@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- **No git.** The repo lives inside OneDrive (versioned by OneDrive). Tasks end with a **build-verification checkpoint**, not a commit.
+- **Git (added during execution).** The repo was `git init`'d on branch `family-explorer`. Each task ends with its build-verification checkpoint **and a commit** (`git add -A && git commit`). The `.Setup/` data folder and `.superpowers/` scratch are git-ignored.
 - **Multi-target both provider branches.** All `Database/` changes must compile under both `#if REVIT2024` (System.Data.SQLite, net48) and the `#else` (Microsoft.Data.Sqlite, net8) branches. Verify by building **both** `Release2024` and `Release2025`.
 - **Keep `ReviTchucky.Core` and `ReviTchucky.UI` free of Revit API types.** Only `ReviTchucky.Revit` references the Revit API.
 - **Revit API calls run only on Revit's main thread** (inside an `IExternalEventHandler.Execute`). Never call the Revit API from a background/ThreadPool thread.

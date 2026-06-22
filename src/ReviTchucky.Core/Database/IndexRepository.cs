@@ -25,12 +25,6 @@ namespace ReviTchucky.Core.Database
                     $"IndexDatabasePath points to a directory, not a file: \"{databasePath}\". " +
                     "Open Settings and set the path to a .db file.");
 
-            if (databasePath.StartsWith(@"\\"))
-                throw new ArgumentException(
-                    $"IndexDatabasePath cannot be a UNC network path: \"{databasePath}\". " +
-                    "SQLite requires a local path or a mapped drive letter (e.g. Z:\\Revit\\.Setup\\family-index.db). " +
-                    "Open Settings and choose a local path.");
-
             // Create parent directory if needed (SQLite won't create it automatically)
             var dir = System.IO.Path.GetDirectoryName(databasePath);
             if (!string.IsNullOrEmpty(dir))
@@ -48,7 +42,11 @@ namespace ReviTchucky.Core.Database
             _connection = new SQLiteConnection(connectionString);
             _connection.Open();
 
-            Execute("PRAGMA journal_mode=WAL;");
+            // WAL is NOT safe across machines on a network filesystem (it relies on host-local
+            // shared memory). Use a rollback journal so the DB can live on \\server\share.
+            // busy_timeout lets brief writes wait for a lock instead of failing immediately.
+            Execute("PRAGMA busy_timeout=5000;");
+            Execute("PRAGMA journal_mode=DELETE;");
             Execute("PRAGMA synchronous=NORMAL;");
             Execute("PRAGMA foreign_keys=ON;");
             CreateSchemaIfNeeded();
