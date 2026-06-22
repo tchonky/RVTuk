@@ -6,7 +6,7 @@ namespace ReviTchucky.UI.ViewModels
     public class GalleryItemViewModel
     {
         public long Id { get; }
-        public string? Caption { get; }
+        public string? Caption { get; set; }
         public BitmapSource? Image { get; }
 
         public GalleryItemViewModel(long id, string? caption, string absolutePath)

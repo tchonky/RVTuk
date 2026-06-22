@@ -180,6 +180,16 @@ namespace ReviTchucky.UI.Views
                 Editor.Document.Blocks.Add(list);
             }
         }
+        private void Caption_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.TextBox tb &&
+                tb.Tag is long id &&
+                DataContext is ViewModels.InstructionsEditorViewModel vm)
+            {
+                vm.SaveCaption(id, tb.Text);
+            }
+        }
+
         private void AddImage_Click(object sender, RoutedEventArgs e)
         {
             var dlg = new Microsoft.Win32.OpenFileDialog

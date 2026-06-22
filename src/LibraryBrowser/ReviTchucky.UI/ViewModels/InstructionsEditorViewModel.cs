@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using ReviTchucky.Core.Database;
 using ReviTchucky.Core.Extraction;
+using System.Collections.ObjectModel;
 
 namespace ReviTchucky.UI.ViewModels
 {
@@ -47,6 +48,10 @@ namespace ReviTchucky.UI.ViewModels
 
         public bool CanUpdateOle => _customThumbPng != null && !_oleSynced;
 
+        public ObservableCollection<GalleryItemViewModel> GalleryItems { get; } = new();
+        public ICommand AddImageCommand { get; }
+        public ICommand DeleteImageCommand { get; }
+
         public ICommand SaveCommand { get; }
         public ICommand CancelCommand { get; }
         public ICommand ReplaceThumbnailCommand { get; }
@@ -73,6 +78,9 @@ namespace ReviTchucky.UI.ViewModels
             ReplaceThumbnailCommand = new RelayCommand(ReplaceThumbnail);
             ResetThumbnailCommand   = new RelayCommand(ResetThumbnail);
             UpdateOleCommand        = new RelayCommand(UpdateOle, () => CanUpdateOle);
+            AddImageCommand    = new RelayCommand(AddImage);
+            DeleteImageCommand = new RelayCommand<long>(DeleteImage);
+            ReloadGallery();
 
             LoadThumbnailState();
         }
@@ -170,6 +178,45 @@ namespace ReviTchucky.UI.ViewModels
 
             CloseRequested?.Invoke();
         }
+
+        private void ReloadGallery()
+        {
+            GalleryItems.Clear();
+            foreach (var im in _repo.GetImages(_familyId))
+                GalleryItems.Add(new GalleryItemViewModel(im.Id, im.Caption, _repo.GetGalleryPath(_familyId, im.FileName)));
+        }
+
+        private void AddImage()
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp",
+                Title  = "Add gallery image",
+                Multiselect = true
+            };
+            if (dlg.ShowDialog() != true) return;
+            try
+            {
+                foreach (var file in dlg.FileNames)
+                {
+                    var png = ConvertToPng(File.ReadAllBytes(file));
+                    _repo.AddImage(_familyId, png, Path.GetFileNameWithoutExtension(file));
+                }
+                ReloadGallery();
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Could not add image: {ex.Message}");
+            }
+        }
+
+        private void DeleteImage(long imageId)
+        {
+            _repo.DeleteImage(imageId);
+            ReloadGallery();
+        }
+
+        public void SaveCaption(long imageId, string? caption) => _repo.UpdateCaption(imageId, caption);
 
         private static byte[] ConvertToPng(byte[] rawBytes)
         {

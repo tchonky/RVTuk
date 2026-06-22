@@ -17,7 +17,8 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>  <!-- gallery -->
+            <RowDefinition Height="Auto"/>  <!-- footer -->
         </Grid.RowDefinitions>
 
         <!-- HEADER: thumbnail + name + status -->
@@ -84,8 +85,37 @@
                      AllowDrop="True"
                      ctrl:RichTextBoxHelper.DocumentXaml="{Binding InstructionsXaml}"/>
 
+        <!-- GALLERY -->
+        <DockPanel Grid.Row="3" Margin="8,0,8,0" LastChildFill="False">
+            <TextBlock Text="GALLERY" FontWeight="SemiBold" FontSize="11"
+                       VerticalAlignment="Center" DockPanel.Dock="Left"/>
+            <Button Content="Add to Gallery…" Command="{Binding AddImageCommand}"
+                    DockPanel.Dock="Right"/>
+        </DockPanel>
+        <ScrollViewer Grid.Row="3" Margin="8,22,8,4" MaxHeight="150"
+                      VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding GalleryItems}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Width="150" Margin="6">
+                            <Image Source="{Binding Image}" Height="90" Stretch="Uniform"/>
+                            <TextBox Text="{Binding Caption}" Margin="0,3,0,0"
+                                     Tag="{Binding Id}" LostFocus="Caption_LostFocus"/>
+                            <Button Content="Delete" Margin="0,3,0,0"
+                                    Command="{Binding DataContext.DeleteImageCommand,
+                                              RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                    CommandParameter="{Binding Id}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
         <!-- FOOTER -->
-        <Grid Grid.Row="3" Margin="8,4,8,8">
+        <Grid Grid.Row="4" Margin="8,4,8,8">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="Cancel" Command="{Binding CancelCommand}" Width="70" Margin="0,0,8,0"/>
                 <Button Content="Save"   Click="Save_Click"                Width="70"/>
