@@ -146,6 +146,14 @@ namespace ReviTchucky.Core.Database
             checkCmd.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='InstructionsXaml'";
             if ((long)(checkCmd.ExecuteScalar() ?? 0L) == 0)
                 ExecuteOn(c, "ALTER TABLE Families ADD COLUMN InstructionsXaml TEXT");
+
+            foreach (var col in new[] { "ParamGroup", "Kind", "Guid", "Formula" })
+            {
+                using var pc = c.CreateCommand();
+                pc.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('Parameters') WHERE name='{col}'";
+                if ((long)(pc.ExecuteScalar() ?? 0L) == 0)
+                    ExecuteOn(c, $"ALTER TABLE Parameters ADD COLUMN {col} TEXT");
+            }
         }
 
         // Returns all families with thumbnail resolved (CustomThumbnail ?? OLE Thumbnail)
@@ -205,7 +213,8 @@ namespace ReviTchucky.Core.Database
         {
             var result = new List<ParameterModel>();
             using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "SELECT Id, ParameterName, DataType, IsInstance FROM Parameters WHERE FamilyId = @id ORDER BY ParameterName";
+            cmd.CommandText = "SELECT Id, ParameterName, DataType, IsInstance, ParamGroup, Kind, Guid, Formula " +
+                              "FROM Parameters WHERE FamilyId = @id ORDER BY ParamGroup, ParameterName";
             AddParam(cmd, "@id", familyId);
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
@@ -215,7 +224,11 @@ namespace ReviTchucky.Core.Database
                     FamilyId      = familyId,
                     ParameterName = reader.GetString(1),
                     DataType      = reader.GetString(2),
-                    IsInstance    = reader.GetInt32(3) == 1
+                    IsInstance    = reader.GetInt32(3) == 1,
+                    ParamGroup    = reader.IsDBNull(4) ? null : reader.GetString(4),
+                    Kind          = reader.IsDBNull(5) ? null : reader.GetString(5),
+                    Guid          = reader.IsDBNull(6) ? null : reader.GetString(6),
+                    Formula       = reader.IsDBNull(7) ? null : reader.GetString(7),
                 });
             return result;
         }

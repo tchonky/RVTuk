@@ -97,6 +97,14 @@ namespace ReviTchucky.Core.Database
                 OleSynced INTEGER NOT NULL DEFAULT 1,
                 FOREIGN KEY (FamilyId) REFERENCES Families(Id) ON DELETE CASCADE
             )");
+
+            foreach (var col in new[] { "ParamGroup", "Kind", "Guid", "Formula" })
+            {
+                using var c = _connection.CreateCommand();
+                c.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('Parameters') WHERE name='{col}'";
+                if ((long)(c.ExecuteScalar() ?? 0L) == 0)
+                    Execute($"ALTER TABLE Parameters ADD COLUMN {col} TEXT");
+            }
         }
 
         public FamilyModel? GetFamilyByPath(string relativePath)
@@ -162,12 +170,17 @@ namespace ReviTchucky.Core.Database
                 foreach (var p in parameters)
                 {
                     using var pCmd = CreateCommand(
-                        "INSERT INTO Parameters (FamilyId, ParameterName, DataType, IsInstance) VALUES (@fid, @name, @type, @inst)",
+                        "INSERT INTO Parameters (FamilyId, ParameterName, DataType, IsInstance, ParamGroup, Kind, Guid, Formula) " +
+                        "VALUES (@fid, @name, @type, @inst, @grp, @kind, @guid, @formula)",
                         transaction);
                     AddParam(pCmd, "@fid", familyId);
                     AddParam(pCmd, "@name", p.ParameterName);
                     AddParam(pCmd, "@type", p.DataType);
                     AddParam(pCmd, "@inst", p.IsInstance ? 1 : 0);
+                    AddParam(pCmd, "@grp", (object?)p.ParamGroup ?? DBNull.Value);
+                    AddParam(pCmd, "@kind", (object?)p.Kind ?? DBNull.Value);
+                    AddParam(pCmd, "@guid", (object?)p.Guid ?? DBNull.Value);
+                    AddParam(pCmd, "@formula", (object?)p.Formula ?? DBNull.Value);
                     pCmd.ExecuteNonQuery();
                 }
 
