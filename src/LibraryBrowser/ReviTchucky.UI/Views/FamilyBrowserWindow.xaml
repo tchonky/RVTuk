@@ -5,6 +5,7 @@
         xmlns:ctrl="clr-namespace:ReviTchucky.UI.Controls"
         Title="ReviTchucky — Family Browser"
         Width="900" Height="620" MinWidth="660" MinHeight="420"
+        Topmost="True"
         WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
@@ -133,7 +134,7 @@
                             <Image Grid.Column="0" Source="{Binding Thumbnail}" Width="32" Height="24" Stretch="Uniform"/>
                             <StackPanel Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
-                                           TextTrimming="CharacterEllipsis"/>
+                                           TextWrapping="Wrap" MaxHeight="48"/>
                                 <TextBlock Text="{Binding Category}"
                                            Foreground="{StaticResource Brush.TextMuted}" FontSize="10"/>
                             </StackPanel>
