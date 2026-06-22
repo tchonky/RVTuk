@@ -259,7 +259,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <TextBox Grid.Column="0" IsReadOnly="True" Margin="0,0,6,0"
-                             Text="{Binding LibraryFolderPath}"
+                             Text="{Binding LibraryFolderPath, Mode=OneWay}"
                              Foreground="{StaticResource Brush.TextMuted}"/>
                     <Button Grid.Column="1" Content="Browse…" Width="72"
                             Click="BrowseLibraryFolder_Click"/>
