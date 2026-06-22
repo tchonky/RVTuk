@@ -195,15 +195,27 @@
                     <RichTextBox IsReadOnly="True"
                                  ctrl:RichTextBoxHelper.DocumentXaml="{Binding InstructionsXaml}"/>
                 </TabItem>
-                <TabItem Header="{Binding Parameters.Count, StringFormat='Parameters ({0})'}">
-                    <DataGrid ItemsSource="{Binding Parameters}" AutoGenerateColumns="False"
-                              IsReadOnly="True" GridLinesVisibility="Horizontal">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Name"     Binding="{Binding ParameterName}" Width="*"/>
-                            <DataGridTextColumn Header="Type"     Binding="{Binding DataType}"      Width="110"/>
-                            <DataGridCheckBoxColumn Header="Instance" Binding="{Binding IsInstance}" Width="65"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
+                <TabItem Header="{Binding FilteredParameters.Count, StringFormat='Parameters ({0})'}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBox Grid.Row="0" Margin="0,0,0,4"
+                                 Text="{Binding ParameterFilter, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Filter parameters by name, group, or kind"/>
+                        <DataGrid Grid.Row="1" ItemsSource="{Binding FilteredParameters}"
+                                  AutoGenerateColumns="False" IsReadOnly="True"
+                                  GridLinesVisibility="Horizontal">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name"  Binding="{Binding ParameterName}" Width="*"/>
+                                <DataGridTextColumn Header="Group" Binding="{Binding ParamGroup}"    Width="130"/>
+                                <DataGridTextColumn Header="Kind"  Binding="{Binding Kind}"          Width="70"/>
+                                <DataGridTextColumn Header="Type"  Binding="{Binding DataType}"      Width="100"/>
+                                <DataGridCheckBoxColumn Header="Inst." Binding="{Binding IsInstance}" Width="46"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
                 </TabItem>
             </TabControl>
         </Grid>

@@ -33,6 +33,8 @@ namespace ReviTchucky.UI.ViewModels
         private int _outdatedCount;
         private string? _instructionsXaml;
         private List<ParameterModel> _parameters = new();
+        private string _parameterFilter = string.Empty;
+        public ObservableCollection<ParameterModel> FilteredParameters { get; } = new();
 
         public ObservableCollection<FamilyBrowserItemViewModel> FilteredItems { get; } = new();
         public ObservableCollection<string> Categories { get; } = new();
@@ -100,7 +102,27 @@ namespace ReviTchucky.UI.ViewModels
         public List<ParameterModel> Parameters
         {
             get => _parameters;
-            set => SetProperty(ref _parameters, value);
+            set { SetProperty(ref _parameters, value); ApplyParameterFilter(); }
+        }
+
+        public string ParameterFilter
+        {
+            get => _parameterFilter;
+            set { SetProperty(ref _parameterFilter, value ?? string.Empty); ApplyParameterFilter(); }
+        }
+
+        private void ApplyParameterFilter()
+        {
+            var q = _parameterFilter.Trim();
+            IEnumerable<ParameterModel> src = _parameters;
+            if (!string.IsNullOrEmpty(q))
+                src = src.Where(p =>
+                    (p.ParameterName?.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                    (p.ParamGroup?.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                    (p.Kind?.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0));
+
+            FilteredParameters.Clear();
+            foreach (var p in src) FilteredParameters.Add(p);
         }
 
         public BrowserRepository Repo => _repo;
