@@ -183,10 +183,13 @@ namespace ReviTchucky.UI.ViewModels
 
         private void ApplyFilter()
         {
-            var search = _searchText.Trim();
+            // Multi-word search: split on whitespace; every token must appear somewhere in the
+            // family name, in any order/position. e.g. "door single" matches "single - door".
+            var tokens = _searchText.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             var filtered = _allItems.AsEnumerable();
-            if (!string.IsNullOrEmpty(search))
-                filtered = filtered.Where(i => i.DisplayName.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0);
+            if (tokens.Length > 0)
+                filtered = filtered.Where(i =>
+                    tokens.All(t => i.DisplayName.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0));
             if (!string.IsNullOrEmpty(_selectedCategory))
                 filtered = filtered.Where(i => i.Category == _selectedCategory);
 

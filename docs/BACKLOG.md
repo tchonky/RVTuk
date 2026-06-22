@@ -29,6 +29,7 @@ if there is no modification, it will work as a resuming the deep scan.
 - [ ]  When writing to search for a family, words separated with space, can appear on any place in the name of the family.
 example: If I search for 'door single' it can match with 'door - single', 'single door', kk_single wooden door', etc.
 - [ ]  A tags section for each family and a possibility to search by tags
+- [ ]  Option to show one or more versions of the revit families. Like, only show families that are 2023 or up to 2024.
 
 ## ⏳ Known deferred (from the Family Explorer build/review — decided "later")
 
