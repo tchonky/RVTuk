@@ -21,6 +21,7 @@ namespace ReviTchucky.UI.ViewModels
         private readonly Func<IReadOnlyList<string>> _getProjectFamilies;
         private readonly Func<string, (bool Success, string? Error)> _loadFamily;
         private readonly Action _deepScan;
+        private readonly Func<long, string, bool> _rescanFamily;
         private readonly Dispatcher _dispatcher;
         private readonly object _loadLock = new object();
 
@@ -29,6 +30,7 @@ namespace ReviTchucky.UI.ViewModels
         private string _selectedCategory = "";
         private FamilyBrowserItemViewModel? _selectedItem;
         private bool _isSyncing;
+        private bool _isRescanning;
         private bool _isShowingSettings;
         private int _outdatedCount;
         private string? _instructionsXaml;
@@ -86,6 +88,12 @@ namespace ReviTchucky.UI.ViewModels
             set => SetProperty(ref _isSyncing, value);
         }
 
+        public bool IsRescanning
+        {
+            get => _isRescanning;
+            set => SetProperty(ref _isRescanning, value);
+        }
+
         public int OutdatedCount
         {
             get => _outdatedCount;
@@ -135,6 +143,7 @@ namespace ReviTchucky.UI.ViewModels
         public ICommand LoadFamilyCommand { get; }
         public ICommand UpdateInProjectCommand { get; }
         public ICommand EditInfoCommand { get; }
+        public ICommand RescanFamilyCommand { get; }
 
         public event Action<FamilyBrowserItemViewModel>? EditInfoRequested;
 
@@ -143,13 +152,15 @@ namespace ReviTchucky.UI.ViewModels
             BrowserRepository repo,
             Func<IReadOnlyList<string>> getProjectFamilies,
             Func<string, (bool Success, string? Error)> loadFamily,
-            Action deepScan)
+            Action deepScan,
+            Func<long, string, bool> rescanFamily)
         {
             _config = config;
             _repo = repo;
             _getProjectFamilies = getProjectFamilies;
             _loadFamily = loadFamily;
             _deepScan = deepScan;
+            _rescanFamily = rescanFamily;
             _dispatcher = Dispatcher.CurrentDispatcher;
 
             SyncCommand           = new RelayCommand(Sync, () => !IsSyncing);
@@ -159,6 +170,7 @@ namespace ReviTchucky.UI.ViewModels
             LoadFamilyCommand     = new RelayCommand(LoadSelected,  () => SelectedItem != null);
             UpdateInProjectCommand= new RelayCommand(UpdateSelected,() => ShowUpdateInProject);
             EditInfoCommand       = new RelayCommand(RequestEditInfo, () => SelectedItem != null);
+            RescanFamilyCommand   = new RelayCommand(RescanSelected, () => SelectedItem != null && !IsRescanning);
 
             LoadFamilies();
             LoadCategories();
@@ -342,6 +354,29 @@ namespace ReviTchucky.UI.ViewModels
         {
             if (SelectedItem != null)
                 EditInfoRequested?.Invoke(SelectedItem);
+        }
+
+        // Re-extracts metadata (category, parameters, thumbnail) for just the selected family,
+        // via the same Revit ping-pong the full deep scan uses — but for one family, so it takes
+        // seconds. Runs on a background thread so WaitForCompletion can't deadlock the UI thread.
+        private void RescanSelected()
+        {
+            var item = SelectedItem;
+            if (item == null) return;
+            var fullPath = Path.Combine(_config.LibraryFolderPath, item.RelativePath);
+            IsRescanning = true;
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                bool ok;
+                try { ok = _rescanFamily(item.Id, fullPath); }
+                catch { ok = false; }
+                _dispatcher.Invoke(() =>
+                {
+                    IsRescanning = false;
+                    if (ok) LoadDetailAsync(item);
+                    else MessageBox.Show("Could not rescan this family.", "ReviTchucky");
+                });
+            });
         }
 
         public void Dispose() => _repo.Dispose();

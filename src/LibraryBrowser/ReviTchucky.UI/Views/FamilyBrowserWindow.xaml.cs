@@ -14,6 +14,7 @@ namespace ReviTchucky.UI.Views
         private readonly Func<IReadOnlyList<string>> _getProjectFamilies;
         private readonly Func<string, (bool Success, string? Error)> _loadFamily;
         private readonly Action _deepScan;
+        private readonly Func<long, string, bool> _rescanFamily;
 
         public FamilyBrowserViewModel ViewModel { get; private set; } = null!;
 
@@ -21,12 +22,14 @@ namespace ReviTchucky.UI.Views
             AppConfig config,
             Func<IReadOnlyList<string>> getProjectFamilies,
             Func<string, (bool Success, string? Error)> loadFamily,
-            Action deepScan)
+            Action deepScan,
+            Func<long, string, bool> rescanFamily)
         {
             InitializeComponent();
             _getProjectFamilies = getProjectFamilies;
             _loadFamily = loadFamily;
             _deepScan = deepScan;
+            _rescanFamily = rescanFamily;
             LoadWithConfig(config);
         }
 
@@ -36,7 +39,7 @@ namespace ReviTchucky.UI.Views
             var setupDir = Path.Combine(config.LibraryFolderPath, ".Setup");
             Directory.CreateDirectory(setupDir);
             var repo = new BrowserRepository(config.DatabasePath);
-            var vm = new FamilyBrowserViewModel(config, repo, _getProjectFamilies, _loadFamily, _deepScan);
+            var vm = new FamilyBrowserViewModel(config, repo, _getProjectFamilies, _loadFamily, _deepScan, _rescanFamily);
             vm.EditInfoRequested += OnEditInfoRequested;
 
             if (ViewModel != null)

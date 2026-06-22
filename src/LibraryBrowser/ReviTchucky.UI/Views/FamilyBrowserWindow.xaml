@@ -186,7 +186,9 @@
                         <Button Content="&#x2191; Update in Project" Command="{Binding UpdateInProjectCommand}"
                                 Margin="0,0,6,0"
                                 Visibility="{Binding ShowUpdateInProject, Converter={StaticResource BoolVis}}"/>
-                        <Button Content="Edit Info" Command="{Binding EditInfoCommand}"/>
+                        <Button Content="Edit Info" Command="{Binding EditInfoCommand}" Margin="0,0,6,0"/>
+                        <Button Content="&#x21BB; Rescan" Command="{Binding RescanFamilyCommand}"
+                                ToolTip="Re-read this family's parameters and thumbnail from disk (fast — just this family)"/>
                     </WrapPanel>
                 </StackPanel>
             </Grid>
