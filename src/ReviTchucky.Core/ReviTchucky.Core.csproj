@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>ReviTchucky.Core</AssemblyName>
+    <RootNamespace>ReviTchucky.Core</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release2024'">
+    <TargetFramework>net48</TargetFramework>
+    <OutputPath>bin\2024\Release2024\</OutputPath>
+    <DefineConstants>REVIT2024</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release2023'">
+    <TargetFramework>net48</TargetFramework>
+    <OutputPath>bin\2023\Release2023\</OutputPath>
+    <DefineConstants>REVIT2024</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'!='Release2024' And '$(Configuration)'!='Release2023'">
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <OutputPath>bin\2025\Release2025\</OutputPath>
+    <DefineConstants>REVIT2025</DefineConstants>
+  </PropertyGroup>
+
+  <!-- net48 (Revit 2023/2024): System.Data.SQLite — no polyfill conflicts.
+       No System.Text.Json — its transitive deps (System.Memory, System.Runtime.CompilerServices.Unsafe, etc.)
+       conflict with Revit's preloaded versions. Use DataContractJsonSerializer instead. -->
+  <!-- Full package needed to get SQLite.Interop.dll (the native x64 DLL).
+       EF6/polyfill transitive DLLs are stripped by Deploy.ps1 before deployment. -->
+  <ItemGroup Condition="'$(Configuration)'=='Release2024' Or '$(Configuration)'=='Release2023'">
+    <PackageReference Include="System.Data.SQLite" Version="1.0.*" />
+  </ItemGroup>
+
+  <!-- net8.0-windows (Revit 2025): Microsoft.Data.Sqlite + System.Text.Json are fine here -->
+  <ItemGroup Condition="'$(Configuration)'!='Release2024' And '$(Configuration)'!='Release2023'">
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*" />
+    <PackageReference Include="System.Text.Json" Version="8.0.*" />
+  </ItemGroup>
+
+  <!-- OpenMCDF pinned to 3.1.2 to match the version preloaded by other Revit addins. -->
+  <ItemGroup>
+    <PackageReference Include="OpenMCDF" Version="3.1.2" />
+  </ItemGroup>
+
+  <!-- net48: System.Drawing is a GAC assembly in .NET Framework — no NuGet needed.
+       System.Drawing.Common 8.x would drag in Unsafe 6.x / System.Memory polyfills
+       that conflict with Revit's preloaded versions. -->
+  <ItemGroup Condition="'$(Configuration)'=='Release2024' Or '$(Configuration)'=='Release2023'">
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+
+  <!-- net8.0: System.Drawing.Common NuGet provides GDI+ access on non-Windows or without WPF -->
+  <ItemGroup Condition="'$(Configuration)'!='Release2024' And '$(Configuration)'!='Release2023'">
+    <PackageReference Include="System.Drawing.Common" Version="8.0.*" />
+  </ItemGroup>
+
+</Project>

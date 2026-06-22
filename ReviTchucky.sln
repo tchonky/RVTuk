@@ -1,0 +1,41 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReviTchucky.Core", "ReviTchucky.Core\ReviTchucky.Core.csproj", "{A1B2C3D4-AAAA-BBBB-CCCC-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReviTchucky.UI", "ReviTchucky.UI\ReviTchucky.UI.csproj", "{A1B2C3D4-AAAA-BBBB-CCCC-000000000002}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReviTchucky.Revit", "ReviTchucky.Revit\ReviTchucky.Revit.csproj", "{A1B2C3D4-AAAA-BBBB-CCCC-000000000003}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Release2023|Any CPU = Release2023|Any CPU
+		Release2024|Any CPU = Release2024|Any CPU
+		Release2025|Any CPU = Release2025|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000001}.Release2023|Any CPU.ActiveCfg = Release2023|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000001}.Release2023|Any CPU.Build.0 = Release2023|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000001}.Release2024|Any CPU.ActiveCfg = Release2024|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000001}.Release2024|Any CPU.Build.0 = Release2024|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000001}.Release2025|Any CPU.ActiveCfg = Release2025|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000001}.Release2025|Any CPU.Build.0 = Release2025|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000002}.Release2023|Any CPU.ActiveCfg = Release2023|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000002}.Release2023|Any CPU.Build.0 = Release2023|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000002}.Release2024|Any CPU.ActiveCfg = Release2024|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000002}.Release2024|Any CPU.Build.0 = Release2024|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000002}.Release2025|Any CPU.ActiveCfg = Release2025|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000002}.Release2025|Any CPU.Build.0 = Release2025|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000003}.Release2023|Any CPU.ActiveCfg = Release2023|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000003}.Release2023|Any CPU.Build.0 = Release2023|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000003}.Release2024|Any CPU.ActiveCfg = Release2024|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000003}.Release2024|Any CPU.Build.0 = Release2024|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000003}.Release2025|Any CPU.ActiveCfg = Release2025|Any CPU
+		{A1B2C3D4-AAAA-BBBB-CCCC-000000000003}.Release2025|Any CPU.Build.0 = Release2025|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
