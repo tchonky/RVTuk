@@ -27,8 +27,9 @@ namespace ReviTchucky.Core.Extraction
             Action<string, int, int> progressCallback,
             CancellationToken cancellationToken = default)
         {
-            var rfaFiles = Directory.GetFiles(_libraryRoot, "*.rfa", SearchOption.AllDirectories);
-            int total = rfaFiles.Length;
+            // Robust walk: skips over-long/inaccessible paths instead of aborting the whole scan.
+            var rfaFiles = new List<string>(PathUtil.SafeEnumerateFiles(_libraryRoot, "*.rfa"));
+            int total = rfaFiles.Count;
             var workItems = new List<ExtractionWorkItem>();
             var scannedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -37,6 +38,16 @@ namespace ReviTchucky.Core.Extraction
                 cancellationToken.ThrowIfCancellationRequested();
 
                 string fullPath = rfaFiles[i];
+
+                // A family whose full path exceeds Windows MAX_PATH cannot be opened by Revit on
+                // .NET Framework; skip it so it neither aborts the scan nor triggers Revit's
+                // "path too long" dialog during metadata extraction.
+                if (fullPath.Length >= 260)
+                {
+                    progressCallback(Path.GetFileName(fullPath), i + 1, total);
+                    continue;
+                }
+
                 string relativePath = PathUtil.GetRelativePath(_libraryRoot, fullPath);
                 string fileName = Path.GetFileName(fullPath);
 

@@ -231,8 +231,9 @@ namespace ReviTchucky.UI.ViewModels
                     var root = _config.LibraryFolderPath;
                     var foundRelPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                    foreach (var fullPath in Directory.EnumerateFiles(root, "*.rfa", SearchOption.AllDirectories))
+                    foreach (var fullPath in PathUtil.SafeEnumerateFiles(root, "*.rfa"))
                     {
+                        if (fullPath.Length >= 260) continue; // unusable on .NET Framework; skip
                         var relativePath = PathUtil.GetRelativePath(root, fullPath);
                         var fi = new FileInfo(fullPath);
                         foundRelPaths.Add(relativePath);

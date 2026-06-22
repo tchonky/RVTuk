@@ -1,10 +1,43 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 namespace ReviTchucky.Core.Util
 {
     public static class PathUtil
     {
+        /// <summary>
+        /// Recursively enumerates files matching <paramref name="searchPattern"/> under
+        /// <paramref name="root"/> WITHOUT throwing on directories or files that exceed the
+        /// Windows MAX_PATH (260) limit or that the user cannot access. .NET Framework's
+        /// <c>Directory.GetFiles(..., AllDirectories)</c> aborts the whole walk the instant it
+        /// meets one over-long/inaccessible path; this skips only the offending subtree and keeps
+        /// going, so a single deeply-nested family can't break an entire library scan. Both the
+        /// deep-scan indexer (Core) and the browser sync (UI) go through here.
+        /// </summary>
+        public static IEnumerable<string> SafeEnumerateFiles(string root, string searchPattern)
+        {
+            var pending = new Stack<string>();
+            pending.Push(root);
+
+            while (pending.Count > 0)
+            {
+                var dir = pending.Pop();
+
+                string[] files;
+                try { files = Directory.GetFiles(dir, searchPattern); }
+                catch { files = Array.Empty<string>(); } // PathTooLong / Unauthorized / IO / Security
+                foreach (var file in files)
+                    yield return file;
+
+                string[] subDirs;
+                try { subDirs = Directory.GetDirectories(dir); }
+                catch { subDirs = Array.Empty<string>(); }
+                foreach (var sub in subDirs)
+                    pending.Push(sub);
+            }
+        }
+
         /// <summary>
         /// Returns <paramref name="fullPath"/> relative to <paramref name="root"/> using
         /// '\' separators. This is the single source of truth for the value stored in

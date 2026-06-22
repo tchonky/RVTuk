@@ -23,6 +23,12 @@ namespace ReviTchucky.Revit.Extraction
 
         public (string? Category, IReadOnlyList<ParameterModel> Parameters) ExtractMetadata(string rfaPath)
         {
+            // Revit's OpenDocumentFile throws / shows a modal "path too long" dialog for paths
+            // over Windows MAX_PATH on .NET Framework. Such families are already skipped during the
+            // scan; guard here too so extraction can never surface that dialog.
+            if (string.IsNullOrEmpty(rfaPath) || rfaPath.Length >= 260)
+                return (null, Array.Empty<ParameterModel>());
+
             Document? doc = null;
             try
             {
