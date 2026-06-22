@@ -15,6 +15,20 @@ namespace ReviTchucky.Revit.Commands
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
+            // Revit hosts the CLR but never creates a WPF Application, so
+            // System.Windows.Application.Current is null in-process. Multiple paths here
+            // (the DispatcherUnhandledException wiring below) and the deep-scan progress UI
+            // (IndexProgressViewModel) dereference Current and would NullReferenceException.
+            // Create one we own, set to never auto-shutdown so closing a window can't take
+            // Revit down with it. Must run on Revit's main (STA) thread — which this is.
+            if (System.Windows.Application.Current == null)
+            {
+                new System.Windows.Application
+                {
+                    ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown
+                };
+            }
+
             var config = ConfigManager.LoadConfig();
             if (!ConfigManager.IsConfigured(config))
             {
