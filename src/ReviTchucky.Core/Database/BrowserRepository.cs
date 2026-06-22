@@ -320,16 +320,39 @@ namespace ReviTchucky.Core.Database
 
         public void DeleteStaleEntries(IEnumerable<string> staleRelativePaths)
         {
-            WithWrite(c =>
+            foreach (var path in staleRelativePaths)
             {
-                foreach (var path in staleRelativePaths)
+                // Look up the family Id (RO connection) before deleting the row so we can
+                // remove its gallery folder even after the row is gone.
+                long id = 0;
+                using (var lookup = _connection.CreateCommand())
+                {
+                    lookup.CommandText = "SELECT Id FROM Families WHERE RelativePath = @path";
+                    AddParam(lookup, "@path", path);
+                    var scalar = lookup.ExecuteScalar();
+                    if (scalar != null && scalar != DBNull.Value)
+                        id = (long)scalar;
+                }
+
+                WithWrite(c =>
                 {
                     using var cmd = c.CreateCommand();
                     cmd.CommandText = "DELETE FROM Families WHERE RelativePath = @path";
                     AddParam(cmd, "@path", path);
                     cmd.ExecuteNonQuery();
+                });
+
+                if (id != 0)
+                {
+                    try
+                    {
+                        var folder = GalleryRoot(id);
+                        if (Directory.Exists(folder))
+                            Directory.Delete(folder, true);
+                    }
+                    catch { /* best-effort; never let a file-delete failure propagate */ }
                 }
-            });
+            }
         }
 
         public void DeleteCustomThumbnail(long familyId)

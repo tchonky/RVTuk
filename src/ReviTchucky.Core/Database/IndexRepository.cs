@@ -17,9 +17,12 @@ namespace ReviTchucky.Core.Database
     public class IndexRepository : IDisposable
     {
         private readonly SQLiteConnection _connection;
+        private readonly string _databasePath;
 
         public IndexRepository(string databasePath)
         {
+            _databasePath = databasePath;
+
             if (System.IO.Directory.Exists(databasePath))
                 throw new ArgumentException(
                     $"IndexDatabasePath points to a directory, not a file: \"{databasePath}\". " +
@@ -219,9 +222,30 @@ namespace ReviTchucky.Core.Database
             {
                 if (!valid.Contains(path))
                 {
+                    // Look up Id before deleting so we can clean up the gallery folder.
+                    long id = 0;
+                    using (var lookup = CreateCommand("SELECT Id FROM Families WHERE RelativePath=@path"))
+                    {
+                        AddParam(lookup, "@path", path);
+                        var scalar = lookup.ExecuteScalar();
+                        if (scalar != null && scalar != DBNull.Value)
+                            id = (long)scalar;
+                    }
+
                     using var cmd = CreateCommand("DELETE FROM Families WHERE RelativePath=@path");
                     AddParam(cmd, "@path", path);
                     cmd.ExecuteNonQuery();
+
+                    if (id != 0)
+                    {
+                        try
+                        {
+                            var folder = GalleryRoot(id);
+                            if (System.IO.Directory.Exists(folder))
+                                System.IO.Directory.Delete(folder, true);
+                        }
+                        catch { /* best-effort; never let a file-delete failure propagate */ }
+                    }
                 }
             }
         }
@@ -229,6 +253,14 @@ namespace ReviTchucky.Core.Database
         public void ClearAll()
         {
             Execute("DELETE FROM Thumbnail; DELETE FROM Parameters; DELETE FROM Families;");
+
+            try
+            {
+                var g = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(_databasePath)!, "Gallery");
+                if (System.IO.Directory.Exists(g))
+                    System.IO.Directory.Delete(g, true);
+            }
+            catch { /* best-effort */ }
         }
 
         private SQLiteCommand CreateCommand(string sql, IDbTransaction? transaction = null)
@@ -264,6 +296,9 @@ namespace ReviTchucky.Core.Database
             Category     = r.IsDBNull(5) ? null : r.GetString(5),
             IndexedDate  = DbConvert.ParseUtc(r.GetString(6))
         };
+
+        private string GalleryRoot(long familyId) =>
+            System.IO.Path.Combine(System.IO.Path.GetDirectoryName(_databasePath)!, "Gallery", familyId.ToString());
 
         private void Execute(string sql)
         {

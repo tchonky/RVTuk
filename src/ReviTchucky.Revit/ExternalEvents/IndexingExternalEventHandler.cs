@@ -37,8 +37,8 @@ namespace ReviTchucky.Revit.ExternalEvents
                 if (CurrentItem == null || Repository == null || Extractor == null)
                     return;
 
-                // Skip ExtractPartAtomFromFamilyFile for families newer than the running Revit
-                // version — opening them triggers native geometry processing that crashes Revit.
+                // Skip families newer than the running Revit version — opening such a family
+                // document triggers native processing that can crash Revit.
                 string? category = null;
                 IReadOnlyList<ReviTchucky.Core.Models.ParameterModel> parameters = System.Array.Empty<ReviTchucky.Core.Models.ParameterModel>();
 
