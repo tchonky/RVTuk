@@ -35,6 +35,7 @@ namespace ReviTchucky.UI.ViewModels
         private List<ParameterModel> _parameters = new();
         private string _parameterFilter = string.Empty;
         public ObservableCollection<ParameterModel> FilteredParameters { get; } = new();
+        public ObservableCollection<GalleryItemViewModel> GalleryItems { get; } = new();
 
         public ObservableCollection<FamilyBrowserItemViewModel> FilteredItems { get; } = new();
         public ObservableCollection<string> Categories { get; } = new();
@@ -196,17 +197,22 @@ namespace ReviTchucky.UI.ViewModels
 
         private void LoadDetailAsync(FamilyBrowserItemViewModel? item)
         {
-            if (item == null) { InstructionsXaml = null; Parameters = new List<ParameterModel>(); return; }
+            if (item == null) { InstructionsXaml = null; Parameters = new List<ParameterModel>(); GalleryItems.Clear(); return; }
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 try
                 {
                     var xaml = _repo.GetInstructionsXaml(item.Id);
                     var prms = _repo.GetParameters(item.Id);
+                    var images = _repo.GetImages(item.Id)
+                        .Select(im => new GalleryItemViewModel(im.Id, im.Caption, _repo.GetGalleryPath(item.Id, im.FileName)))
+                        .ToList();
                     _dispatcher.Invoke(() =>
                     {
                         InstructionsXaml = xaml;
                         Parameters = prms;
+                        GalleryItems.Clear();
+                        foreach (var g in images) GalleryItems.Add(g);
                     });
                 }
                 catch { /* swallow — detail load failure is non-fatal */ }
