@@ -18,7 +18,8 @@ namespace ReviTchucky.Core.Database
 {
     public class BrowserRepository : IDisposable
     {
-        private readonly SQLiteConnection _connection;
+        private readonly string _databasePath;
+        private readonly SQLiteConnection _connection; // persistent READ-ONLY connection
 
 #if REVIT2024
         // System.Data.SQLite searches for SQLite.Interop.dll relative to Revit.exe, not our add-in folder.
@@ -40,26 +41,76 @@ namespace ReviTchucky.Core.Database
 
         public BrowserRepository(string databasePath)
         {
-#if REVIT2024
-            _connection = new SQLiteConnection($"Data Source={databasePath};Version=3;");
-#else
-            _connection = new SQLiteConnection(
-                new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
-                {
-                    DataSource = databasePath,
-                    Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadWriteCreate
-                }.ToString());
-#endif
-            _connection.Open();
-            Execute("PRAGMA journal_mode=WAL;");
-            Execute("PRAGMA synchronous=NORMAL;");
-            Execute("PRAGMA foreign_keys=ON;");
-            EnsureSchema();
+            _databasePath = databasePath;
+
+            // One-time: ensure the file + schema exist and the journal is migrated off WAL.
+            // Best-effort — if the share is read-only for this user, assume the admin already
+            // created/migrated the DB and fall through to the read-only connection.
+            try
+            {
+                using var init = OpenWrite();
+                EnsureSchema(init);
+            }
+            catch { /* read-only share or locked; admin DB assumed ready */ }
+
+            _connection = OpenRead();
+            ExecuteOn(_connection, "PRAGMA busy_timeout=5000;");
+            ExecuteOn(_connection, "PRAGMA foreign_keys=ON;");
         }
 
-        private void EnsureSchema()
+        // Persistent read-only connection for all Get* methods.
+        private SQLiteConnection OpenRead()
         {
-            Execute(@"
+#if REVIT2024
+            var c = new SQLiteConnection($"Data Source={_databasePath};Version=3;Read Only=True;");
+#else
+            var c = new SQLiteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+            {
+                DataSource = _databasePath,
+                Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly
+            }.ToString());
+#endif
+            c.Open();
+            return c;
+        }
+
+        // Short-lived read-write connection for the occasional admin/edit write.
+        private SQLiteConnection OpenWrite()
+        {
+#if REVIT2024
+            var c = new SQLiteConnection($"Data Source={_databasePath};Version=3;");
+#else
+            var c = new SQLiteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+            {
+                DataSource = _databasePath,
+                Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadWriteCreate
+            }.ToString());
+#endif
+            c.Open();
+            ExecuteOn(c, "PRAGMA busy_timeout=5000;");
+            ExecuteOn(c, "PRAGMA journal_mode=DELETE;");
+            ExecuteOn(c, "PRAGMA synchronous=NORMAL;");
+            ExecuteOn(c, "PRAGMA foreign_keys=ON;");
+            return c;
+        }
+
+        // Runs a write action against a fresh read-write connection, then closes it.
+        private void WithWrite(Action<SQLiteConnection> action)
+        {
+            using var c = OpenWrite();
+            action(c);
+        }
+
+        private static void ExecuteOn(SQLiteConnection c, string sql)
+        {
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.ExecuteNonQuery();
+        }
+
+        private void EnsureSchema(SQLiteConnection c)
+        {
+            ExecuteOn(c, @"
                 CREATE TABLE IF NOT EXISTS Families (
                     Id INTEGER PRIMARY KEY,
                     RelativePath TEXT UNIQUE NOT NULL,
@@ -91,18 +142,10 @@ namespace ReviTchucky.Core.Database
                     FOREIGN KEY (FamilyId) REFERENCES Families(Id) ON DELETE CASCADE
                 );");
 
-            // Add InstructionsXaml column if missing (migration for older DBs)
-            using var checkCmd = _connection.CreateCommand();
+            using var checkCmd = c.CreateCommand();
             checkCmd.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='InstructionsXaml'";
             if ((long)(checkCmd.ExecuteScalar() ?? 0L) == 0)
-                Execute("ALTER TABLE Families ADD COLUMN InstructionsXaml TEXT");
-        }
-
-        private void Execute(string sql)
-        {
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = sql;
-            cmd.ExecuteNonQuery();
+                ExecuteOn(c, "ALTER TABLE Families ADD COLUMN InstructionsXaml TEXT");
         }
 
         // Returns all families with thumbnail resolved (CustomThumbnail ?? OLE Thumbnail)
@@ -196,27 +239,6 @@ namespace ReviTchucky.Core.Database
             return result == DBNull.Value || result == null ? null : (byte[])result;
         }
 
-        public void SaveInstructionsXaml(long familyId, string? xaml)
-        {
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "UPDATE Families SET InstructionsXaml = @xaml WHERE Id = @id";
-            AddParam(cmd, "@xaml", (object?)xaml ?? DBNull.Value);
-            AddParam(cmd, "@id", familyId);
-            cmd.ExecuteNonQuery();
-        }
-
-        public void SaveCustomThumbnail(long familyId, byte[] pngData, bool oleSynced)
-        {
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = @"INSERT INTO CustomThumbnail (FamilyId, PngData, OleSynced)
-                                VALUES (@fid, @png, @sync)
-                                ON CONFLICT(FamilyId) DO UPDATE SET PngData=@png, OleSynced=@sync";
-            AddParam(cmd, "@fid", familyId);
-            AddParam(cmd, "@png", pngData);
-            AddParam(cmd, "@sync", oleSynced ? 1 : 0);
-            cmd.ExecuteNonQuery();
-        }
-
         public List<string> GetAllRelativePaths()
         {
             var result = new List<string>();
@@ -228,49 +250,88 @@ namespace ReviTchucky.Core.Database
             return result;
         }
 
+        public void SaveInstructionsXaml(long familyId, string? xaml)
+        {
+            WithWrite(c =>
+            {
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = "UPDATE Families SET InstructionsXaml = @xaml WHERE Id = @id";
+                AddParam(cmd, "@xaml", (object?)xaml ?? DBNull.Value);
+                AddParam(cmd, "@id", familyId);
+                cmd.ExecuteNonQuery();
+            });
+        }
+
+        public void SaveCustomThumbnail(long familyId, byte[] pngData, bool oleSynced)
+        {
+            WithWrite(c =>
+            {
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = @"INSERT INTO CustomThumbnail (FamilyId, PngData, OleSynced)
+                                VALUES (@fid, @png, @sync)
+                                ON CONFLICT(FamilyId) DO UPDATE SET PngData=@png, OleSynced=@sync";
+                AddParam(cmd, "@fid", familyId);
+                AddParam(cmd, "@png", pngData);
+                AddParam(cmd, "@sync", oleSynced ? 1 : 0);
+                cmd.ExecuteNonQuery();
+            });
+        }
+
         public void UpsertFamily(string relativePath, string fileName, DateTime modifiedDateUtc, long fileSize)
         {
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = @"
-                INSERT INTO Families (RelativePath, FileName, ModifiedDate, FileSize)
-                VALUES (@rel, @name, @modified, @size)
-                ON CONFLICT(RelativePath) DO UPDATE SET
-                    FileName = excluded.FileName,
-                    ModifiedDate = excluded.ModifiedDate,
-                    FileSize = excluded.FileSize";
-            AddParam(cmd, "@rel", relativePath);
-            AddParam(cmd, "@name", fileName);
-            AddParam(cmd, "@modified", modifiedDateUtc.ToString("o"));
-            AddParam(cmd, "@size", fileSize);
-            cmd.ExecuteNonQuery();
+            WithWrite(c =>
+            {
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = @"
+                    INSERT INTO Families (RelativePath, FileName, ModifiedDate, FileSize)
+                    VALUES (@rel, @name, @modified, @size)
+                    ON CONFLICT(RelativePath) DO UPDATE SET
+                        FileName = excluded.FileName,
+                        ModifiedDate = excluded.ModifiedDate,
+                        FileSize = excluded.FileSize";
+                AddParam(cmd, "@rel", relativePath);
+                AddParam(cmd, "@name", fileName);
+                AddParam(cmd, "@modified", modifiedDateUtc.ToString("o"));
+                AddParam(cmd, "@size", fileSize);
+                cmd.ExecuteNonQuery();
+            });
         }
 
         public void DeleteStaleEntries(IEnumerable<string> staleRelativePaths)
         {
-            foreach (var path in staleRelativePaths)
+            WithWrite(c =>
             {
-                using var cmd = _connection.CreateCommand();
-                cmd.CommandText = "DELETE FROM Families WHERE RelativePath = @path";
-                AddParam(cmd, "@path", path);
-                cmd.ExecuteNonQuery();
-            }
+                foreach (var path in staleRelativePaths)
+                {
+                    using var cmd = c.CreateCommand();
+                    cmd.CommandText = "DELETE FROM Families WHERE RelativePath = @path";
+                    AddParam(cmd, "@path", path);
+                    cmd.ExecuteNonQuery();
+                }
+            });
         }
 
         public void DeleteCustomThumbnail(long familyId)
         {
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "DELETE FROM CustomThumbnail WHERE FamilyId = @id";
-            AddParam(cmd, "@id", familyId);
-            cmd.ExecuteNonQuery();
+            WithWrite(c =>
+            {
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = "DELETE FROM CustomThumbnail WHERE FamilyId = @id";
+                AddParam(cmd, "@id", familyId);
+                cmd.ExecuteNonQuery();
+            });
         }
 
         public void SetOleSynced(long familyId, bool synced)
         {
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "UPDATE CustomThumbnail SET OleSynced = @sync WHERE FamilyId = @id";
-            AddParam(cmd, "@sync", synced ? 1 : 0);
-            AddParam(cmd, "@id", familyId);
-            cmd.ExecuteNonQuery();
+            WithWrite(c =>
+            {
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = "UPDATE CustomThumbnail SET OleSynced = @sync WHERE FamilyId = @id";
+                AddParam(cmd, "@sync", synced ? 1 : 0);
+                AddParam(cmd, "@id", familyId);
+                cmd.ExecuteNonQuery();
+            });
         }
 
         private static void AddParam(IDbCommand cmd, string name, object? value)
