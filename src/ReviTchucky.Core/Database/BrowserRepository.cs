@@ -140,6 +140,14 @@ namespace ReviTchucky.Core.Database
                     PngData  BLOB    NOT NULL,
                     OleSynced INTEGER NOT NULL DEFAULT 1,
                     FOREIGN KEY (FamilyId) REFERENCES Families(Id) ON DELETE CASCADE
+                );
+                CREATE TABLE IF NOT EXISTS FamilyImage (
+                    Id        INTEGER PRIMARY KEY,
+                    FamilyId  INTEGER NOT NULL,
+                    FileName  TEXT    NOT NULL,
+                    Caption   TEXT,
+                    SortOrder INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY (FamilyId) REFERENCES Families(Id) ON DELETE CASCADE
                 );");
 
             using var checkCmd = c.CreateCommand();
@@ -353,6 +361,127 @@ namespace ReviTchucky.Core.Database
             p.ParameterName = name;
             p.Value = value ?? DBNull.Value;
             cmd.Parameters.Add(p);
+        }
+
+        // ── Gallery ──────────────────────────────────────────────────────────
+
+        private string GalleryRoot(long familyId)
+        {
+            var setupDir = System.IO.Path.GetDirectoryName(_databasePath)!; // the .Setup folder
+            return System.IO.Path.Combine(setupDir, "Gallery", familyId.ToString());
+        }
+
+        public string GetGalleryPath(long familyId, string fileName)
+            => System.IO.Path.Combine(GalleryRoot(familyId), fileName);
+
+        public List<FamilyImage> GetImages(long familyId)
+        {
+            var result = new List<FamilyImage>();
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT Id, FileName, Caption, SortOrder FROM FamilyImage " +
+                              "WHERE FamilyId=@id ORDER BY SortOrder, Id";
+            AddParam(cmd, "@id", familyId);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                result.Add(new FamilyImage
+                {
+                    Id        = reader.GetInt64(0),
+                    FamilyId  = familyId,
+                    FileName  = reader.GetString(1),
+                    Caption   = reader.IsDBNull(2) ? null : reader.GetString(2),
+                    SortOrder = reader.GetInt32(3),
+                });
+            return result;
+        }
+
+        public FamilyImage AddImage(long familyId, byte[] pngData, string? caption)
+        {
+            var dir = GalleryRoot(familyId);
+            System.IO.Directory.CreateDirectory(dir);
+            var fileName = $"{Guid.NewGuid():N}.png";
+            System.IO.File.WriteAllBytes(System.IO.Path.Combine(dir, fileName), pngData);
+
+            long newId = 0;
+            int sort = 0;
+            WithWrite(c =>
+            {
+                using (var max = c.CreateCommand())
+                {
+                    max.CommandText = "SELECT COALESCE(MAX(SortOrder)+1, 0) FROM FamilyImage WHERE FamilyId=@id";
+                    AddParam(max, "@id", familyId);
+                    sort = Convert.ToInt32(max.ExecuteScalar() ?? 0);
+                }
+                using (var ins = c.CreateCommand())
+                {
+                    ins.CommandText = "INSERT INTO FamilyImage (FamilyId, FileName, Caption, SortOrder) " +
+                                      "VALUES (@fid, @fn, @cap, @sort)";
+                    AddParam(ins, "@fid", familyId);
+                    AddParam(ins, "@fn", fileName);
+                    AddParam(ins, "@cap", (object?)caption ?? DBNull.Value);
+                    AddParam(ins, "@sort", sort);
+                    ins.ExecuteNonQuery();
+                }
+                using (var sel = c.CreateCommand())
+                {
+                    sel.CommandText = "SELECT Id FROM FamilyImage WHERE FamilyId=@fid AND FileName=@fn";
+                    AddParam(sel, "@fid", familyId);
+                    AddParam(sel, "@fn", fileName);
+                    newId = (long)(sel.ExecuteScalar() ?? 0L);
+                }
+            });
+            return new FamilyImage { Id = newId, FamilyId = familyId, FileName = fileName, Caption = caption, SortOrder = sort };
+        }
+
+        public void UpdateCaption(long imageId, string? caption)
+        {
+            WithWrite(c =>
+            {
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = "UPDATE FamilyImage SET Caption=@cap WHERE Id=@id";
+                AddParam(cmd, "@cap", (object?)caption ?? DBNull.Value);
+                AddParam(cmd, "@id", imageId);
+                cmd.ExecuteNonQuery();
+            });
+        }
+
+        public void DeleteImage(long imageId)
+        {
+            // Look up file (RO connection) before deleting the row.
+            long familyId = 0; string? fileName = null;
+            using (var cmd = _connection.CreateCommand())
+            {
+                cmd.CommandText = "SELECT FamilyId, FileName FROM FamilyImage WHERE Id=@id";
+                AddParam(cmd, "@id", imageId);
+                using var r = cmd.ExecuteReader();
+                if (r.Read()) { familyId = r.GetInt64(0); fileName = r.GetString(1); }
+            }
+            WithWrite(c =>
+            {
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = "DELETE FROM FamilyImage WHERE Id=@id";
+                AddParam(cmd, "@id", imageId);
+                cmd.ExecuteNonQuery();
+            });
+            if (fileName != null)
+            {
+                try { System.IO.File.Delete(System.IO.Path.Combine(GalleryRoot(familyId), fileName)); } catch { }
+            }
+        }
+
+        public void ReorderImages(long familyId, IReadOnlyList<long> orderedImageIds)
+        {
+            WithWrite(c =>
+            {
+                for (int i = 0; i < orderedImageIds.Count; i++)
+                {
+                    using var cmd = c.CreateCommand();
+                    cmd.CommandText = "UPDATE FamilyImage SET SortOrder=@s WHERE Id=@id AND FamilyId=@fid";
+                    AddParam(cmd, "@s", i);
+                    AddParam(cmd, "@id", orderedImageIds[i]);
+                    AddParam(cmd, "@fid", familyId);
+                    cmd.ExecuteNonQuery();
+                }
+            });
         }
 
         public void Dispose() => _connection.Dispose();

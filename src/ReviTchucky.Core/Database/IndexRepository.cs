@@ -98,6 +98,15 @@ namespace ReviTchucky.Core.Database
                 FOREIGN KEY (FamilyId) REFERENCES Families(Id) ON DELETE CASCADE
             )");
 
+            Execute(@"CREATE TABLE IF NOT EXISTS FamilyImage (
+                Id        INTEGER PRIMARY KEY,
+                FamilyId  INTEGER NOT NULL,
+                FileName  TEXT    NOT NULL,
+                Caption   TEXT,
+                SortOrder INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (FamilyId) REFERENCES Families(Id) ON DELETE CASCADE
+            )");
+
             foreach (var col in new[] { "ParamGroup", "Kind", "Guid", "Formula" })
             {
                 using var c = _connection.CreateCommand();
