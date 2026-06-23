@@ -1,4 +1,4 @@
-# ReviTchucky
+# RVTuk
 
 A Revit add-in toolkit for Knafo Klimor Architects LTD. Currently includes:
 
@@ -15,12 +15,12 @@ A Revit add-in toolkit for Knafo Klimor Architects LTD. Currently includes:
 ## Project Structure
 
 ```
-ReviTchucky/
+RVTuk/
 ├── src/
-│   ├── ReviTchucky.Core/          # Business logic, database (SQLite), config — no Revit/WPF deps
+│   ├── RVTuk.Core/          # Business logic, database (SQLite), config — no Revit/WPF deps
 │   ├── LibraryBrowser/
-│   │   └── ReviTchucky.UI/        # WPF windows and view models
-│   └── ReviTchucky.Revit/         # Revit add-in host (ribbon, external events, commands)
+│   │   └── RVTuk.UI/        # WPF windows and view models
+│   └── RVTuk.Revit/         # Revit add-in host (ribbon, external events, commands)
 ├── Deploy.ps1                     # Build + deploy to Revit add-ins directory
 └── CLAUDE.md                      # AI assistant instructions
 ```
@@ -28,9 +28,9 @@ ReviTchucky/
 ## Building
 
 ```powershell
-dotnet build src\ReviTchucky.Revit\ReviTchucky.Revit.csproj -c Release2025
-dotnet build src\ReviTchucky.Revit\ReviTchucky.Revit.csproj -c Release2024
-dotnet build src\ReviTchucky.Revit\ReviTchucky.Revit.csproj -c Release2023
+dotnet build src\RVTuk.Revit\RVTuk.Revit.csproj -c Release2025
+dotnet build src\RVTuk.Revit\RVTuk.Revit.csproj -c Release2024
+dotnet build src\RVTuk.Revit\RVTuk.Revit.csproj -c Release2023
 ```
 
 ## Deploying
@@ -41,7 +41,7 @@ Run as Administrator from the repo root:
 .\Deploy.ps1
 ```
 
-Copies DLLs to `C:\ProgramData\Autodesk\Revit\Addins\{2023|2024|2025}\ReviTchucky\` and writes the `.addin` manifest. Restart Revit after deploying.
+Copies DLLs to `C:\ProgramData\Autodesk\Revit\Addins\{2023|2024|2025}\RVTuk\` and writes the `.addin` manifest. Restart Revit after deploying.
 
 ## Family Browser Features
 

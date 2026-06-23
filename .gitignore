@@ -34,3 +34,6 @@ appsettings.local.json
 
 # Superpowers scratch (SDD ledger, brainstorm artifacts) — keep out of history
 .superpowers/
+
+# Claude Code worktrees/scratch
+.claude/

@@ -15,41 +15,41 @@
 ### Created
 | File | Responsibility |
 |---|---|
-| `ReviTchucky.Core/Models/VersionStatus.cs` | Enum: None / UpToDate / UpdateAvailable |
-| `ReviTchucky.Core/Models/FamilyBrowserItem.cs` | Lightweight DB row + resolved thumbnail + version status |
-| `ReviTchucky.Core/Database/BrowserRepository.cs` | All browser-specific DB reads/writes (separate from IndexRepository) |
-| `ReviTchucky.Core/Extraction/ThumbnailWriter.cs` | Convert PNG → DIB, write to `.rfa` OLE `\x05SummaryInformation` stream |
-| `ReviTchucky.UI/Controls/RichTextBoxHelper.cs` | Attached property `DocumentXaml` binding XAML↔FlowDocument |
-| `ReviTchucky.UI/ViewModels/FamilyBrowserItemViewModel.cs` | Per-item VM wrapping `FamilyBrowserItem`; holds `BitmapSource` thumbnail |
-| `ReviTchucky.UI/ViewModels/FamilyBrowserViewModel.cs` | Main browser VM: search, filter, version check, load/update, open editor |
-| `ReviTchucky.UI/ViewModels/InstructionsEditorViewModel.cs` | Editor VM: rich text, thumbnail ⁝ menu, save/cancel |
-| `ReviTchucky.UI/Views/FamilyBrowserWindow.xaml` | Two-panel layout: family list + detail panel |
-| `ReviTchucky.UI/Views/FamilyBrowserWindow.xaml.cs` | Code-behind: drag & drop onto thumbnail, paste |
-| `ReviTchucky.UI/Views/InstructionsEditorWindow.xaml` | Editor layout: thumbnail header, toolbar, RichTextBox, footer |
-| `ReviTchucky.UI/Views/InstructionsEditorWindow.xaml.cs` | Code-behind: drag & drop, paste, FlowDocument serialization |
-| `ReviTchucky.Revit/ExternalEvents/GetProjectFamiliesEventHandler.cs` | Reads `FilteredElementCollector(doc).OfClass(typeof(Family))` on Revit main thread |
-| `ReviTchucky.Revit/ExternalEvents/LoadFamilyEventHandler.cs` | Calls `doc.LoadFamily(path, options)` on Revit main thread |
-| `ReviTchucky.Revit/Commands/BrowseLibraryCommand.cs` | Opens or focuses `FamilyBrowserWindow` |
+| `RVTuk.Core/Models/VersionStatus.cs` | Enum: None / UpToDate / UpdateAvailable |
+| `RVTuk.Core/Models/FamilyBrowserItem.cs` | Lightweight DB row + resolved thumbnail + version status |
+| `RVTuk.Core/Database/BrowserRepository.cs` | All browser-specific DB reads/writes (separate from IndexRepository) |
+| `RVTuk.Core/Extraction/ThumbnailWriter.cs` | Convert PNG → DIB, write to `.rfa` OLE `\x05SummaryInformation` stream |
+| `RVTuk.UI/Controls/RichTextBoxHelper.cs` | Attached property `DocumentXaml` binding XAML↔FlowDocument |
+| `RVTuk.UI/ViewModels/FamilyBrowserItemViewModel.cs` | Per-item VM wrapping `FamilyBrowserItem`; holds `BitmapSource` thumbnail |
+| `RVTuk.UI/ViewModels/FamilyBrowserViewModel.cs` | Main browser VM: search, filter, version check, load/update, open editor |
+| `RVTuk.UI/ViewModels/InstructionsEditorViewModel.cs` | Editor VM: rich text, thumbnail ⁝ menu, save/cancel |
+| `RVTuk.UI/Views/FamilyBrowserWindow.xaml` | Two-panel layout: family list + detail panel |
+| `RVTuk.UI/Views/FamilyBrowserWindow.xaml.cs` | Code-behind: drag & drop onto thumbnail, paste |
+| `RVTuk.UI/Views/InstructionsEditorWindow.xaml` | Editor layout: thumbnail header, toolbar, RichTextBox, footer |
+| `RVTuk.UI/Views/InstructionsEditorWindow.xaml.cs` | Code-behind: drag & drop, paste, FlowDocument serialization |
+| `RVTuk.Revit/ExternalEvents/GetProjectFamiliesEventHandler.cs` | Reads `FilteredElementCollector(doc).OfClass(typeof(Family))` on Revit main thread |
+| `RVTuk.Revit/ExternalEvents/LoadFamilyEventHandler.cs` | Calls `doc.LoadFamily(path, options)` on Revit main thread |
+| `RVTuk.Revit/Commands/BrowseLibraryCommand.cs` | Opens or focuses `FamilyBrowserWindow` |
 
 ### Modified
 | File | Change |
 |---|---|
-| `ReviTchucky.Core/Database/IndexRepository.cs` | Add `MigrateSchema()` call after `CreateSchemaIfNeeded()` |
-| `ReviTchucky.Revit/Application.cs` | Register two new ExternalEvents; hold `FamilyBrowserWindow` singleton; add Browse Library ribbon button |
+| `RVTuk.Core/Database/IndexRepository.cs` | Add `MigrateSchema()` call after `CreateSchemaIfNeeded()` |
+| `RVTuk.Revit/Application.cs` | Register two new ExternalEvents; hold `FamilyBrowserWindow` singleton; add Browse Library ribbon button |
 
 ---
 
 ## Task 1: VersionStatus enum + FamilyBrowserItem model
 
 **Files:**
-- Create: `ReviTchucky.Core/Models/VersionStatus.cs`
-- Create: `ReviTchucky.Core/Models/FamilyBrowserItem.cs`
+- Create: `RVTuk.Core/Models/VersionStatus.cs`
+- Create: `RVTuk.Core/Models/FamilyBrowserItem.cs`
 
 - [ ] **Step 1: Create VersionStatus**
 
 ```csharp
-// ReviTchucky.Core/Models/VersionStatus.cs
-namespace ReviTchucky.Core.Models
+// RVTuk.Core/Models/VersionStatus.cs
+namespace RVTuk.Core.Models
 {
     public enum VersionStatus { None, UpToDate, UpdateAvailable }
 }
@@ -58,10 +58,10 @@ namespace ReviTchucky.Core.Models
 - [ ] **Step 2: Create FamilyBrowserItem**
 
 ```csharp
-// ReviTchucky.Core/Models/FamilyBrowserItem.cs
+// RVTuk.Core/Models/FamilyBrowserItem.cs
 using System;
 
-namespace ReviTchucky.Core.Models
+namespace RVTuk.Core.Models
 {
     public class FamilyBrowserItem
     {
@@ -81,7 +81,7 @@ namespace ReviTchucky.Core.Models
 - [ ] **Step 3: Build Core to confirm no errors**
 
 ```powershell
-dotnet build "ReviTchucky\ReviTchucky.Core\ReviTchucky.Core.csproj" -c Release2024
+dotnet build "RVTuk\RVTuk.Core\RVTuk.Core.csproj" -c Release2024
 ```
 
 Expected: Build succeeded, 0 errors.
@@ -89,7 +89,7 @@ Expected: Build succeeded, 0 errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add ReviTchucky/ReviTchucky.Core/Models/VersionStatus.cs ReviTchucky/ReviTchucky.Core/Models/FamilyBrowserItem.cs
+git add RVTuk/RVTuk.Core/Models/VersionStatus.cs RVTuk/RVTuk.Core/Models/FamilyBrowserItem.cs
 git commit -m "feat: add VersionStatus enum and FamilyBrowserItem model"
 ```
 
@@ -98,8 +98,8 @@ git commit -m "feat: add VersionStatus enum and FamilyBrowserItem model"
 ## Task 2: DB schema migration + BrowserRepository
 
 **Files:**
-- Modify: `ReviTchucky.Core/Database/IndexRepository.cs`
-- Create: `ReviTchucky.Core/Database/BrowserRepository.cs`
+- Modify: `RVTuk.Core/Database/IndexRepository.cs`
+- Create: `RVTuk.Core/Database/BrowserRepository.cs`
 
 - [ ] **Step 1: Add MigrateSchema to IndexRepository**
 
@@ -132,11 +132,11 @@ private void MigrateSchema()
 - [ ] **Step 2: Create BrowserRepository**
 
 ```csharp
-// ReviTchucky.Core/Database/BrowserRepository.cs
+// RVTuk.Core/Database/BrowserRepository.cs
 using System;
 using System.Collections.Generic;
 using System.Data;
-using ReviTchucky.Core.Models;
+using RVTuk.Core.Models;
 
 #if REVIT2024
 using System.Data.SQLite;
@@ -146,7 +146,7 @@ using SQLiteConnection = Microsoft.Data.Sqlite.SqliteConnection;
 using SQLiteCommand   = Microsoft.Data.Sqlite.SqliteCommand;
 #endif
 
-namespace ReviTchucky.Core.Database
+namespace RVTuk.Core.Database
 {
     public class BrowserRepository : IDisposable
     {
@@ -312,7 +312,7 @@ namespace ReviTchucky.Core.Database
 - [ ] **Step 3: Build Core**
 
 ```powershell
-dotnet build "ReviTchucky\ReviTchucky.Core\ReviTchucky.Core.csproj" -c Release2024
+dotnet build "RVTuk\RVTuk.Core\RVTuk.Core.csproj" -c Release2024
 ```
 
 Expected: Build succeeded, 0 errors.
@@ -320,7 +320,7 @@ Expected: Build succeeded, 0 errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add ReviTchucky/ReviTchucky.Core/Database/IndexRepository.cs ReviTchucky/ReviTchucky.Core/Database/BrowserRepository.cs
+git add RVTuk/RVTuk.Core/Database/IndexRepository.cs RVTuk/RVTuk.Core/Database/BrowserRepository.cs
 git commit -m "feat: DB schema migration (InstructionsXaml, CustomThumbnail) + BrowserRepository"
 ```
 
@@ -329,19 +329,19 @@ git commit -m "feat: DB schema migration (InstructionsXaml, CustomThumbnail) + B
 ## Task 3: ThumbnailWriter — write PNG to .rfa OLE stream
 
 **Files:**
-- Create: `ReviTchucky.Core/Extraction/ThumbnailWriter.cs`
+- Create: `RVTuk.Core/Extraction/ThumbnailWriter.cs`
 
 The `.rfa` OLE compound document contains a `\x05SummaryInformation` stream that holds the thumbnail as a CF_DIB property (PIDSI_THUMBNAIL = 0x0F). We rebuild this stream with the new image.
 
 - [ ] **Step 1: Create ThumbnailWriter**
 
 ```csharp
-// ReviTchucky.Core/Extraction/ThumbnailWriter.cs
+// RVTuk.Core/Extraction/ThumbnailWriter.cs
 using System;
 using System.IO;
 using OpenMcdf;
 
-namespace ReviTchucky.Core.Extraction
+namespace RVTuk.Core.Extraction
 {
     public static class ThumbnailWriter
     {
@@ -488,7 +488,7 @@ namespace ReviTchucky.Core.Extraction
 - [ ] **Step 2: Build Core**
 
 ```powershell
-dotnet build "ReviTchucky\ReviTchucky.Core\ReviTchucky.Core.csproj" -c Release2024
+dotnet build "RVTuk\RVTuk.Core\RVTuk.Core.csproj" -c Release2024
 ```
 
 Expected: Build succeeded, 0 errors.
@@ -498,7 +498,7 @@ Expected: Build succeeded, 0 errors.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add ReviTchucky/ReviTchucky.Core/Extraction/ThumbnailWriter.cs
+git add RVTuk/RVTuk.Core/Extraction/ThumbnailWriter.cs
 git commit -m "feat: ThumbnailWriter — write custom PNG to .rfa OLE SummaryInformation stream"
 ```
 
@@ -507,14 +507,14 @@ git commit -m "feat: ThumbnailWriter — write custom PNG to .rfa OLE SummaryInf
 ## Task 4: GetProjectFamiliesEventHandler
 
 **Files:**
-- Create: `ReviTchucky.Revit/ExternalEvents/GetProjectFamiliesEventHandler.cs`
+- Create: `RVTuk.Revit/ExternalEvents/GetProjectFamiliesEventHandler.cs`
 
 Reads all `Family` elements from the active document on Revit's main thread.
 
 - [ ] **Step 1: Create handler**
 
 ```csharp
-// ReviTchucky.Revit/ExternalEvents/GetProjectFamiliesEventHandler.cs
+// RVTuk.Revit/ExternalEvents/GetProjectFamiliesEventHandler.cs
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -522,7 +522,7 @@ using System.Threading;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
-namespace ReviTchucky.Revit.ExternalEvents
+namespace RVTuk.Revit.ExternalEvents
 {
     public class GetProjectFamiliesEventHandler : IExternalEventHandler
     {
@@ -556,7 +556,7 @@ namespace ReviTchucky.Revit.ExternalEvents
             }
         }
 
-        public string GetName() => "ReviTchucky.GetProjectFamiliesEventHandler";
+        public string GetName() => "RVTuk.GetProjectFamiliesEventHandler";
     }
 }
 ```
@@ -564,7 +564,7 @@ namespace ReviTchucky.Revit.ExternalEvents
 - [ ] **Step 2: Build Revit project**
 
 ```powershell
-dotnet build "ReviTchucky\ReviTchucky.Revit\ReviTchucky.Revit.csproj" -c Release2024
+dotnet build "RVTuk\RVTuk.Revit\RVTuk.Revit.csproj" -c Release2024
 ```
 
 Expected: Build succeeded, 0 errors.
@@ -572,7 +572,7 @@ Expected: Build succeeded, 0 errors.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add ReviTchucky/ReviTchucky.Revit/ExternalEvents/GetProjectFamiliesEventHandler.cs
+git add RVTuk/RVTuk.Revit/ExternalEvents/GetProjectFamiliesEventHandler.cs
 git commit -m "feat: GetProjectFamiliesEventHandler reads loaded family names from active document"
 ```
 
@@ -581,19 +581,19 @@ git commit -m "feat: GetProjectFamiliesEventHandler reads loaded family names fr
 ## Task 5: LoadFamilyEventHandler
 
 **Files:**
-- Create: `ReviTchucky.Revit/ExternalEvents/LoadFamilyEventHandler.cs`
+- Create: `RVTuk.Revit/ExternalEvents/LoadFamilyEventHandler.cs`
 
 Loads or reloads a family from a path on disk into the active document.
 
 - [ ] **Step 1: Create handler**
 
 ```csharp
-// ReviTchucky.Revit/ExternalEvents/LoadFamilyEventHandler.cs
+// RVTuk.Revit/ExternalEvents/LoadFamilyEventHandler.cs
 using System.Threading;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
-namespace ReviTchucky.Revit.ExternalEvents
+namespace RVTuk.Revit.ExternalEvents
 {
     public class LoadFamilyEventHandler : IExternalEventHandler
     {
@@ -640,7 +640,7 @@ namespace ReviTchucky.Revit.ExternalEvents
             }
         }
 
-        public string GetName() => "ReviTchucky.LoadFamilyEventHandler";
+        public string GetName() => "RVTuk.LoadFamilyEventHandler";
 
         private class OverwriteLoadOptions : IFamilyLoadOptions
         {
@@ -665,7 +665,7 @@ namespace ReviTchucky.Revit.ExternalEvents
 - [ ] **Step 2: Build Revit project**
 
 ```powershell
-dotnet build "ReviTchucky\ReviTchucky.Revit\ReviTchucky.Revit.csproj" -c Release2024
+dotnet build "RVTuk\RVTuk.Revit\RVTuk.Revit.csproj" -c Release2024
 ```
 
 Expected: Build succeeded, 0 errors.
@@ -673,7 +673,7 @@ Expected: Build succeeded, 0 errors.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add ReviTchucky/ReviTchucky.Revit/ExternalEvents/LoadFamilyEventHandler.cs
+git add RVTuk/RVTuk.Revit/ExternalEvents/LoadFamilyEventHandler.cs
 git commit -m "feat: LoadFamilyEventHandler wraps Document.LoadFamily with overwrite options"
 ```
 
@@ -682,8 +682,8 @@ git commit -m "feat: LoadFamilyEventHandler wraps Document.LoadFamily with overw
 ## Task 6: Application.cs updates + BrowseLibraryCommand
 
 **Files:**
-- Modify: `ReviTchucky.Revit/Application.cs`
-- Create: `ReviTchucky.Revit/Commands/BrowseLibraryCommand.cs`
+- Modify: `RVTuk.Revit/Application.cs`
+- Create: `RVTuk.Revit/Commands/BrowseLibraryCommand.cs`
 
 - [ ] **Step 1: Update Application.cs**
 
@@ -696,7 +696,7 @@ public static GetProjectFamiliesEventHandler GetFamiliesHandler { get; private s
 public static ExternalEvent GetFamiliesEvent { get; private set; } = null!;
 public static LoadFamilyEventHandler LoadFamilyHandler { get; private set; } = null!;
 public static ExternalEvent LoadFamilyEvent { get; private set; } = null!;
-public static ReviTchucky.UI.Views.FamilyBrowserWindow? BrowserWindow { get; set; }
+public static RVTuk.UI.Views.FamilyBrowserWindow? BrowserWindow { get; set; }
 ```
 
 In `OnStartup`, after creating `IndexingHandler`/`IndexingEvent`:
@@ -727,21 +727,21 @@ panel.AddItem(browseBtn);
 Also add the using for the new command at the top of Application.cs:
 
 ```csharp
-using ReviTchucky.Revit.Commands;
-using ReviTchucky.Revit.ExternalEvents;
+using RVTuk.Revit.Commands;
+using RVTuk.Revit.ExternalEvents;
 ```
 
 - [ ] **Step 2: Create BrowseLibraryCommand**
 
 ```csharp
-// ReviTchucky.Revit/Commands/BrowseLibraryCommand.cs
+// RVTuk.Revit/Commands/BrowseLibraryCommand.cs
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using ReviTchucky.Core.Config;
-using ReviTchucky.UI.Views;
+using RVTuk.Core.Config;
+using RVTuk.UI.Views;
 
-namespace ReviTchucky.Revit.Commands
+namespace RVTuk.Revit.Commands
 {
     [Transaction(TransactionMode.Manual)]
     public class BrowseLibraryCommand : IExternalCommand
@@ -783,7 +783,7 @@ namespace ReviTchucky.Revit.Commands
 - [ ] **Step 3: Build Revit project**
 
 ```powershell
-dotnet build "ReviTchucky\ReviTchucky.Revit\ReviTchucky.Revit.csproj" -c Release2024
+dotnet build "RVTuk\RVTuk.Revit\RVTuk.Revit.csproj" -c Release2024
 ```
 
 Expected: Build succeeded, 0 errors (UI project will fail since FamilyBrowserWindow doesn't exist yet — that's fine, skip UI build for now).
@@ -791,7 +791,7 @@ Expected: Build succeeded, 0 errors (UI project will fail since FamilyBrowserWin
 - [ ] **Step 4: Commit**
 
 ```bash
-git add ReviTchucky/ReviTchucky.Revit/Application.cs ReviTchucky/ReviTchucky.Revit/Commands/BrowseLibraryCommand.cs
+git add RVTuk/RVTuk.Revit/Application.cs RVTuk/RVTuk.Revit/Commands/BrowseLibraryCommand.cs
 git commit -m "feat: register GetFamilies/LoadFamily events and Browse Library ribbon button"
 ```
 
@@ -800,21 +800,21 @@ git commit -m "feat: register GetFamilies/LoadFamily events and Browse Library r
 ## Task 7: RichTextBoxHelper attached property
 
 **Files:**
-- Create: `ReviTchucky.UI/Controls/RichTextBoxHelper.cs`
+- Create: `RVTuk.UI/Controls/RichTextBoxHelper.cs`
 
 WPF's `RichTextBox.Document` is not directly bindable. This attached property bridges a `string` (XAML FlowDocument) to the `RichTextBox`.
 
 - [ ] **Step 1: Create RichTextBoxHelper**
 
 ```csharp
-// ReviTchucky.UI/Controls/RichTextBoxHelper.cs
+// RVTuk.UI/Controls/RichTextBoxHelper.cs
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Markup;
 
-namespace ReviTchucky.UI.Controls
+namespace RVTuk.UI.Controls
 {
     public static class RichTextBoxHelper
     {
@@ -883,7 +883,7 @@ namespace ReviTchucky.UI.Controls
 - [ ] **Step 2: Build UI project**
 
 ```powershell
-dotnet build "ReviTchucky\ReviTchucky.UI\ReviTchucky.UI.csproj" -c Release2024
+dotnet build "RVTuk\RVTuk.UI\RVTuk.UI.csproj" -c Release2024
 ```
 
 Expected: Build succeeded, 0 errors.
@@ -891,7 +891,7 @@ Expected: Build succeeded, 0 errors.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add ReviTchucky/ReviTchucky.UI/Controls/RichTextBoxHelper.cs
+git add RVTuk/RVTuk.UI/Controls/RichTextBoxHelper.cs
 git commit -m "feat: RichTextBoxHelper attached property for binding XAML FlowDocument to RichTextBox"
 ```
 
@@ -900,18 +900,18 @@ git commit -m "feat: RichTextBoxHelper attached property for binding XAML FlowDo
 ## Task 8: FamilyBrowserItemViewModel + FamilyBrowserViewModel
 
 **Files:**
-- Create: `ReviTchucky.UI/ViewModels/FamilyBrowserItemViewModel.cs`
-- Create: `ReviTchucky.UI/ViewModels/FamilyBrowserViewModel.cs`
+- Create: `RVTuk.UI/ViewModels/FamilyBrowserItemViewModel.cs`
+- Create: `RVTuk.UI/ViewModels/FamilyBrowserViewModel.cs`
 
 - [ ] **Step 1: Create FamilyBrowserItemViewModel**
 
 ```csharp
-// ReviTchucky.UI/ViewModels/FamilyBrowserItemViewModel.cs
+// RVTuk.UI/ViewModels/FamilyBrowserItemViewModel.cs
 using System.IO;
 using System.Windows.Media.Imaging;
-using ReviTchucky.Core.Models;
+using RVTuk.Core.Models;
 
-namespace ReviTchucky.UI.ViewModels
+namespace RVTuk.UI.ViewModels
 {
     public class FamilyBrowserItemViewModel : ViewModelBase
     {
@@ -970,7 +970,7 @@ namespace ReviTchucky.UI.ViewModels
 - [ ] **Step 2: Create FamilyBrowserViewModel**
 
 ```csharp
-// ReviTchucky.UI/ViewModels/FamilyBrowserViewModel.cs
+// RVTuk.UI/ViewModels/FamilyBrowserViewModel.cs
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -980,11 +980,11 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Input;
 using Autodesk.Revit.UI;
-using ReviTchucky.Core.Config;
-using ReviTchucky.Core.Database;
-using ReviTchucky.Core.Models;
+using RVTuk.Core.Config;
+using RVTuk.Core.Database;
+using RVTuk.Core.Models;
 
-namespace ReviTchucky.UI.ViewModels
+namespace RVTuk.UI.ViewModels
 {
     public class FamilyBrowserViewModel : ViewModelBase, IDisposable
     {
@@ -1218,7 +1218,7 @@ namespace ReviTchucky.UI.ViewModels
                     if (success)
                         item.VersionStatus = VersionStatus.UpToDate;
                     else if (!string.IsNullOrEmpty(error))
-                        MessageBox.Show($"Failed to load family: {error}", "ReviTchucky");
+                        MessageBox.Show($"Failed to load family: {error}", "RVTuk");
                 });
             });
         }
@@ -1239,7 +1239,7 @@ namespace ReviTchucky.UI.ViewModels
 - [ ] **Step 3: Build UI**
 
 ```powershell
-dotnet build "ReviTchucky\ReviTchucky.UI\ReviTchucky.UI.csproj" -c Release2024
+dotnet build "RVTuk\RVTuk.UI\RVTuk.UI.csproj" -c Release2024
 ```
 
 Expected: Build succeeded, 0 errors.
@@ -1247,7 +1247,7 @@ Expected: Build succeeded, 0 errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add ReviTchucky/ReviTchucky.UI/ViewModels/FamilyBrowserItemViewModel.cs ReviTchucky/ReviTchucky.UI/ViewModels/FamilyBrowserViewModel.cs
+git add RVTuk/RVTuk.UI/ViewModels/FamilyBrowserItemViewModel.cs RVTuk/RVTuk.UI/ViewModels/FamilyBrowserViewModel.cs
 git commit -m "feat: FamilyBrowserItemViewModel and FamilyBrowserViewModel with search, filter, version check"
 ```
 
@@ -1256,19 +1256,19 @@ git commit -m "feat: FamilyBrowserItemViewModel and FamilyBrowserViewModel with 
 ## Task 9: FamilyBrowserWindow
 
 **Files:**
-- Create: `ReviTchucky.UI/Views/FamilyBrowserWindow.xaml`
-- Create: `ReviTchucky.UI/Views/FamilyBrowserWindow.xaml.cs`
+- Create: `RVTuk.UI/Views/FamilyBrowserWindow.xaml`
+- Create: `RVTuk.UI/Views/FamilyBrowserWindow.xaml.cs`
 
 - [ ] **Step 1: Create XAML**
 
 ```xml
-<!-- ReviTchucky.UI/Views/FamilyBrowserWindow.xaml -->
-<Window x:Class="ReviTchucky.UI.Views.FamilyBrowserWindow"
+<!-- RVTuk.UI/Views/FamilyBrowserWindow.xaml -->
+<Window x:Class="RVTuk.UI.Views.FamilyBrowserWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="clr-namespace:ReviTchucky.UI.ViewModels"
-        xmlns:ctrl="clr-namespace:ReviTchucky.UI.Controls"
-        Title="ReviTchucky — Family Browser"
+        xmlns:vm="clr-namespace:RVTuk.UI.ViewModels"
+        xmlns:ctrl="clr-namespace:RVTuk.UI.Controls"
+        Title="RVTuk — Family Browser"
         Width="860" Height="600" MinWidth="640" MinHeight="400"
         WindowStartupLocation="CenterScreen">
 
@@ -1435,15 +1435,15 @@ git commit -m "feat: FamilyBrowserItemViewModel and FamilyBrowserViewModel with 
 - [ ] **Step 2: Create code-behind**
 
 ```csharp
-// ReviTchucky.UI/Views/FamilyBrowserWindow.xaml.cs
+// RVTuk.UI/Views/FamilyBrowserWindow.xaml.cs
 using System;
 using System.Windows;
 using Autodesk.Revit.UI;
-using ReviTchucky.Core.Config;
-using ReviTchucky.Core.Database;
-using ReviTchucky.UI.ViewModels;
+using RVTuk.Core.Config;
+using RVTuk.Core.Database;
+using RVTuk.UI.ViewModels;
 
-namespace ReviTchucky.UI.Views
+namespace RVTuk.UI.Views
 {
     public partial class FamilyBrowserWindow : Window
     {
@@ -1485,7 +1485,7 @@ namespace ReviTchucky.UI.Views
 - [ ] **Step 3: Build UI**
 
 ```powershell
-dotnet build "ReviTchucky\ReviTchucky.UI\ReviTchucky.UI.csproj" -c Release2024
+dotnet build "RVTuk\RVTuk.UI\RVTuk.UI.csproj" -c Release2024
 ```
 
 Expected: Build succeeded. (InstructionsEditorWindow is referenced but not yet created — add a stub class temporarily if needed.)
@@ -1493,7 +1493,7 @@ Expected: Build succeeded. (InstructionsEditorWindow is referenced but not yet c
 - [ ] **Step 4: Commit**
 
 ```bash
-git add "ReviTchucky/ReviTchucky.UI/Views/FamilyBrowserWindow.xaml" "ReviTchucky/ReviTchucky.UI/Views/FamilyBrowserWindow.xaml.cs"
+git add "RVTuk/RVTuk.UI/Views/FamilyBrowserWindow.xaml" "RVTuk/RVTuk.UI/Views/FamilyBrowserWindow.xaml.cs"
 git commit -m "feat: FamilyBrowserWindow two-panel layout with search, version badges, and detail panel"
 ```
 
@@ -1502,20 +1502,20 @@ git commit -m "feat: FamilyBrowserWindow two-panel layout with search, version b
 ## Task 10: InstructionsEditorViewModel
 
 **Files:**
-- Create: `ReviTchucky.UI/ViewModels/InstructionsEditorViewModel.cs`
+- Create: `RVTuk.UI/ViewModels/InstructionsEditorViewModel.cs`
 
 - [ ] **Step 1: Create InstructionsEditorViewModel**
 
 ```csharp
-// ReviTchucky.UI/ViewModels/InstructionsEditorViewModel.cs
+// RVTuk.UI/ViewModels/InstructionsEditorViewModel.cs
 using System;
 using System.IO;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
-using ReviTchucky.Core.Database;
-using ReviTchucky.Core.Extraction;
+using RVTuk.Core.Database;
+using RVTuk.Core.Extraction;
 
-namespace ReviTchucky.UI.ViewModels
+namespace RVTuk.UI.ViewModels
 {
     public class InstructionsEditorViewModel : ViewModelBase
     {
@@ -1659,7 +1659,7 @@ namespace ReviTchucky.UI.ViewModels
             {
                 System.Windows.MessageBox.Show(
                     "Could not write to the .rfa file. The file may be read-only or locked.",
-                    "ReviTchucky");
+                    "RVTuk");
             }
         }
 
@@ -1716,7 +1716,7 @@ namespace ReviTchucky.UI.ViewModels
 - [ ] **Step 2: Build UI**
 
 ```powershell
-dotnet build "ReviTchucky\ReviTchucky.UI\ReviTchucky.UI.csproj" -c Release2024
+dotnet build "RVTuk\RVTuk.UI\RVTuk.UI.csproj" -c Release2024
 ```
 
 Expected: Build succeeded.
@@ -1724,7 +1724,7 @@ Expected: Build succeeded.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add ReviTchucky/ReviTchucky.UI/ViewModels/InstructionsEditorViewModel.cs
+git add RVTuk/RVTuk.UI/ViewModels/InstructionsEditorViewModel.cs
 git commit -m "feat: InstructionsEditorViewModel with thumbnail ⁝ menu, OLE sync detection, and save"
 ```
 
@@ -1733,17 +1733,17 @@ git commit -m "feat: InstructionsEditorViewModel with thumbnail ⁝ menu, OLE sy
 ## Task 11: InstructionsEditorWindow
 
 **Files:**
-- Create: `ReviTchucky.UI/Views/InstructionsEditorWindow.xaml`
-- Create: `ReviTchucky.UI/Views/InstructionsEditorWindow.xaml.cs`
+- Create: `RVTuk.UI/Views/InstructionsEditorWindow.xaml`
+- Create: `RVTuk.UI/Views/InstructionsEditorWindow.xaml.cs`
 
 - [ ] **Step 1: Create XAML**
 
 ```xml
-<!-- ReviTchucky.UI/Views/InstructionsEditorWindow.xaml -->
-<Window x:Class="ReviTchucky.UI.Views.InstructionsEditorWindow"
+<!-- RVTuk.UI/Views/InstructionsEditorWindow.xaml -->
+<Window x:Class="RVTuk.UI.Views.InstructionsEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:ctrl="clr-namespace:ReviTchucky.UI.Controls"
+        xmlns:ctrl="clr-namespace:RVTuk.UI.Controls"
         Title="Edit Family Info"
         Width="640" Height="560" MinWidth="480" MinHeight="400"
         WindowStartupLocation="CenterOwner"
@@ -1846,7 +1846,7 @@ git commit -m "feat: InstructionsEditorViewModel with thumbnail ⁝ menu, OLE sy
 - [ ] **Step 2: Create code-behind**
 
 ```csharp
-// ReviTchucky.UI/Views/InstructionsEditorWindow.xaml.cs
+// RVTuk.UI/Views/InstructionsEditorWindow.xaml.cs
 using System;
 using System.IO;
 using System.Windows;
@@ -1854,11 +1854,11 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
-using ReviTchucky.Core.Config;
-using ReviTchucky.UI.Controls;
-using ReviTchucky.UI.ViewModels;
+using RVTuk.Core.Config;
+using RVTuk.UI.Controls;
+using RVTuk.UI.ViewModels;
 
-namespace ReviTchucky.UI.Views
+namespace RVTuk.UI.Views
 {
     public partial class InstructionsEditorWindow : Window
     {
@@ -1869,7 +1869,7 @@ namespace ReviTchucky.UI.Views
             InitializeComponent();
 
             // Resolve full path
-            var config = ReviTchucky.Core.Config.ConfigManager.LoadConfig();
+            var config = RVTuk.Core.Config.ConfigManager.LoadConfig();
             var fullPath = Path.Combine(config.LibraryFolderPath, item.RelativePath);
             var xaml = browser.InstructionsXaml; // already loaded by browser VM
 
@@ -2090,9 +2090,9 @@ var browser = (FamilyBrowserViewModel)/* ... */;
 - [ ] **Step 4: Build all three projects**
 
 ```powershell
-dotnet build "ReviTchucky\ReviTchucky.Revit\ReviTchucky.Revit.csproj" -c Release2024
-dotnet build "ReviTchucky\ReviTchucky.Revit\ReviTchucky.Revit.csproj" -c Release2023
-dotnet build "ReviTchucky\ReviTchucky.Revit\ReviTchucky.Revit.csproj" -c Release2025
+dotnet build "RVTuk\RVTuk.Revit\RVTuk.Revit.csproj" -c Release2024
+dotnet build "RVTuk\RVTuk.Revit\RVTuk.Revit.csproj" -c Release2023
+dotnet build "RVTuk\RVTuk.Revit\RVTuk.Revit.csproj" -c Release2025
 ```
 
 Expected: All three succeed, 0 errors.
@@ -2100,7 +2100,7 @@ Expected: All three succeed, 0 errors.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add "ReviTchucky/ReviTchucky.UI/Views/InstructionsEditorWindow.xaml" "ReviTchucky/ReviTchucky.UI/Views/InstructionsEditorWindow.xaml.cs" ReviTchucky/ReviTchucky.UI/ViewModels/InstructionsEditorViewModel.cs
+git add "RVTuk/RVTuk.UI/Views/InstructionsEditorWindow.xaml" "RVTuk/RVTuk.UI/Views/InstructionsEditorWindow.xaml.cs" RVTuk/RVTuk.UI/ViewModels/InstructionsEditorViewModel.cs
 git commit -m "feat: InstructionsEditorWindow with rich text, thumbnail ⁝ menu, drag-drop, and OLE sync"
 ```
 
@@ -2115,7 +2115,7 @@ git commit -m "feat: InstructionsEditorWindow with rich text, thumbnail ⁝ menu
 .\Deploy.ps1
 ```
 
-Expected: DLLs deployed to `C:\Users\danie\AppData\Roaming\Autodesk\Revit\Addins\ReviTchucky\` for each version.
+Expected: DLLs deployed to `C:\Users\danie\AppData\Roaming\Autodesk\Revit\Addins\RVTuk\` for each version.
 
 - [ ] **Step 2: Start Revit 2024, open any project**
 
