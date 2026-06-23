@@ -123,6 +123,11 @@ namespace ReviTchucky.Core.Database
             yearCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='RevitYear'";
             if ((long)(yearCheck.ExecuteScalar() ?? 0L) == 0)
                 Execute("ALTER TABLE Families ADD COLUMN RevitYear INTEGER NOT NULL DEFAULT 0");
+
+            using var tagsCheck = _connection.CreateCommand();
+            tagsCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='Tags'";
+            if ((long)(tagsCheck.ExecuteScalar() ?? 0L) == 0)
+                Execute("ALTER TABLE Families ADD COLUMN Tags TEXT");
         }
 
         public FamilyModel? GetFamilyByPath(string relativePath)

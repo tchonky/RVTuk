@@ -17,6 +17,7 @@ namespace ReviTchucky.UI.ViewModels
         public string? Category => Model.Category;
         public string RelativePath => Model.RelativePath;
         public int RevitYear => Model.RevitYear;
+        public string? Tags => Model.Tags;
 
         public VersionStatus VersionStatus
         {

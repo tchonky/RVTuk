@@ -15,6 +15,7 @@ namespace ReviTchucky.UI.ViewModels
         private readonly string _rfaFullPath;
 
         private string? _instructionsXaml;
+        private string _tagsText = string.Empty;
         private byte[]? _customThumbPng;
         private bool _oleSynced;
         private BitmapSource? _thumbnailSource;
@@ -26,6 +27,12 @@ namespace ReviTchucky.UI.ViewModels
         {
             get => _instructionsXaml;
             set => SetProperty(ref _instructionsXaml, value);
+        }
+
+        public string TagsText
+        {
+            get => _tagsText;
+            set => SetProperty(ref _tagsText, value);
         }
 
         public BitmapSource? ThumbnailSource
@@ -74,6 +81,7 @@ namespace ReviTchucky.UI.ViewModels
             _rfaFullPath = rfaFullPath;
             FamilyDisplayName = Path.GetFileNameWithoutExtension(familyFileName);
             _instructionsXaml = currentXaml;
+            _tagsText = repo.GetTags(familyId) ?? string.Empty;
 
             SaveCommand             = new RelayCommand(() => { }); // actual save goes through ExecuteSave
             CancelCommand           = new RelayCommand(() => CloseRequested?.Invoke());
@@ -168,6 +176,7 @@ namespace ReviTchucky.UI.ViewModels
         public void ExecuteSave(string? xamlFromEditor)
         {
             _repo.SaveInstructionsXaml(_familyId, xamlFromEditor);
+            _repo.SaveTags(_familyId, string.IsNullOrWhiteSpace(_tagsText) ? null : _tagsText.Trim());
 
             if (_customThumbPng != null)
             {

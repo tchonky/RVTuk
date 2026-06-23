@@ -168,6 +168,11 @@ namespace ReviTchucky.Core.Database
             yearCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='RevitYear'";
             if ((long)(yearCheck.ExecuteScalar() ?? 0L) == 0)
                 ExecuteOn(c, "ALTER TABLE Families ADD COLUMN RevitYear INTEGER NOT NULL DEFAULT 0");
+
+            using var tagsCheck = c.CreateCommand();
+            tagsCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='Tags'";
+            if ((long)(tagsCheck.ExecuteScalar() ?? 0L) == 0)
+                ExecuteOn(c, "ALTER TABLE Families ADD COLUMN Tags TEXT");
         }
 
         // Returns all families with thumbnail resolved (CustomThumbnail ?? OLE Thumbnail)
@@ -180,7 +185,8 @@ namespace ReviTchucky.Core.Database
                        t.PngData  AS OlePng,
                        ct.PngData AS CustomPng,
                        ct.OleSynced,
-                       f.RevitYear
+                       f.RevitYear,
+                       f.Tags
                 FROM Families f
                 LEFT JOIN Thumbnail t ON t.FamilyId = f.Id
                 LEFT JOIN CustomThumbnail ct ON ct.FamilyId = f.Id
@@ -200,6 +206,7 @@ namespace ReviTchucky.Core.Database
                     HasCustomThumbnail = hasCustom,
                     OleSynced        = !hasCustom || reader.GetInt32(7) == 1,
                     RevitYear        = reader.IsDBNull(8) ? 0 : reader.GetInt32(8),
+                    Tags             = reader.IsDBNull(9) ? null : reader.GetString(9),
                 });
             }
             return result;
@@ -277,6 +284,27 @@ namespace ReviTchucky.Core.Database
             while (reader.Read())
                 result.Add(reader.GetString(0));
             return result;
+        }
+
+        public string? GetTags(long familyId)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT Tags FROM Families WHERE Id = @id";
+            AddParam(cmd, "@id", familyId);
+            var result = cmd.ExecuteScalar();
+            return result == DBNull.Value || result == null ? null : (string)result;
+        }
+
+        public void SaveTags(long familyId, string? tags)
+        {
+            WithWrite(c =>
+            {
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = "UPDATE Families SET Tags = @tags WHERE Id = @id";
+                AddParam(cmd, "@tags", (object?)tags ?? DBNull.Value);
+                AddParam(cmd, "@id", familyId);
+                cmd.ExecuteNonQuery();
+            });
         }
 
         public void SaveInstructionsXaml(long familyId, string? xaml)

@@ -64,6 +64,12 @@
             <StackPanel Grid.Column="1" Margin="10,4,0,4" VerticalAlignment="Center">
                 <TextBlock Text="{Binding FamilyDisplayName}" FontSize="13" FontWeight="Bold"/>
                 <TextBlock Text="{Binding ThumbStatus}" FontSize="10" Foreground="Gray" Margin="0,2,0,0"/>
+                <DockPanel Margin="0,6,0,0">
+                    <TextBlock Text="&#x1F3F7; Tags:" DockPanel.Dock="Left" VerticalAlignment="Center"
+                               FontSize="10" Foreground="Gray" Margin="0,0,6,0"/>
+                    <TextBox Text="{Binding TagsText, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Comma-separated tags, e.g. door, exterior, ADA"/>
+                </DockPanel>
             </StackPanel>
         </Grid>
 

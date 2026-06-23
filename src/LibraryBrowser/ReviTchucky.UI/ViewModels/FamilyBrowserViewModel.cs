@@ -135,6 +135,15 @@ namespace ReviTchucky.UI.ViewModels
             set => SetProperty(ref _instructionsXaml, value);
         }
 
+        private string? _selectedTags;
+        public string? SelectedTags
+        {
+            get => _selectedTags;
+            set { SetProperty(ref _selectedTags, value); OnPropertyChanged(nameof(ShowTags)); }
+        }
+
+        public bool ShowTags => !string.IsNullOrWhiteSpace(_selectedTags);
+
         public List<ParameterModel> Parameters
         {
             get => _parameters;
@@ -242,7 +251,9 @@ namespace ReviTchucky.UI.ViewModels
             var filtered = _allItems.AsEnumerable();
             if (tokens.Length > 0)
                 filtered = filtered.Where(i =>
-                    tokens.All(t => i.DisplayName.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0));
+                    tokens.All(t =>
+                        i.DisplayName.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        (i.Tags != null && i.Tags.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0)));
             if (!string.IsNullOrEmpty(_selectedCategory))
                 filtered = filtered.Where(i => i.Category == _selectedCategory);
             if (!string.IsNullOrEmpty(_selectedVersion))
@@ -259,13 +270,14 @@ namespace ReviTchucky.UI.ViewModels
 
         private void LoadDetailAsync(FamilyBrowserItemViewModel? item)
         {
-            if (item == null) { InstructionsXaml = null; Parameters = new List<ParameterModel>(); GalleryItems.Clear(); return; }
+            if (item == null) { InstructionsXaml = null; Parameters = new List<ParameterModel>(); GalleryItems.Clear(); SelectedTags = null; return; }
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 try
                 {
                     var xaml = _repo.GetInstructionsXaml(item.Id);
                     var prms = _repo.GetParameters(item.Id);
+                    var tags = _repo.GetTags(item.Id);
                     var images = _repo.GetImages(item.Id)
                         .Select(im => new GalleryItemViewModel(im.Id, im.Caption, _repo.GetGalleryPath(item.Id, im.FileName)))
                         .ToList();
@@ -273,6 +285,8 @@ namespace ReviTchucky.UI.ViewModels
                     {
                         InstructionsXaml = xaml;
                         Parameters = prms;
+                        item.Model.Tags = tags;
+                        SelectedTags = tags;
                         GalleryItems.Clear();
                         foreach (var g in images) GalleryItems.Add(g);
                     });
