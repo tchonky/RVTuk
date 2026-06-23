@@ -173,6 +173,11 @@ namespace ReviTchucky.Core.Database
             tagsCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='Tags'";
             if ((long)(tagsCheck.ExecuteScalar() ?? 0L) == 0)
                 ExecuteOn(c, "ALTER TABLE Families ADD COLUMN Tags TEXT");
+
+            using var favCheck = c.CreateCommand();
+            favCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='IsFavorite'";
+            if ((long)(favCheck.ExecuteScalar() ?? 0L) == 0)
+                ExecuteOn(c, "ALTER TABLE Families ADD COLUMN IsFavorite INTEGER NOT NULL DEFAULT 0");
         }
 
         // Returns all families with thumbnail resolved (CustomThumbnail ?? OLE Thumbnail)
@@ -186,7 +191,8 @@ namespace ReviTchucky.Core.Database
                        ct.PngData AS CustomPng,
                        ct.OleSynced,
                        f.RevitYear,
-                       f.Tags
+                       f.Tags,
+                       f.IsFavorite
                 FROM Families f
                 LEFT JOIN Thumbnail t ON t.FamilyId = f.Id
                 LEFT JOIN CustomThumbnail ct ON ct.FamilyId = f.Id
@@ -207,6 +213,7 @@ namespace ReviTchucky.Core.Database
                     OleSynced        = !hasCustom || reader.GetInt32(7) == 1,
                     RevitYear        = reader.IsDBNull(8) ? 0 : reader.GetInt32(8),
                     Tags             = reader.IsDBNull(9) ? null : reader.GetString(9),
+                    IsFavorite       = !reader.IsDBNull(10) && reader.GetInt32(10) == 1,
                 });
             }
             return result;
@@ -302,6 +309,18 @@ namespace ReviTchucky.Core.Database
                 using var cmd = c.CreateCommand();
                 cmd.CommandText = "UPDATE Families SET Tags = @tags WHERE Id = @id";
                 AddParam(cmd, "@tags", (object?)tags ?? DBNull.Value);
+                AddParam(cmd, "@id", familyId);
+                cmd.ExecuteNonQuery();
+            });
+        }
+
+        public void SetFavorite(long familyId, bool isFavorite)
+        {
+            WithWrite(c =>
+            {
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = "UPDATE Families SET IsFavorite = @fav WHERE Id = @id";
+                AddParam(cmd, "@fav", isFavorite ? 1 : 0);
                 AddParam(cmd, "@id", familyId);
                 cmd.ExecuteNonQuery();
             });

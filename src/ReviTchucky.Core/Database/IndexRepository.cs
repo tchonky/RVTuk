@@ -128,6 +128,11 @@ namespace ReviTchucky.Core.Database
             tagsCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='Tags'";
             if ((long)(tagsCheck.ExecuteScalar() ?? 0L) == 0)
                 Execute("ALTER TABLE Families ADD COLUMN Tags TEXT");
+
+            using var favCheck = _connection.CreateCommand();
+            favCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='IsFavorite'";
+            if ((long)(favCheck.ExecuteScalar() ?? 0L) == 0)
+                Execute("ALTER TABLE Families ADD COLUMN IsFavorite INTEGER NOT NULL DEFAULT 0");
         }
 
         public FamilyModel? GetFamilyByPath(string relativePath)

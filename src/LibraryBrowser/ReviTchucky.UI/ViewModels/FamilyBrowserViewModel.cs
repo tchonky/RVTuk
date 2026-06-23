@@ -28,8 +28,12 @@ namespace ReviTchucky.UI.ViewModels
         private List<FamilyBrowserItemViewModel> _allItems = new();
         private string _searchText = string.Empty;
         private string _selectedCategory = "";
-        private string _selectedVersion = "";
         private FamilyBrowserItemViewModel? _selectedItem;
+        private bool _showFavoritesOnly;
+        private bool _showInProjectOnly = true;
+        private bool _showOutdatedOnly;
+        private bool _isSyncMenuOpen;
+        private bool _syncHasRun;
         private bool _isSyncing;
         private bool _isRescanning;
         private bool _isShowingSettings;
@@ -42,7 +46,7 @@ namespace ReviTchucky.UI.ViewModels
 
         public ObservableCollection<FamilyBrowserItemViewModel> FilteredItems { get; } = new();
         public ObservableCollection<string> Categories { get; } = new();
-        public ObservableCollection<string> Versions { get; } = new();
+        public ObservableCollection<VersionFilterOption> VersionOptions { get; } = new();
 
         public string SearchText
         {
@@ -56,10 +60,34 @@ namespace ReviTchucky.UI.ViewModels
             set { SetProperty(ref _selectedCategory, value ?? ""); ApplyFilter(); }
         }
 
-        public string SelectedVersion
+        public bool ShowFavoritesOnly
         {
-            get => _selectedVersion;
-            set { SetProperty(ref _selectedVersion, value ?? ""); ApplyFilter(); }
+            get => _showFavoritesOnly;
+            set { SetProperty(ref _showFavoritesOnly, value); ApplyFilter(); }
+        }
+
+        public bool ShowInProjectOnly
+        {
+            get => _showInProjectOnly;
+            set { SetProperty(ref _showInProjectOnly, value); ApplyFilter(); }
+        }
+
+        public bool ShowOutdatedOnly
+        {
+            get => _showOutdatedOnly;
+            set { SetProperty(ref _showOutdatedOnly, value); ApplyFilter(); }
+        }
+
+        // Opening the Sync menu the first time triggers the project/version check so the
+        // "In the project" / "Outdated" filters have data to work with.
+        public bool IsSyncMenuOpen
+        {
+            get => _isSyncMenuOpen;
+            set
+            {
+                SetProperty(ref _isSyncMenuOpen, value);
+                if (value && !_syncHasRun && !IsSyncing) Sync();
+            }
         }
 
         public FamilyBrowserItemViewModel? SelectedItem
@@ -194,6 +222,7 @@ namespace ReviTchucky.UI.ViewModels
         public ICommand EditInfoCommand { get; }
         public ICommand RescanFamilyCommand { get; }
         public ICommand FilterByTagCommand { get; }
+        public ICommand ToggleFavoriteCommand { get; }
 
         public event Action<FamilyBrowserItemViewModel>? EditInfoRequested;
 
@@ -222,6 +251,7 @@ namespace ReviTchucky.UI.ViewModels
             EditInfoCommand       = new RelayCommand(RequestEditInfo, () => SelectedItem != null);
             RescanFamilyCommand   = new RelayCommand(RescanSelected, () => SelectedItem != null && !IsRescanning);
             FilterByTagCommand    = new RelayCommand<string>(t => { if (!string.IsNullOrWhiteSpace(t)) SearchText = t.Trim(); });
+            ToggleFavoriteCommand = new RelayCommand<FamilyBrowserItemViewModel>(ToggleFavorite);
 
             LoadFamilies();
             LoadCategories();
@@ -247,15 +277,18 @@ namespace ReviTchucky.UI.ViewModels
 
         private void LoadVersions()
         {
-            Versions.Clear();
-            Versions.Add(""); // "" = "All Versions" sentinel
+            var previouslySelected = VersionOptions.Where(o => o.IsSelected).Select(o => o.Year).ToHashSet();
+            VersionOptions.Clear();
             foreach (var y in _allItems
                 .Select(i => i.RevitYear)
                 .Where(y => y > 0)
                 .Distinct()
                 .OrderByDescending(y => y))
-                Versions.Add(y.ToString());
-            SelectedVersion = "";
+            {
+                var opt = new VersionFilterOption(y) { IsSelected = previouslySelected.Contains(y) };
+                opt.PropertyChanged += (_, __) => ApplyFilter();
+                VersionOptions.Add(opt);
+            }
         }
 
         private void ApplyFilter()
@@ -271,8 +304,20 @@ namespace ReviTchucky.UI.ViewModels
                         (i.Tags != null && i.Tags.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0)));
             if (!string.IsNullOrEmpty(_selectedCategory))
                 filtered = filtered.Where(i => i.Category == _selectedCategory);
-            if (!string.IsNullOrEmpty(_selectedVersion))
-                filtered = filtered.Where(i => i.RevitYear.ToString() == _selectedVersion);
+
+            var selectedYears = VersionOptions.Where(o => o.IsSelected).Select(o => o.Year).ToHashSet();
+            if (selectedYears.Count > 0)
+                filtered = filtered.Where(i => selectedYears.Contains(i.RevitYear));
+
+            if (_showFavoritesOnly)
+                filtered = filtered.Where(i => i.IsFavorite);
+
+            // In-project / outdated need the Sync check to know what's loaded in the project;
+            // until it has run, show everything regardless of those toggles.
+            if (_syncHasRun && _showInProjectOnly)
+                filtered = filtered.Where(i => i.VersionStatus != VersionStatus.None);
+            if (_syncHasRun && _showOutdatedOnly)
+                filtered = filtered.Where(i => i.VersionStatus == VersionStatus.UpdateAvailable);
 
             // Hide families under an ignored subfolder (kept in the DB, just not shown).
             if (_config.IgnoredSubfolders != null && _config.IgnoredSubfolders.Count > 0)
@@ -375,11 +420,13 @@ namespace ReviTchucky.UI.ViewModels
                     _dispatcher.Invoke(() =>
                     {
                         _allItems = finalItems;
+                        _syncHasRun = true;
                         LoadCategories();
                         LoadVersions();
                         OutdatedCount = finalOutdated;
                         OnPropertyChanged(nameof(ShowUpdateInProject));
                         IsSyncing = false;
+                        ApplyFilter();
                     });
                 }
             });
@@ -440,6 +487,15 @@ namespace ReviTchucky.UI.ViewModels
         {
             if (SelectedItem != null)
                 EditInfoRequested?.Invoke(SelectedItem);
+        }
+
+        private void ToggleFavorite(FamilyBrowserItemViewModel? item)
+        {
+            if (item == null) return;
+            item.IsFavorite = !item.IsFavorite;
+            try { _repo.SetFavorite(item.Id, item.IsFavorite); }
+            catch { /* read-only share; favourite stays in-memory only */ }
+            if (_showFavoritesOnly) ApplyFilter();
         }
 
         // Re-extracts metadata (category, parameters, thumbnail) for just the selected family,

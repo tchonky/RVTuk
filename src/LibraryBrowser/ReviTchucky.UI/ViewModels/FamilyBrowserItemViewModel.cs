@@ -19,6 +19,17 @@ namespace ReviTchucky.UI.ViewModels
         public int RevitYear => Model.RevitYear;
         public string? Tags => Model.Tags;
 
+        public bool IsFavorite
+        {
+            get => Model.IsFavorite;
+            set
+            {
+                if (Model.IsFavorite == value) return;
+                Model.IsFavorite = value;
+                OnPropertyChanged();
+            }
+        }
+
         public VersionStatus VersionStatus
         {
             get => _versionStatus;
