@@ -28,11 +28,23 @@ section; check off with `[x]` and the commit hash when shipped.
   metadata is extracted, so a cancelled family looks "up to date" and won't be re-read
   next time. Defer the size/date update until after extraction succeeds. (Note: also
   interacts with the fast Sync, which writes size/date too — design carefully.)
+  Concrete plan (do deliberately, with a Revit test): `FamilyIndexer.Scan` should insert
+  new/changed rows with a sentinel size/date (e.g. 0 / `DateTime.MinValue`) and have
+  `InsertFamily` stop updating ModifiedDate/FileSize on conflict; carry the real
+  ModifiedDate+FileSize on `ExtractionWorkItem`; `IndexRepository.UpdateFamilyMetadata`
+  writes them only after extraction commits. Cancelling then leaves stale size/date →
+  re-scanned next time. ⚠️ Sync's `UpsertFamily` writes real size/date with no metadata,
+  so a Sync-then-DeepScan already skips those families — decide whether Sync should mark
+  rows "needs deep scan" too.
 - [ ] Option to deep-scan **just thumbnails** (fast) and/or **just parameters** (slow).
 
 ## 🚀 New features / ideas
 
-- [ ] A **tags** section per family + search by tags.
+- [ ] **Tags follow-ups** (base shipped, `c742a9b`): clickable tag chips that fill the search;
+  a tag auto-complete / pick-from-existing list so spelling stays consistent; a dedicated
+  "has tag" filter separate from the free-text search.
+- [ ] **Favorites / pinned families** — star a family, quick-filter to starred only.
+- [ ] **Recently used** — track the last N families loaded into a project for quick access.
 
 ## ⏳ Known deferred (from the Family Explorer build/review — decided "later")
 
@@ -59,3 +71,6 @@ section; check off with `[x]` and the commit hash when shipped.
 - [x] Filter the list by **Revit version** — RevitYear column + version dropdown (`e08ce65`).
 - [x] Gallery: **reorder images** with ◀/▶ buttons in the editor (`bb87e65`).
 - [x] **Skipped-family count** — deep-scan dialog + `last-scan.log` report skips (`46dada3`).
+- [x] **Per-family tags** — editable in the info editor, searchable, shown in detail (`c742a9b`).
+- [x] `Deploy.ps1`: per-version resilience (skip a locked/open Revit year), version filter,
+  colored summary (`621f880`).
