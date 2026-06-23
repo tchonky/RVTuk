@@ -43,8 +43,9 @@ section; check off with `[x]` and the commit hash when shipped.
 - [ ] **Tags follow-ups** (base `c742a9b`, clickable chips `c625502`): a tag auto-complete /
   pick-from-existing list so spelling stays consistent; a dedicated "has tag" filter
   separate from the free-text search.
-- [ ] **Favorites / pinned families** — star a family, quick-filter to starred only.
 - [ ] **Recently used** — track the last N families loaded into a project for quick access.
+- [ ] Toolbar polish: the new Version/Sync/Favourites buttons use default (light) WPF chrome;
+  style them to match the dark theme. Also style the popup checkboxes.
 
 ## ⏳ Known deferred (from the Family Explorer build/review — decided "later")
 
@@ -73,5 +74,11 @@ section; check off with `[x]` and the commit hash when shipped.
   clickable tag chips that filter the list (`c625502`).
 - [x] Editor gallery images now **decode off the UI thread** (no stutter on slow shares) (`191c214`).
 - [x] Deep-scan progress shows **estimated time remaining** (`87fa3e0`).
+- [x] **Two-line toolbar**: line 1 Category + multi-select Version + Config; line 2 Search +
+  Favourites + Sync dropdown (`f04eef1`).
+- [x] **Favourites** — star a family (list row + detail), "favourites only" filter (`f04eef1`).
+- [x] **Multi-select version** filter (checkbox popup, pick several years) (`f04eef1`).
+- [x] **"In the project" / "Outdated" filters** in the Sync dropdown; runs the project check on
+  first open, filters apply after (`f04eef1`).
 - [x] `Deploy.ps1`: per-version resilience (skip a locked/open Revit year), version filter,
   colored summary (`621f880`).
