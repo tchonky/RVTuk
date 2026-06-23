@@ -162,6 +162,12 @@ namespace ReviTchucky.Core.Database
                 if ((long)(pc.ExecuteScalar() ?? 0L) == 0)
                     ExecuteOn(c, $"ALTER TABLE Parameters ADD COLUMN {col} TEXT");
             }
+
+            // Add RevitYear column to Families if missing
+            using var yearCheck = c.CreateCommand();
+            yearCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='RevitYear'";
+            if ((long)(yearCheck.ExecuteScalar() ?? 0L) == 0)
+                ExecuteOn(c, "ALTER TABLE Families ADD COLUMN RevitYear INTEGER NOT NULL DEFAULT 0");
         }
 
         // Returns all families with thumbnail resolved (CustomThumbnail ?? OLE Thumbnail)
@@ -173,7 +179,8 @@ namespace ReviTchucky.Core.Database
                 SELECT f.Id, f.FileName, f.RelativePath, f.Category, f.ModifiedDate,
                        t.PngData  AS OlePng,
                        ct.PngData AS CustomPng,
-                       ct.OleSynced
+                       ct.OleSynced,
+                       f.RevitYear
                 FROM Families f
                 LEFT JOIN Thumbnail t ON t.FamilyId = f.Id
                 LEFT JOIN CustomThumbnail ct ON ct.FamilyId = f.Id
@@ -192,6 +199,7 @@ namespace ReviTchucky.Core.Database
                     ThumbnailPng     = hasCustom ? (byte[])reader[6] : (reader.IsDBNull(5) ? null : (byte[])reader[5]),
                     HasCustomThumbnail = hasCustom,
                     OleSynced        = !hasCustom || reader.GetInt32(7) == 1,
+                    RevitYear        = reader.IsDBNull(8) ? 0 : reader.GetInt32(8),
                 });
             }
             return result;

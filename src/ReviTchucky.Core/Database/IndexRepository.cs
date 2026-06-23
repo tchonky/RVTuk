@@ -117,6 +117,12 @@ namespace ReviTchucky.Core.Database
                 if ((long)(c.ExecuteScalar() ?? 0L) == 0)
                     Execute($"ALTER TABLE Parameters ADD COLUMN {col} TEXT");
             }
+
+            // Add RevitYear column to Families if missing
+            using var yearCheck = _connection.CreateCommand();
+            yearCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='RevitYear'";
+            if ((long)(yearCheck.ExecuteScalar() ?? 0L) == 0)
+                Execute("ALTER TABLE Families ADD COLUMN RevitYear INTEGER NOT NULL DEFAULT 0");
         }
 
         public FamilyModel? GetFamilyByPath(string relativePath)
@@ -164,14 +170,15 @@ namespace ReviTchucky.Core.Database
             }
         }
 
-        public void UpdateFamilyMetadata(long familyId, string? category, IReadOnlyList<ParameterModel> parameters, byte[]? thumbnailPng)
+        public void UpdateFamilyMetadata(long familyId, string? category, IReadOnlyList<ParameterModel> parameters, byte[]? thumbnailPng, int revitYear = 0)
         {
             using var transaction = _connection.BeginTransaction();
             try
             {
-                using var catCmd = CreateCommand("UPDATE Families SET Category=@cat, IndexedDate=@now WHERE Id=@id", transaction);
+                using var catCmd = CreateCommand("UPDATE Families SET Category=@cat, IndexedDate=@now, RevitYear=@year WHERE Id=@id", transaction);
                 AddParam(catCmd, "@cat", category ?? (object)DBNull.Value);
                 AddParam(catCmd, "@now", DateTime.UtcNow.ToString("o"));
+                AddParam(catCmd, "@year", revitYear);
                 AddParam(catCmd, "@id", familyId);
                 catCmd.ExecuteNonQuery();
 

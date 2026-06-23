@@ -35,10 +35,11 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Search + Category + Sync + Settings row -->
+            <!-- Search + Category + Version + Sync + Settings row -->
             <Grid Grid.Row="0" Margin="6,6,6,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
@@ -85,8 +86,30 @@
                     </ComboBox.ItemTemplate>
                 </ComboBox>
 
+                <ComboBox Grid.Column="2" Width="72" Margin="0,0,4,0"
+                          ItemsSource="{Binding Versions}"
+                          SelectedItem="{Binding SelectedVersion}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock>
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="{Binding}"/>
+                                        <Style.Triggers>
+                                            <!-- "" sentinel = "All Versions" -->
+                                            <DataTrigger Binding="{Binding}" Value="">
+                                                <Setter Property="Text" Value="All Versions"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
                 <!-- Sync icon button (circular arrow path) -->
-                <Button Grid.Column="2" Width="28" Margin="0,0,4,0"
+                <Button Grid.Column="3" Width="28" Margin="0,0,4,0"
                         ToolTip="Sync: scan for file changes and check project family versions"
                         Command="{Binding SyncCommand}">
                     <Viewbox Width="14" Height="14">
@@ -98,7 +121,7 @@
                 </Button>
 
                 <!-- Settings toggle (gear icon path) -->
-                <Button Grid.Column="3" Width="28"
+                <Button Grid.Column="4" Width="28"
                         ToolTip="Library settings &amp; deep scan"
                         Command="{Binding ToggleSettingsCommand}">
                     <Viewbox Width="14" Height="14">

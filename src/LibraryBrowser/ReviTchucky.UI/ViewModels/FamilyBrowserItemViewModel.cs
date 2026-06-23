@@ -16,6 +16,7 @@ namespace ReviTchucky.UI.ViewModels
         public string DisplayName => Path.GetFileNameWithoutExtension(Model.FileName);
         public string? Category => Model.Category;
         public string RelativePath => Model.RelativePath;
+        public int RevitYear => Model.RevitYear;
 
         public VersionStatus VersionStatus
         {

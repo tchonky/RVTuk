@@ -52,7 +52,7 @@ namespace ReviTchucky.Revit.ExternalEvents
                     catch { /* skip family if extraction fails */ }
                 }
 
-                Repository.UpdateFamilyMetadata(CurrentItem.FamilyId, category, parameters, CurrentItem.ThumbnailPng);
+                Repository.UpdateFamilyMetadata(CurrentItem.FamilyId, category, parameters, CurrentItem.ThumbnailPng, CurrentItem.FileRevitYear);
             }
             finally
             {
