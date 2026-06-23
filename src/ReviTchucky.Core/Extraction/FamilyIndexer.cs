@@ -12,11 +12,14 @@ namespace ReviTchucky.Core.Extraction
     {
         private readonly IndexRepository _repository;
         private readonly string _libraryRoot;
+        private readonly IReadOnlyList<string> _ignoredSubfolders;
 
-        public FamilyIndexer(IndexRepository repository, string libraryRootPath)
+        public FamilyIndexer(IndexRepository repository, string libraryRootPath,
+            IReadOnlyList<string> ignoredSubfolders = null)
         {
             _repository = repository;
             _libraryRoot = libraryRootPath;
+            _ignoredSubfolders = ignoredSubfolders ?? new List<string>();
         }
 
         /// <summary>
@@ -52,6 +55,15 @@ namespace ReviTchucky.Core.Extraction
                 string fileName = Path.GetFileName(fullPath);
 
                 progressCallback(fileName, i + 1, total);
+
+                if (PathUtil.IsUnderIgnoredFolder(relativePath, _ignoredSubfolders))
+                {
+                    // Family is in an ignored subfolder: skip extraction but add to scannedPaths
+                    // so DeleteStaleEntries does not remove any already-indexed rows for it.
+                    scannedPaths.Add(relativePath);
+                    continue;
+                }
+
                 scannedPaths.Add(relativePath);
 
                 var info = new FileInfo(fullPath);

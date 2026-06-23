@@ -72,6 +72,24 @@ namespace ReviTchucky.UI.ViewModels
         public bool ShowFamilyDetail => HasSelection && !_isShowingSettings;
         public string LibraryFolderPath => _config.LibraryFolderPath;
 
+        private string _ignoredSubfoldersText;
+        public string IgnoredSubfoldersText
+        {
+            get => _ignoredSubfoldersText ?? string.Join(Environment.NewLine, _config.IgnoredSubfolders);
+            set
+            {
+                if (Equals(_ignoredSubfoldersText, value)) return;
+                _ignoredSubfoldersText = value;
+                _config.IgnoredSubfolders = (value ?? string.Empty)
+                    .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim())
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .ToList();
+                ConfigManager.SaveConfig(_config);
+                OnPropertyChanged();
+            }
+        }
+
         public bool IsShowingSettings
         {
             get => _isShowingSettings;
@@ -250,6 +268,15 @@ namespace ReviTchucky.UI.ViewModels
                     {
                         if (fullPath.Length >= 260) continue; // unusable on .NET Framework; skip
                         var relativePath = PathUtil.GetRelativePath(root, fullPath);
+
+                        if (PathUtil.IsUnderIgnoredFolder(relativePath, _config.IgnoredSubfolders))
+                        {
+                            // Ignored: skip upsert but add to foundRelPaths so existing DB rows
+                            // for this family are not treated as stale and deleted.
+                            foundRelPaths.Add(relativePath);
+                            continue;
+                        }
+
                         var fi = new FileInfo(fullPath);
                         foundRelPaths.Add(relativePath);
                         _repo.UpsertFamily(relativePath, fi.Name, fi.LastWriteTimeUtc, fi.Length);
