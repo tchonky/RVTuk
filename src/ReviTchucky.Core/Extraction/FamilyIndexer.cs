@@ -14,6 +14,12 @@ namespace ReviTchucky.Core.Extraction
         private readonly string _libraryRoot;
         private readonly IReadOnlyList<string> _ignoredSubfolders;
 
+        /// <summary>Families skipped because their full path exceeds Windows MAX_PATH (set by the last Scan).</summary>
+        public int SkippedLongPath { get; private set; }
+
+        /// <summary>Families skipped because they live under an ignored subfolder (set by the last Scan).</summary>
+        public int SkippedIgnored { get; private set; }
+
         public FamilyIndexer(IndexRepository repository, string libraryRootPath,
             IReadOnlyList<string> ignoredSubfolders = null)
         {
@@ -36,6 +42,9 @@ namespace ReviTchucky.Core.Extraction
             var workItems = new List<ExtractionWorkItem>();
             var scannedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+            SkippedLongPath = 0;
+            SkippedIgnored = 0;
+
             for (int i = 0; i < total; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -47,6 +56,7 @@ namespace ReviTchucky.Core.Extraction
                 // "path too long" dialog during metadata extraction.
                 if (fullPath.Length >= 260)
                 {
+                    SkippedLongPath++;
                     progressCallback(Path.GetFileName(fullPath), i + 1, total);
                     continue;
                 }
@@ -60,6 +70,7 @@ namespace ReviTchucky.Core.Extraction
                 {
                     // Family is in an ignored subfolder: skip extraction but add to scannedPaths
                     // so DeleteStaleEntries does not remove any already-indexed rows for it.
+                    SkippedIgnored++;
                     scannedPaths.Add(relativePath);
                     continue;
                 }

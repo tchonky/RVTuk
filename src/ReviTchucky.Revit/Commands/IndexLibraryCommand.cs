@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Text;
 using System.Threading;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
@@ -48,6 +50,8 @@ namespace ReviTchucky.Revit.Commands
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 int updated = 0;
+                int skippedLong = 0;
+                int skippedIgnored = 0;
                 try
                 {
                     using var repo = new IndexRepository(config.DatabasePath);
@@ -58,6 +62,8 @@ namespace ReviTchucky.Revit.Commands
                         cancellationToken);
 
                     updated = workItems.Count;
+                    skippedLong = indexer.SkippedLongPath;
+                    skippedIgnored = indexer.SkippedIgnored;
 
                     foreach (var item in workItems)
                     {
@@ -77,14 +83,51 @@ namespace ReviTchucky.Revit.Commands
                 {
                     vm.Finish();
                     int finalUpdated = updated;
+                    int finalSkippedLong = skippedLong;
+                    int finalSkippedIgnored = skippedIgnored;
+
+                    WriteScanLog(config, finalUpdated, finalSkippedLong, finalSkippedIgnored);
+
                     System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                     {
                         progressWindow.Close();
-                        TaskDialog.Show("ReviTchucky – Deep Scan Complete",
-                            $"Indexed: {finalUpdated} families.");
+
+                        var msg = new StringBuilder();
+                        msg.Append($"Indexed: {finalUpdated} families.");
+                        if (finalSkippedLong > 0)
+                            msg.Append($"\nSkipped (path too long): {finalSkippedLong}");
+                        if (finalSkippedIgnored > 0)
+                            msg.Append($"\nSkipped (ignored folder): {finalSkippedIgnored}");
+
+                        TaskDialog.Show("ReviTchucky – Deep Scan Complete", msg.ToString());
                     });
                 }
             });
+        }
+
+        /// <summary>
+        /// Writes a small last-scan.log next to the database so the admin can see why some
+        /// families were skipped. Best-effort: any failure (e.g. read-only share) is swallowed.
+        /// </summary>
+        private static void WriteScanLog(AppConfig config, int indexed, int skippedLong, int skippedIgnored)
+        {
+            try
+            {
+                string dir = Path.GetDirectoryName(config.DatabasePath);
+                if (string.IsNullOrEmpty(dir)) return;
+
+                string logPath = Path.Combine(dir, "last-scan.log");
+                var sb = new StringBuilder();
+                sb.AppendLine($"Deep scan finished: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine($"Indexed families:          {indexed}");
+                sb.AppendLine($"Skipped (path too long):   {skippedLong}");
+                sb.AppendLine($"Skipped (ignored folder):  {skippedIgnored}");
+                File.WriteAllText(logPath, sb.ToString());
+            }
+            catch
+            {
+                // Logging is best-effort; never let it break the scan result dialog.
+            }
         }
     }
 }
