@@ -7,13 +7,7 @@ section; check off with `[x]` and the commit hash when shipped.
 
 ## 🐞 Bugs / things to fix
 
-- [ ] When click the family to edit the instructions, Browser crashes and gives the error:
-ReviTchucky Family Browser encountered an error:
-XamlParseException: Add value to collection of type
-'System.Windows.Controls.UlElementCollection' threw an
-exception.
-Details written to
-C:\Users\danie\AppData\Local\ReviTchucky\crash.log
+_(none open — add as you find them)_
 
 ## ✨ Improvements (to existing features)
 
@@ -25,24 +19,21 @@ C:\Users\danie\AppData\Local\ReviTchucky\crash.log
   isn't lost; the next scan then resumes naturally (unchanged families are skipped).
   ⚠️ Needs a fix: today a family's row is written with the new size/date *before* its
   metadata is extracted, so a cancelled family looks "up to date" and won't be re-read
-  next time. Defer the size/date update until after extraction succeeds.
+  next time. Defer the size/date update until after extraction succeeds. (Note: also
+  interacts with the fast Sync, which writes size/date too — design carefully.)
 - [ ] Option to deep-scan **just thumbnails** (fast) and/or **just parameters** (slow).
 
 ## 🚀 New features / ideas
 
-- [ ] Option to **ignore one or more subfolders** in the deep scan.
 - [ ] A **tags** section per family + search by tags.
 - [ ] Filter the list by **Revit version** (e.g. show only families saved in 2023, or
-  2023–2024). Needs the per-family Revit year surfaced from the index (already captured
-  during extraction as `FileRevitYear`).
+  2023–2024). The year is captured during extraction (`FileRevitYear`) but not yet stored
+  in the DB — needs a RevitYear column + write + a filter control.
 
 ## ⏳ Known deferred (from the Family Explorer build/review — decided "later")
 
-- [ ] Verify gallery images load from a `\\server\share` (UNC) path; if not, switch
-  `GalleryItemViewModel` to `new Uri(path, UriKind.Absolute)`.
 - [ ] Editor gallery loads image files synchronously on the UI thread — could stutter
   on a slow share with many images; load off-thread if galleries grow.
-- [ ] Add a confirmation prompt before **Delete** removes a gallery image (permanent).
 - [ ] Drag-to-reorder gallery images (the `ReorderImages` API exists; UI not wired).
 - [ ] Surface a count of families skipped during a scan (too-new, too-long path,
   unreadable) so the admin knows why some are missing. Create a log and write in the DB folder.
@@ -60,3 +51,6 @@ C:\Users\danie\AppData\Local\ReviTchucky\crash.log
 - [x] Family Browser window **always on top**; long family names **wrap** to 2–3 lines (`3813ecf`).
 - [x] **Multi-word search** — all words match, any order/position (`0336bad`).
 - [x] **Per-family Rescan** button — re-extract just the selected family (`1b3c52d`).
+- [x] Fix: editor crash on open — `ContextMenu` parented in a Grid (`958f614`).
+- [x] Gallery: UNC-safe image `Uri` + confirm before deleting an image (`fd60009`).
+- [x] **Ignore subfolders** in deep scan + sync (configurable in Settings) (`534a6f5`).
