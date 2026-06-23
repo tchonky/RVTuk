@@ -20,8 +20,8 @@ section; check off with `[x]` and the commit hash when shipped.
 
 - [ ] **Deep scan is slow** — it opens every family in Revit to read parameters
   (which upgrades older families to the running version in memory), so a first
-  full scan takes a long time. Ideas to explore: better progress + time estimate,
-  make it resumable, or a faster path for families that don't need full metadata.
+  full scan takes a long time. ETA now shown (`87fa3e0`); still want: make it
+  resumable, or a faster path for families that don't need full metadata.
 - [ ] When deep scanning, on **Cancel** keep everything already extracted so the time
   isn't lost; the next scan then resumes naturally (unchanged families are skipped).
   ⚠️ Needs a fix: today a family's row is written with the new size/date *before* its
@@ -40,16 +40,14 @@ section; check off with `[x]` and the commit hash when shipped.
 
 ## 🚀 New features / ideas
 
-- [ ] **Tags follow-ups** (base shipped, `c742a9b`): clickable tag chips that fill the search;
-  a tag auto-complete / pick-from-existing list so spelling stays consistent; a dedicated
-  "has tag" filter separate from the free-text search.
+- [ ] **Tags follow-ups** (base `c742a9b`, clickable chips `c625502`): a tag auto-complete /
+  pick-from-existing list so spelling stays consistent; a dedicated "has tag" filter
+  separate from the free-text search.
 - [ ] **Favorites / pinned families** — star a family, quick-filter to starred only.
 - [ ] **Recently used** — track the last N families loaded into a project for quick access.
 
 ## ⏳ Known deferred (from the Family Explorer build/review — decided "later")
 
-- [ ] Editor gallery loads image files synchronously on the UI thread — could stutter
-  on a slow share with many images; load off-thread if galleries grow.
 - [ ] Parameter **write-back** — let the tool actually fix/reorganize parameters in
   the families (currently view/audit only).
 - [ ] UI styling/layout polish for the new gallery + parameter regions.
@@ -71,6 +69,9 @@ section; check off with `[x]` and the commit hash when shipped.
 - [x] Filter the list by **Revit version** — RevitYear column + version dropdown (`e08ce65`).
 - [x] Gallery: **reorder images** with ◀/▶ buttons in the editor (`bb87e65`).
 - [x] **Skipped-family count** — deep-scan dialog + `last-scan.log` report skips (`46dada3`).
-- [x] **Per-family tags** — editable in the info editor, searchable, shown in detail (`c742a9b`).
+- [x] **Per-family tags** — editable in the info editor, searchable, shown in detail (`c742a9b`);
+  clickable tag chips that filter the list (`c625502`).
+- [x] Editor gallery images now **decode off the UI thread** (no stutter on slow shares) (`191c214`).
+- [x] Deep-scan progress shows **estimated time remaining** (`87fa3e0`).
 - [x] `Deploy.ps1`: per-version resilience (skip a locked/open Revit year), version filter,
   colored summary (`621f880`).
