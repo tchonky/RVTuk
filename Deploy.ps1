@@ -1,5 +1,25 @@
 #Requires -RunAsAdministrator
-$ErrorActionPreference = "Stop"
+<#
+.SYNOPSIS
+    Builds-output deployer for the ReviTchucky Revit add-in (2023 / 2024 / 2025).
+.DESCRIPTION
+    Copies each version's build output into the per-year Revit Addins folder and
+    writes the .addin manifest. Each version deploys independently: if one year's
+    Revit is open (locking its DLLs) or its build output is missing, that year is
+    skipped with a warning and the others still deploy.
+.PARAMETER Only
+    Optional list of versions to deploy (e.g. ".\Deploy.ps1 2024 2025"). Defaults to all.
+.EXAMPLE
+    .\Deploy.ps1            # deploy every version that isn't locked/missing
+    .\Deploy.ps1 2024       # deploy only Revit 2024
+#>
+param(
+    [Parameter(Position = 0, ValueFromRemainingArguments = $true)]
+    [string[]]$Only
+)
+
+# Per-version failures must not abort the run; we handle errors explicitly per year.
+$ErrorActionPreference = "Continue"
 $root = Split-Path $MyInvocation.MyCommand.Path -Parent
 
 $addinName    = "ReviTchucky"
@@ -8,7 +28,7 @@ $className    = "ReviTchucky.Revit.Application"
 $vendorId     = "KnafoKlimor"
 $vendorDesc   = "Knafo Klimor Architects LTD"
 
-$versions = @{
+$versions = [ordered]@{
     "2023" = @{ Config = "Release2023"; Tfm = "net48" }
     "2024" = @{ Config = "Release2024"; Tfm = "net48" }
     "2025" = @{ Config = "Release2025"; Tfm = "net8.0-windows" }
@@ -16,63 +36,115 @@ $versions = @{
 
 $addinsBase = "C:\ProgramData\Autodesk\Revit\Addins"
 
-foreach ($ver in $versions.Keys | Sort-Object) {
-    $info      = $versions[$ver]
-    $config    = $info.Config
-    $tfm       = $info.Tfm
+# --- helpers ---------------------------------------------------------------
 
-    # SDK-style output lands in bin\<year>\<config>\<tfm>\
-    $srcDir    = "$root\src\ReviTchucky.Revit\bin\$ver\$config\$tfm"
+function Write-Banner {
+    $line = "=" * 56
+    Write-Host ""
+    Write-Host "  $line" -ForegroundColor DarkCyan
+    Write-Host "   ReviTchucky deploy" -ForegroundColor White -NoNewline
+    Write-Host "  -  $(Get-Date -Format 'HH:mm:ss')" -ForegroundColor DarkGray
+    Write-Host "  $line" -ForegroundColor DarkCyan
+    Write-Host ""
+}
 
-    # Fall back to flat layout (pre-SDK builds without TFM subfolder)
+# Map each running Revit.exe to its version year via its install path
+# (e.g. "...\Revit 2023\Revit.exe"). Lets us skip a year whose Revit is open.
+function Get-RunningRevitYears {
+    $years = @()
+    foreach ($p in Get-Process -Name "Revit" -ErrorAction SilentlyContinue) {
+        try {
+            if ($p.Path -match "Revit\s+(\d{4})") { $years += $Matches[1] }
+        } catch { }  # Access denied reading Path on some processes — ignore
+    }
+    return ($years | Sort-Object -Unique)
+}
+
+# --- run -------------------------------------------------------------------
+
+Write-Banner
+
+$runningYears = Get-RunningRevitYears
+if ($runningYears.Count -gt 0) {
+    Write-Host "  Revit running: " -NoNewline -ForegroundColor DarkGray
+    Write-Host ($runningYears -join ", ") -ForegroundColor Yellow
+    Write-Host ""
+}
+
+# Resolve which versions to attempt
+$targets = $versions.Keys
+if ($Only) {
+    $targets = $versions.Keys | Where-Object { $Only -contains $_ }
+    $unknown = $Only | Where-Object { -not $versions.Contains($_) }
+    foreach ($u in $unknown) { Write-Warning "Unknown version '$u' — valid: $($versions.Keys -join ', ')" }
+    if (-not $targets) { Write-Host "Nothing to deploy." -ForegroundColor Red; return }
+}
+
+# Status of each year for the closing summary
+$results = [ordered]@{}
+
+foreach ($ver in $targets) {
+    $info   = $versions[$ver]
+    $config = $info.Config
+    $tfm    = $info.Tfm
+
+    Write-Host ("  Revit {0} " -f $ver) -ForegroundColor Cyan -NoNewline
+    Write-Host "[$config]" -ForegroundColor DarkGray
+
+    # 1) Skip if this year's Revit is open — its add-in DLLs are loaded and locked.
+    if ($runningYears -contains $ver) {
+        Write-Host "    SKIP  Revit $ver is open (files are locked). Close it to update." -ForegroundColor Yellow
+        $results[$ver] = "skipped (Revit open)"
+        Write-Host ""
+        continue
+    }
+
+    # 2) Locate build output (SDK TFM subfolder, with flat fallback).
+    $srcDir = "$root\src\ReviTchucky.Revit\bin\$ver\$config\$tfm"
     if (-not (Test-Path "$srcDir\ReviTchucky.Revit.dll")) {
         $srcDir = "$root\src\ReviTchucky.Revit\bin\$ver\$config"
+    }
+    if (-not (Test-Path "$srcDir\ReviTchucky.Revit.dll")) {
+        Write-Host "    SKIP  build output not found. Run: dotnet build -c $config" -ForegroundColor Yellow
+        $results[$ver] = "skipped (not built)"
+        Write-Host ""
+        continue
     }
 
     $addinsDir = "$addinsBase\$ver"
     $dllDir    = "$addinsDir\$addinName"
     $addinFile = "$addinsDir\$addinName.addin"
 
-    if (-not (Test-Path "$srcDir\ReviTchucky.Revit.dll")) {
-        Write-Warning "Build output not found for Revit $ver ($srcDir) — skipping. Run: dotnet build -c $config"
-        continue
-    }
+    try {
+        # Wipe the whole folder so stale DLLs (incl. x64\SQLite.Interop.dll) can't survive.
+        if (Test-Path $dllDir) { Remove-Item $dllDir -Recurse -Force -ErrorAction Stop }
+        New-Item -ItemType Directory -Path $dllDir -Force -ErrorAction Stop | Out-Null
 
-    Write-Host "Deploying Revit $ver..." -ForegroundColor Cyan
+        Copy-Item "$srcDir\*.dll" $dllDir -Force -ErrorAction Stop
+        Copy-Item "$srcDir\*.pdb" $dllDir -Force -ErrorAction SilentlyContinue
+        Copy-Item "$srcDir\*.json" $dllDir -Force -ErrorAction SilentlyContinue
 
-    # Wipe the entire folder so stale DLLs (including x64\SQLite.Interop.dll) can't survive
-    if (Test-Path $dllDir) { Remove-Item $dllDir -Recurse -Force }
-    New-Item -ItemType Directory -Path $dllDir -Force | Out-Null
-    Copy-Item "$srcDir\*.dll" $dllDir -Force
-    Copy-Item "$srcDir\*.pdb" $dllDir -Force -ErrorAction SilentlyContinue
-    Copy-Item "$srcDir\*.json" $dllDir -Force -ErrorAction SilentlyContinue
+        # Native interop DLLs live in x64\; copy flat since Revit is always x64.
+        $x64Dir = "$srcDir\x64"
+        if (Test-Path $x64Dir) { Copy-Item "$x64Dir\*.dll" $dllDir -Force -ErrorAction Stop }
 
-    # Native interop DLLs live in x64\ subdir; copy flat since Revit is always x64
-    $x64Dir = "$srcDir\x64"
-    if (Test-Path $x64Dir) {
-        Copy-Item "$x64Dir\*.dll" $dllDir -Force
-    }
-
-    # For net48 builds, remove BCL polyfill DLLs that Revit already has preloaded.
-    # Shipping newer versions causes "conflicts with same preloaded module" API_ERRORs
-    # that result in 0xc0000005 access violations. Let the CLR fall back to Revit's
-    # already-loaded versions; any API gap is caught by try/catch, not a native crash.
-    if ($tfm -eq "net48") {
-        @(
-            "System.Memory.dll", "System.Runtime.CompilerServices.Unsafe.dll",
-            "System.Buffers.dll", "System.Numerics.Vectors.dll",
-            "Microsoft.Bcl.HashCode.dll", "System.ValueTuple.dll",
-            "System.Text.Json.dll", "System.Text.Encodings.Web.dll",
-            # System.Data.SQLite EF6/Linq extensions — we use raw ADO.NET only
-            "EntityFramework.dll", "EntityFramework.SqlServer.dll",
-            "System.Data.SQLite.EF6.dll", "System.Data.SQLite.Linq.dll"
-        ) | ForEach-Object {
-            $f = "$dllDir\$_"
-            if (Test-Path $f) { Remove-Item $f -Force }
+        # net48: strip BCL polyfill DLLs Revit preloads (shipping newer ones causes
+        # "conflicts with same preloaded module" API_ERRORs -> 0xc0000005 crashes).
+        if ($tfm -eq "net48") {
+            @(
+                "System.Memory.dll", "System.Runtime.CompilerServices.Unsafe.dll",
+                "System.Buffers.dll", "System.Numerics.Vectors.dll",
+                "Microsoft.Bcl.HashCode.dll", "System.ValueTuple.dll",
+                "System.Text.Json.dll", "System.Text.Encodings.Web.dll",
+                "EntityFramework.dll", "EntityFramework.SqlServer.dll",
+                "System.Data.SQLite.EF6.dll", "System.Data.SQLite.Linq.dll"
+            ) | ForEach-Object {
+                $f = "$dllDir\$_"
+                if (Test-Path $f) { Remove-Item $f -Force -ErrorAction SilentlyContinue }
+            }
         }
-    }
 
-    @"
+        @"
 <?xml version="1.0" encoding="utf-8"?>
 <RevitAddIns>
   <AddIn Type="Application">
@@ -84,10 +156,44 @@ foreach ($ver in $versions.Keys | Sort-Object) {
     <VendorDescription>$vendorDesc</VendorDescription>
   </AddIn>
 </RevitAddIns>
-"@ | Out-File $addinFile -Encoding utf8 -Force
+"@ | Out-File $addinFile -Encoding utf8 -Force -ErrorAction Stop
 
-    Write-Host "  DLLs   -> $dllDir" -ForegroundColor Green
-    Write-Host "  .addin -> $addinFile" -ForegroundColor Green
+        $dllCount = (Get-ChildItem "$dllDir\*.dll" -ErrorAction SilentlyContinue | Measure-Object).Count
+        Write-Host "    OK    $dllCount DLLs -> $dllDir" -ForegroundColor Green
+        Write-Host "          manifest -> $addinFile" -ForegroundColor DarkGreen
+        $results[$ver] = "deployed"
+    }
+    catch [System.IO.IOException] {
+        # Almost always a locked file: Revit (this year) has the DLL open.
+        Write-Host "    SKIP  files are locked (Revit $ver likely open): $($_.Exception.Message)" -ForegroundColor Yellow
+        $results[$ver] = "skipped (locked)"
+    }
+    catch {
+        Write-Host "    FAIL  $($_.Exception.Message)" -ForegroundColor Red
+        $results[$ver] = "FAILED"
+    }
+    Write-Host ""
 }
 
-Write-Host "`nDone. Restart Revit to load the add-in." -ForegroundColor Yellow
+# --- summary ---------------------------------------------------------------
+
+Write-Host "  " ("-" * 54) -ForegroundColor DarkCyan
+Write-Host "  Summary" -ForegroundColor White
+foreach ($ver in $results.Keys) {
+    $status = $results[$ver]
+    $color = switch -Wildcard ($status) {
+        "deployed"  { "Green" }
+        "FAILED"    { "Red" }
+        default     { "Yellow" }  # skipped (*)
+    }
+    Write-Host ("    Revit {0}  : " -f $ver) -NoNewline -ForegroundColor DarkGray
+    Write-Host $status -ForegroundColor $color
+}
+Write-Host ""
+
+if ($results.Values -contains "deployed") {
+    Write-Host "  Done. Restart the affected Revit version(s) to load the add-in." -ForegroundColor Yellow
+} else {
+    Write-Host "  Nothing deployed." -ForegroundColor Red
+}
+Write-Host ""
