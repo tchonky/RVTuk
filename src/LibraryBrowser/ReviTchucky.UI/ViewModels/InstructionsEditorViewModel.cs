@@ -212,6 +212,12 @@ namespace ReviTchucky.UI.ViewModels
 
         private void DeleteImage(long imageId)
         {
+            var result = System.Windows.MessageBox.Show(
+                "Delete this image? This permanently removes the file from disk.",
+                "ReviTchucky",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning);
+            if (result != System.Windows.MessageBoxResult.Yes) return;
             _repo.DeleteImage(imageId);
             ReloadGallery();
         }
