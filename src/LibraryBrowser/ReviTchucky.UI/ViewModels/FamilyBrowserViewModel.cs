@@ -139,10 +139,23 @@ namespace ReviTchucky.UI.ViewModels
         public string? SelectedTags
         {
             get => _selectedTags;
-            set { SetProperty(ref _selectedTags, value); OnPropertyChanged(nameof(ShowTags)); }
+            set { SetProperty(ref _selectedTags, value); OnPropertyChanged(nameof(ShowTags)); RebuildTagChips(); }
         }
 
         public bool ShowTags => !string.IsNullOrWhiteSpace(_selectedTags);
+
+        public ObservableCollection<string> SelectedTagChips { get; } = new();
+
+        private void RebuildTagChips()
+        {
+            SelectedTagChips.Clear();
+            if (string.IsNullOrWhiteSpace(_selectedTags)) return;
+            foreach (var t in _selectedTags!.Split(','))
+            {
+                var s = t.Trim();
+                if (s.Length > 0) SelectedTagChips.Add(s);
+            }
+        }
 
         public List<ParameterModel> Parameters
         {
@@ -180,6 +193,7 @@ namespace ReviTchucky.UI.ViewModels
         public ICommand UpdateInProjectCommand { get; }
         public ICommand EditInfoCommand { get; }
         public ICommand RescanFamilyCommand { get; }
+        public ICommand FilterByTagCommand { get; }
 
         public event Action<FamilyBrowserItemViewModel>? EditInfoRequested;
 
@@ -207,6 +221,7 @@ namespace ReviTchucky.UI.ViewModels
             UpdateInProjectCommand= new RelayCommand(UpdateSelected,() => ShowUpdateInProject);
             EditInfoCommand       = new RelayCommand(RequestEditInfo, () => SelectedItem != null);
             RescanFamilyCommand   = new RelayCommand(RescanSelected, () => SelectedItem != null && !IsRescanning);
+            FilterByTagCommand    = new RelayCommand<string>(t => { if (!string.IsNullOrWhiteSpace(t)) SearchText = t.Trim(); });
 
             LoadFamilies();
             LoadCategories();

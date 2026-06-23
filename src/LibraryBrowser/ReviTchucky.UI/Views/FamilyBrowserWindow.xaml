@@ -198,11 +198,25 @@
                     <TextBlock Text="{Binding SelectedItem.DisplayName}" FontSize="14" FontWeight="Bold"/>
                     <TextBlock Text="{Binding SelectedItem.Category}"
                                Foreground="{StaticResource Brush.TextMuted}" FontSize="11" Margin="0,2,0,0"/>
-                    <TextBlock Margin="0,2,0,0" FontSize="11" TextWrapping="Wrap"
-                               Foreground="{StaticResource Brush.Accent}"
-                               Visibility="{Binding ShowTags, Converter={StaticResource BoolVis}}">
-                        <Run Text="&#x1F3F7;"/><Run Text=" "/><Run Text="{Binding SelectedTags, Mode=OneWay}"/>
-                    </TextBlock>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0"
+                                Visibility="{Binding ShowTags, Converter={StaticResource BoolVis}}">
+                        <TextBlock Text="&#x1F3F7;" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"
+                                   Foreground="{StaticResource Brush.Accent}"/>
+                        <ItemsControl ItemsSource="{Binding SelectedTagChips}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Content="{Binding}" Margin="0,0,4,4" Padding="6,1" FontSize="11"
+                                            Command="{Binding DataContext.FilterByTagCommand,
+                                                      RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip="Filter the list by this tag"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                     <Border Background="#332200" BorderBrush="{StaticResource Brush.Accent}" BorderThickness="1"
                             Margin="0,6,0,4" Padding="6,3" CornerRadius="3"
                             Visibility="{Binding ShowUpdateInProject, Converter={StaticResource BoolVis}}">
