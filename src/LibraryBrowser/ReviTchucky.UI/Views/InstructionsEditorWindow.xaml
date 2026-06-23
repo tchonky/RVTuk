@@ -107,6 +107,16 @@
                             <Image Source="{Binding Image}" Height="90" Stretch="Uniform"/>
                             <TextBox Text="{Binding Caption}" Margin="0,3,0,0"
                                      Tag="{Binding Id}" LostFocus="Caption_LostFocus"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                <Button Content="&#x25C0;" Width="26"
+                                        Command="{Binding DataContext.MoveImageLeftCommand,
+                                                  RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding Id}"/>
+                                <Button Content="&#x25B6;" Width="26" Margin="4,0,0,0"
+                                        Command="{Binding DataContext.MoveImageRightCommand,
+                                                  RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                        CommandParameter="{Binding Id}"/>
+                            </StackPanel>
                             <Button Content="Delete" Margin="0,3,0,0"
                                     Command="{Binding DataContext.DeleteImageCommand,
                                               RelativeSource={RelativeSource AncestorType=ItemsControl}}"

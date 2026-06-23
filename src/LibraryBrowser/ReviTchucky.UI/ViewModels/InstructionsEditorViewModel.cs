@@ -51,6 +51,8 @@ namespace ReviTchucky.UI.ViewModels
         public ObservableCollection<GalleryItemViewModel> GalleryItems { get; } = new();
         public ICommand AddImageCommand { get; }
         public ICommand DeleteImageCommand { get; }
+        public ICommand MoveImageLeftCommand { get; }
+        public ICommand MoveImageRightCommand { get; }
 
         public ICommand SaveCommand { get; }
         public ICommand CancelCommand { get; }
@@ -78,8 +80,10 @@ namespace ReviTchucky.UI.ViewModels
             ReplaceThumbnailCommand = new RelayCommand(ReplaceThumbnail);
             ResetThumbnailCommand   = new RelayCommand(ResetThumbnail);
             UpdateOleCommand        = new RelayCommand(UpdateOle, () => CanUpdateOle);
-            AddImageCommand    = new RelayCommand(AddImage);
-            DeleteImageCommand = new RelayCommand<long>(DeleteImage);
+            AddImageCommand        = new RelayCommand(AddImage);
+            DeleteImageCommand     = new RelayCommand<long>(DeleteImage);
+            MoveImageLeftCommand   = new RelayCommand<long>(MoveImageLeft);
+            MoveImageRightCommand  = new RelayCommand<long>(MoveImageRight);
             ReloadGallery();
 
             LoadThumbnailState();
@@ -220,6 +224,40 @@ namespace ReviTchucky.UI.ViewModels
             if (result != System.Windows.MessageBoxResult.Yes) return;
             _repo.DeleteImage(imageId);
             ReloadGallery();
+        }
+
+        private void MoveImageLeft(long id)
+        {
+            int index = IndexOf(id);
+            if (index <= 0) return;
+            var list = BuildIdList();
+            (list[index - 1], list[index]) = (list[index], list[index - 1]);
+            _repo.ReorderImages(_familyId, list);
+            ReloadGallery();
+        }
+
+        private void MoveImageRight(long id)
+        {
+            int index = IndexOf(id);
+            if (index < 0 || index >= GalleryItems.Count - 1) return;
+            var list = BuildIdList();
+            (list[index], list[index + 1]) = (list[index + 1], list[index]);
+            _repo.ReorderImages(_familyId, list);
+            ReloadGallery();
+        }
+
+        private int IndexOf(long id)
+        {
+            for (int i = 0; i < GalleryItems.Count; i++)
+                if (GalleryItems[i].Id == id) return i;
+            return -1;
+        }
+
+        private System.Collections.Generic.List<long> BuildIdList()
+        {
+            var list = new System.Collections.Generic.List<long>(GalleryItems.Count);
+            foreach (var item in GalleryItems) list.Add(item.Id);
+            return list;
         }
 
         public void SaveCaption(long imageId, string? caption) => _repo.UpdateCaption(imageId, caption);
