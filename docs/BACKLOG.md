@@ -1,4 +1,4 @@
-# ReviTchucky — Backlog
+# RVTuk — Backlog
 
 Running list of additions and modifications. Brain-dump goes under the right
 section; check off with `[x]` and the commit hash when shipped.
@@ -24,9 +24,9 @@ section; check off with `[x]` and the commit hash when shipped.
 ## 🐞 Bugs / things to fix
 
 - [~] When closed, Revit crashes (access violation `c0000005` in `siappdll.dll`).
-      **Diagnosed: NOT ReviTchucky.** `siappdll.dll` / `3DxRevit.dll` is the 3Dconnexion
+      **Diagnosed: NOT RVTuk.** `siappdll.dll` / `3DxRevit.dll` is the 3Dconnexion
       SpaceMouse driver (`C:\Program Files\3Dconnexion\3DxWare\...`). The crash is on a
-      non-main native thread during Revit shutdown; every ReviTchucky journal entry is a
+      non-main native thread during Revit shutdown; every RVTuk journal entry is a
       normal startup/command event. Fix is on 3Dconnexion's side: update or temporarily
       disable the 3Dconnexion add-in / SpaceMouse driver. (CER dump:
       `…\Local\Autodesk\CER\92ed161c…\29`.)

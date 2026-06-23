@@ -16,7 +16,7 @@ A non-modal floating WPF window that lets users search the indexed family librar
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ ReviTchucky — Family Browser          [Furniture › Seating] │
+│ RVTuk — Family Browser          [Furniture › Seating] │
 ├──────────────────────┬──────────────────────────────────────┤
 │ 🔍 Search...  All ▾  │  [thumbnail]  Chair - Dining         │
 ├──────────────────────│  Furniture › Seating                 │

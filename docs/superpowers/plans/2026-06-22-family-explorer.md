@@ -12,28 +12,28 @@
 
 - **Git (added during execution).** The repo was `git init`'d on branch `family-explorer`. Each task ends with its build-verification checkpoint **and a commit** (`git add -A && git commit`). The `.Setup/` data folder and `.superpowers/` scratch are git-ignored.
 - **Multi-target both provider branches.** All `Database/` changes must compile under both `#if REVIT2024` (System.Data.SQLite, net48) and the `#else` (Microsoft.Data.Sqlite, net8) branches. Verify by building **both** `Release2024` and `Release2025`.
-- **Keep `ReviTchucky.Core` and `ReviTchucky.UI` free of Revit API types.** Only `ReviTchucky.Revit` references the Revit API.
+- **Keep `RVTuk.Core` and `RVTuk.UI` free of Revit API types.** Only `RVTuk.Revit` references the Revit API.
 - **Revit API calls run only on Revit's main thread** (inside an `IExternalEventHandler.Execute`). Never call the Revit API from a background/ThreadPool thread.
 - **Dates** persist as UTC ISO-8601 (`DateTime.ToString("o")`); read back via `DbConvert.ParseUtc`.
-- **Build command** (run from the `ReviTchucky` folder, i.e. `D:\User\OneDrive - Knafo Klimor Architects LTD\Coding\ReviTchucky`):
-  `dotnet build ReviTchucky.sln -c Release2024` (and `-c Release2025`, `-c Release2023`).
+- **Build command** (run from the `RVTuk` folder, i.e. `D:\User\OneDrive - Knafo Klimor Architects LTD\Coding\RVTuk`):
+  `dotnet build RVTuk.sln -c Release2024` (and `-c Release2025`, `-c Release2023`).
 - **SQL must stay portable** across both providers (one statement per `ExecuteScalar`; named params via the existing `AddParam` helper).
 
 ## File Structure
 
 Created:
-- `src/ReviTchucky.Core/Models/FamilyImage.cs` — gallery image metadata row (Phase 3).
-- `src/LibraryBrowser/ReviTchucky.UI/ViewModels/GalleryItemViewModel.cs` — one gallery image, lazy file→BitmapSource (Phase 3).
+- `src/RVTuk.Core/Models/FamilyImage.cs` — gallery image metadata row (Phase 3).
+- `src/LibraryBrowser/RVTuk.UI/ViewModels/GalleryItemViewModel.cs` — one gallery image, lazy file→BitmapSource (Phase 3).
 
 Modified:
-- `src/ReviTchucky.Core/Database/IndexRepository.cs` — drop UNC block, rollback journal + busy_timeout, param columns in schema/migration/write (Phases 1–2).
-- `src/ReviTchucky.Core/Database/BrowserRepository.cs` — read-only read connection + transient write connection, param columns, gallery CRUD (Phases 1–3).
-- `src/ReviTchucky.Core/Models/ParameterModel.cs` — add `ParamGroup`, `Kind`, `Guid`, `Formula` (Phase 2).
-- `src/ReviTchucky.Revit/Extraction/FamilyMetadataExtractor.cs` — FamilyManager document-open extraction (Phase 2).
-- `src/LibraryBrowser/ReviTchucky.UI/ViewModels/FamilyBrowserViewModel.cs` — parameter filter, gallery binding (Phases 2–3).
-- `src/LibraryBrowser/ReviTchucky.UI/Views/FamilyBrowserWindow.xaml` — param columns + filter box, gallery region (Phases 2–3).
-- `src/LibraryBrowser/ReviTchucky.UI/ViewModels/InstructionsEditorViewModel.cs` — gallery management commands (Phase 3).
-- `src/LibraryBrowser/ReviTchucky.UI/Views/InstructionsEditorWindow.xaml` (+ `.xaml.cs`) — gallery management UI (Phase 3).
+- `src/RVTuk.Core/Database/IndexRepository.cs` — drop UNC block, rollback journal + busy_timeout, param columns in schema/migration/write (Phases 1–2).
+- `src/RVTuk.Core/Database/BrowserRepository.cs` — read-only read connection + transient write connection, param columns, gallery CRUD (Phases 1–3).
+- `src/RVTuk.Core/Models/ParameterModel.cs` — add `ParamGroup`, `Kind`, `Guid`, `Formula` (Phase 2).
+- `src/RVTuk.Revit/Extraction/FamilyMetadataExtractor.cs` — FamilyManager document-open extraction (Phase 2).
+- `src/LibraryBrowser/RVTuk.UI/ViewModels/FamilyBrowserViewModel.cs` — parameter filter, gallery binding (Phases 2–3).
+- `src/LibraryBrowser/RVTuk.UI/Views/FamilyBrowserWindow.xaml` — param columns + filter box, gallery region (Phases 2–3).
+- `src/LibraryBrowser/RVTuk.UI/ViewModels/InstructionsEditorViewModel.cs` — gallery management commands (Phase 3).
+- `src/LibraryBrowser/RVTuk.UI/Views/InstructionsEditorWindow.xaml` (+ `.xaml.cs`) — gallery management UI (Phase 3).
 
 ---
 
@@ -44,7 +44,7 @@ Goal: DB can live at `\\server\share\…`, read-only for browsing, written only 
 ### Task 1: IndexRepository — allow UNC, rollback journal, busy_timeout
 
 **Files:**
-- Modify: `src/ReviTchucky.Core/Database/IndexRepository.cs`
+- Modify: `src/RVTuk.Core/Database/IndexRepository.cs`
 
 **Interfaces:**
 - Produces: unchanged public API; `IndexRepository(string databasePath)` now accepts `\\…` paths and opens with `journal_mode=DELETE` + `busy_timeout=5000`.
@@ -85,10 +85,10 @@ with:
 
 - [ ] **Step 3: Build Core (both provider branches)**
 
-Run from the `ReviTchucky` folder:
+Run from the `RVTuk` folder:
 ```
-dotnet build ReviTchucky.sln -c Release2024
-dotnet build ReviTchucky.sln -c Release2025
+dotnet build RVTuk.sln -c Release2024
+dotnet build RVTuk.sln -c Release2025
 ```
 Expected: Build succeeded, 0 errors.
 
@@ -101,7 +101,7 @@ Expected: Build succeeded, 0 errors.
 Today `BrowserRepository` holds one read-write connection used for both reads and writes (Sync upserts/deletes, editor saves). Split it: a persistent **read-only** connection for `Get*`, and a transient **read-write** connection per write. The constructor still ensures schema (and migrates the journal off WAL) via a one-time write connection, which also handles first-run DB creation.
 
 **Files:**
-- Modify: `src/ReviTchucky.Core/Database/BrowserRepository.cs`
+- Modify: `src/RVTuk.Core/Database/BrowserRepository.cs`
 
 **Interfaces:**
 - Consumes: `databasePath` (may be `\\…`).
@@ -262,8 +262,8 @@ Apply the identical pattern (wrap the body in `WithWrite(c => { … using var cm
 - [ ] **Step 4: Build Core (both provider branches)**
 
 ```
-dotnet build ReviTchucky.sln -c Release2024
-dotnet build ReviTchucky.sln -c Release2025
+dotnet build RVTuk.sln -c Release2024
+dotnet build RVTuk.sln -c Release2025
 ```
 Expected: Build succeeded, 0 errors.
 
@@ -282,7 +282,7 @@ Goal: capture each parameter's group + kind (System/Shared/Family) + GUID + form
 ### Task 3: Extend ParameterModel
 
 **Files:**
-- Modify: `src/ReviTchucky.Core/Models/ParameterModel.cs`
+- Modify: `src/RVTuk.Core/Models/ParameterModel.cs`
 
 **Interfaces:**
 - Produces: `ParameterModel` with new nullable string properties `ParamGroup`, `Kind`, `Guid`, `Formula`.
@@ -290,7 +290,7 @@ Goal: capture each parameter's group + kind (System/Shared/Family) + GUID + form
 - [ ] **Step 1: Add the fields**
 
 ```csharp
-namespace ReviTchucky.Core.Models
+namespace RVTuk.Core.Models
 {
     public class ParameterModel
     {
@@ -314,7 +314,7 @@ namespace ReviTchucky.Core.Models
 - [ ] **Step 2: Build Core**
 
 ```
-dotnet build ReviTchucky.sln -c Release2024
+dotnet build RVTuk.sln -c Release2024
 ```
 Expected: 0 errors.
 
@@ -325,8 +325,8 @@ Expected: 0 errors.
 ### Task 4: DB columns + read/write round-trip for new param fields
 
 **Files:**
-- Modify: `src/ReviTchucky.Core/Database/IndexRepository.cs`
-- Modify: `src/ReviTchucky.Core/Database/BrowserRepository.cs`
+- Modify: `src/RVTuk.Core/Database/IndexRepository.cs`
+- Modify: `src/RVTuk.Core/Database/BrowserRepository.cs`
 
 **Interfaces:**
 - Consumes: `ParameterModel.ParamGroup/Kind/Guid/Formula`.
@@ -416,8 +416,8 @@ Replace `GetParameters` (currently lines ~161–178) with:
 - [ ] **Step 5: Build Core (both branches)**
 
 ```
-dotnet build ReviTchucky.sln -c Release2024
-dotnet build ReviTchucky.sln -c Release2025
+dotnet build RVTuk.sln -c Release2024
+dotnet build RVTuk.sln -c Release2025
 ```
 Expected: 0 errors.
 
@@ -430,7 +430,7 @@ Expected: 0 errors.
 Replace the PartAtom XML peek with opening the family document and reading `FamilyManager`. This is the source of group + kind data.
 
 **Files:**
-- Modify: `src/ReviTchucky.Revit/Extraction/FamilyMetadataExtractor.cs`
+- Modify: `src/RVTuk.Revit/Extraction/FamilyMetadataExtractor.cs`
 
 **Interfaces:**
 - Consumes: a `.rfa` path; runs on Revit's main thread (called from `IndexingExternalEventHandler.Execute`, which already guards "too new" families).
@@ -444,10 +444,10 @@ Replace the whole class body's `ExtractMetadata` + `ParseAtomXml` with a FamilyM
 using System;
 using System.Collections.Generic;
 using Autodesk.Revit.DB;
-using ReviTchucky.Core.Models;
+using RVTuk.Core.Models;
 using RevitApplication = Autodesk.Revit.ApplicationServices.Application;
 
-namespace ReviTchucky.Revit.Extraction
+namespace RVTuk.Revit.Extraction
 {
     /// <summary>
     /// Must be called only from Revit's main thread (inside an ExternalEvent handler).
@@ -545,14 +545,14 @@ namespace ReviTchucky.Revit.Extraction
 }
 ```
 
-> **API note:** `Definition.GetGroupTypeId()` and `LabelUtils.GetLabelForGroup(ForgeTypeId)` exist in Revit 2022+ (covers 2023/2024/2025). The `#pragma`-wrapped `ParameterGroup`/`GetLabelFor` fallback covers the deprecated path. If `GetLabelForSpec` is unavailable for a given build, the `catch` falls back to `StorageType`. Confirm these resolve when building `ReviTchucky.Revit` per config; if a symbol is missing for one Revit version, guard it with the existing per-config constants.
+> **API note:** `Definition.GetGroupTypeId()` and `LabelUtils.GetLabelForGroup(ForgeTypeId)` exist in Revit 2022+ (covers 2023/2024/2025). The `#pragma`-wrapped `ParameterGroup`/`GetLabelFor` fallback covers the deprecated path. If `GetLabelForSpec` is unavailable for a given build, the `catch` falls back to `StorageType`. Confirm these resolve when building `RVTuk.Revit` per config; if a symbol is missing for one Revit version, guard it with the existing per-config constants.
 
 - [ ] **Step 2: Build the Revit project (all three configs — Revit API surface differs per version)**
 
 ```
-dotnet build ReviTchucky.sln -c Release2023
-dotnet build ReviTchucky.sln -c Release2024
-dotnet build ReviTchucky.sln -c Release2025
+dotnet build RVTuk.sln -c Release2023
+dotnet build RVTuk.sln -c Release2024
+dotnet build RVTuk.sln -c Release2025
 ```
 Expected: 0 errors. If a `LabelUtils`/`Definition` symbol fails on one config, apply a per-config guard and rebuild.
 
@@ -563,8 +563,8 @@ Expected: 0 errors. If a `LabelUtils`/`Definition` symbol fails on one config, a
 ### Task 6: Parameters UI — Group/Kind columns + live filter
 
 **Files:**
-- Modify: `src/LibraryBrowser/ReviTchucky.UI/ViewModels/FamilyBrowserViewModel.cs`
-- Modify: `src/LibraryBrowser/ReviTchucky.UI/Views/FamilyBrowserWindow.xaml`
+- Modify: `src/LibraryBrowser/RVTuk.UI/ViewModels/FamilyBrowserViewModel.cs`
+- Modify: `src/LibraryBrowser/RVTuk.UI/Views/FamilyBrowserWindow.xaml`
 
 **Interfaces:**
 - Consumes: `BrowserRepository.GetParameters` (now with group/kind).
@@ -657,8 +657,8 @@ Replace the Parameters `TabItem` (currently lines ~198–207 in `FamilyBrowserWi
 - [ ] **Step 3: Build UI (both branches)**
 
 ```
-dotnet build ReviTchucky.sln -c Release2024
-dotnet build ReviTchucky.sln -c Release2025
+dotnet build RVTuk.sln -c Release2024
+dotnet build RVTuk.sln -c Release2025
 ```
 Expected: 0 errors.
 
@@ -673,8 +673,8 @@ Goal: multiple admin-added images per family, each with a caption; files on disk
 ### Task 7: FamilyImage model + gallery storage helper + DB CRUD
 
 **Files:**
-- Create: `src/ReviTchucky.Core/Models/FamilyImage.cs`
-- Modify: `src/ReviTchucky.Core/Database/BrowserRepository.cs`
+- Create: `src/RVTuk.Core/Models/FamilyImage.cs`
+- Modify: `src/RVTuk.Core/Database/BrowserRepository.cs`
 
 **Interfaces:**
 - Produces:
@@ -690,7 +690,7 @@ Goal: multiple admin-added images per family, each with a caption; files on disk
 - [ ] **Step 1: Create the model**
 
 ```csharp
-namespace ReviTchucky.Core.Models
+namespace RVTuk.Core.Models
 {
     public class FamilyImage
     {
@@ -846,8 +846,8 @@ Add the same `CREATE TABLE IF NOT EXISTS FamilyImage (...)` to `IndexRepository.
 - [ ] **Step 4: Build Core (both branches)**
 
 ```
-dotnet build ReviTchucky.sln -c Release2024
-dotnet build ReviTchucky.sln -c Release2025
+dotnet build RVTuk.sln -c Release2024
+dotnet build RVTuk.sln -c Release2025
 ```
 Expected: 0 errors.
 
@@ -858,9 +858,9 @@ Expected: 0 errors.
 ### Task 8: GalleryItemViewModel + detail-panel gallery
 
 **Files:**
-- Create: `src/LibraryBrowser/ReviTchucky.UI/ViewModels/GalleryItemViewModel.cs`
-- Modify: `src/LibraryBrowser/ReviTchucky.UI/ViewModels/FamilyBrowserViewModel.cs`
-- Modify: `src/LibraryBrowser/ReviTchucky.UI/Views/FamilyBrowserWindow.xaml`
+- Create: `src/LibraryBrowser/RVTuk.UI/ViewModels/GalleryItemViewModel.cs`
+- Modify: `src/LibraryBrowser/RVTuk.UI/ViewModels/FamilyBrowserViewModel.cs`
+- Modify: `src/LibraryBrowser/RVTuk.UI/Views/FamilyBrowserWindow.xaml`
 
 **Interfaces:**
 - Produces:
@@ -873,7 +873,7 @@ Expected: 0 errors.
 using System.IO;
 using System.Windows.Media.Imaging;
 
-namespace ReviTchucky.UI.ViewModels
+namespace RVTuk.UI.ViewModels
 {
     public class GalleryItemViewModel
     {
@@ -975,8 +975,8 @@ In `FamilyBrowserWindow.xaml`, add a third `TabItem` to the detail `TabControl` 
 - [ ] **Step 4: Build UI (both branches)**
 
 ```
-dotnet build ReviTchucky.sln -c Release2024
-dotnet build ReviTchucky.sln -c Release2025
+dotnet build RVTuk.sln -c Release2024
+dotnet build RVTuk.sln -c Release2025
 ```
 Expected: 0 errors.
 
@@ -987,8 +987,8 @@ Expected: 0 errors.
 ### Task 9: Gallery management in the editor
 
 **Files:**
-- Modify: `src/LibraryBrowser/ReviTchucky.UI/ViewModels/InstructionsEditorViewModel.cs`
-- Modify: `src/LibraryBrowser/ReviTchucky.UI/Views/InstructionsEditorWindow.xaml` (+ `.xaml.cs`)
+- Modify: `src/LibraryBrowser/RVTuk.UI/ViewModels/InstructionsEditorViewModel.cs`
+- Modify: `src/LibraryBrowser/RVTuk.UI/Views/InstructionsEditorWindow.xaml` (+ `.xaml.cs`)
 
 **Interfaces:**
 - Consumes: `BrowserRepository` (already passed to the editor VM), `AddImage/UpdateCaption/DeleteImage/GetImages/GetGalleryPath` (Task 7), the existing `ConvertToPng` helper in this VM.
@@ -1012,13 +1012,13 @@ In the constructor (after the existing command wiring), add:
             ReloadGallery();
 ```
 
-The project has only the non-generic `RelayCommand` (`src/LibraryBrowser/ReviTchucky.UI/ViewModels/RelayCommand.cs`). Create a generic sibling `RelayCommand<T>` in the same folder (`src/LibraryBrowser/ReviTchucky.UI/ViewModels/RelayCommandT.cs`):
+The project has only the non-generic `RelayCommand` (`src/LibraryBrowser/RVTuk.UI/ViewModels/RelayCommand.cs`). Create a generic sibling `RelayCommand<T>` in the same folder (`src/LibraryBrowser/RVTuk.UI/ViewModels/RelayCommandT.cs`):
 
 ```csharp
 using System;
 using System.Windows.Input;
 
-namespace ReviTchucky.UI.ViewModels
+namespace RVTuk.UI.ViewModels
 {
     public class RelayCommand<T> : ICommand
     {
@@ -1165,8 +1165,8 @@ In `InstructionsEditorWindow.xaml.cs`, add the `LostFocus` handler:
 - [ ] **Step 4: Build UI (both branches)**
 
 ```
-dotnet build ReviTchucky.sln -c Release2024
-dotnet build ReviTchucky.sln -c Release2025
+dotnet build RVTuk.sln -c Release2024
+dotnet build RVTuk.sln -c Release2025
 ```
 Expected: 0 errors.
 
@@ -1176,11 +1176,11 @@ Expected: 0 errors.
 
 ## Final Verification (manual, in Revit)
 
-1. **Build all three configs** from the `ReviTchucky` folder:
+1. **Build all three configs** from the `RVTuk` folder:
    ```
-   dotnet build ReviTchucky.sln -c Release2023
-   dotnet build ReviTchucky.sln -c Release2024
-   dotnet build ReviTchucky.sln -c Release2025
+   dotnet build RVTuk.sln -c Release2023
+   dotnet build RVTuk.sln -c Release2024
+   dotnet build RVTuk.sln -c Release2025
    ```
    Expected: 0 errors each.
 2. **Deploy** (`Deploy.ps1`, elevated) and restart Revit.

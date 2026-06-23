@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Builds-output deployer for the ReviTchucky Revit add-in (2023 / 2024 / 2025).
+    Builds-output deployer for the RVTuk Revit add-in (2023 / 2024 / 2025).
 .DESCRIPTION
     Copies each version's build output into the per-year Revit Addins folder and
     writes the .addin manifest. Each version deploys independently: if one year's
@@ -22,9 +22,9 @@ param(
 $ErrorActionPreference = "Continue"
 $root = Split-Path $MyInvocation.MyCommand.Path -Parent
 
-$addinName    = "ReviTchucky"
+$addinName    = "RVTuk"
 $clientId     = "D71D7480-4A21-474E-A47E-3E8DF8C1BDA5"
-$className    = "ReviTchucky.Revit.Application"
+$className    = "RVTuk.Revit.Application"
 $vendorId     = "KnafoKlimor"
 $vendorDesc   = "Knafo Klimor Architects LTD"
 
@@ -42,7 +42,7 @@ function Write-Banner {
     $line = "=" * 56
     Write-Host ""
     Write-Host "  $line" -ForegroundColor DarkCyan
-    Write-Host "   ReviTchucky deploy" -ForegroundColor White -NoNewline
+    Write-Host "   RVTuk deploy" -ForegroundColor White -NoNewline
     Write-Host "  -  $(Get-Date -Format 'HH:mm:ss')" -ForegroundColor DarkGray
     Write-Host "  $line" -ForegroundColor DarkCyan
     Write-Host ""
@@ -100,11 +100,11 @@ foreach ($ver in $targets) {
     }
 
     # 2) Locate build output (SDK TFM subfolder, with flat fallback).
-    $srcDir = "$root\src\ReviTchucky.Revit\bin\$ver\$config\$tfm"
-    if (-not (Test-Path "$srcDir\ReviTchucky.Revit.dll")) {
-        $srcDir = "$root\src\ReviTchucky.Revit\bin\$ver\$config"
+    $srcDir = "$root\src\RVTuk.Revit\bin\$ver\$config\$tfm"
+    if (-not (Test-Path "$srcDir\RVTuk.Revit.dll")) {
+        $srcDir = "$root\src\RVTuk.Revit\bin\$ver\$config"
     }
-    if (-not (Test-Path "$srcDir\ReviTchucky.Revit.dll")) {
+    if (-not (Test-Path "$srcDir\RVTuk.Revit.dll")) {
         Write-Host "    SKIP  build output not found. Run: dotnet build -c $config" -ForegroundColor Yellow
         $results[$ver] = "skipped (not built)"
         Write-Host ""
@@ -149,7 +149,7 @@ foreach ($ver in $targets) {
 <RevitAddIns>
   <AddIn Type="Application">
     <Name>$addinName</Name>
-    <Assembly>$addinName\ReviTchucky.Revit.dll</Assembly>
+    <Assembly>$addinName\RVTuk.Revit.dll</Assembly>
     <FullClassName>$className</FullClassName>
     <ClientId>$clientId</ClientId>
     <VendorId>$vendorId</VendorId>

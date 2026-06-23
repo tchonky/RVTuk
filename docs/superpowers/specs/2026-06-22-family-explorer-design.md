@@ -39,7 +39,7 @@ Capture and display each family parameter's *group*, *kind* (System / Shared / F
 instance/type flag, data type, GUID, and formula; filter the list by typing.
 
 ### Extraction change (core of the work)
-`FamilyMetadataExtractor.ParseAtomXml` (`src/ReviTchucky.Revit/Extraction/`) reads
+`FamilyMetadataExtractor.ParseAtomXml` (`src/RVTuk.Revit/Extraction/`) reads
 `Application.ExtractPartAtomFromFamilyFile` — a fast XML peek yielding only name / datatype /
 isInstance, with **no** group or shared/system info.
 
@@ -63,7 +63,7 @@ peek). Admin-only and occasional, runs in the background on Revit's thread. Wort
 note in the scan UI.
 
 ### Data model + DB
-Extend `ParameterModel` (`src/ReviTchucky.Core/Models/ParameterModel.cs`) with `ParamGroup`,
+Extend `ParameterModel` (`src/RVTuk.Core/Models/ParameterModel.cs`) with `ParamGroup`,
 `Kind`, `Guid`, `Formula` (nullable strings; `Kind` may be an enum). Migrate the `Parameters`
 table on open (same pattern as the existing `InstructionsXaml` migration in
 `IndexRepository.cs`):
@@ -148,7 +148,7 @@ Apply the same PRAGMA/journal settings in both `IndexRepository` and `BrowserRep
 
 ## Verification
 
-1. **Build** all three configs: `dotnet build ReviTchucky.sln -c Release2024` (and
+1. **Build** all three configs: `dotnet build RVTuk.sln -c Release2024` (and
    `Release2023`, `Release2025`).
 2. **Deploy** (`Deploy.ps1`, elevated) and restart Revit.
 3. **Parameter audit:** library folder with shared/system/family params in various groups
