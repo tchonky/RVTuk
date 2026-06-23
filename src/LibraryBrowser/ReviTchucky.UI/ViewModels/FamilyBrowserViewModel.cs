@@ -28,6 +28,7 @@ namespace ReviTchucky.UI.ViewModels
         private List<FamilyBrowserItemViewModel> _allItems = new();
         private string _searchText = string.Empty;
         private string _selectedCategory = "";
+        private string _selectedVersion = "";
         private FamilyBrowserItemViewModel? _selectedItem;
         private bool _isSyncing;
         private bool _isRescanning;
@@ -41,6 +42,7 @@ namespace ReviTchucky.UI.ViewModels
 
         public ObservableCollection<FamilyBrowserItemViewModel> FilteredItems { get; } = new();
         public ObservableCollection<string> Categories { get; } = new();
+        public ObservableCollection<string> Versions { get; } = new();
 
         public string SearchText
         {
@@ -52,6 +54,12 @@ namespace ReviTchucky.UI.ViewModels
         {
             get => _selectedCategory;
             set { SetProperty(ref _selectedCategory, value ?? ""); ApplyFilter(); }
+        }
+
+        public string SelectedVersion
+        {
+            get => _selectedVersion;
+            set { SetProperty(ref _selectedVersion, value ?? ""); ApplyFilter(); }
         }
 
         public FamilyBrowserItemViewModel? SelectedItem
@@ -193,6 +201,7 @@ namespace ReviTchucky.UI.ViewModels
 
             LoadFamilies();
             LoadCategories();
+            LoadVersions();
         }
 
         private void LoadFamilies()
@@ -212,6 +221,19 @@ namespace ReviTchucky.UI.ViewModels
             SelectedCategory = "";
         }
 
+        private void LoadVersions()
+        {
+            Versions.Clear();
+            Versions.Add(""); // "" = "All Versions" sentinel
+            foreach (var y in _allItems
+                .Select(i => i.RevitYear)
+                .Where(y => y > 0)
+                .Distinct()
+                .OrderByDescending(y => y))
+                Versions.Add(y.ToString());
+            SelectedVersion = "";
+        }
+
         private void ApplyFilter()
         {
             // Multi-word search: split on whitespace; every token must appear somewhere in the
@@ -223,6 +245,8 @@ namespace ReviTchucky.UI.ViewModels
                     tokens.All(t => i.DisplayName.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0));
             if (!string.IsNullOrEmpty(_selectedCategory))
                 filtered = filtered.Where(i => i.Category == _selectedCategory);
+            if (!string.IsNullOrEmpty(_selectedVersion))
+                filtered = filtered.Where(i => i.RevitYear.ToString() == _selectedVersion);
 
             // Hide families under an ignored subfolder (kept in the DB, just not shown).
             if (_config.IgnoredSubfolders != null && _config.IgnoredSubfolders.Count > 0)
@@ -323,6 +347,7 @@ namespace ReviTchucky.UI.ViewModels
                     {
                         _allItems = finalItems;
                         LoadCategories();
+                        LoadVersions();
                         OutdatedCount = finalOutdated;
                         OnPropertyChanged(nameof(ShowUpdateInProject));
                         IsSyncing = false;

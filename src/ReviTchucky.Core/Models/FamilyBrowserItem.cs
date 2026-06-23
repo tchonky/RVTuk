@@ -13,5 +13,6 @@ namespace ReviTchucky.Core.Models
         public bool HasCustomThumbnail { get; set; }
         public bool OleSynced { get; set; } = true;
         public VersionStatus VersionStatus { get; set; } = VersionStatus.None;
+        public int RevitYear { get; set; }
     }
 }
