@@ -7,7 +7,17 @@ section; check off with `[x]` and the commit hash when shipped.
 
 ## 🐞 Bugs / things to fix
 
-- [ ] When ignored folder is add, list of families does not update. Maybe put an option  to scan the folder just to list files? 
+- [ ] I'm not sure, but when closed, Revit crashes, giving the following:
+        Date/Time: 2026-06-23 11:49:52 +03:00
+        Application: Revit.exe
+        Error: Access violation - code c0000005 (first/second chance not available)
+        Crashed Module Name: siappdll.dll
+        Exception Address: 0x0000020d8023d39e
+        Exception Code: c0000005
+        Exception Flags: 0
+        Exception Parameters: 0, 20d9a350004
+      also check: C:\Users\danie\AppData\Local\Autodesk\CER\92ed161c792ec7321aadc8abc2616368c8ce96b2\29
+      
 
 ## ✨ Improvements (to existing features)
 
@@ -26,17 +36,11 @@ section; check off with `[x]` and the commit hash when shipped.
 ## 🚀 New features / ideas
 
 - [ ] A **tags** section per family + search by tags.
-- [ ] Filter the list by **Revit version** (e.g. show only families saved in 2023, or
-  2023–2024). The year is captured during extraction (`FileRevitYear`) but not yet stored
-  in the DB — needs a RevitYear column + write + a filter control.
 
 ## ⏳ Known deferred (from the Family Explorer build/review — decided "later")
 
 - [ ] Editor gallery loads image files synchronously on the UI thread — could stutter
   on a slow share with many images; load off-thread if galleries grow.
-- [ ] Drag-to-reorder gallery images (the `ReorderImages` API exists; UI not wired).
-- [ ] Surface a count of families skipped during a scan (too-new, too-long path,
-  unreadable) so the admin knows why some are missing. Create a log and write in the DB folder.
 - [ ] Parameter **write-back** — let the tool actually fix/reorganize parameters in
   the families (currently view/audit only).
 - [ ] UI styling/layout polish for the new gallery + parameter regions.
@@ -54,3 +58,7 @@ section; check off with `[x]` and the commit hash when shipped.
 - [x] Fix: editor crash on open — `ContextMenu` parented in a Grid (`958f614`).
 - [x] Gallery: UNC-safe image `Uri` + confirm before deleting an image (`fd60009`).
 - [x] **Ignore subfolders** in deep scan + sync (configurable in Settings) (`534a6f5`).
+- [x] Fix: ignored-folder list **now updates** the browser view when changed (`bd5ec13`).
+- [x] Filter the list by **Revit version** — RevitYear column + version dropdown (`e08ce65`).
+- [x] Gallery: **reorder images** with ◀/▶ buttons in the editor (`bb87e65`).
+- [x] **Skipped-family count** — deep-scan dialog + `last-scan.log` report skips (`46dada3`).
