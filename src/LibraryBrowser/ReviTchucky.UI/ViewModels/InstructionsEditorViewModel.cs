@@ -1,9 +1,12 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using ReviTchucky.Core.Database;
 using ReviTchucky.Core.Extraction;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
 namespace ReviTchucky.UI.ViewModels
@@ -13,6 +16,7 @@ namespace ReviTchucky.UI.ViewModels
         private readonly BrowserRepository _repo;
         private readonly long _familyId;
         private readonly string _rfaFullPath;
+        private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
 
         private string? _instructionsXaml;
         private string _tagsText = string.Empty;
@@ -194,9 +198,22 @@ namespace ReviTchucky.UI.ViewModels
 
         private void ReloadGallery()
         {
-            GalleryItems.Clear();
+            var specs = new List<(long Id, string? Caption, string Path)>();
             foreach (var im in _repo.GetImages(_familyId))
-                GalleryItems.Add(new GalleryItemViewModel(im.Id, im.Caption, _repo.GetGalleryPath(_familyId, im.FileName)));
+                specs.Add((im.Id, im.Caption, _repo.GetGalleryPath(_familyId, im.FileName)));
+
+            GalleryItems.Clear();
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                var vms = new List<GalleryItemViewModel>(specs.Count);
+                foreach (var s in specs)
+                    vms.Add(new GalleryItemViewModel(s.Id, s.Caption, s.Path));
+                _dispatcher.Invoke(() =>
+                {
+                    GalleryItems.Clear();
+                    foreach (var vm in vms) GalleryItems.Add(vm);
+                });
+            });
         }
 
         private void AddImage()
