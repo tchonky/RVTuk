@@ -7,7 +7,7 @@ section; check off with `[x]` and the commit hash when shipped.
 
 ## 🐞 Bugs / things to fix
 
-_(none open — add as you find them)_
+- [ ] When ignored folder is add, list of families does not update. Maybe put an option  to scan the folder just to list files? 
 
 ## ✨ Improvements (to existing features)
 

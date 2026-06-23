@@ -86,6 +86,7 @@ namespace ReviTchucky.UI.ViewModels
                     .Where(s => !string.IsNullOrEmpty(s))
                     .ToList();
                 ConfigManager.SaveConfig(_config);
+                ApplyFilter();   // refresh the list so newly-ignored families disappear immediately
                 OnPropertyChanged();
             }
         }
@@ -222,6 +223,10 @@ namespace ReviTchucky.UI.ViewModels
                     tokens.All(t => i.DisplayName.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0));
             if (!string.IsNullOrEmpty(_selectedCategory))
                 filtered = filtered.Where(i => i.Category == _selectedCategory);
+
+            // Hide families under an ignored subfolder (kept in the DB, just not shown).
+            if (_config.IgnoredSubfolders != null && _config.IgnoredSubfolders.Count > 0)
+                filtered = filtered.Where(i => !PathUtil.IsUnderIgnoredFolder(i.RelativePath, _config.IgnoredSubfolders));
 
             FilteredItems.Clear();
             foreach (var item in filtered.OrderBy(i => i.DisplayName))
