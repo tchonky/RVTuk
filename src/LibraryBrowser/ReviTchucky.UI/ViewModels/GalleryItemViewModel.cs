@@ -23,7 +23,7 @@ namespace ReviTchucky.UI.ViewModels
                 if (!File.Exists(path)) return null; // missing file → placeholder (null) handled by UI
                 var bmp = new BitmapImage();
                 bmp.BeginInit();
-                bmp.UriSource = new System.Uri(path);
+                bmp.UriSource = new System.Uri(path, System.UriKind.Absolute);
                 bmp.CacheOption = BitmapCacheOption.OnLoad;
                 bmp.DecodePixelWidth = 320;
                 bmp.EndInit();
