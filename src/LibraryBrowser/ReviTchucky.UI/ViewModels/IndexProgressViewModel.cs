@@ -13,6 +13,7 @@ namespace ReviTchucky.UI.ViewModels
         private int _currentCount;
         private int _totalCount;
         private string _elapsedTime = "00:00:00";
+        private string _remainingTime = "--:--:--";
         private bool _isRunning;
 
         private readonly DispatcherTimer _timer;
@@ -24,6 +25,7 @@ namespace ReviTchucky.UI.ViewModels
         public int CurrentCount { get => _currentCount; set => SetProperty(ref _currentCount, value); }
         public int TotalCount { get => _totalCount; set => SetProperty(ref _totalCount, value); }
         public string ElapsedTime { get => _elapsedTime; set => SetProperty(ref _elapsedTime, value); }
+        public string RemainingTime { get => _remainingTime; set => SetProperty(ref _remainingTime, value); }
         public bool IsRunning { get => _isRunning; set => SetProperty(ref _isRunning, value); }
 
         public ICommand CancelCommand { get; }
@@ -39,13 +41,29 @@ namespace ReviTchucky.UI.ViewModels
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _timer.Tick += (_, _) =>
+            {
                 ElapsedTime = (DateTime.UtcNow - _startTime).ToString(@"hh\:mm\:ss");
+                UpdateEta();
+            };
+        }
+
+        private void UpdateEta()
+        {
+            if (_currentCount <= 0 || _totalCount <= 0 || _currentCount >= _totalCount)
+            {
+                RemainingTime = _currentCount >= _totalCount && _totalCount > 0 ? "00:00:00" : "--:--:--";
+                return;
+            }
+            var elapsed = DateTime.UtcNow - _startTime;
+            var remaining = TimeSpan.FromTicks(elapsed.Ticks / _currentCount * (_totalCount - _currentCount));
+            RemainingTime = remaining.ToString(@"hh\:mm\:ss");
         }
 
         public CancellationToken Start()
         {
             _cts = new CancellationTokenSource();
             _startTime = DateTime.UtcNow;
+            RemainingTime = "--:--:--";
             IsRunning = true;
             _timer.Start();
             return _cts.Token;
@@ -59,6 +77,7 @@ namespace ReviTchucky.UI.ViewModels
                 CurrentCount = current;
                 TotalCount = total;
                 ProgressValue = total > 0 ? (int)(100.0 * current / total) : 0;
+                UpdateEta();
             });
         }
 

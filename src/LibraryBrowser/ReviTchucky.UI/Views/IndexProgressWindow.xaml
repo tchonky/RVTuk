@@ -28,6 +28,9 @@
             <Run Text="   "/>
             <Run Text="Elapsed: "/>
             <Run Text="{Binding ElapsedTime, Mode=OneWay}"/>
+            <Run Text="   "/>
+            <Run Text="Remaining: "/>
+            <Run Text="{Binding RemainingTime, Mode=OneWay}"/>
         </TextBlock>
 
         <Separator Grid.Row="3" Margin="0,4,0,8"/>
