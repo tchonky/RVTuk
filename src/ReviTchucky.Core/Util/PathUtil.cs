@@ -60,5 +60,29 @@ namespace ReviTchucky.Core.Util
                 ? fullPath.Substring(root.Length)
                 : fullPath;
         }
+
+        /// <summary>
+        /// Returns <c>true</c> if <paramref name="relativePath"/> falls under any folder in
+        /// <paramref name="ignored"/>. Each ignored entry is normalised (trimmed, leading/trailing
+        /// '\\' and '/' stripped). An entry "Archive" matches "Archive\\old\\x.rfa" and "Archive"
+        /// itself, but NOT "ArchiveStuff\\x.rfa" — the check is always on a backslash segment
+        /// boundary. Comparison is case-insensitive. Empty/whitespace entries are skipped.
+        /// </summary>
+        public static bool IsUnderIgnoredFolder(string relativePath, IEnumerable<string> ignored)
+        {
+            if (ignored == null) return false;
+            foreach (var raw in ignored)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                var entry = raw.Trim().Trim('\\', '/');
+                if (string.IsNullOrEmpty(entry)) continue;
+
+                // Match: path equals the entry, or path starts with entry + '\\'.
+                if (relativePath.Equals(entry, StringComparison.OrdinalIgnoreCase) ||
+                    relativePath.StartsWith(entry + "\\", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
     }
 }

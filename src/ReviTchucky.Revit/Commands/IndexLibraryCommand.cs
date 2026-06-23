@@ -51,7 +51,7 @@ namespace ReviTchucky.Revit.Commands
                 try
                 {
                     using var repo = new IndexRepository(config.DatabasePath);
-                    var indexer = new FamilyIndexer(repo, config.LibraryFolderPath);
+                    var indexer = new FamilyIndexer(repo, config.LibraryFolderPath, config.IgnoredSubfolders);
 
                     var workItems = indexer.Scan(
                         (fileName, current, total) => vm.UpdateProgress(fileName, current, total),
