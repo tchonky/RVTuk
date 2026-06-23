@@ -5,6 +5,22 @@ section; check off with `[x]` and the commit hash when shipped.
 
 ---
 
+## ▶ Status / next session (read me first)
+
+- All work is on branch **`family-explorer`**; **`main`** = safe pre-feature baseline. **Not merged.**
+- **Both configs build clean** (`Release2024`/net48, `Release2025`/net8). A large UI batch
+  (tags, favourites, two-line toolbar, multi-version filter, in-project/outdated filters, scan
+  ETA, off-thread gallery) is **committed but NOT yet verified in Revit**.
+- **To test:** close Revit 2024 → elevated `.\Deploy.ps1 2024` → restart Revit → Browse Library.
+  Confirm: toolbar popups open, favourites ★ persist, tags edit/search, version multi-select,
+  Sync dropdown filters. ⚠️ "In the project" is **checked by default**, so the list narrows to
+  project families after the first Sync — user may want it default-unchecked (awaiting feedback).
+- **Then** decide on merging `family-explorer` → `main`.
+- Working style: replies terse; **minimal code comments** (comment once it works); run git for the
+  user (git novice) and explain simply; move items to Done here with the commit hash as they ship.
+
+---
+
 ## 🐞 Bugs / things to fix
 
 - [~] When closed, Revit crashes (access violation `c0000005` in `siappdll.dll`).

@@ -41,10 +41,11 @@ Each config maps to a target framework and a `DefineConstants` symbol that switc
 
 ```powershell
 # From the ReviTchucky folder, in an elevated shell:
-.\Deploy.ps1
+.\Deploy.ps1            # all versions
+.\Deploy.ps1 2024       # only Revit 2024 (optional version filter)
 ```
 
-Deploys to `C:\ProgramData\Autodesk\Revit\Addins\{2023|2024|2025}\ReviTchucky\`. Restart Revit after deploying.
+Deploys to `C:\ProgramData\Autodesk\Revit\Addins\{2023|2024|2025}\ReviTchucky\`. Restart Revit after deploying. Each version deploys independently: a year whose Revit is currently open (DLLs locked) or whose build output is missing is skipped with a warning while the others proceed.
 
 The `.addin` manifest registers the add-in with:
 - **Entry class**: `ReviTchucky.Revit.Application`
