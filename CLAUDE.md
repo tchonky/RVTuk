@@ -8,6 +8,7 @@ RVTuk is a Revit add-in for Knafo Klimor Architects LTD. It supports Revit 2023,
 
 - **Family Library Indexer** — scans a folder of `.rfa` files, extracts metadata (category, parameters, thumbnails) via the Revit API, and stores it in a shared SQLite database.
 - **Family Browser** — a searchable/filterable window over that index, with per-family rich-text instructions and custom thumbnails, plus "load/update family into the active project".
+- **Template Tool** - A comparison tool that creates a snapshot of most important settings from the project and it will modify those configs (future feature) in the model
 
 ## Build
 

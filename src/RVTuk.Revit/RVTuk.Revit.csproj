@@ -62,7 +62,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RVTuk.Core\RVTuk.Core.csproj" />
-    <ProjectReference Include="..\LibraryBrowser\RVTuk.UI\RVTuk.UI.csproj" />
-  </ItemGroup>
+    </ItemGroup>
 
 </Project>
