@@ -47,15 +47,18 @@
                 <!-- Three-dot button -->
                 <Button Content="&#x2056;" HorizontalAlignment="Right" VerticalAlignment="Top"
                         Width="18" Height="18" FontSize="12" Padding="0" Margin="0,2,2,0"
-                        Click="ThumbMenuButton_Click"/>
-                <ContextMenu x:Name="ThumbContextMenu">
-                    <MenuItem Header="&#x1F5BC; Replace&#x2026;"                   Command="{Binding ReplaceThumbnailCommand}"/>
-                    <MenuItem Header="&#x21BA; Reset to system original"    Command="{Binding ResetThumbnailCommand}"/>
-                    <Separator/>
-                    <MenuItem Header="&#x2191; Update .rfa with DB image"
-                              Command="{Binding UpdateOleCommand}"
-                              IsEnabled="{Binding CanUpdateOle}"/>
-                </ContextMenu>
+                        Click="ThumbMenuButton_Click">
+                    <Button.ContextMenu>
+                        <ContextMenu x:Name="ThumbContextMenu">
+                            <MenuItem Header="&#x1F5BC; Replace&#x2026;"                   Command="{Binding ReplaceThumbnailCommand}"/>
+                            <MenuItem Header="&#x21BA; Reset to system original"    Command="{Binding ResetThumbnailCommand}"/>
+                            <Separator/>
+                            <MenuItem Header="&#x2191; Update .rfa with DB image"
+                                      Command="{Binding UpdateOleCommand}"
+                                      IsEnabled="{Binding CanUpdateOle}"/>
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
             </Grid>
 
             <StackPanel Grid.Column="1" Margin="10,4,0,4" VerticalAlignment="Center">

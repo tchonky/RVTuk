@@ -7,7 +7,13 @@ section; check off with `[x]` and the commit hash when shipped.
 
 ## 🐞 Bugs / things to fix
 
-_(none open — add as you find them)_
+- [ ] When click the family to edit the instructions, Browser crashes and gives the error:
+ReviTchucky Family Browser encountered an error:
+XamlParseException: Add value to collection of type
+'System.Windows.Controls.UlElementCollection' threw an
+exception.
+Details written to
+C:\Users\danie\AppData\Local\ReviTchucky\crash.log
 
 ## ✨ Improvements (to existing features)
 
