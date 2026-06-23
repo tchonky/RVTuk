@@ -7,8 +7,7 @@ section; check off with `[x]` and the commit hash when shipped.
 
 ## 🐞 Bugs / things to fix
 
-- [ ]  Make Family Browser window always on top.
-- [ ]  wrap the name of the family to fit in the panel, up to the size of the thumbnail (2 or 3 lines.)
+_(none open — add as you find them)_
 
 ## ✨ Improvements (to existing features)
 
@@ -16,20 +15,20 @@ section; check off with `[x]` and the commit hash when shipped.
   (which upgrades older families to the running version in memory), so a first
   full scan takes a long time. Ideas to explore: better progress + time estimate,
   make it resumable, or a faster path for families that don't need full metadata.
-
-- [ ]  When deep scanning, when pressing 'cancel', write all the information that you have already
-so you don loose the scan time. Also, in the next deep scan, because we're checking any modification,
-if there is no modification, it will work as a resuming the deep scan.
-- [ ]  Possibility of deep scan just the thumbnails (faster) and/or the parameters. (slower)
+- [ ] When deep scanning, on **Cancel** keep everything already extracted so the time
+  isn't lost; the next scan then resumes naturally (unchanged families are skipped).
+  ⚠️ Needs a fix: today a family's row is written with the new size/date *before* its
+  metadata is extracted, so a cancelled family looks "up to date" and won't be re-read
+  next time. Defer the size/date update until after extraction succeeds.
+- [ ] Option to deep-scan **just thumbnails** (fast) and/or **just parameters** (slow).
 
 ## 🚀 New features / ideas
 
-- [ ]  When a family is selected, create a button on the right that deep scan just that family.
-- [ ]  Option to ignore one or more subfolders in the deep scan
-- [ ]  When writing to search for a family, words separated with space, can appear on any place in the name of the family.
-example: If I search for 'door single' it can match with 'door - single', 'single door', kk_single wooden door', etc.
-- [ ]  A tags section for each family and a possibility to search by tags
-- [ ]  Option to show one or more versions of the revit families. Like, only show families that are 2023 or up to 2024.
+- [ ] Option to **ignore one or more subfolders** in the deep scan.
+- [ ] A **tags** section per family + search by tags.
+- [ ] Filter the list by **Revit version** (e.g. show only families saved in 2023, or
+  2023–2024). Needs the per-family Revit year surfaced from the index (already captured
+  during extraction as `FileRevitYear`).
 
 ## ⏳ Known deferred (from the Family Explorer build/review — decided "later")
 
@@ -40,7 +39,7 @@ example: If I search for 'door single' it can match with 'door - single', 'singl
 - [ ] Add a confirmation prompt before **Delete** removes a gallery image (permanent).
 - [ ] Drag-to-reorder gallery images (the `ReorderImages` API exists; UI not wired).
 - [ ] Surface a count of families skipped during a scan (too-new, too-long path,
-  unreadable) so the admin knows why some are missing. Create a log and write in the DB folder
+  unreadable) so the admin knows why some are missing. Create a log and write in the DB folder.
 - [ ] Parameter **write-back** — let the tool actually fix/reorganize parameters in
   the families (currently view/audit only).
 - [ ] UI styling/layout polish for the new gallery + parameter regions.
@@ -52,3 +51,6 @@ example: If I search for 'door single' it can match with 'door - single', 'singl
 - [x] Fix: WPF `Application.Current` null crash on Browse Library (`90b96d6`).
 - [x] Fix: `LibraryFolderPath` read-only TwoWay binding crash (`7771823`).
 - [x] Fix: scan aborting on Windows MAX_PATH; now skips over-long paths (`4b9998f`).
+- [x] Family Browser window **always on top**; long family names **wrap** to 2–3 lines (`3813ecf`).
+- [x] **Multi-word search** — all words match, any order/position (`0336bad`).
+- [x] **Per-family Rescan** button — re-extract just the selected family (`1b3c52d`).
