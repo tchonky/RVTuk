@@ -7,16 +7,13 @@ section; check off with `[x]` and the commit hash when shipped.
 
 ## 🐞 Bugs / things to fix
 
-- [ ] I'm not sure, but when closed, Revit crashes, giving the following:
-        Date/Time: 2026-06-23 11:49:52 +03:00
-        Application: Revit.exe
-        Error: Access violation - code c0000005 (first/second chance not available)
-        Crashed Module Name: siappdll.dll
-        Exception Address: 0x0000020d8023d39e
-        Exception Code: c0000005
-        Exception Flags: 0
-        Exception Parameters: 0, 20d9a350004
-      also check: C:\Users\danie\AppData\Local\Autodesk\CER\92ed161c792ec7321aadc8abc2616368c8ce96b2\29
+- [~] When closed, Revit crashes (access violation `c0000005` in `siappdll.dll`).
+      **Diagnosed: NOT ReviTchucky.** `siappdll.dll` / `3DxRevit.dll` is the 3Dconnexion
+      SpaceMouse driver (`C:\Program Files\3Dconnexion\3DxWare\...`). The crash is on a
+      non-main native thread during Revit shutdown; every ReviTchucky journal entry is a
+      normal startup/command event. Fix is on 3Dconnexion's side: update or temporarily
+      disable the 3Dconnexion add-in / SpaceMouse driver. (CER dump:
+      `…\Local\Autodesk\CER\92ed161c…\29`.)
       
 
 ## ✨ Improvements (to existing features)
