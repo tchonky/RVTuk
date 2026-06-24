@@ -1,0 +1,176 @@
+<Window x:Class="RVTuk.UI.Views.ComparatorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
+        xmlns:vm="clr-namespace:RVTuk.UI.ViewModels"
+        Title="RVTuk — Project Comparator"
+        Width="1100" Height="680" MinWidth="820" MinHeight="520"
+        Topmost="True"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/RVTuk.UI;component/Themes/DarkTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <ObjectDataProvider x:Key="DecisionValues" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
+                <ObjectDataProvider.MethodParameters>
+                    <x:Type TypeName="vm:DecisionOption"/>
+                </ObjectDataProvider.MethodParameters>
+            </ObjectDataProvider>
+            <ObjectDataProvider x:Key="ModeValues" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
+                <ObjectDataProvider.MethodParameters>
+                    <x:Type TypeName="vm:ComparatorMode"/>
+                </ObjectDataProvider.MethodParameters>
+            </ObjectDataProvider>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Window.Background><StaticResource ResourceKey="Brush.Bg"/></Window.Background>
+    <Window.Foreground><StaticResource ResourceKey="Brush.Text"/></Window.Foreground>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ── SOURCE BAR ─────────────────────────────────────────────── -->
+        <Border Grid.Row="0" Background="{StaticResource Brush.Control}" Padding="8,6">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Mode:" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{StaticResource Brush.TextMuted}"/>
+                <ComboBox Width="130" Margin="0,0,12,0"
+                          ItemsSource="{Binding Source={StaticResource ModeValues}}"
+                          SelectedItem="{Binding Mode}"/>
+
+                <TextBlock Text="A:" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{StaticResource Brush.TextMuted}"/>
+                <ComboBox Width="220" Margin="0,0,2,0"
+                          ItemsSource="{Binding SourceAOptions}" SelectedItem="{Binding SourceA}" IsEditable="True"/>
+                <Button Content="…" Width="24" Margin="0,0,12,0" Command="{Binding BrowseACommand}" ToolTip="Browse for a .rvt/.rte"/>
+
+                <TextBlock Text="⇌" VerticalAlignment="Center" Margin="0,0,12,0" FontSize="16" Foreground="{StaticResource Brush.TextMuted}"/>
+
+                <TextBlock Text="B:" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{StaticResource Brush.TextMuted}"/>
+                <ComboBox Width="220" Margin="0,0,2,0"
+                          ItemsSource="{Binding SourceBOptions}" SelectedItem="{Binding SourceB}" IsEditable="True"/>
+                <Button Content="…" Width="24" Margin="0,0,12,0" Command="{Binding BrowseBCommand}" ToolTip="Browse for a .rvt/.rte"/>
+
+                <Button Content="Compare ▶" Margin="0,0,6,0" Padding="10,4"
+                        Background="{StaticResource Brush.Accent}" Foreground="Black"
+                        Command="{Binding CompareCommand}"/>
+                <Button Content="Refresh" Margin="0,0,6,0" Padding="8,4" Command="{Binding RefreshDocumentsCommand}"/>
+                <Button Content="Export ▾" Padding="8,4" Command="{Binding ExportCommand}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ── BODY: rail + comparison area ───────────────────────────── -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200" MinWidth="150"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Category rail -->
+            <Border Grid.Column="0" Background="{StaticResource Brush.Panel}">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="CATEGORIES" Margin="8,8,8,4"
+                               FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource Brush.TextMuted}"/>
+                    <ListBox ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}"
+                             Background="Transparent" BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel LastChildFill="True">
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding Badge}" Margin="4,0,0,0"
+                                               FontSize="9" VerticalAlignment="Center"
+                                               Foreground="{StaticResource Brush.Accent}"/>
+                                    <TextBlock Text="{Binding DisplayName}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{StaticResource Brush.Text}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsAvailable}" Value="False">
+                                                        <Setter Property="Foreground" Value="{StaticResource Brush.TextMuted}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch"
+                          Background="{StaticResource Brush.Border}"/>
+
+            <!-- Comparison area: roster (top) + detail (bottom) -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="5"/>
+                    <RowDefinition Height="240" MinHeight="120"/>
+                </Grid.RowDefinitions>
+
+                <DataGrid Grid.Row="0" ItemsSource="{Binding ViewTemplates.Items}"
+                          SelectedItem="{Binding ViewTemplates.SelectedItem}"
+                          AutoGenerateColumns="False" IsReadOnly="False" CanUserAddRows="False"
+                          HeadersVisibility="Column" GridLinesVisibility="Horizontal">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="" Binding="{Binding StatusGlyph}" IsReadOnly="True" Width="32"/>
+                        <DataGridTextColumn Header="A — Template" Binding="{Binding NameA}" IsReadOnly="True" Width="*"/>
+                        <DataGridTextColumn Header="Score A" Binding="{Binding ScoreA, StringFormat={}{0}%}" IsReadOnly="True" Width="64"/>
+                        <DataGridTextColumn Header="B — Template" Binding="{Binding NameB}" IsReadOnly="True" Width="*"/>
+                        <DataGridTextColumn Header="Score B" Binding="{Binding ScoreB, StringFormat={}{0}%}" IsReadOnly="True" Width="64"/>
+                        <DataGridTemplateColumn Header="Action" Width="190">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <ComboBox Width="110" Margin="0,0,4,0"
+                                                  ItemsSource="{Binding Source={StaticResource DecisionValues}}"
+                                                  SelectedItem="{Binding Decision, Mode=TwoWay}"/>
+                                        <Button Content="Accept" Padding="6,1" Command="{Binding AcceptCommand}"
+                                                ToolTip="Accept into the Standard (records data only — does not change Revit)"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
+                              Background="{StaticResource Brush.Border}"/>
+
+                <!-- Detail of the selected item -->
+                <Border Grid.Row="2" Background="{StaticResource Brush.Panel}" Padding="8"
+                        DataContext="{Binding ViewTemplates.SelectedItem}">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                            <TextBlock Text="{Binding DisplayName}" FontWeight="Bold" FontSize="14"/>
+                            <TextBlock Text="{Binding Recommendation}" Foreground="{StaticResource Brush.Accent}" Margin="0,2,0,0"/>
+                        </StackPanel>
+                        <DataGrid ItemsSource="{Binding Fields}" AutoGenerateColumns="False" IsReadOnly="True"
+                                  CanUserAddRows="False" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                  Background="Transparent">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="" Binding="{Binding Status}" Width="28"/>
+                                <DataGridTextColumn Header="Field" Binding="{Binding Label}" Width="*"/>
+                                <DataGridTextColumn Header="A" Binding="{Binding ValueA}" Width="*"/>
+                                <DataGridTextColumn Header="B" Binding="{Binding ValueB}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- ── STATUS BAR ─────────────────────────────────────────────── -->
+        <Border Grid.Row="2" Background="{StaticResource Brush.Control}" Padding="8,4">
+            <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource Brush.TextMuted}"/>
+        </Border>
+    </Grid>
+</Window>
