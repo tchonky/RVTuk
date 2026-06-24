@@ -14,16 +14,16 @@ namespace RVTuk.Revit.ExternalEvents
     {
         private readonly ManualResetEventSlim _done = new ManualResetEventSlim(false);
 
-        public Document? TargetDocument { get; set; }            // null = use active document
+        public string? TargetDocTitle { get; set; }              // null = use active document
         public List<ICategoryExtractor> Extractors { get; set; } = new List<ICategoryExtractor>();
 
         public SnapshotMeta? ResultMeta { get; private set; }
         public List<CategorySnapshot> ResultCategories { get; private set; } = new List<CategorySnapshot>();
         public string? Error { get; private set; }
 
-        public void Prepare(Document? doc, List<ICategoryExtractor> extractors)
+        public void Prepare(string? targetDocTitle, List<ICategoryExtractor> extractors)
         {
-            TargetDocument = doc;
+            TargetDocTitle = targetDocTitle;
             Extractors = extractors;
             ResultMeta = null;
             ResultCategories = new List<CategorySnapshot>();
@@ -38,7 +38,16 @@ namespace RVTuk.Revit.ExternalEvents
         {
             try
             {
-                var doc = TargetDocument ?? app.ActiveUIDocument?.Document;
+                Document? doc = null;
+                if (!string.IsNullOrEmpty(TargetDocTitle))
+                {
+                    foreach (Document d in app.Application.Documents)
+                    {
+                        if (!d.IsLinked && d.Title == TargetDocTitle) { doc = d; break; }
+                    }
+                }
+                doc ??= app.ActiveUIDocument?.Document;
+
                 if (doc == null)
                 {
                     Error = "No document is open to capture.";

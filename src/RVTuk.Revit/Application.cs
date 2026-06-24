@@ -21,7 +21,12 @@ namespace RVTuk.Revit
         public static ExternalEvent GetFamiliesEvent { get; private set; } = null!;
         public static LoadFamilyEventHandler LoadFamilyHandler { get; private set; } = null!;
         public static ExternalEvent LoadFamilyEvent { get; private set; } = null!;
+        public static CaptureSnapshotEventHandler CaptureSnapshotHandler { get; private set; } = null!;
+        public static ExternalEvent CaptureSnapshotEvent { get; private set; } = null!;
+        public static OpenModelSnapshotEventHandler OpenModelSnapshotHandler { get; private set; } = null!;
+        public static ExternalEvent OpenModelSnapshotEvent { get; private set; } = null!;
         public static RVTuk.UI.Views.FamilyBrowserWindow? BrowserWindow { get; set; }
+        public static RVTuk.UI.Views.ComparatorWindow? ComparatorWindow { get; set; }
         public static UIApplication? CurrentUIApp { get; set; }
 
         private static string? _addinDir;
@@ -57,6 +62,10 @@ namespace RVTuk.Revit
             GetFamiliesEvent   = ExternalEvent.Create(GetFamiliesHandler);
             LoadFamilyHandler  = new LoadFamilyEventHandler();
             LoadFamilyEvent    = ExternalEvent.Create(LoadFamilyHandler);
+            CaptureSnapshotHandler = new CaptureSnapshotEventHandler();
+            CaptureSnapshotEvent   = ExternalEvent.Create(CaptureSnapshotHandler);
+            OpenModelSnapshotHandler = new OpenModelSnapshotEventHandler();
+            OpenModelSnapshotEvent   = ExternalEvent.Create(OpenModelSnapshotHandler);
 
             try
             {
@@ -105,6 +114,46 @@ namespace RVTuk.Revit
             browseBtn.Image      = CreateBrowseLibraryIcon(16);
 
             panel.AddItem(browseBtn);
+
+            var compareBtn = new PushButtonData(
+                "CompareProjects",
+                "Project\nComparator",
+                assemblyPath,
+                typeof(CompareProjectsCommand).FullName!)
+            {
+                ToolTip = "Compare two Revit projects (or a project against the firm template) and build a better Standard"
+            };
+            compareBtn.LargeImage = CreateComparatorIcon(32);
+            compareBtn.Image      = CreateComparatorIcon(16);
+
+            panel.AddItem(compareBtn);
+        }
+
+        private static BitmapSource CreateComparatorIcon(int size)
+        {
+            var dv = new DrawingVisual();
+            using (var ctx = dv.RenderOpen())
+            {
+                double s = size;
+                ctx.DrawRectangle(new SolidColorBrush(WpfColor.FromRgb(0x25, 0x25, 0x26)), null,
+                    new Rect(0, 0, s, s));
+
+                // Two overlapping document sheets.
+                var sheetA = new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00));
+                var sheetB = new SolidColorBrush(WpfColor.FromRgb(0xFF, 0xC0, 0x40));
+                ctx.DrawRectangle(sheetA, null, new Rect(s * 0.12, s * 0.18, s * 0.42, s * 0.58));
+                ctx.DrawRectangle(sheetB, null, new Rect(s * 0.46, s * 0.30, s * 0.42, s * 0.58));
+
+                // Double-headed diff arrow between them.
+                var pen = new Pen(new SolidColorBrush(Colors.White), Math.Max(1, s * 0.05));
+                pen.Freeze();
+                double y = s * 0.50;
+                ctx.DrawLine(pen, new WpfPoint(s * 0.40, y), new WpfPoint(s * 0.60, y));
+            }
+            var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            bmp.Freeze();
+            return bmp;
         }
 
         private static BitmapSource CreateBrowseLibraryIcon(int size)

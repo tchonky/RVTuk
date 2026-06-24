@@ -6,6 +6,9 @@ namespace RVTuk.Core.Models.Comparison
     [DataContract]
     public class SnapshotMeta
     {
+        /// <summary>SQLite row id (0 when not persisted). Not part of the serialized payload.</summary>
+        public long Id { get; set; }
+
         /// <summary>"Project" | "Template" | "Standard".</summary>
         [DataMember] public string SourceKind { get; set; } = "Project";
         [DataMember] public string SourceName { get; set; } = string.Empty;

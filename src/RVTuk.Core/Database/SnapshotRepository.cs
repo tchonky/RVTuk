@@ -189,6 +189,7 @@ namespace RVTuk.Core.Database
 
         private static SnapshotMeta ReadMeta(IDataReader r) => new SnapshotMeta
         {
+            Id            = r.GetInt64(0),
             SourceKind    = r.GetString(1),
             SourceName    = r.GetString(2),
             SourcePath    = r.IsDBNull(3) ? null : r.GetString(3),

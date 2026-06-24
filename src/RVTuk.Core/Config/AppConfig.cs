@@ -9,6 +9,9 @@ namespace RVTuk.Core.Config
         // Derived — never stored separately; always lives inside the library folder.
         public string DatabasePath => Path.Combine(LibraryFolderPath, ".Setup", "RVTuk.db");
 
+        // Derived — the Project Comparator's snapshots + Standard live alongside the family DB.
+        public string StandardsDatabasePath => Path.Combine(LibraryFolderPath, ".Setup", "RVTuk.Standards.db");
+
         /// <summary>
         /// Subfolder paths (relative to the library root, using '\' separators) that should be
         /// excluded from deep scans and fast syncs. Families under these folders are skipped during
