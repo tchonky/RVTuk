@@ -185,10 +185,11 @@ namespace RVTuk.Revit.Extraction
             return sb.ToString();
         }
 
-        /// <summary>ElementId raw value, version-robust (IntegerValue on 2023/24, Value on 2025).</summary>
+        /// <summary>ElementId raw value, version-robust. ElementId.Value (long) exists in Revit
+        /// 2024+; Revit 2023 only has IntegerValue.</summary>
         private static long Raw(ElementId id)
         {
-#if REVIT2024
+#if REVIT2023
             return id.IntegerValue;
 #else
             return id.Value;

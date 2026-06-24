@@ -12,16 +12,19 @@
   <PropertyGroup Condition="'$(Configuration)'=='Release2024'">
     <TargetFramework>net48</TargetFramework>
     <OutputPath>bin\2024\Release2024\</OutputPath>
+    <DefineConstants>REVIT2024</DefineConstants>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Release2023'">
     <TargetFramework>net48</TargetFramework>
     <OutputPath>bin\2023\Release2023\</OutputPath>
+    <DefineConstants>REVIT2023</DefineConstants>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'!='Release2024' And '$(Configuration)'!='Release2023'">
     <TargetFramework>net8.0-windows</TargetFramework>
     <OutputPath>bin\2025\Release2025\</OutputPath>
+    <DefineConstants>REVIT2025</DefineConstants>
   </PropertyGroup>
 
   <!-- Revit 2023 API packages (net48) -->
