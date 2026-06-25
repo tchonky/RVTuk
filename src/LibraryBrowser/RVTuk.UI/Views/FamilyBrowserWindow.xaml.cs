@@ -60,6 +60,15 @@ namespace RVTuk.UI.Views
                 SelectedPath = ViewModel.LibraryFolderPath
             };
             if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+
+            var error = LibraryFolderValidator.Validate(dialog.SelectedPath);
+            if (error != null)
+            {
+                MessageBox.Show(error, "RVTuk - Family Browser",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             var config = ConfigManager.LoadConfig();
             config.LibraryFolderPath = dialog.SelectedPath;
             Directory.CreateDirectory(Path.Combine(dialog.SelectedPath, ".Setup"));

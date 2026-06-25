@@ -2,17 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
-using System.Reflection;
 using RVTuk.Core.Models;
-
-#if REVIT2024
-using System.Data.SQLite;
-using System.Runtime.InteropServices;
-#else
 using Microsoft.Data.Sqlite;
 using SQLiteConnection = Microsoft.Data.Sqlite.SqliteConnection;
 using SQLiteCommand   = Microsoft.Data.Sqlite.SqliteCommand;
-#endif
 
 namespace RVTuk.Core.Database
 {
@@ -21,26 +14,9 @@ namespace RVTuk.Core.Database
         private readonly string _databasePath;
         private readonly SQLiteConnection _connection; // persistent READ-ONLY connection
 
-#if REVIT2024
-        // System.Data.SQLite searches for SQLite.Interop.dll relative to Revit.exe, not our add-in folder.
-        // Pre-load it by full path so Windows' module cache satisfies the subsequent name-only lookup.
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr LoadLibrary(string dllPath);
-
-        static BrowserRepository()
-        {
-            var dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            if (dir != null)
-            {
-                var interop = Path.Combine(dir, "SQLite.Interop.dll");
-                if (File.Exists(interop))
-                    LoadLibrary(interop);
-            }
-        }
-#endif
-
         public BrowserRepository(string databasePath)
         {
+            SqliteNative.EnsureLoaded();
             _databasePath = databasePath;
 
             // One-time: ensure the file + schema exist and the journal is migrated off WAL.
@@ -61,15 +37,11 @@ namespace RVTuk.Core.Database
         // Persistent read-only connection for all Get* methods.
         private SQLiteConnection OpenRead()
         {
-#if REVIT2024
-            var c = new SQLiteConnection($"Data Source={_databasePath};Version=3;Read Only=True;");
-#else
-            var c = new SQLiteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+            var c = new SQLiteConnection(new SqliteConnectionStringBuilder
             {
                 DataSource = _databasePath,
-                Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly
+                Mode = SqliteOpenMode.ReadOnly
             }.ToString());
-#endif
             c.Open();
             return c;
         }
@@ -77,15 +49,11 @@ namespace RVTuk.Core.Database
         // Short-lived read-write connection for the occasional admin/edit write.
         private SQLiteConnection OpenWrite()
         {
-#if REVIT2024
-            var c = new SQLiteConnection($"Data Source={_databasePath};Version=3;");
-#else
-            var c = new SQLiteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+            var c = new SQLiteConnection(new SqliteConnectionStringBuilder
             {
                 DataSource = _databasePath,
-                Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadWriteCreate
+                Mode = SqliteOpenMode.ReadWriteCreate
             }.ToString());
-#endif
             c.Open();
             ExecuteOn(c, "PRAGMA busy_timeout=5000;");
             ExecuteOn(c, "PRAGMA journal_mode=DELETE;");

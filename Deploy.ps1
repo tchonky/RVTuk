@@ -29,7 +29,6 @@ $vendorId     = "KnafoKlimor"
 $vendorDesc   = "Knafo Klimor Architects LTD"
 
 $versions = [ordered]@{
-    "2023" = @{ Config = "Release2023"; Tfm = "net48" }
     "2024" = @{ Config = "Release2024"; Tfm = "net48" }
     "2025" = @{ Config = "Release2025"; Tfm = "net8.0-windows" }
 }
@@ -127,6 +126,13 @@ foreach ($ver in $targets) {
         # Native interop DLLs live in x64\; copy flat since Revit is always x64.
         $x64Dir = "$srcDir\x64"
         if (Test-Path $x64Dir) { Copy-Item "$x64Dir\*.dll" $dllDir -Force -ErrorAction Stop }
+
+        # Microsoft.Data.Sqlite ships its native engine under runtimes\<rid>\native.
+        # Revit is x64; copy e_sqlite3.dll flat so the add-in folder resolves it. On net48
+        # SqliteNative.EnsureLoaded() pre-loads it by full path (Revit resolves native libs
+        # relative to Revit.exe, not our folder); net8's resolver also finds it next to the DLL.
+        $nativeSqlite = "$srcDir\runtimes\win-x64\native\e_sqlite3.dll"
+        if (Test-Path $nativeSqlite) { Copy-Item $nativeSqlite $dllDir -Force -ErrorAction Stop }
 
         # net48: strip BCL polyfill DLLs Revit preloads (shipping newer ones causes
         # "conflicts with same preloaded module" API_ERRORs -> 0xc0000005 crashes).

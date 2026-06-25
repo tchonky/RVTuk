@@ -15,29 +15,11 @@
     <DefineConstants>REVIT2024</DefineConstants>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)'=='Release2023'">
-    <TargetFramework>net48</TargetFramework>
-    <OutputPath>bin\2023\Release2023\</OutputPath>
-    <DefineConstants>REVIT2023</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)'!='Release2024' And '$(Configuration)'!='Release2023'">
+  <PropertyGroup Condition="'$(Configuration)'!='Release2024'">
     <TargetFramework>net8.0-windows</TargetFramework>
     <OutputPath>bin\2025\Release2025\</OutputPath>
     <DefineConstants>REVIT2025</DefineConstants>
   </PropertyGroup>
-
-  <!-- Revit 2023 API packages (net48) -->
-  <ItemGroup Condition="'$(Configuration)'=='Release2023'">
-    <PackageReference Include="Nice3point.Revit.Api.RevitAPI"
-                      Version="2023.*"
-                      IncludeAssets="compile;build;native;contentfiles;analyzers;buildtransitive"
-                      ExcludeAssets="runtime" />
-    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI"
-                      Version="2023.*"
-                      IncludeAssets="compile;build;native;contentfiles;analyzers;buildtransitive"
-                      ExcludeAssets="runtime" />
-  </ItemGroup>
 
   <!-- Revit 2024 API packages (net48) -->
   <ItemGroup Condition="'$(Configuration)'=='Release2024'">
@@ -52,7 +34,7 @@
   </ItemGroup>
 
   <!-- Revit 2025 API packages (net8.0-windows) -->
-  <ItemGroup Condition="'$(Configuration)'!='Release2024' And '$(Configuration)'!='Release2023'">
+  <ItemGroup Condition="'$(Configuration)'!='Release2024'">
     <PackageReference Include="Nice3point.Revit.Api.RevitAPI"
                       Version="2025.*"
                       IncludeAssets="compile;build;native;contentfiles;analyzers;buildtransitive"

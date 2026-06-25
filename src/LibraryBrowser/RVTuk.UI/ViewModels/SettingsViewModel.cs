@@ -62,14 +62,10 @@ namespace RVTuk.UI.ViewModels
         {
             ValidationMessage = string.Empty;
 
-            if (string.IsNullOrWhiteSpace(LibraryFolderPath))
+            var error = LibraryFolderValidator.Validate(LibraryFolderPath);
+            if (error != null)
             {
-                ValidationMessage = "Library folder path is required.";
-                return;
-            }
-            if (!Directory.Exists(LibraryFolderPath))
-            {
-                ValidationMessage = "Library folder does not exist.";
+                ValidationMessage = error;
                 return;
             }
 

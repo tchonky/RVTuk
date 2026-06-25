@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RVTuk is a Revit add-in for Knafo Klimor Architects LTD. It supports Revit 2023, 2024, and 2025 simultaneously via separate build configurations. It currently provides two features:
+RVTuk is a Revit add-in for Knafo Klimor Architects LTD. It supports Revit 2024 and 2025 simultaneously via separate build configurations (Revit 2023 was dropped). It currently provides two features:
 
 - **Family Library Indexer** — scans a folder of `.rfa` files, extracts metadata (category, parameters, thumbnails) via the Revit API, and stores it in a shared SQLite database.
 - **Family Browser** — a searchable/filterable window over that index, with per-family rich-text instructions and custom thumbnails, plus "load/update family into the active project".
@@ -12,10 +12,9 @@ RVTuk is a Revit add-in for Knafo Klimor Architects LTD. It supports Revit 2023,
 
 ## Build
 
-A solution file (`RVTuk.sln`) is present with three solution configurations — `Release2023`, `Release2024`, `Release2025` (there is no standard `Debug`/`Release`). Build the whole solution per config:
+A solution file (`RVTuk.sln`) is present with two solution configurations — `Release2024`, `Release2025` (there is no standard `Debug`/`Release`). Build the whole solution per config:
 
 ```powershell
-dotnet build RVTuk.sln -c Release2023
 dotnet build RVTuk.sln -c Release2024
 dotnet build RVTuk.sln -c Release2025
 ```
@@ -26,15 +25,14 @@ Or build a single project (its project references are built transitively). The p
 dotnet build src\RVTuk.Revit\RVTuk.Revit.csproj -c Release2024
 ```
 
-Each config maps to a target framework and a `DefineConstants` symbol that switches the SQLite provider (see Architecture):
+Each config maps to a target framework and a `DefineConstants` symbol that switches the JSON serializer and native-load path (see Architecture):
 
-| Config        | TFM               | Constant    | SQLite provider           |
-|---------------|-------------------|-------------|---------------------------|
-| `Release2023` | `net48`           | `REVIT2024` | `System.Data.SQLite`      |
-| `Release2024` | `net48`           | `REVIT2024` | `System.Data.SQLite`      |
-| `Release2025` | `net8.0-windows`  | `REVIT2025` | `Microsoft.Data.Sqlite`   |
+| Config        | TFM               | Constant    | SQLite provider           | JSON                      |
+|---------------|-------------------|-------------|---------------------------|---------------------------|
+| `Release2024` | `net48`           | `REVIT2024` | `Microsoft.Data.Sqlite`   | `DataContractJsonSerializer` |
+| `Release2025` | `net8.0-windows`  | `REVIT2025` | `Microsoft.Data.Sqlite`   | `System.Text.Json`        |
 
-(Release2023 intentionally reuses the `REVIT2024` symbol — both are the net48 code path.) Build outputs land in each project's `bin\{2023|2024|2025}\Release{...}\{tfm}\`, e.g. `src\RVTuk.Revit\bin\2024\Release2024\net48\`.
+Both configs use `Microsoft.Data.Sqlite`; the `REVIT2024` constant switches the JSON serializer (no `System.Text.Json` on net48) and enables the native `e_sqlite3.dll` pre-load. Build outputs land in each project's `bin\{2024|2025}\Release{...}\{tfm}\`, e.g. `src\RVTuk.Revit\bin\2024\Release2024\net48\`.
 
 ## Deployment
 
@@ -46,7 +44,7 @@ Each config maps to a target framework and a `DefineConstants` symbol that switc
 .\Deploy.ps1 2024       # only Revit 2024 (optional version filter)
 ```
 
-Deploys to `C:\ProgramData\Autodesk\Revit\Addins\{2023|2024|2025}\RVTuk\`. Restart Revit after deploying. Each version deploys independently: a year whose Revit is currently open (DLLs locked) or whose build output is missing is skipped with a warning while the others proceed.
+Deploys to `C:\ProgramData\Autodesk\Revit\Addins\{2024|2025}\RVTuk\`. Restart Revit after deploying. Each version deploys independently: a year whose Revit is currently open (DLLs locked) or whose build output is missing is skipped with a warning while the others proceed.
 
 The `.addin` manifest registers the add-in with:
 - **Entry class**: `RVTuk.Revit.Application`
@@ -67,16 +65,16 @@ RVTuk.Revit       — Revit add-in host: IExternalApplication entry point,
                           src\RVTuk.Revit
 ```
 
-**RVTuk.Core** holds data models, the SQLite schema/repositories, OLE thumbnail read/write, metadata-XML parsing, and config. Keep it free of Revit API and WPF types so it can be reasoned about in isolation. It multi-targets `net48` (Release2023/2024) and `net8.0-windows` (Release2025) and **does** carry NuGet dependencies, which differ per target:
-- net48: `System.Data.SQLite` (full package — needed for the native `SQLite.Interop.dll`), GAC `System.Drawing`. No `System.Text.Json` (its transitive polyfills clash with Revit's preloaded assemblies — JSON uses `DataContractJsonSerializer`).
+**RVTuk.Core** holds data models, the SQLite schema/repositories, OLE thumbnail read/write, metadata-XML parsing, and config. Keep it free of Revit API and WPF types so it can be reasoned about in isolation. It multi-targets `net48` (Release2024) and `net8.0-windows` (Release2025) and **does** carry NuGet dependencies, which differ per target:
+- net48: `Microsoft.Data.Sqlite`, GAC `System.Drawing`. No `System.Text.Json` (its transitive polyfills clash with Revit's preloaded assemblies — JSON uses `DataContractJsonSerializer`).
 - net8: `Microsoft.Data.Sqlite`, `System.Text.Json`, `System.Drawing.Common`.
 - both: `OpenMCDF` pinned to `3.1.2` (matches the version other Revit add-ins preload).
 
-Provider differences are bridged with `#if REVIT2024` and `SQLiteConnection`/`SQLiteCommand` aliases in the `Database` classes — keep SQL portable across both providers (e.g. one statement per `ExecuteScalar`).
+**SQLite provider:** all configs use `Microsoft.Data.Sqlite`. `System.Data.SQLite` was dropped because its native win32 VFS **cannot open databases over some UNC shares** (`\\server\share`) — it throws `unable to open database file` even when the file is readable, while `Microsoft.Data.Sqlite`'s bundled `e_sqlite3` opens the same file fine. The repositories alias `SQLiteConnection`/`SQLiteCommand` to the `Microsoft.Data.Sqlite` types. `Database/SqliteNative.EnsureLoaded()` (called by every repository ctor) pre-loads `e_sqlite3.dll` by full path on net48, because Revit resolves native libs relative to `Revit.exe`, not the add-in folder; `Deploy.ps1` copies `e_sqlite3.dll` flat into the add-in folder. Keep SQL portable (e.g. one statement per `ExecuteScalar`).
 
 **RVTuk.UI** multi-targets the same frameworks, uses WPF (`UseWPF`) and WinForms (`UseWindowsForms`), and contains all user-facing windows/controls. Depends on Core only — it must not reference any Revit type. Revit interactions are passed in as plain `Func<>`/`Action` delegates from the Revit project.
 
-**RVTuk.Revit** is the only project that references the Revit API (`Nice3point.Revit.Api.RevitAPI` / `RevitAPIUI`, pinned `2023.*` / `2024.*` / `2025.*`, `compile`-only with `ExcludeAssets="runtime"`). It hosts the ribbon, commands, and the `ExternalEvent` handlers, and wires UI delegates to that API.
+**RVTuk.Revit** is the only project that references the Revit API (`Nice3point.Revit.Api.RevitAPI` / `RevitAPIUI`, pinned `2024.*` / `2025.*`, `compile`-only with `ExcludeAssets="runtime"`). It hosts the ribbon, commands, and the `ExternalEvent` handlers, and wires UI delegates to that API.
 
 ## Threading Model
 

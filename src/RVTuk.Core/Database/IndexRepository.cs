@@ -2,15 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using RVTuk.Core.Models;
-
-#if REVIT2024
-using System.Data.SQLite;
-#else
 using Microsoft.Data.Sqlite;
 using SQLiteConnection = Microsoft.Data.Sqlite.SqliteConnection;
 using SQLiteCommand   = Microsoft.Data.Sqlite.SqliteCommand;
 using SQLiteParameter = Microsoft.Data.Sqlite.SqliteParameter;
-#endif
 
 namespace RVTuk.Core.Database
 {
@@ -21,6 +16,7 @@ namespace RVTuk.Core.Database
 
         public IndexRepository(string databasePath)
         {
+            SqliteNative.EnsureLoaded();
             _databasePath = databasePath;
 
             if (System.IO.Directory.Exists(databasePath))
@@ -33,15 +29,11 @@ namespace RVTuk.Core.Database
             if (!string.IsNullOrEmpty(dir))
                 System.IO.Directory.CreateDirectory(dir);
 
-#if REVIT2024
-            var connectionString = $"Data Source={databasePath};Version=3;";
-#else
-            var connectionString = new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+            var connectionString = new SqliteConnectionStringBuilder
             {
                 DataSource = databasePath,
-                Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadWriteCreate
+                Mode = SqliteOpenMode.ReadWriteCreate
             }.ToString();
-#endif
             _connection = new SQLiteConnection(connectionString);
             _connection.Open();
 
@@ -286,11 +278,7 @@ namespace RVTuk.Core.Database
             cmd.CommandText = sql;
             if (transaction != null)
             {
-#if REVIT2024
-                cmd.Transaction = (System.Data.SQLite.SQLiteTransaction)transaction;
-#else
                 cmd.Transaction = (Microsoft.Data.Sqlite.SqliteTransaction)transaction;
-#endif
             }
             return cmd;
         }
