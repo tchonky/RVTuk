@@ -19,6 +19,11 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <OutputPath>bin\2025\Release2025\</OutputPath>
     <DefineConstants>REVIT2025</DefineConstants>
+    <!-- net8 libraries don't copy NuGet deps to bin by default (they rely on deps.json
+         resolution). A Revit add-in is loaded by Revit.exe, so it must carry its own
+         dependency closure — including runtimes\win-x64\native\e_sqlite3.dll — into bin
+         for Deploy.ps1 to pick up. (net48 already copies deps, so this only matters here.) -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <!-- Revit 2024 API packages (net48) -->
