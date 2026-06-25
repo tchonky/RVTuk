@@ -46,6 +46,8 @@ Both configs use `Microsoft.Data.Sqlite`; the `REVIT2024` constant switches the 
 
 Deploys to `C:\ProgramData\Autodesk\Revit\Addins\{2024|2025}\RVTuk\`. Restart Revit after deploying. Each version deploys independently: a year whose Revit is currently open (DLLs locked) or whose build output is missing is skipped with a warning while the others proceed.
 
+`Deploy.ps1` copies the build output flat plus the native `e_sqlite3.dll` (from `runtimes\win-x64\native`). For this to work the build output must actually contain the dependency closure: net48 copies NuGet deps to `bin` automatically, but **net8 libraries do not** — so `RVTuk.Revit` (net8) sets `<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>` to pull `Microsoft.Data.Sqlite` + `e_sqlite3.dll` into `bin`. Without it, the Revit 2025 deploy would contain only the three project DLLs and fail to load.
+
 The `.addin` manifest registers the add-in with:
 - **Entry class**: `RVTuk.Revit.Application`
 - **Client ID**: `D71D7480-4A21-474E-A47E-3E8DF8C1BDA5`
