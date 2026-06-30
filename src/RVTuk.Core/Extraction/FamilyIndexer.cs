@@ -51,13 +51,17 @@ namespace RVTuk.Core.Extraction
 
             // Protect families that were indexed before their folder was ignored: keep their rows
             // (the browser just hides them) instead of pruning them as stale. We don't walk the
-            // ignored folders on disk, so we read these straight from the DB.
-            foreach (var dbPath in _repository.GetAllRelativePaths())
+            // ignored folders on disk, so we read these straight from the DB. Skipped entirely when
+            // nothing is ignored, to avoid an extra full-table read on every scan.
+            if (_ignoredSubfolders.Count > 0)
             {
-                if (PathUtil.IsUnderIgnoredFolder(dbPath, _ignoredSubfolders))
+                foreach (var dbPath in _repository.GetAllRelativePaths())
                 {
-                    scannedPaths.Add(dbPath);
-                    SkippedIgnored++;
+                    if (PathUtil.IsUnderIgnoredFolder(dbPath, _ignoredSubfolders))
+                    {
+                        scannedPaths.Add(dbPath);
+                        SkippedIgnored++;
+                    }
                 }
             }
 

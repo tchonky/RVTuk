@@ -46,6 +46,18 @@ For the product vision and roadmap behind these items, see [`../VISION.md`](../V
 
 ## ✨ Improvements (to existing features)
 
+- [ ] **Config: ignored-list change doesn't refresh an open browser.** Editing IGNORED
+  SUBFOLDERS in the Config window saves config but does not refresh an already-open Family
+  Browser (the old inline panel refreshed instantly via `ApplyFilter`). Wire the
+  ignored-list change to the existing browser-reload delegate (`onLibraryFolderChanged`
+  in `OpenConfigCommand` → `FamilyBrowserWindow.ReloadConfig`). Deferred: needs an in-Revit
+  check that the reload doesn't flicker/steal focus.
+- [ ] **Deep-scan re-entrancy.** With the modeless Config window and two scan buttons, a user
+  can start a second scan while one is running; both share `IndexingHandler` /
+  `IndexingEvent` and would race. Disable the scan buttons (or guard `RunDeepScan`) while a
+  scan is in progress. Pre-existing risk, now easier to hit.
+
+
 - [ ] **Deep scan is slow** — it opens every family in Revit to read parameters
   (which upgrades older families to the running version in memory), so a first
   full scan takes a long time. ETA now shown (`87fa3e0`); still want: make it
