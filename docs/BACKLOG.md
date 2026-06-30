@@ -24,6 +24,17 @@ For the product vision and roadmap behind these items, see [`../VISION.md`](../V
 
 ## 🐞 Bugs / things to fix
 
+- [ ] **OLE thumbnails never extract** — after a deep scan *no* family shows its embedded
+  preview; `ThumbnailExtractor.ExtractFromRfa` returns null for every file. Pre-existing
+  (unchanged by the Config-hub work) and not previously verified in Revit. Extraction reads the
+  `\x05SummaryInformation` OLE stream (PIDSI_THUMBNAIL → VT_CF / CF_DIB) and converts the DIB to
+  PNG via System.Drawing; every stage has a silent `catch → null`, so the failure point is
+  unknown. **Next step:** add temporary per-stage diagnostic logging (stream missing? byte-order
+  marker `0xFFFE` mismatch? thumbnail property not found? unexpected clipboard format? DIB→PNG
+  throw?), deep-scan a few known-good `.rfa` in Revit, read the log to localise, then fix.
+  Likely causes: modern Revit storing the preview outside SummaryInformation, an OpenMcdf 3.x
+  stream-name/read difference, or a DIB header variant `System.Drawing` won't load.
+
 - [~] When closed, Revit crashes (access violation `c0000005` in `siappdll.dll`).
       **Diagnosed: NOT RVTuk.** `siappdll.dll` / `3DxRevit.dll` is the 3Dconnexion
       SpaceMouse driver (`C:\Program Files\3Dconnexion\3DxWare\...`). The crash is on a

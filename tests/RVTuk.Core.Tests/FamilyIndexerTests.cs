@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using RVTuk.Core.Database;
 using RVTuk.Core.Extraction;
+using RVTuk.Core.Models;
 using Xunit;
 
 namespace RVTuk.Core.Tests;
@@ -66,7 +67,7 @@ public class FamilyIndexerTests : IDisposable
     }
 
     [Fact]
-    public void Scan_ForceReextractAll_StillSkipsIgnoredSubfolders()
+    public void Scan_ForceReextractAll_DoesNotWalkIgnoredSubfolders()
     {
         WriteRfa("Doors/A.rfa");
         WriteRfa("Archive/Old.rfa");
@@ -75,8 +76,32 @@ public class FamilyIndexerTests : IDisposable
 
         var forced = indexer.Scan(NoProgress, default, forceReextractAll: true);
 
-        Assert.Single(forced);                // only Doors/A; Archive ignored even when forced
-        Assert.Equal(1, indexer.SkippedIgnored);
+        Assert.Single(forced);                                    // only Doors/A; Archive not walked
+        Assert.Null(repo.GetFamilyByPath("Archive\\Old.rfa"));    // never indexed
+        Assert.Equal(0, indexer.SkippedIgnored);                  // nothing was previously indexed under it
+    }
+
+    [Fact]
+    public void Scan_PreservesPreviouslyIndexedFamilyWhenItsFolderBecomesIgnored()
+    {
+        WriteRfa("Doors/A.rfa");
+        WriteRfa("Archive/Old.rfa");
+        using var repo = new IndexRepository(_dbPath);
+
+        // First scan with nothing ignored: both families get indexed.
+        new FamilyIndexer(repo, _root).Scan(NoProgress);
+        Assert.Equal(2, repo.GetAllRelativePaths().Count);
+
+        // Now ignore Archive and rescan: the Archive row must be kept (browser just hides it),
+        // not pruned as stale, and not re-extracted.
+        var indexer = new FamilyIndexer(repo, _root, new List<string> { "Archive" });
+        var work = indexer.Scan(NoProgress, default, forceReextractAll: true);
+
+        Assert.Equal(2, repo.GetAllRelativePaths().Count);        // Archive row preserved
+        Assert.Single(work);                                      // only Doors/A re-extracted
+        Assert.Equal(1, indexer.SkippedIgnored);                  // Archive/Old.rfa protected
+        Assert.DoesNotContain(work, w =>
+            w.RelativePath.IndexOf("Old", StringComparison.OrdinalIgnoreCase) >= 0);
     }
 
     [Fact]

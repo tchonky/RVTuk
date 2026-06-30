@@ -38,13 +38,28 @@ namespace RVTuk.Core.Extraction
             bool forceReextractAll = false)
         {
             // Robust walk: skips over-long/inaccessible paths instead of aborting the whole scan.
-            var rfaFiles = new List<string>(PathUtil.SafeEnumerateFiles(_libraryRoot, "*.rfa"));
+            // Ignored subfolders are pruned from the walk entirely, so their (often huge) file
+            // counts never inflate the progress total or slow the scan.
+            var rfaFiles = new List<string>(PathUtil.SafeEnumerateFiles(_libraryRoot, "*.rfa",
+                dir => PathUtil.IsUnderIgnoredFolder(PathUtil.GetRelativePath(_libraryRoot, dir), _ignoredSubfolders)));
             int total = rfaFiles.Count;
             var workItems = new List<ExtractionWorkItem>();
             var scannedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             SkippedLongPath = 0;
             SkippedIgnored = 0;
+
+            // Protect families that were indexed before their folder was ignored: keep their rows
+            // (the browser just hides them) instead of pruning them as stale. We don't walk the
+            // ignored folders on disk, so we read these straight from the DB.
+            foreach (var dbPath in _repository.GetAllRelativePaths())
+            {
+                if (PathUtil.IsUnderIgnoredFolder(dbPath, _ignoredSubfolders))
+                {
+                    scannedPaths.Add(dbPath);
+                    SkippedIgnored++;
+                }
+            }
 
             for (int i = 0; i < total; i++)
             {
@@ -66,15 +81,6 @@ namespace RVTuk.Core.Extraction
                 string fileName = Path.GetFileName(fullPath);
 
                 progressCallback(fileName, i + 1, total);
-
-                if (PathUtil.IsUnderIgnoredFolder(relativePath, _ignoredSubfolders))
-                {
-                    // Family is in an ignored subfolder: skip extraction but add to scannedPaths
-                    // so DeleteStaleEntries does not remove any already-indexed rows for it.
-                    SkippedIgnored++;
-                    scannedPaths.Add(relativePath);
-                    continue;
-                }
 
                 scannedPaths.Add(relativePath);
 
