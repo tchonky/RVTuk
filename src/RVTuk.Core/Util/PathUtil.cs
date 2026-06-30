@@ -15,7 +15,8 @@ namespace RVTuk.Core.Util
         /// going, so a single deeply-nested family can't break an entire library scan. Both the
         /// deep-scan indexer (Core) and the browser sync (UI) go through here.
         /// </summary>
-        public static IEnumerable<string> SafeEnumerateFiles(string root, string searchPattern)
+        public static IEnumerable<string> SafeEnumerateFiles(string root, string searchPattern,
+            Func<string, bool>? skipDirectory = null)
         {
             var pending = new Stack<string>();
             pending.Push(root);
@@ -34,7 +35,12 @@ namespace RVTuk.Core.Util
                 try { subDirs = Directory.GetDirectories(dir); }
                 catch { subDirs = Array.Empty<string>(); }
                 foreach (var sub in subDirs)
+                {
+                    // Skip whole subtrees the caller wants ignored (e.g. ignored library
+                    // subfolders) so we never walk — or count — the files inside them.
+                    if (skipDirectory != null && skipDirectory(sub)) continue;
                     pending.Push(sub);
+                }
             }
         }
 

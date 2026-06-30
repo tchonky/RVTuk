@@ -66,9 +66,14 @@ namespace RVTuk.Revit.Commands
                     skippedLong = indexer.SkippedLongPath;
                     skippedIgnored = indexer.SkippedIgnored;
 
-                    foreach (var item in workItems)
+                    // Phase 2 — pull category/parameters from each family via the Revit engine.
+                    // This is the slow part, so drive the progress bar over the work items here
+                    // (phase 1 above only covered the fast file walk + thumbnail read).
+                    for (int i = 0; i < workItems.Count; i++)
                     {
                         if (cancellationToken.IsCancellationRequested) break;
+                        var item = workItems[i];
+                        vm.UpdateProgress(Path.GetFileName(item.FullPath), i + 1, workItems.Count);
                         handler.PrepareAndWait(item, repo, extractor);
                         externalEvent.Raise();
                         handler.WaitForCompletion();
