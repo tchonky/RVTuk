@@ -34,7 +34,8 @@ namespace RVTuk.Core.Extraction
         /// </summary>
         public IReadOnlyList<ExtractionWorkItem> Scan(
             Action<string, int, int> progressCallback,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            bool forceReextractAll = false)
         {
             // Robust walk: skips over-long/inaccessible paths instead of aborting the whole scan.
             var rfaFiles = new List<string>(PathUtil.SafeEnumerateFiles(_libraryRoot, "*.rfa"));
@@ -83,7 +84,12 @@ namespace RVTuk.Core.Extraction
 
                 var existing = _repository.GetFamilyByPath(relativePath);
 
-                bool needsExtraction = existing == null
+                // "Re-scan All Families" forces re-extraction of every family regardless of
+                // whether its file changed; the default incremental scan only re-extracts new
+                // or modified files. Either way the upsert keeps the family's row Id, so curated
+                // data (instructions, tags, favourites, custom thumbnails, gallery) is preserved.
+                bool needsExtraction = forceReextractAll
+                    || existing == null
                     || existing.FileSize != fileSize
                     || Math.Abs((existing.ModifiedDate - modifiedDate).TotalSeconds) > 1;
 

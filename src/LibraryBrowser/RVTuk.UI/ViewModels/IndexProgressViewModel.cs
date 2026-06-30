@@ -30,14 +30,9 @@ namespace RVTuk.UI.ViewModels
 
         public ICommand CancelCommand { get; }
 
-        public event Action? RebuildRequested;
-
-        public ICommand RebuildIndexCommand { get; }
-
         public IndexProgressViewModel()
         {
             CancelCommand = new RelayCommand(Cancel, () => IsRunning);
-            RebuildIndexCommand = new RelayCommand(RequestRebuild, () => !IsRunning);
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _timer.Tick += (_, _) =>
@@ -93,11 +88,6 @@ namespace RVTuk.UI.ViewModels
         private void Cancel()
         {
             _cts?.Cancel();
-        }
-
-        private void RequestRebuild()
-        {
-            RebuildRequested?.Invoke();
         }
     }
 }

@@ -13,7 +13,6 @@ namespace RVTuk.UI.Views
         private AppConfig _config = null!;
         private readonly Func<IReadOnlyList<string>> _getProjectFamilies;
         private readonly Func<string, (bool Success, string? Error)> _loadFamily;
-        private readonly Action _deepScan;
         private readonly Func<long, string, bool> _rescanFamily;
 
         public FamilyBrowserViewModel ViewModel { get; private set; } = null!;
@@ -22,16 +21,20 @@ namespace RVTuk.UI.Views
             AppConfig config,
             Func<IReadOnlyList<string>> getProjectFamilies,
             Func<string, (bool Success, string? Error)> loadFamily,
-            Action deepScan,
             Func<long, string, bool> rescanFamily)
         {
             InitializeComponent();
             _getProjectFamilies = getProjectFamilies;
             _loadFamily = loadFamily;
-            _deepScan = deepScan;
             _rescanFamily = rescanFamily;
             LoadWithConfig(config);
         }
+
+        /// <summary>
+        /// Re-loads the browser against the current saved config. Called by the Config window
+        /// after the library folder changes, so an open browser doesn't show a stale library.
+        /// </summary>
+        public void ReloadConfig() => LoadWithConfig(ConfigManager.LoadConfig());
 
         private void LoadWithConfig(AppConfig config)
         {
@@ -39,7 +42,7 @@ namespace RVTuk.UI.Views
             var setupDir = Path.Combine(config.LibraryFolderPath, ".Setup");
             Directory.CreateDirectory(setupDir);
             var repo = new BrowserRepository(config.DatabasePath);
-            var vm = new FamilyBrowserViewModel(config, repo, _getProjectFamilies, _loadFamily, _deepScan, _rescanFamily);
+            var vm = new FamilyBrowserViewModel(config, repo, _getProjectFamilies, _loadFamily, _rescanFamily);
             vm.EditInfoRequested += OnEditInfoRequested;
 
             if (ViewModel != null)
@@ -50,31 +53,6 @@ namespace RVTuk.UI.Views
 
             ViewModel = vm;
             DataContext = ViewModel;
-        }
-
-        private void BrowseLibraryFolder_Click(object sender, RoutedEventArgs e)
-        {
-            using var dialog = new System.Windows.Forms.FolderBrowserDialog
-            {
-                Description = "Select the root folder containing your Revit families",
-                SelectedPath = ViewModel.LibraryFolderPath
-            };
-            if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-
-            var error = LibraryFolderValidator.Validate(dialog.SelectedPath);
-            if (error != null)
-            {
-                MessageBox.Show(error, "RVTuk - Family Browser",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            var config = ConfigManager.LoadConfig();
-            config.LibraryFolderPath = dialog.SelectedPath;
-            Directory.CreateDirectory(Path.Combine(dialog.SelectedPath, ".Setup"));
-            ConfigManager.SaveConfig(config);
-            LoadWithConfig(config);
-            ViewModel.IsShowingSettings = true;
         }
 
         private void OnEditInfoRequested(FamilyBrowserItemViewModel item)
