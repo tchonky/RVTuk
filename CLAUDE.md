@@ -13,7 +13,7 @@ Current and planned features:
 - **Family Library Indexer** — scans a folder of `.rfa` files, extracts metadata (category, parameters, thumbnails) via the Revit API, and stores it in a shared database.
 - **Family Browser** — a searchable/filterable window over that index, with per-family rich-text instructions, tags, favourites, and custom thumbnails, plus "load/update family into the active project".
 - **Project Comparator** (a.k.a. Template Tool) — captures a snapshot of a project's key settings (view templates first), stores it in a DB, and compares two projects or audits one against a curated firm "Standard." Report-only today; writing back to models is a gated future phase. See [`docs/comparator/`](docs/comparator/features.md).
-- **Config** — settings panel: family library folder, ignored subfolders, restart/rebuild the family DB.
+- **Config** — a ribbon button opening a settings hub (library folder, ignored subfolders) plus the two deep-scan actions: "Scan New & Changed" (incremental) and "Re-scan All Families" (forced re-extraction of every family, non-destructive — curated data is preserved).
 
 ### Future features
 
