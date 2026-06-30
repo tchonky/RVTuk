@@ -1,9 +1,10 @@
 # RVTuk Development Guidelines
 
-> **Note:** This is the original Phase-1 planning/spec document. Some class names and the
-> proposed UI here predate the implementation, and the build/deploy specifics below have since
-> changed. For the current build configurations, target frameworks, project layout, and deploy
-> target, see `CLAUDE.md` — it is authoritative.
+> **⚠️ ARCHIVED — historical reference only.** This is the original Phase-1 planning/spec
+> document. Some class names and the proposed UI here predate the implementation, and the
+> build/deploy specifics below have since changed. Kept for history; **do not treat as current.**
+> For the live picture see [`../../VISION.md`](../../VISION.md) (product) and
+> [`../../CLAUDE.md`](../../CLAUDE.md) (authoritative technical reference).
 
 ## Project Overview
 RVTuk is a Revit add-in toolkit for family management. Phase 1 focuses on building a Family Library Indexer that scans a folder of .rfa files, extracts metadata (category, parameters, thumbnails), and stores it in a shared SQLite database.

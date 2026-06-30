@@ -2,6 +2,7 @@
 
 Running list of additions and modifications. Brain-dump goes under the right
 section; check off with `[x]` and the commit hash when shipped.
+For the product vision and roadmap behind these items, see [`../VISION.md`](../VISION.md).
 
 ---
 

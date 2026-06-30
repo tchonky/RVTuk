@@ -1,6 +1,6 @@
 # Project Comparator — Product Definition & Roadmap
 
-Product lens. See the [design spec](../superpowers/specs/2026-06-23-project-comparator-design.md) for architecture, [guidelines.md](guidelines.md) for domain rules, [ui-ux.md](ui-ux.md) for screens.
+Product lens. The Comparator is pillar 2 ("Standardization") of the wider product — see [`../../VISION.md`](../../VISION.md). See the [design spec](../superpowers/specs/2026-06-23-project-comparator-design.md) for architecture, [guidelines.md](guidelines.md) for domain rules, [ui-ux.md](ui-ux.md) for screens.
 
 ---
 

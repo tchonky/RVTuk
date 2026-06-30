@@ -4,11 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RVTuk is a Revit add-in for Knafo Klimor Architects LTD. It supports Revit 2024 and 2025 simultaneously via separate build configurations (Revit 2023 was dropped). It currently provides two features:
+RVTuk is a Revit add-in toolkit for Knafo Klimor Architects LTD. It supports Revit 2024 and 2025 simultaneously via separate build configurations (Revit 2023 was dropped).
 
-- **Family Library Indexer** — scans a folder of `.rfa` files, extracts metadata (category, parameters, thumbnails) via the Revit API, and stores it in a shared SQLite database.
-- **Family Browser** — a searchable/filterable window over that index, with per-family rich-text instructions and custom thumbnails, plus "load/update family into the active project".
-- **Template Tool** - A comparison tool that creates a snapshot of most important settings from the project and it will modify those configs (future feature) in the model
+> **Product vision, audience, and roadmap live in [`VISION.md`](VISION.md).** This file is the technical reference (build, architecture, threading, deploy).
+
+Current and planned features:
+
+- **Family Library Indexer** — scans a folder of `.rfa` files, extracts metadata (category, parameters, thumbnails) via the Revit API, and stores it in a shared database.
+- **Family Browser** — a searchable/filterable window over that index, with per-family rich-text instructions, tags, favourites, and custom thumbnails, plus "load/update family into the active project".
+- **Project Comparator** (a.k.a. Template Tool) — captures a snapshot of a project's key settings (view templates first), stores it in a DB, and compares two projects or audits one against a curated firm "Standard." Report-only today; writing back to models is a gated future phase. See [`docs/comparator/`](docs/comparator/features.md).
+- **Config** — settings panel: family library folder, ignored subfolders, restart/rebuild the family DB.
+
+### Future features
+
+- **Productivity tools** — interactive room renumbering; auto-dimensioning (folds in the separate `KKimensions` project).
+- **Instructions** — editable in-Revit pages with visual tips and how-to guidance.
 
 ## Build
 
