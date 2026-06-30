@@ -52,7 +52,11 @@ namespace RVTuk.Revit.ExternalEvents
                     catch { /* skip family if extraction fails */ }
                 }
 
-                Repository.UpdateFamilyMetadata(CurrentItem.FamilyId, category, parameters, CurrentItem.ThumbnailPng, CurrentItem.FileRevitYear);
+                // Pass the file's real size/date through: writing them here (only after a
+                // successful extraction) is what marks the row current. A cancelled family is
+                // never updated, so it stays stale and is re-scanned next time.
+                Repository.UpdateFamilyMetadata(CurrentItem.FamilyId, category, parameters, CurrentItem.ThumbnailPng, CurrentItem.FileRevitYear,
+                    CurrentItem.ModifiedDate, CurrentItem.FileSize);
             }
             finally
             {

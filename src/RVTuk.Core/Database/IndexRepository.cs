@@ -147,8 +147,15 @@ namespace RVTuk.Core.Database
             return paths;
         }
 
-        public long InsertFamily(string relativePath, string fileName, DateTime modifiedDate, long fileSize)
+        public long InsertFamily(string relativePath, string fileName)
         {
+            // Create/keep the row WITHOUT marking it current: a new row gets a sentinel size/date
+            // (0 / DateTime.MinValue) so a never-extracted new family never matches its file; on a
+            // RelativePath conflict we update FileName ONLY, so an existing changed family keeps its
+            // old size/date. The real size/date is written later by UpdateFamilyMetadata once
+            // extraction succeeds — that, not this insert, is what marks a family up to date. A
+            // cancelled extraction therefore leaves the row stale and it is re-scanned next time.
+            //
             // Two single statements rather than INSERT…;SELECT in one ExecuteScalar:
             // Microsoft.Data.Sqlite (Revit 2025 / net8) only returns the first result set
             // from a multi-statement command, so the trailing SELECT's Id would be lost.
@@ -156,12 +163,12 @@ namespace RVTuk.Core.Database
             using (var insert = CreateCommand(@"
                 INSERT INTO Families (RelativePath, FileName, ModifiedDate, FileSize)
                 VALUES (@path, @name, @modified, @size)
-                ON CONFLICT(RelativePath) DO UPDATE SET FileName=@name, ModifiedDate=@modified, FileSize=@size;"))
+                ON CONFLICT(RelativePath) DO UPDATE SET FileName=@name;"))
             {
                 AddParam(insert, "@path", relativePath);
                 AddParam(insert, "@name", fileName);
-                AddParam(insert, "@modified", modifiedDate.ToString("o"));
-                AddParam(insert, "@size", fileSize);
+                AddParam(insert, "@modified", DateTime.MinValue.ToString("o"));
+                AddParam(insert, "@size", 0L);
                 insert.ExecuteNonQuery();
             }
 
@@ -172,15 +179,21 @@ namespace RVTuk.Core.Database
             }
         }
 
-        public void UpdateFamilyMetadata(long familyId, string? category, IReadOnlyList<ParameterModel> parameters, byte[]? thumbnailPng, int revitYear = 0)
+        public void UpdateFamilyMetadata(long familyId, string? category, IReadOnlyList<ParameterModel> parameters, byte[]? thumbnailPng, int revitYear = 0,
+            DateTime modifiedDate = default, long fileSize = 0)
         {
             using var transaction = _connection.BeginTransaction();
             try
             {
-                using var catCmd = CreateCommand("UPDATE Families SET Category=@cat, IndexedDate=@now, RevitYear=@year WHERE Id=@id", transaction);
+                // Write the file's real size/date HERE, in the same transaction as the extracted
+                // metadata: a successful extraction is what marks the row current. (FamilyIndexer
+                // inserts a sentinel size/date, so until this commits the family is re-scannable.)
+                using var catCmd = CreateCommand("UPDATE Families SET Category=@cat, IndexedDate=@now, RevitYear=@year, ModifiedDate=@modified, FileSize=@size WHERE Id=@id", transaction);
                 AddParam(catCmd, "@cat", category ?? (object)DBNull.Value);
                 AddParam(catCmd, "@now", DateTime.UtcNow.ToString("o"));
                 AddParam(catCmd, "@year", revitYear);
+                AddParam(catCmd, "@modified", modifiedDate.ToString("o"));
+                AddParam(catCmd, "@size", fileSize);
                 AddParam(catCmd, "@id", familyId);
                 catCmd.ExecuteNonQuery();
 
