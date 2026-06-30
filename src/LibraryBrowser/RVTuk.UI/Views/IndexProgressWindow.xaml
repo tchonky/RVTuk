@@ -36,8 +36,6 @@
         <Separator Grid.Row="3" Margin="0,4,0,8"/>
 
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="Rebuild Index" Width="100" Margin="0,0,8,0"
-                    Command="{Binding RebuildIndexCommand}"/>
             <Button Content="Cancel" Width="70"
                     Command="{Binding CancelCommand}"/>
         </StackPanel>

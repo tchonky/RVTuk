@@ -27,6 +27,7 @@ namespace RVTuk.Revit
         public static ExternalEvent OpenModelSnapshotEvent { get; private set; } = null!;
         public static RVTuk.UI.Views.FamilyBrowserWindow? BrowserWindow { get; set; }
         public static RVTuk.UI.Views.ComparatorWindow? ComparatorWindow { get; set; }
+        public static RVTuk.UI.Views.ConfigWindow? ConfigWindow { get; set; }
         public static UIApplication? CurrentUIApp { get; set; }
 
         private static string? _addinDir;
@@ -127,6 +128,50 @@ namespace RVTuk.Revit
             compareBtn.Image      = CreateComparatorIcon(16);
 
             panel.AddItem(compareBtn);
+
+            var configBtn = new PushButtonData(
+                "Config",
+                "Config",
+                assemblyPath,
+                typeof(OpenConfigCommand).FullName!)
+            {
+                ToolTip = "Library folder, deep scan, and ignored subfolders (settings for RVTuk tools)"
+            };
+            configBtn.LargeImage = CreateConfigIcon(32);
+            configBtn.Image      = CreateConfigIcon(16);
+
+            panel.AddItem(configBtn);
+        }
+
+        private static BitmapSource CreateConfigIcon(int size)
+        {
+            // Reuse the standard gear glyph (24×24 path coords) rendered onto the dark tile,
+            // so Config matches the other ribbon icons.
+            const string gearPath =
+                "M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61" +
+                "l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41" +
+                "h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22" +
+                "L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61" +
+                "l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84" +
+                "c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.57 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32" +
+                "c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z";
+
+            var dv = new DrawingVisual();
+            using (var ctx = dv.RenderOpen())
+            {
+                double s = size;
+                ctx.DrawRectangle(new SolidColorBrush(WpfColor.FromRgb(0x25, 0x25, 0x26)), null,
+                    new Rect(0, 0, s, s));
+
+                var geo = Geometry.Parse(gearPath);
+                ctx.PushTransform(new ScaleTransform(s / 24.0, s / 24.0));
+                ctx.DrawGeometry(new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00)), null, geo);
+                ctx.Pop();
+            }
+            var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            bmp.Freeze();
+            return bmp;
         }
 
         private static BitmapSource CreateComparatorIcon(int size)

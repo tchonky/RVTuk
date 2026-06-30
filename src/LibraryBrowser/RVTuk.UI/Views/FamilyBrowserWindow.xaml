@@ -36,11 +36,10 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- LINE 1: Category + Version (multi-check) + Config -->
+            <!-- LINE 1: Category + Version (multi-check) -->
             <Grid Grid.Row="0" Margin="6,6,6,2">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
@@ -86,17 +85,6 @@
                     </Popup>
                 </Grid>
 
-                <!-- Config (settings + deep scan) -->
-                <Button Grid.Column="2" Width="28"
-                        ToolTip="Library settings &amp; deep scan"
-                        Command="{Binding ToggleSettingsCommand}">
-                    <Viewbox Width="14" Height="14">
-                        <Canvas Width="24" Height="24">
-                            <Path Fill="{StaticResource Brush.Text}"
-                                  Data="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.57 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-                        </Canvas>
-                    </Viewbox>
-                </Button>
             </Grid>
 
             <!-- LINE 2: Search + Favourites + Sync (dropdown) -->
@@ -363,73 +351,6 @@
                 </TabItem>
             </TabControl>
         </Grid>
-
-        <!-- ── RIGHT PANEL: SETTINGS ──────────────────────────────────── -->
-        <ScrollViewer Grid.Column="2"
-                      Visibility="{Binding IsShowingSettings, Converter={StaticResource BoolVis}}"
-                      VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="28,22,28,22" MaxWidth="480">
-
-                <TextBlock Text="Library Settings" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,22"/>
-
-                <TextBlock Text="LIBRARY ROOT FOLDER"
-                           Foreground="{StaticResource Brush.TextMuted}" FontSize="10"
-                           FontWeight="SemiBold" Margin="0,0,0,6"/>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBox Grid.Column="0" IsReadOnly="True" Margin="0,0,6,0"
-                             Text="{Binding LibraryFolderPath, Mode=OneWay}"
-                             Foreground="{StaticResource Brush.TextMuted}"/>
-                    <Button Grid.Column="1" Content="Browse…" Width="72"
-                            Click="BrowseLibraryFolder_Click"/>
-                </Grid>
-                <TextBlock Foreground="{StaticResource Brush.TextMuted}" FontSize="10"
-                           Margin="0,5,0,0" TextWrapping="Wrap">
-                    The .Setup folder with the database will be created here automatically.
-                </TextBlock>
-
-                <Separator Margin="0,26,0,22"/>
-
-                <TextBlock Text="DEEP SCAN" Foreground="{StaticResource Brush.TextMuted}"
-                           FontSize="10" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,0,0,14"
-                           Foreground="{StaticResource Brush.Text}">
-                    Deep scan extracts full metadata — category, parameters, and thumbnail — from every
-                    family file using the Revit engine. Slower than Sync but captures information that
-                    requires an active Revit context. Run after adding many new families or when
-                    parameters are missing from the browser.
-                </TextBlock>
-                <Button Command="{Binding DeepScanCommand}" HorizontalAlignment="Left"
-                        Padding="14,7" Background="{StaticResource Brush.AccentDark}"
-                        BorderBrush="{StaticResource Brush.Accent}">
-                    <StackPanel Orientation="Horizontal">
-                        <Viewbox Width="13" Height="13" Margin="0,0,7,0">
-                            <Canvas Width="24" Height="24">
-                                <Path Fill="{StaticResource Brush.Text}"
-                                      Data="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/>
-                            </Canvas>
-                        </Viewbox>
-                        <TextBlock Text="Start Deep Scan" FontSize="12"/>
-                    </StackPanel>
-                </Button>
-
-                <Separator Margin="0,26,0,22"/>
-
-                <TextBlock Text="IGNORED SUBFOLDERS" Foreground="{StaticResource Brush.TextMuted}"
-                           FontSize="10" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                <TextBox AcceptsReturn="True" Height="80"
-                         VerticalScrollBarVisibility="Auto"
-                         Text="{Binding IgnoredSubfoldersText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
-                <TextBlock Foreground="{StaticResource Brush.TextMuted}" FontSize="10"
-                           Margin="0,5,0,0" TextWrapping="Wrap">
-                    One subfolder per line, relative to the library root. Saved on the next scan.
-                </TextBlock>
-
-            </StackPanel>
-        </ScrollViewer>
 
     </Grid>
 </Window>

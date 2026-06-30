@@ -20,7 +20,6 @@ namespace RVTuk.UI.ViewModels
         private readonly BrowserRepository _repo;
         private readonly Func<IReadOnlyList<string>> _getProjectFamilies;
         private readonly Func<string, (bool Success, string? Error)> _loadFamily;
-        private readonly Action _deepScan;
         private readonly Func<long, string, bool> _rescanFamily;
         private readonly Dispatcher _dispatcher;
         private readonly object _loadLock = new object();
@@ -36,7 +35,6 @@ namespace RVTuk.UI.ViewModels
         private bool _syncHasRun;
         private bool _isSyncing;
         private bool _isRescanning;
-        private bool _isShowingSettings;
         private int _outdatedCount;
         private string? _instructionsXaml;
         private List<ParameterModel> _parameters = new();
@@ -105,37 +103,7 @@ namespace RVTuk.UI.ViewModels
 
         public bool HasSelection => _selectedItem != null;
         public bool ShowUpdateInProject => _selectedItem?.VersionStatus == VersionStatus.UpdateAvailable;
-        public bool ShowFamilyDetail => HasSelection && !_isShowingSettings;
-        public string LibraryFolderPath => _config.LibraryFolderPath;
-
-        private string _ignoredSubfoldersText;
-        public string IgnoredSubfoldersText
-        {
-            get => _ignoredSubfoldersText ?? string.Join(Environment.NewLine, _config.IgnoredSubfolders);
-            set
-            {
-                if (Equals(_ignoredSubfoldersText, value)) return;
-                _ignoredSubfoldersText = value;
-                _config.IgnoredSubfolders = (value ?? string.Empty)
-                    .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(s => s.Trim())
-                    .Where(s => !string.IsNullOrEmpty(s))
-                    .ToList();
-                ConfigManager.SaveConfig(_config);
-                ApplyFilter();   // refresh the list so newly-ignored families disappear immediately
-                OnPropertyChanged();
-            }
-        }
-
-        public bool IsShowingSettings
-        {
-            get => _isShowingSettings;
-            set
-            {
-                SetProperty(ref _isShowingSettings, value);
-                OnPropertyChanged(nameof(ShowFamilyDetail));
-            }
-        }
+        public bool ShowFamilyDetail => HasSelection;
 
         public bool IsSyncing
         {
@@ -214,8 +182,6 @@ namespace RVTuk.UI.ViewModels
         public BrowserRepository Repo => _repo;
 
         public ICommand SyncCommand { get; }
-        public ICommand ToggleSettingsCommand { get; }
-        public ICommand DeepScanCommand { get; }
         public ICommand UpdateAllCommand { get; }
         public ICommand LoadFamilyCommand { get; }
         public ICommand UpdateInProjectCommand { get; }
@@ -231,20 +197,16 @@ namespace RVTuk.UI.ViewModels
             BrowserRepository repo,
             Func<IReadOnlyList<string>> getProjectFamilies,
             Func<string, (bool Success, string? Error)> loadFamily,
-            Action deepScan,
             Func<long, string, bool> rescanFamily)
         {
             _config = config;
             _repo = repo;
             _getProjectFamilies = getProjectFamilies;
             _loadFamily = loadFamily;
-            _deepScan = deepScan;
             _rescanFamily = rescanFamily;
             _dispatcher = Dispatcher.CurrentDispatcher;
 
             SyncCommand           = new RelayCommand(Sync, () => !IsSyncing);
-            ToggleSettingsCommand = new RelayCommand(() => IsShowingSettings = !IsShowingSettings);
-            DeepScanCommand       = new RelayCommand(() => { IsShowingSettings = false; _deepScan(); });
             UpdateAllCommand      = new RelayCommand(UpdateAll,     () => OutdatedCount > 0);
             LoadFamilyCommand     = new RelayCommand(LoadSelected,  () => SelectedItem != null);
             UpdateInProjectCommand= new RelayCommand(UpdateSelected,() => ShowUpdateInProject);

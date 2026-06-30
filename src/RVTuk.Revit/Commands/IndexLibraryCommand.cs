@@ -26,23 +26,23 @@ namespace RVTuk.Revit.Commands
                 if (!ConfigManager.IsConfigured(config))
                     return Result.Cancelled;
             }
-            RunDeepScan(commandData.Application, config);
+            RunDeepScan(commandData.Application, config, forceReextractAll: false);
             return Result.Succeeded;
         }
 
-        public static void RunDeepScan(UIApplication uiApp, AppConfig config)
+        /// <param name="forceReextractAll">
+        /// false = "Scan New &amp; Changed": re-extract only new/modified families (fast).
+        /// true  = "Re-scan All Families": re-extract every family's parameters and original
+        /// thumbnail, pruning families whose files are gone. Non-destructive — curated data
+        /// (instructions, tags, favourites, custom thumbnails, gallery) is preserved.
+        /// </param>
+        public static void RunDeepScan(UIApplication uiApp, AppConfig config, bool forceReextractAll)
         {
             var progressWindow = new IndexProgressWindow();
             var vm = progressWindow.ViewModel;
             var handler = Application.IndexingHandler;
             var externalEvent = Application.IndexingEvent;
             var extractor = new FamilyMetadataExtractor(uiApp.Application);
-
-            vm.RebuildRequested += () =>
-            {
-                using var repo = new IndexRepository(config.DatabasePath);
-                repo.ClearAll();
-            };
 
             progressWindow.Show();
             var cancellationToken = vm.Start();
@@ -59,7 +59,8 @@ namespace RVTuk.Revit.Commands
 
                     var workItems = indexer.Scan(
                         (fileName, current, total) => vm.UpdateProgress(fileName, current, total),
-                        cancellationToken);
+                        cancellationToken,
+                        forceReextractAll);
 
                     updated = workItems.Count;
                     skippedLong = indexer.SkippedLongPath;

@@ -71,7 +71,6 @@ namespace RVTuk.Revit.Commands
 
             Application.CurrentUIApp = commandData.Application;
             var capturedUIApp = commandData.Application;
-            Action deepScan = () => IndexLibraryCommand.RunDeepScan(capturedUIApp, ConfigManager.LoadConfig());
 
             // Re-extract metadata for ONE family (selected in the browser), reusing the same
             // indexing ExternalEvent ping-pong. Called from a background thread by the VM, so
@@ -149,7 +148,7 @@ namespace RVTuk.Revit.Commands
             try
             {
                 System.Windows.Application.Current.DispatcherUnhandledException += dispatcherHandler;
-                var window = new FamilyBrowserWindow(config, getProjectFamilies, loadFamily, deepScan, rescanFamily);
+                var window = new FamilyBrowserWindow(config, getProjectFamilies, loadFamily, rescanFamily);
                 window.Closed += (s, e) =>
                     System.Windows.Application.Current.DispatcherUnhandledException -= dispatcherHandler;
                 Application.BrowserWindow = window; // set before Show() so handler can close it if layout throws
