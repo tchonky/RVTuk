@@ -62,20 +62,13 @@ For the product vision and roadmap behind these items, see [`../VISION.md`](../V
   (which upgrades older families to the running version in memory), so a first
   full scan takes a long time. ETA now shown (`87fa3e0`); still want: make it
   resumable, or a faster path for families that don't need full metadata.
-- [ ] When deep scanning, on **Cancel** keep everything already extracted so the time
-  isn't lost; the next scan then resumes naturally (unchanged families are skipped).
-  ⚠️ Needs a fix: today a family's row is written with the new size/date *before* its
-  metadata is extracted, so a cancelled family looks "up to date" and won't be re-read
-  next time. Defer the size/date update until after extraction succeeds. (Note: also
-  interacts with the fast Sync, which writes size/date too — design carefully.)
-  Concrete plan (do deliberately, with a Revit test): `FamilyIndexer.Scan` should insert
-  new/changed rows with a sentinel size/date (e.g. 0 / `DateTime.MinValue`) and have
-  `InsertFamily` stop updating ModifiedDate/FileSize on conflict; carry the real
-  ModifiedDate+FileSize on `ExtractionWorkItem`; `IndexRepository.UpdateFamilyMetadata`
-  writes them only after extraction commits. Cancelling then leaves stale size/date →
-  re-scanned next time. ⚠️ Sync's `UpsertFamily` writes real size/date with no metadata,
-  so a Sync-then-DeepScan already skips those families — decide whether Sync should mark
-  rows "needs deep scan" too.
+- [x] When deep scanning, on **Cancel** keep everything already extracted so the time
+  isn't lost (`57c9ceb`). New/changed rows now carry a sentinel size/date; the real
+  ModifiedDate+FileSize ride on `ExtractionWorkItem` and `UpdateFamilyMetadata` writes them
+  only after extraction commits, so a cancelled family stays stale and is re-scanned next
+  time. ⚠️ **Still open (separate):** the fast Sync's `UpsertFamily` writes real size/date
+  with no metadata, so a Sync-then-DeepScan skips those families — decide whether Sync should
+  mark rows "needs deep scan" too. *(Verify the cancel/resume end-to-end in Revit.)*
 - [ ] Option to deep-scan **just thumbnails** (fast) and/or **just parameters** (slow).
 
 ## 🚀 New features / ideas
