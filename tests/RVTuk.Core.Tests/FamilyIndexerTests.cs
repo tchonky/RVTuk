@@ -53,6 +53,24 @@ public class FamilyIndexerTests : IDisposable
     }
 
     [Fact]
+    public void Scan_Incremental_ReextractsModifiedFile()
+    {
+        var a = WriteRfa("Doors/A.rfa", "one");
+        using var repo = new IndexRepository(_dbPath);
+        var indexer = new FamilyIndexer(repo, _root);
+        Assert.Single(indexer.Scan(NoProgress));   // initial index
+
+        // Release the leaked OpenMcdf handle (fake .rfa), then change the file size.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        File.WriteAllText(a, "two-different-and-longer");
+
+        var second = indexer.Scan(NoProgress);     // incremental
+        Assert.Single(second);                     // A changed -> re-extracted
+    }
+
+    [Fact]
     public void Scan_ForceReextractAll_ReturnsEveryFileEvenWhenUnchanged()
     {
         WriteRfa("Doors/A.rfa");
