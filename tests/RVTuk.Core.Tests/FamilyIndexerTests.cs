@@ -46,10 +46,15 @@ public class FamilyIndexerTests : IDisposable
         var indexer = new FamilyIndexer(repo, _root);
 
         var first = indexer.Scan(NoProgress);
-        Assert.Single(first);                 // A is new -> needs extraction
+        var item = Assert.Single(first);      // A is new -> needs extraction
+
+        // A scan no longer marks a family current on its own: extraction must succeed first
+        // (so a cancelled scan leaves the row stale and re-scannable). Simulate that success.
+        repo.UpdateFamilyMetadata(item.FamilyId, "Doors", new List<ParameterModel>(), null,
+            revitYear: 0, modifiedDate: item.ModifiedDate, fileSize: item.FileSize);
 
         var second = indexer.Scan(NoProgress);
-        Assert.Empty(second);                 // A unchanged -> skipped
+        Assert.Empty(second);                 // A unchanged & extracted -> skipped
     }
 
     [Fact]
@@ -144,6 +149,72 @@ public class FamilyIndexerTests : IDisposable
         var remaining = repo.GetAllRelativePaths();
         Assert.Single(remaining);
         Assert.DoesNotContain(remaining, p => p.EndsWith("A.rfa", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Scan_NewFamilyScannedButNotExtracted_IsReturnedAgainNextScan()
+    {
+        // Simulates cancelling a deep scan before a new family's metadata is written.
+        // The row exists (so its Id/curated data is stable) but carries a sentinel
+        // size/date, so the next scan must still see it as needing extraction.
+        WriteRfa("Doors/A.rfa");
+        using var repo = new IndexRepository(_dbPath);
+        var indexer = new FamilyIndexer(repo, _root);
+
+        var first = indexer.Scan(NoProgress);
+        Assert.Single(first);                 // new -> needs extraction
+
+        // No UpdateFamilyMetadata call (the Revit ExternalEvent never ran / was cancelled).
+        var second = indexer.Scan(NoProgress);
+        Assert.Single(second);                // still needs extraction next time
+    }
+
+    [Fact]
+    public void Scan_AfterUpdateFamilyMetadataWritesRealSizeDate_SkipsFamilyNextScan()
+    {
+        WriteRfa("Doors/A.rfa");
+        using var repo = new IndexRepository(_dbPath);
+        var indexer = new FamilyIndexer(repo, _root);
+
+        var first = indexer.Scan(NoProgress);
+        var item = Assert.Single(first);
+
+        // Successful extraction marks the row current by writing the real size/date.
+        repo.UpdateFamilyMetadata(item.FamilyId, "Doors", new List<ParameterModel>(), null,
+            revitYear: 0, modifiedDate: item.ModifiedDate, fileSize: item.FileSize);
+
+        var second = indexer.Scan(NoProgress);
+        Assert.Empty(second);                 // now up to date -> skipped
+    }
+
+    [Fact]
+    public void Scan_ExistingChangedFamilyScannedButNotExtracted_IsReturnedAgainNextScan()
+    {
+        var a = WriteRfa("Doors/A.rfa", "one");
+        using var repo = new IndexRepository(_dbPath);
+        var indexer = new FamilyIndexer(repo, _root);
+
+        // Fully index the family once (write its real size/date so it's "current").
+        var first = indexer.Scan(NoProgress);
+        var item = Assert.Single(first);
+        repo.UpdateFamilyMetadata(item.FamilyId, "Doors", new List<ParameterModel>(), null,
+            revitYear: 0, modifiedDate: item.ModifiedDate, fileSize: item.FileSize);
+        Assert.Empty(indexer.Scan(NoProgress)); // confirm it's now skipped
+
+        // Change the file. Release the leaked OpenMcdf handle first.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        File.WriteAllText(a, "two-different-and-longer");
+
+        // Scan sees the change but extraction is cancelled (no UpdateFamilyMetadata).
+        var second = indexer.Scan(NoProgress);
+        Assert.Single(second);                // changed -> needs extraction
+
+        // InsertFamily must NOT have overwritten the stored size/date on conflict,
+        // so the family still looks stale and is returned again.
+        var third = indexer.Scan(NoProgress);
+        Assert.Single(third);
     }
 
     [Fact]

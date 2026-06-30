@@ -321,6 +321,12 @@ namespace RVTuk.Core.Database
             });
         }
 
+        // NOTE: The fast Sync path intentionally writes the file's real size/date with no extracted
+        // metadata. Consequently a Sync-marked family then "looks up to date" to the deep scan
+        // (its stored size/date matches the file) and is skipped — so its parameters/category are
+        // never extracted. That is a separate, known issue (whether Sync should mark rows "needs
+        // deep scan") tracked in docs/BACKLOG.md and is OUT OF SCOPE for the resumable-deep-scan
+        // change. Deliberately left unchanged here.
         public void UpsertFamily(string relativePath, string fileName, DateTime modifiedDateUtc, long fileSize)
         {
             WithWrite(c =>

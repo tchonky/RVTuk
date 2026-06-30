@@ -105,7 +105,12 @@ namespace RVTuk.Core.Extraction
 
                 if (!needsExtraction) continue;
 
-                long familyId = _repository.InsertFamily(relativePath, fileName, modifiedDate, fileSize);
+                // Create/keep the row (preserving its Id and curated data) but do NOT store the
+                // real size/date yet — InsertFamily writes a sentinel for new rows and leaves an
+                // existing row's old size/date untouched. The real values ride on the work item and
+                // are committed only once extraction succeeds (UpdateFamilyMetadata). That way a
+                // cancelled family still looks stale and is re-scanned next time.
+                long familyId = _repository.InsertFamily(relativePath, fileName);
                 var (thumbnail, revitYear) = ThumbnailExtractor.ExtractFromRfa(fullPath);
 
                 workItems.Add(new ExtractionWorkItem
@@ -114,7 +119,9 @@ namespace RVTuk.Core.Extraction
                     FullPath = fullPath,
                     RelativePath = relativePath,
                     ThumbnailPng = thumbnail,
-                    FileRevitYear = revitYear
+                    FileRevitYear = revitYear,
+                    ModifiedDate = modifiedDate,
+                    FileSize = fileSize
                 });
             }
 
