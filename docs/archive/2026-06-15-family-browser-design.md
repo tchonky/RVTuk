@@ -1,3 +1,5 @@
+> **Archived 2026-07-01 — superseded by [`../superpowers/specs/family-browser-design.md`](../superpowers/specs/family-browser-design.md)** (consolidated Family Browser design). Kept as a point-in-time record.
+
 # Family Browser — Design Spec
 **Date:** 2026-06-15  
 **Status:** Approved
