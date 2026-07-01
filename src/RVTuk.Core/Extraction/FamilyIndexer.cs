@@ -20,6 +20,9 @@ namespace RVTuk.Core.Extraction
         /// <summary>Families skipped because they live under an ignored subfolder (set by the last Scan).</summary>
         public int SkippedIgnored { get; private set; }
 
+        /// <summary>Families whose thumbnail was committed directly without queuing Revit parameter extraction (set by the last Scan).</summary>
+        public int ThumbnailOnlyCount { get; private set; }
+
         public FamilyIndexer(IndexRepository repository, string libraryRootPath,
             IReadOnlyList<string> ignoredSubfolders = null)
         {
@@ -29,13 +32,19 @@ namespace RVTuk.Core.Extraction
         }
 
         /// <summary>
-        /// Scans the library folder. Returns files needing Revit API metadata extraction.
-        /// Thumbnails (OLE) are extracted here and embedded in the work items.
+        /// Scans the library folder. <paramref name="includeThumbnails"/> and
+        /// <paramref name="includeParameters"/> are independent: a family needs a facet
+        /// refreshed if its file changed, or it is simply missing that facet's data. Families
+        /// needing only a thumbnail refresh are committed directly (no Revit engine involved);
+        /// families needing parameters are returned as work items for Phase 2 (Revit-engine
+        /// extraction), carrying an already-extracted thumbnail if that facet was also requested.
+        /// Both flags false is a filenames-only sync: add new families, prune deleted ones.
         /// </summary>
         public IReadOnlyList<ExtractionWorkItem> Scan(
             Action<string, int, int> progressCallback,
             CancellationToken cancellationToken = default,
-            bool forceReextractAll = false)
+            bool includeThumbnails = false,
+            bool includeParameters = false)
         {
             // Robust walk: skips over-long/inaccessible paths instead of aborting the whole scan.
             // Ignored subfolders are pruned from the walk entirely, so their (often huge) file
@@ -48,6 +57,11 @@ namespace RVTuk.Core.Extraction
 
             SkippedLongPath = 0;
             SkippedIgnored = 0;
+            ThumbnailOnlyCount = 0;
+
+            // Preloaded once per scan so the per-file loop never issues an extra query per family.
+            var hasThumbnail = includeThumbnails ? _repository.GetFamilyIdsWithThumbnail() : new HashSet<long>();
+            var paramsExtracted = includeParameters ? _repository.GetFamilyIdsWithParametersExtracted() : new HashSet<long>();
 
             // Protect families that were indexed before their folder was ignored: keep their rows
             // (the browser just hides them) instead of pruning them as stale. We don't walk the
@@ -94,35 +108,69 @@ namespace RVTuk.Core.Extraction
 
                 var existing = _repository.GetFamilyByPath(relativePath);
 
-                // "Re-scan All Families" forces re-extraction of every family regardless of
-                // whether its file changed; the default incremental scan only re-extracts new
-                // or modified files. Either way the upsert keeps the family's row Id, so curated
-                // data (instructions, tags, favourites, custom thumbnails, gallery) is preserved.
-                bool needsExtraction = forceReextractAll
-                    || existing == null
+                bool fileChanged = existing == null
                     || existing.FileSize != fileSize
                     || Math.Abs((existing.ModifiedDate - modifiedDate).TotalSeconds) > 1;
 
-                if (!needsExtraction) continue;
+                bool needsThumbnail = includeThumbnails
+                    && (fileChanged || existing == null || !hasThumbnail.Contains(existing.Id));
+                bool needsParameters = includeParameters
+                    && (fileChanged || existing == null || !paramsExtracted.Contains(existing.Id));
 
-                // Create/keep the row (preserving its Id and curated data) but do NOT store the
-                // real size/date yet — InsertFamily writes a sentinel for new rows and leaves an
-                // existing row's old size/date untouched. The real values ride on the work item and
-                // are committed only once extraction succeeds (UpdateFamilyMetadata). That way a
-                // cancelled family still looks stale and is re-scanned next time.
-                long familyId = _repository.InsertFamily(relativePath, fileName);
-                var (thumbnail, revitYear) = ThumbnailExtractor.ExtractFromRfa(fullPath);
-
-                workItems.Add(new ExtractionWorkItem
+                if (!needsThumbnail && !needsParameters)
                 {
-                    FamilyId = familyId,
-                    FullPath = fullPath,
-                    RelativePath = relativePath,
-                    ThumbnailPng = thumbnail,
-                    FileRevitYear = revitYear,
-                    ModifiedDate = modifiedDate,
-                    FileSize = fileSize
-                });
+                    // Filenames-only sync (also the "neither checkbox" case): keep the row's
+                    // name/size/date current with no extraction. Real values written directly —
+                    // there is nothing to extract afterward, so no sentinel/resumability dance.
+                    _repository.UpsertFamilyFileInfo(relativePath, fileName, fileSize, modifiedDate);
+                    continue;
+                }
+
+                if (needsParameters)
+                {
+                    // Create/keep the row (preserving its Id and curated data) but do NOT store the
+                    // real size/date yet — InsertFamily writes a sentinel for new rows and leaves an
+                    // existing row's old size/date untouched. The real values ride on the work item
+                    // and are committed only once extraction succeeds (UpdateFamilyMetadata). That
+                    // way a cancelled family still looks stale and is re-scanned next time.
+                    long familyId = _repository.InsertFamily(relativePath, fileName);
+
+                    byte[]? thumbnail = null;
+                    int revitYear = 0;
+                    if (needsThumbnail)
+                        (thumbnail, revitYear) = ThumbnailExtractor.ExtractFromRfa(fullPath);
+
+                    workItems.Add(new ExtractionWorkItem
+                    {
+                        FamilyId = familyId,
+                        FullPath = fullPath,
+                        RelativePath = relativePath,
+                        ThumbnailPng = thumbnail,
+                        FileRevitYear = revitYear,
+                        ModifiedDate = modifiedDate,
+                        FileSize = fileSize
+                    });
+                }
+                else
+                {
+                    // Needs only a thumbnail refresh: a plain file read, no Revit engine involved,
+                    // so commit it directly instead of queuing a Phase-2 work item.
+                    var (thumbnail, revitYear) = ThumbnailExtractor.ExtractFromRfa(fullPath);
+                    long familyId = existing?.Id ?? _repository.InsertFamily(relativePath, fileName);
+
+                    if (thumbnail != null)
+                    {
+                        _repository.UpdateThumbnailOnly(familyId, thumbnail, revitYear, modifiedDate, fileSize);
+                        ThumbnailOnlyCount++;
+                    }
+                    else
+                    {
+                        // Extraction failed (e.g. no embedded preview) — keep name/size/date
+                        // current; leave the Thumbnail table untouched so this family is retried
+                        // on the next thumbnails-enabled scan.
+                        _repository.UpsertFamilyFileInfo(relativePath, fileName, fileSize, modifiedDate);
+                    }
+                }
             }
 
             _repository.DeleteStaleEntries(scannedPaths);
