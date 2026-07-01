@@ -10,21 +10,24 @@ namespace RVTuk.UI.ViewModels
 {
     /// <summary>
     /// View model for the ribbon-launched Config hub. Today it hosts the Family Library
-    /// settings (library root, deep scan, ignored subfolders) that previously lived in an
+    /// settings (library root, scan, ignored subfolders) that previously lived in an
     /// inline panel inside the Family Browser. Built as a hub so other tools' settings can be
     /// added as further tabs later.
     /// </summary>
     public class ConfigViewModel : ViewModelBase
     {
         private readonly AppConfig _config;
-        private readonly Action _scanNewAndChanged;
-        private readonly Action _rescanAll;
+        private readonly Action<bool, bool> _scan;
         private readonly Action? _onLibraryFolderChanged;
 
         private string? _ignoredSubfoldersText;
+        private bool _scanThumbnails;
+        private bool _scanParameters;
 
-        /// <param name="scanNewAndChanged">Incremental deep scan (new/modified families only).</param>
-        /// <param name="rescanAll">Forced re-extraction of every family (non-destructive).</param>
+        /// <param name="scan">
+        /// Runs a scan. Args are (includeThumbnails, includeParameters); both false means a
+        /// filenames-only sync (add new families, prune deleted ones, no extraction).
+        /// </param>
         /// <param name="onLibraryFolderChanged">
         /// Invoked after the library folder is changed + saved, so the host can refresh an open
         /// Family Browser. Optional — kept as a delegate so this UI project takes no Revit/window
@@ -32,18 +35,15 @@ namespace RVTuk.UI.ViewModels
         /// </param>
         public ConfigViewModel(
             AppConfig config,
-            Action scanNewAndChanged,
-            Action rescanAll,
+            Action<bool, bool> scan,
             Action? onLibraryFolderChanged = null)
         {
             _config = config;
-            _scanNewAndChanged = scanNewAndChanged;
-            _rescanAll = rescanAll;
+            _scan = scan;
             _onLibraryFolderChanged = onLibraryFolderChanged;
 
             BrowseLibraryCommand = new RelayCommand(BrowseLibraryFolder);
-            ScanNewCommand       = new RelayCommand(() => _scanNewAndChanged(), () => IsConfigured);
-            RescanAllCommand     = new RelayCommand(ConfirmAndRescanAll, () => IsConfigured);
+            ScanCommand = new RelayCommand(() => _scan(ScanThumbnails, ScanParameters), () => IsConfigured);
         }
 
         public string LibraryFolderPath
@@ -65,6 +65,18 @@ namespace RVTuk.UI.ViewModels
 
         public bool IsConfigured => !string.IsNullOrWhiteSpace(_config.LibraryFolderPath);
 
+        public bool ScanThumbnails
+        {
+            get => _scanThumbnails;
+            set => SetProperty(ref _scanThumbnails, value);
+        }
+
+        public bool ScanParameters
+        {
+            get => _scanParameters;
+            set => SetProperty(ref _scanParameters, value);
+        }
+
         public string IgnoredSubfoldersText
         {
             get => _ignoredSubfoldersText ?? string.Join(Environment.NewLine, _config.IgnoredSubfolders);
@@ -83,8 +95,7 @@ namespace RVTuk.UI.ViewModels
         }
 
         public ICommand BrowseLibraryCommand { get; }
-        public ICommand ScanNewCommand { get; }
-        public ICommand RescanAllCommand { get; }
+        public ICommand ScanCommand { get; }
 
         private void BrowseLibraryFolder()
         {
@@ -106,24 +117,8 @@ namespace RVTuk.UI.ViewModels
             LibraryFolderPath = dialog.SelectedPath;
             Directory.CreateDirectory(Path.Combine(dialog.SelectedPath, ".Setup"));
             ConfigManager.SaveConfig(_config);
-            CommandManager.InvalidateRequerySuggested(); // re-enable scan buttons now a folder is set
+            CommandManager.InvalidateRequerySuggested(); // re-enable the Scan button now a folder is set
             _onLibraryFolderChanged?.Invoke();
-        }
-
-        private void ConfirmAndRescanAll()
-        {
-            var result = System.Windows.MessageBox.Show(
-                "Re-scan all families?\n\n" +
-                "This re-reads every family in the library to refresh parameters and thumbnails, " +
-                "and removes families whose files no longer exist. It can take a long time for a " +
-                "large library.\n\n" +
-                "Your instructions, pictures, custom thumbnails, tags, and favourites are kept.\n\n" +
-                "Continue?",
-                "RVTuk – Re-scan All Families",
-                MessageBoxButton.YesNo, MessageBoxImage.Question);
-
-            if (result == MessageBoxResult.Yes)
-                _rescanAll();
         }
     }
 }

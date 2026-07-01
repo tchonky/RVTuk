@@ -35,12 +35,10 @@ namespace RVTuk.Revit.Commands
             var config = ConfigManager.LoadConfig();
             var uiApp = commandData.Application;
 
-            // Deep-scan actions need the Revit UIApplication for metadata extraction. Reload config
-            // at click time so a folder / ignored-list change made in the window is honoured.
-            Action scanNewAndChanged = () =>
-                IndexLibraryCommand.RunDeepScan(uiApp, ConfigManager.LoadConfig(), forceReextractAll: false);
-            Action rescanAll = () =>
-                IndexLibraryCommand.RunDeepScan(uiApp, ConfigManager.LoadConfig(), forceReextractAll: true);
+            // The scan needs the Revit UIApplication for metadata extraction. Reload config at
+            // click time so a folder / ignored-list change made in the window is honoured.
+            Action<bool, bool> scan = (includeThumbnails, includeParameters) =>
+                IndexLibraryCommand.RunScan(uiApp, ConfigManager.LoadConfig(), includeThumbnails, includeParameters);
 
             // If the Family Browser is open, refresh it after a library-folder change so it does
             // not keep showing the old library.
@@ -55,7 +53,7 @@ namespace RVTuk.Revit.Commands
 
             try
             {
-                var vm = new ConfigViewModel(config, scanNewAndChanged, rescanAll, onLibraryFolderChanged);
+                var vm = new ConfigViewModel(config, scan, onLibraryFolderChanged);
                 var window = new ConfigWindow(vm);
                 window.Closed += (s, e) => Application.ConfigWindow = null;
                 Application.ConfigWindow = window; // set before Show() so re-entry finds it
