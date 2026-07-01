@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>RVTuk.UI</AssemblyName>
+    <RootNamespace>RVTuk.UI</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release2024'">
+    <TargetFramework>net48</TargetFramework>
+    <OutputPath>bin\2024\Release2024\</OutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'!='Release2024'">
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <OutputPath>bin\2025\Release2025\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\RVTuk.Core\RVTuk.Core.csproj" />
+  </ItemGroup>
+
+</Project>

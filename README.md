@@ -1,14 +1,15 @@
 # RVTuk
 
-A Revit add-in toolkit for Knafo Klimor Architects LTD. Currently includes:
+A Revit add-in toolkit for Knafo Klimor Architects LTD. See [`VISION.md`](VISION.md) for the
+product vision and roadmap. Currently includes:
 
 - **Family Browser** — search, browse, load, and manage your Revit family library from a dark-themed side panel. Syncs the library database on demand and supports deep-scan indexing (category, parameters, thumbnail) using the Revit engine.
+- **Project Comparator** — capture a snapshot of a project's settings (view templates first), then compare two projects or audit one against a curated firm "Standard." Report-only (in active development).
 
 ## Supported Revit Versions
 
 | Configuration  | Revit Version | Target Framework |
 |---------------|--------------|-----------------|
-| Release2023   | 2023         | net48           |
 | Release2024   | 2024         | net48           |
 | Release2025   | 2025         | net8.0-windows  |
 
@@ -30,7 +31,6 @@ RVTuk/
 ```powershell
 dotnet build src\RVTuk.Revit\RVTuk.Revit.csproj -c Release2025
 dotnet build src\RVTuk.Revit\RVTuk.Revit.csproj -c Release2024
-dotnet build src\RVTuk.Revit\RVTuk.Revit.csproj -c Release2023
 ```
 
 ## Deploying
@@ -41,7 +41,7 @@ Run as Administrator from the repo root:
 .\Deploy.ps1
 ```
 
-Copies DLLs to `C:\ProgramData\Autodesk\Revit\Addins\{2023|2024|2025}\RVTuk\` and writes the `.addin` manifest. Restart Revit after deploying.
+Copies DLLs to `C:\ProgramData\Autodesk\Revit\Addins\{2024|2025}\RVTuk\` and writes the `.addin` manifest. Restart Revit after deploying.
 
 ## Family Browser Features
 
