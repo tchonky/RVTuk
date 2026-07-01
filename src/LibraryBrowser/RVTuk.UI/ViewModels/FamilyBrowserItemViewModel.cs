@@ -44,13 +44,28 @@ namespace RVTuk.UI.ViewModels
         public bool ShowUpToDate => _versionStatus == VersionStatus.UpToDate;
         public bool ShowUpdateAvailable => _versionStatus == VersionStatus.UpdateAvailable;
 
-        public BitmapSource? Thumbnail { get; }
+        private BitmapSource? _thumbnail;
+        public BitmapSource? Thumbnail
+        {
+            get => _thumbnail;
+            private set => SetProperty(ref _thumbnail, value);
+        }
 
         public FamilyBrowserItemViewModel(FamilyBrowserItem model)
         {
             Model = model;
             _versionStatus = model.VersionStatus;
-            Thumbnail = model.ThumbnailPng != null ? LoadBitmap(model.ThumbnailPng) : null;
+            _thumbnail = model.ThumbnailPng != null ? LoadBitmap(model.ThumbnailPng) : null;
+        }
+
+        /// <summary>
+        /// Replaces the preview image (e.g. after a single-family rescan re-extracts it).
+        /// Raises PropertyChanged so both the list row and the detail pane update live.
+        /// </summary>
+        public void UpdateThumbnail(byte[]? pngData)
+        {
+            Model.ThumbnailPng = pngData;
+            Thumbnail = pngData != null ? LoadBitmap(pngData) : null;
         }
 
         private static BitmapSource? LoadBitmap(byte[] pngData)
@@ -61,7 +76,7 @@ namespace RVTuk.UI.ViewModels
                 bmp.BeginInit();
                 bmp.StreamSource = new System.IO.MemoryStream(pngData);
                 bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.DecodePixelHeight = 40;
+                bmp.DecodePixelHeight = 128; // crisp enough for the ~118px square detail frame
                 bmp.EndInit();
                 bmp.Freeze();
                 return bmp;

@@ -233,9 +233,11 @@
                     <ColumnDefinition Width="120"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <Border Grid.Column="0" Background="{StaticResource Brush.Control}"
+                <Border Grid.Column="0" Width="118" Height="118" VerticalAlignment="Top"
+                        HorizontalAlignment="Left"
+                        Background="{StaticResource Brush.Control}"
                         BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
-                    <Image Source="{Binding SelectedItem.Thumbnail}" Width="118" Height="80" Stretch="Uniform"/>
+                    <Image Source="{Binding SelectedItem.Thumbnail}" Stretch="Uniform" Margin="3"/>
                 </Border>
                 <StackPanel Grid.Column="1" Margin="10,0,0,0">
                     <DockPanel>
