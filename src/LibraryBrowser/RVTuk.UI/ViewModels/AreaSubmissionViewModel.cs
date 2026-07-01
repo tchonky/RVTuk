@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Forms;
 using System.Windows.Input;
+using System.Windows.Threading;
 using RVTuk.Core.AreaSubmission;
 
 namespace RVTuk.UI.ViewModels
@@ -19,22 +20,24 @@ namespace RVTuk.UI.ViewModels
     {
         private readonly Func<IReadOnlyList<(long Id, AreaRecord Rec)>> _extract;
         private readonly Action<long> _selectInModel;
-        private readonly Func<AreaSubmissionConfig, (bool ok, string msg)> _export;
+        private readonly Func<IReadOnlyList<AreaRecord>, AreaSubmissionConfig, (bool ok, string msg)> _export;
+        private readonly Dispatcher _dispatcher;
 
         private SubmissionPane _currentPane = SubmissionPane.Config;
         private AreaRowViewModel? _selectedRow;
 
         /// <param name="extract">Reads the areas on the open sheet (id + record).</param>
         /// <param name="selectInModel">Selects an Area in the model by element id.</param>
-        /// <param name="export">Validates + writes the DXF/DAT; returns (ok, message).</param>
+        /// <param name="export">Validates + writes the DXF/DAT for the given records; returns (ok, message).</param>
         public AreaSubmissionViewModel(
             Func<IReadOnlyList<(long Id, AreaRecord Rec)>> extract,
             Action<long> selectInModel,
-            Func<AreaSubmissionConfig, (bool ok, string msg)> export)
+            Func<IReadOnlyList<AreaRecord>, AreaSubmissionConfig, (bool ok, string msg)> export)
         {
             _extract = extract;
             _selectInModel = selectInModel;
             _export = export;
+            _dispatcher = Dispatcher.CurrentDispatcher;
 
             ShowConfigCommand = new RelayCommand(() => CurrentPane = SubmissionPane.Config);
             RefreshCommand    = new RelayCommand(Refresh);
@@ -89,29 +92,52 @@ namespace RVTuk.UI.ViewModels
             }
         }
 
+        // Extraction goes through a Revit ExternalEvent ping-pong that blocks the calling thread
+        // until Revit's main thread services it. This window lives ON the main thread, so we must
+        // run the extract off-thread (else the main thread blocks waiting for itself) and marshal
+        // the results back to the Dispatcher — same pattern as the Family Browser's Sync.
         private void Refresh()
         {
-            Levels.Clear();
-            IReadOnlyList<(long Id, AreaRecord Rec)> extracted;
-            try { extracted = _extract(); }
-            catch (Exception ex) { ExportCompleted?.Invoke(false, "Could not read the open sheet: " + ex.Message); return; }
-
-            foreach (var grp in extracted
-                        .GroupBy(e => e.Rec.Level ?? string.Empty)
-                        .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
             {
-                var groupVm = new AreaLevelGroupViewModel(grp.Key);
-                foreach (var (id, rec) in grp.OrderBy(e => e.Rec.Number, StringComparer.OrdinalIgnoreCase))
-                    groupVm.Rows.Add(new AreaRowViewModel(id, rec));
-                Levels.Add(groupVm);
-            }
+                IReadOnlyList<(long Id, AreaRecord Rec)> extracted;
+                try { extracted = _extract(); }
+                catch (Exception ex)
+                {
+                    _dispatcher.Invoke(() => ExportCompleted?.Invoke(false, "Could not read the open sheet: " + ex.Message));
+                    return;
+                }
 
-            CurrentPane = SubmissionPane.Areas;
+                var groups = extracted
+                    .GroupBy(e => e.Rec.Level ?? string.Empty)
+                    .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                    .Select(g =>
+                    {
+                        var vm = new AreaLevelGroupViewModel(g.Key);
+                        foreach (var (id, rec) in g.OrderBy(e => e.Rec.Number, StringComparer.OrdinalIgnoreCase))
+                            vm.Rows.Add(new AreaRowViewModel(id, rec));
+                        return vm;
+                    })
+                    .ToList();
+
+                _dispatcher.Invoke(() =>
+                {
+                    Levels.Clear();
+                    foreach (var g in groups) Levels.Add(g);
+                    CurrentPane = SubmissionPane.Areas;
+                });
+            });
         }
 
         private void Export()
         {
-            var (ok, msg) = _export(Config);
+            var records = Levels.SelectMany(g => g.Rows).Select(r => r.Record).ToList();
+            if (records.Count == 0)
+            {
+                ExportCompleted?.Invoke(false, "No areas loaded — click Refresh first.");
+                return;
+            }
+            var (ok, msg) = _export(records, Config);
             ExportCompleted?.Invoke(ok, msg);
         }
 

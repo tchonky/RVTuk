@@ -32,6 +32,7 @@ namespace RVTuk.Revit
         public static RVTuk.UI.Views.FamilyBrowserWindow? BrowserWindow { get; set; }
         public static RVTuk.UI.Views.ComparatorWindow? ComparatorWindow { get; set; }
         public static RVTuk.UI.Views.ConfigWindow? ConfigWindow { get; set; }
+        public static RVTuk.UI.Views.AreaSubmissionWindow? AreaCalcWindow { get; set; }
         public static UIApplication? CurrentUIApp { get; set; }
 
         private static string? _addinDir;
@@ -149,6 +150,45 @@ namespace RVTuk.Revit
             configBtn.Image      = CreateConfigIcon(16);
 
             panel.AddItem(configBtn);
+
+            var areaBtn = new PushButtonData(
+                "AreaCalc",
+                "Area\nCalc",
+                assemblyPath,
+                typeof(AreaCalcCommand).FullName!)
+            {
+                ToolTip = "Rishui Zamin area calculation: generate the .dxf + .dat from the open sheet's Areas"
+            };
+            areaBtn.LargeImage = CreateAreaCalcIcon(32);
+            areaBtn.Image      = CreateAreaCalcIcon(16);
+
+            panel.AddItem(areaBtn);
+        }
+
+        private static BitmapSource CreateAreaCalcIcon(int size)
+        {
+            var dv = new DrawingVisual();
+            using (var ctx = dv.RenderOpen())
+            {
+                double s = size;
+                ctx.DrawRectangle(new SolidColorBrush(WpfColor.FromRgb(0x25, 0x25, 0x26)), null,
+                    new Rect(0, 0, s, s));
+
+                // A rectangle "area" split into two zones (primary/service) with a dimension tick.
+                var primary = new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00));
+                var service = new SolidColorBrush(WpfColor.FromRgb(0x4C, 0x9A, 0xFF));
+                ctx.DrawRectangle(primary, null, new Rect(s * 0.16, s * 0.24, s * 0.42, s * 0.52));
+                ctx.DrawRectangle(service, null, new Rect(s * 0.58, s * 0.40, s * 0.26, s * 0.36));
+
+                var pen = new Pen(new SolidColorBrush(Colors.White), Math.Max(1, s * 0.05));
+                pen.Freeze();
+                // outline
+                ctx.DrawRectangle(null, pen, new Rect(s * 0.16, s * 0.24, s * 0.68, s * 0.52));
+            }
+            var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            bmp.Freeze();
+            return bmp;
         }
 
         private static BitmapSource CreateConfigIcon(int size)
