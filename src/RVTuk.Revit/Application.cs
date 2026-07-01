@@ -162,7 +162,22 @@ namespace RVTuk.Revit
             areaBtn.LargeImage = CreateAreaCalcIcon(32);
             areaBtn.Image      = CreateAreaCalcIcon(16);
 
-            panel.AddItem(areaBtn);
+            var setupBtn = new PushButtonData(
+                "SetupRishuiZamin",
+                "Setup RZ\nParameters",
+                assemblyPath,
+                typeof(SetupRishuiZaminParamsCommand).FullName!)
+            {
+                ToolTip = "One-time project setup for Area Calc: bind the RZ_UsageType parameter to Areas and create the usage key schedule"
+            };
+            setupBtn.LargeImage = CreateConfigIcon(32);
+            setupBtn.Image      = CreateConfigIcon(16);
+
+            // Split button: main face opens Area Calc; the dropdown carries the one-time setup.
+            var areaSplit = (SplitButton)panel.AddItem(new SplitButtonData("AreaCalcSplit", "Area Calc"));
+            areaSplit.IsSynchronizedWithCurrentItem = false; // keep Area Calc as the face after Setup runs
+            areaSplit.AddPushButton(areaBtn);
+            areaSplit.AddPushButton(setupBtn);
         }
 
         private static BitmapSource CreateAreaCalcIcon(int size)

@@ -214,6 +214,38 @@ public class FamilyIndexerTests : IDisposable
     }
 
     [Fact]
+    public void Scan_CaseOnlyRename_KeepsRowAndReKeysToDiskCasing()
+    {
+        WriteRfa("Doors/A.rfa");
+        using var repo = new IndexRepository(_dbPath);
+
+        var first = new FamilyIndexer(repo, _root).Scan(NoProgress, default, includeParameters: true);
+        var item = Assert.Single(first);
+        repo.UpdateFamilyMetadata(item.FamilyId, "Doors", new List<ParameterModel>(), null,
+            revitYear: 0, modifiedDate: item.ModifiedDate, fileSize: item.FileSize);
+
+        // Simulate a case-only rename of the folder ("Doors" -> "doors"). On Windows this is the
+        // same file; the DB row (and its curated data) must survive under the same Id, re-keyed
+        // to the new casing — not be pruned as stale and re-indexed as a new family.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        var oldDir = Path.Combine(_root, "Doors");
+        var newDir = Path.Combine(_root, "doors");
+        var tmpDir = Path.Combine(_root, "doors_tmp");
+        Directory.Move(oldDir, tmpDir);   // two-step: a direct case-only Move throws on Windows
+        Directory.Move(tmpDir, newDir);
+
+        var second = new FamilyIndexer(repo, _root).Scan(NoProgress, default, includeParameters: true);
+
+        Assert.Empty(second);                                          // unchanged content -> no re-extraction
+        var path = Assert.Single(repo.GetAllRelativePaths());          // no duplicate, not pruned
+        Assert.StartsWith("doors", path);                              // re-keyed to on-disk casing
+        var reFound = repo.GetFamilyByPath(path);
+        Assert.NotNull(reFound);
+        Assert.Equal(item.FamilyId, reFound!.Id);                      // same row -> curated data kept
+    }
+
+    [Fact]
     public void Scan_PrunesFamiliesWhoseFileIsGone()
     {
         var a = WriteRfa("Doors/A.rfa");

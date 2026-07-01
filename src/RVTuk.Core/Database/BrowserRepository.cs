@@ -336,14 +336,46 @@ namespace RVTuk.Core.Database
         {
             WithWrite(c =>
             {
+                // Resolve the row case-insensitively (preferring an exact-case match): Windows
+                // paths are case-insensitive but the RelativePath key is not, so a case-only
+                // rename on disk must update the existing row — a case-sensitive upsert would
+                // insert a duplicate that then lingers next to the old row forever. Updating by
+                // Id also re-keys the row to the current on-disk casing.
+                long id = 0;
+                using (var lookup = c.CreateCommand())
+                {
+                    lookup.CommandText =
+                        "SELECT Id FROM Families WHERE RelativePath = @rel COLLATE NOCASE " +
+                        "ORDER BY (CASE WHEN RelativePath = @rel THEN 0 ELSE 1 END) LIMIT 1";
+                    AddParam(lookup, "@rel", relativePath);
+                    var scalar = lookup.ExecuteScalar();
+                    if (scalar != null && scalar != DBNull.Value)
+                        id = (long)scalar;
+                }
+
                 using var cmd = c.CreateCommand();
-                cmd.CommandText = @"
-                    INSERT INTO Families (RelativePath, FileName, ModifiedDate, FileSize)
-                    VALUES (@rel, @name, @modified, @size)
-                    ON CONFLICT(RelativePath) DO UPDATE SET
-                        FileName = excluded.FileName,
-                        ModifiedDate = excluded.ModifiedDate,
-                        FileSize = excluded.FileSize";
+                if (id != 0)
+                {
+                    cmd.CommandText = @"
+                        UPDATE Families SET
+                            RelativePath = @rel,
+                            FileName = @name,
+                            ModifiedDate = @modified,
+                            FileSize = @size
+                        WHERE Id = @id";
+                    AddParam(cmd, "@id", id);
+                }
+                else
+                {
+                    // ON CONFLICT kept for safety under concurrent writers on the shared DB.
+                    cmd.CommandText = @"
+                        INSERT INTO Families (RelativePath, FileName, ModifiedDate, FileSize)
+                        VALUES (@rel, @name, @modified, @size)
+                        ON CONFLICT(RelativePath) DO UPDATE SET
+                            FileName = excluded.FileName,
+                            ModifiedDate = excluded.ModifiedDate,
+                            FileSize = excluded.FileSize";
+                }
                 AddParam(cmd, "@rel", relativePath);
                 AddParam(cmd, "@name", fileName);
                 AddParam(cmd, "@modified", modifiedDateUtc.ToString("o"));

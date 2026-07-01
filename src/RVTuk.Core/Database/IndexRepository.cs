@@ -134,12 +134,35 @@ namespace RVTuk.Core.Database
 
         public FamilyModel? GetFamilyByPath(string relativePath)
         {
+            // Case-insensitive lookup (preferring an exact-case row if one exists): Windows paths
+            // are case-insensitive but the RelativePath key is not, so a case-only rename on disk
+            // must still resolve to the existing row — otherwise the family is re-indexed as new
+            // and its curated data (tags, favourites, instructions) is lost when the old row is
+            // pruned as stale. SQLite's NOCASE folds ASCII only, which covers the drive-letter/
+            // Latin part of library paths; Hebrew has no case to fold.
             using var cmd = CreateCommand(
-                "SELECT Id, RelativePath, FileName, ModifiedDate, FileSize, Category, IndexedDate FROM Families WHERE RelativePath = @path");
+                "SELECT Id, RelativePath, FileName, ModifiedDate, FileSize, Category, IndexedDate FROM Families " +
+                "WHERE RelativePath = @path COLLATE NOCASE " +
+                "ORDER BY (CASE WHEN RelativePath = @path THEN 0 ELSE 1 END) LIMIT 1");
             AddParam(cmd, "@path", relativePath);
             using var reader = cmd.ExecuteReader();
             if (!reader.Read()) return null;
             return ReadFamily(reader);
+        }
+
+        /// <summary>
+        /// Re-keys a row to the current on-disk casing of its path. Called by the indexer when
+        /// <see cref="GetFamilyByPath"/> resolved a row whose stored casing differs from disk,
+        /// so every later exact-match write (upserts, stale pruning) hits the same row.
+        /// </summary>
+        public void UpdateRelativePathCasing(long familyId, string relativePath, string fileName)
+        {
+            using var cmd = CreateCommand(
+                "UPDATE Families SET RelativePath = @path, FileName = @name WHERE Id = @id");
+            AddParam(cmd, "@path", relativePath);
+            AddParam(cmd, "@name", fileName);
+            AddParam(cmd, "@id", familyId);
+            cmd.ExecuteNonQuery();
         }
 
         public List<string> GetAllRelativePaths()
@@ -310,7 +333,9 @@ namespace RVTuk.Core.Database
 
         public void DeleteStaleEntries(IEnumerable<string> validRelativePaths)
         {
-            var valid = new HashSet<string>(validRelativePaths);
+            // Ignore-case like the scanner's own path set: a row whose stored casing differs from
+            // the scanned path is still the same file on a Windows filesystem, not a stale row.
+            var valid = new HashSet<string>(validRelativePaths, StringComparer.OrdinalIgnoreCase);
             foreach (var path in GetAllRelativePaths())
             {
                 if (!valid.Contains(path))
