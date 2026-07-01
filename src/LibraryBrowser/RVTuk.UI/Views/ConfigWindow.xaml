@@ -43,29 +43,32 @@
 
                     <Separator Margin="0,26,0,22"/>
 
-                    <TextBlock Text="DEEP SCAN" Foreground="{StaticResource Brush.TextMuted}"
+                    <TextBlock Text="SCAN" Foreground="{StaticResource Brush.TextMuted}"
                                FontSize="10" FontWeight="SemiBold" Margin="0,0,0,8"/>
                     <TextBlock FontSize="12" TextWrapping="Wrap" Margin="0,0,0,14"
                                Foreground="{StaticResource Brush.Text}">
-                        Deep scan extracts full metadata — category, parameters, and thumbnail —
-                        from family files using the Revit engine.
+                        Scan always adds new families and removes ones whose files are gone.
+                        Check a box to also refresh that data for anything new, changed, or
+                        currently missing it — nothing else is touched.
                         <LineBreak/><LineBreak/>
-                        <Run FontWeight="SemiBold">Scan New &amp; Changed</Run> only re-reads families
-                        that are new or whose file changed — fast.
+                        <Run FontWeight="SemiBold">Update thumbnails</Run> re-reads each family's
+                        preview image — a fast, plain file read.
                         <LineBreak/>
-                        <Run FontWeight="SemiBold">Re-scan All Families</Run> re-reads every family
-                        (use when parameters or thumbnails are missing) and removes families whose
-                        files are gone. Your instructions, pictures, tags, and favourites are kept.
+                        <Run FontWeight="SemiBold">Update parameters</Run> re-reads category and
+                        parameters using the Revit engine — slower.
+                        <LineBreak/><LineBreak/>
+                        Your instructions, pictures, custom thumbnails, tags, and favourites are
+                        always kept.
                     </TextBlock>
-                    <StackPanel Orientation="Horizontal">
-                        <Button Command="{Binding ScanNewCommand}" Margin="0,0,10,0"
-                                Padding="14,7" Background="{StaticResource Brush.AccentDark}"
-                                BorderBrush="{StaticResource Brush.Accent}"
-                                Content="Scan New &amp; Changed"/>
-                        <Button Command="{Binding RescanAllCommand}"
-                                Padding="14,7"
-                                Content="Re-scan All Families"/>
-                    </StackPanel>
+                    <CheckBox Content="Update thumbnails" Margin="0,0,0,8"
+                              IsChecked="{Binding ScanThumbnails}"/>
+                    <CheckBox Content="Update parameters (slower)" Margin="0,0,0,14"
+                              IsChecked="{Binding ScanParameters}"/>
+                    <Button Command="{Binding ScanCommand}"
+                            HorizontalAlignment="Left"
+                            Padding="14,7" Background="{StaticResource Brush.AccentDark}"
+                            BorderBrush="{StaticResource Brush.Accent}"
+                            Content="Scan"/>
 
                     <Separator Margin="0,26,0,22"/>
 
