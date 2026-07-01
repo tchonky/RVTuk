@@ -250,6 +250,11 @@ namespace RVTuk.Core.Database
             return result == DBNull.Value || result == null ? null : (byte[])result;
         }
 
+        // Same resolution as GetAllFamilies: custom thumbnail wins over the OLE one.
+        // Used to refresh a single family's preview after a one-off rescan.
+        public byte[]? GetResolvedThumbnail(long familyId)
+            => GetCustomThumbnail(familyId).Png ?? GetOleThumbnail(familyId);
+
         public List<string> GetAllRelativePaths()
         {
             var result = new List<string>();

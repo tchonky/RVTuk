@@ -474,10 +474,20 @@ namespace RVTuk.UI.ViewModels
                 bool ok;
                 try { ok = _rescanFamily(item.Id, fullPath); }
                 catch { ok = false; }
+                byte[]? freshThumb = null;
+                if (ok)
+                {
+                    try { freshThumb = _repo.GetResolvedThumbnail(item.Id); }
+                    catch { /* thumbnail refresh is best-effort */ }
+                }
                 _dispatcher.Invoke(() =>
                 {
                     IsRescanning = false;
-                    if (ok) LoadDetailAsync(item);
+                    if (ok)
+                    {
+                        item.UpdateThumbnail(freshThumb);
+                        LoadDetailAsync(item);
+                    }
                     else MessageBox.Show("Could not rescan this family.", "RVTuk");
                 });
             });
