@@ -123,6 +123,10 @@ foreach ($ver in $targets) {
         Copy-Item "$srcDir\*.pdb" $dllDir -Force -ErrorAction SilentlyContinue
         Copy-Item "$srcDir\*.json" $dllDir -Force -ErrorAction SilentlyContinue
 
+        # Shared-parameter definition file(s) (e.g. RZ_AreaParams.txt) — resolved at runtime next
+        # to RVTuk.Revit.dll, so must land flat in the add-in folder like the DLLs above.
+        Copy-Item "$srcDir\*.txt" $dllDir -Force -ErrorAction SilentlyContinue
+
         # Native interop DLLs live in x64\; copy flat since Revit is always x64.
         $x64Dir = "$srcDir\x64"
         if (Test-Path $x64Dir) { Copy-Item "$x64Dir\*.dll" $dllDir -Force -ErrorAction Stop }
