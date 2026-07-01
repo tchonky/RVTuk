@@ -45,6 +45,14 @@ namespace RVTuk.Core.AreaSubmission
         private const double FrameMargin = 200.0; // cm; keeps RZ_FRAME strictly outside RZ_FLOOR
         private const double FloorMargin = 50.0;   // cm; keeps RZ_FLOOR strictly outside its areas
 
+        // RZ_FRAME_SYM/RZ_FLOOR_SYM must be inserted strictly inside their own polygon (the
+        // RZ_* rule expects point-in-polygon, not on-boundary) — Garmoshka.dxf itself insets
+        // its frame symbol ~5 units from the box's max corner (e.g. 26995,8995 inside a
+        // 27000,9000 frame) rather than placing it exactly on the corner. FrameMargin/FloorMargin
+        // are always >= this, so the inset corner stays inside the box for any box the code
+        // produces.
+        private const double SymbolInset = 5.0;
+
         /// <summary>
         /// Builds the full ASCII DXF text for the given areas and submission config: the
         /// captured preamble, then one <c>RZ_FRAME</c> per distinct <see cref="AreaRecord.PageNo"/>,
@@ -96,7 +104,7 @@ namespace RVTuk.Core.AreaSubmission
             var corners = RectCorners(box);
             AppendPolyline(sb, "RZ_FRAME", corners);
 
-            var insertion = (X: box.MaxX, Y: box.MaxY);
+            var insertion = (X: box.MaxX - SymbolInset, Y: box.MaxY - SymbolInset);
             AppendInsert(sb, "RZ_FRAME", "RZ_FRAME_SYM", insertion);
 
             AppendAttrib(sb, insertion, PageNoOffset, FrameTextHeight, "PAGE_NO", pageNo.ToString(CultureInfo.InvariantCulture), fieldFlag: 0, justify: 2);
@@ -109,7 +117,7 @@ namespace RVTuk.Core.AreaSubmission
             var corners = RectCorners(box);
             AppendPolyline(sb, "RZ_FLOOR", corners);
 
-            var insertion = (X: box.MaxX, Y: box.MaxY);
+            var insertion = (X: box.MaxX - SymbolInset, Y: box.MaxY - SymbolInset);
             AppendInsert(sb, "RZ_FLOOR", "RZ_FLOOR_SYM", insertion);
 
             AppendAttrib(sb, insertion, FloorTagOffset, FloorTextHeight, "FLOOR", floor ?? "", fieldFlag: 0, justify: 2);
