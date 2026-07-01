@@ -125,6 +125,11 @@ namespace RVTuk.Core.Database
             favCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='IsFavorite'";
             if ((long)(favCheck.ExecuteScalar() ?? 0L) == 0)
                 Execute("ALTER TABLE Families ADD COLUMN IsFavorite INTEGER NOT NULL DEFAULT 0");
+
+            using var paramsExtractedCheck = _connection.CreateCommand();
+            paramsExtractedCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='ParametersExtracted'";
+            if ((long)(paramsExtractedCheck.ExecuteScalar() ?? 0L) == 0)
+                Execute("ALTER TABLE Families ADD COLUMN ParametersExtracted INTEGER NOT NULL DEFAULT 0");
         }
 
         public FamilyModel? GetFamilyByPath(string relativePath)
@@ -145,6 +150,26 @@ namespace RVTuk.Core.Database
             while (reader.Read())
                 paths.Add(reader.GetString(0));
             return paths;
+        }
+
+        public HashSet<long> GetFamilyIdsWithThumbnail()
+        {
+            var ids = new HashSet<long>();
+            using var cmd = CreateCommand("SELECT DISTINCT FamilyId FROM Thumbnail");
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                ids.Add(reader.GetInt64(0));
+            return ids;
+        }
+
+        public HashSet<long> GetFamilyIdsWithParametersExtracted()
+        {
+            var ids = new HashSet<long>();
+            using var cmd = CreateCommand("SELECT Id FROM Families WHERE ParametersExtracted = 1");
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                ids.Add(reader.GetInt64(0));
+            return ids;
         }
 
         public long InsertFamily(string relativePath, string fileName)
@@ -179,6 +204,22 @@ namespace RVTuk.Core.Database
             }
         }
 
+        public void UpsertFamilyFileInfo(string relativePath, string fileName, long fileSize, DateTime modifiedDateUtc)
+        {
+            using var cmd = CreateCommand(@"
+                INSERT INTO Families (RelativePath, FileName, ModifiedDate, FileSize)
+                VALUES (@path, @name, @modified, @size)
+                ON CONFLICT(RelativePath) DO UPDATE SET
+                    FileName = excluded.FileName,
+                    ModifiedDate = excluded.ModifiedDate,
+                    FileSize = excluded.FileSize;");
+            AddParam(cmd, "@path", relativePath);
+            AddParam(cmd, "@name", fileName);
+            AddParam(cmd, "@modified", modifiedDateUtc.ToString("o"));
+            AddParam(cmd, "@size", fileSize);
+            cmd.ExecuteNonQuery();
+        }
+
         public void UpdateFamilyMetadata(long familyId, string? category, IReadOnlyList<ParameterModel> parameters, byte[]? thumbnailPng, int revitYear = 0,
             DateTime modifiedDate = default, long fileSize = 0)
         {
@@ -188,7 +229,7 @@ namespace RVTuk.Core.Database
                 // Write the file's real size/date HERE, in the same transaction as the extracted
                 // metadata: a successful extraction is what marks the row current. (FamilyIndexer
                 // inserts a sentinel size/date, so until this commits the family is re-scannable.)
-                using var catCmd = CreateCommand("UPDATE Families SET Category=@cat, IndexedDate=@now, RevitYear=@year, ModifiedDate=@modified, FileSize=@size WHERE Id=@id", transaction);
+                using var catCmd = CreateCommand("UPDATE Families SET Category=@cat, IndexedDate=@now, RevitYear=@year, ModifiedDate=@modified, FileSize=@size, ParametersExtracted=1 WHERE Id=@id", transaction);
                 AddParam(catCmd, "@cat", category ?? (object)DBNull.Value);
                 AddParam(catCmd, "@now", DateTime.UtcNow.ToString("o"));
                 AddParam(catCmd, "@year", revitYear);
@@ -227,6 +268,36 @@ namespace RVTuk.Core.Database
                     AddParam(thumbCmd, "@png", thumbnailPng);
                     thumbCmd.ExecuteNonQuery();
                 }
+
+                transaction.Commit();
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
+        }
+
+        public void UpdateThumbnailOnly(long familyId, byte[] thumbnailPng, int revitYear, DateTime modifiedDate, long fileSize)
+        {
+            using var transaction = _connection.BeginTransaction();
+            try
+            {
+                using var thumbCmd = CreateCommand(
+                    "INSERT OR REPLACE INTO Thumbnail (FamilyId, PngData) VALUES (@fid, @png)", transaction);
+                AddParam(thumbCmd, "@fid", familyId);
+                AddParam(thumbCmd, "@png", thumbnailPng);
+                thumbCmd.ExecuteNonQuery();
+
+                using var famCmd = CreateCommand(
+                    "UPDATE Families SET RevitYear=@year, ModifiedDate=@modified, FileSize=@size, IndexedDate=@now WHERE Id=@id",
+                    transaction);
+                AddParam(famCmd, "@year", revitYear);
+                AddParam(famCmd, "@modified", modifiedDate.ToString("o"));
+                AddParam(famCmd, "@size", fileSize);
+                AddParam(famCmd, "@now", DateTime.UtcNow.ToString("o"));
+                AddParam(famCmd, "@id", familyId);
+                famCmd.ExecuteNonQuery();
 
                 transaction.Commit();
             }
