@@ -25,6 +25,10 @@ namespace RVTuk.Revit
         public static ExternalEvent CaptureSnapshotEvent { get; private set; } = null!;
         public static OpenModelSnapshotEventHandler OpenModelSnapshotHandler { get; private set; } = null!;
         public static ExternalEvent OpenModelSnapshotEvent { get; private set; } = null!;
+        public static AreaExtractEventHandler AreaExtractHandler { get; private set; } = null!;
+        public static ExternalEvent AreaExtractEvent { get; private set; } = null!;
+        public static SelectAreaEventHandler SelectAreaHandler { get; private set; } = null!;
+        public static ExternalEvent SelectAreaEvent { get; private set; } = null!;
         public static RVTuk.UI.Views.FamilyBrowserWindow? BrowserWindow { get; set; }
         public static RVTuk.UI.Views.ComparatorWindow? ComparatorWindow { get; set; }
         public static RVTuk.UI.Views.ConfigWindow? ConfigWindow { get; set; }
@@ -67,6 +71,10 @@ namespace RVTuk.Revit
             CaptureSnapshotEvent   = ExternalEvent.Create(CaptureSnapshotHandler);
             OpenModelSnapshotHandler = new OpenModelSnapshotEventHandler();
             OpenModelSnapshotEvent   = ExternalEvent.Create(OpenModelSnapshotHandler);
+            AreaExtractHandler = new AreaExtractEventHandler();
+            AreaExtractEvent   = ExternalEvent.Create(AreaExtractHandler);
+            SelectAreaHandler  = new SelectAreaEventHandler();
+            SelectAreaEvent    = ExternalEvent.Create(SelectAreaHandler);
 
             try
             {
