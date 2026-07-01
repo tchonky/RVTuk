@@ -30,6 +30,10 @@ namespace RVTuk.Core.AreaSubmission
     public class AreaRecord
     {
         public string Level { get; set; } = "";
+
+        /// <summary>Level elevation in metres, relative to the project's determining entrance
+        /// level (approximated by project zero). Feeds the DXF <c>LEVEL_ELEVATION</c> tag.</summary>
+        public double ElevationMeters { get; set; }
         public string? Number { get; set; }
         public string? Name { get; set; }
         public int? UsageCode { get; set; }

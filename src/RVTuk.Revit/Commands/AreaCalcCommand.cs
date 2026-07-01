@@ -14,6 +14,12 @@ namespace RVTuk.Revit.Commands
     [Transaction(TransactionMode.Manual)]
     public class AreaCalcCommand : IExternalCommand
     {
+        // AreaExtractHandler/Event are shared singletons and ExternalEvent.Raise() coalesces, so
+        // concurrent extracts must be serialized (same rule as the Family Browser's load lock) —
+        // two quick Refresh clicks would otherwise Reset() the handler out from under a raise
+        // that is still executing.
+        private static readonly object ExtractLock = new object();
+
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             // Revit never creates a WPF Application; make one we own (never auto-shutdown).
@@ -36,12 +42,15 @@ namespace RVTuk.Revit.Commands
             // Revit's main thread services it, so the view model calls it on a background thread.
             Func<IReadOnlyList<(long Id, AreaRecord Rec)>> extract = () =>
             {
-                Application.AreaExtractHandler.Reset();
-                Application.AreaExtractEvent.Raise();
-                Application.AreaExtractHandler.WaitForCompletion();
-                return Application.AreaExtractHandler.Result
-                    .Select(e => (e.ElementId, e.Record))
-                    .ToList();
+                lock (ExtractLock)
+                {
+                    Application.AreaExtractHandler.Reset();
+                    Application.AreaExtractEvent.Raise();
+                    Application.AreaExtractHandler.WaitForCompletion();
+                    return Application.AreaExtractHandler.Result
+                        .Select(e => (e.ElementId, e.Record))
+                        .ToList();
+                }
             };
 
             // Select an area in the model — fire-and-forget (called on the UI thread; the event

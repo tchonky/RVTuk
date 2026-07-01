@@ -27,6 +27,7 @@ namespace RVTuk.Revit.AreaSubmission
     {
         // Revit internal units are feet; the DXF writer (Task 5) works in centimetres.
         private const double FeetToCm = 30.48;
+        private const double FeetToM = 0.3048;
         private const double SqFeetToSqM = 0.09290304;
 
         public IReadOnlyList<ExtractedArea> FromOpenSheet(UIDocument uidoc)
@@ -93,6 +94,7 @@ namespace RVTuk.Revit.AreaSubmission
             {
                 Level = levelName,
                 Floor = levelName,
+                ElevationMeters = (level?.Elevation ?? 0.0) * FeetToM,
                 Number = area.Number,
                 Name = area.Name,
                 UsageCode = ReadUsageCode(area),

@@ -83,7 +83,7 @@ namespace RVTuk.Core.AreaSubmission
                 {
                     var floorBox = BoundingBox(floorGroup.SelectMany(AllPoints)).Expand(FloorMargin);
                     var first = floorGroup.First();
-                    AppendFloor(sb, floorGroup.Key, first.Level, config.BuildingNo, first.IsUnderground, floorBox);
+                    AppendFloor(sb, floorGroup.Key, first.ElevationMeters, config.BuildingNo, first.IsUnderground, floorBox);
 
                     foreach (var area in floorGroup)
                     {
@@ -112,7 +112,7 @@ namespace RVTuk.Core.AreaSubmission
             AppendSeqend(sb, "RZ_FRAME");
         }
 
-        private static void AppendFloor(StringBuilder sb, string floor, string level, int buildingNo, bool isUnderground, BBox box)
+        private static void AppendFloor(StringBuilder sb, string floor, double elevationMeters, int buildingNo, bool isUnderground, BBox box)
         {
             var corners = RectCorners(box);
             AppendPolyline(sb, "RZ_FLOOR", corners);
@@ -122,7 +122,7 @@ namespace RVTuk.Core.AreaSubmission
 
             AppendAttrib(sb, insertion, FloorTagOffset, FloorTextHeight, "FLOOR", floor ?? "", fieldFlag: 0, justify: 2);
             AppendAttrib(sb, insertion, BuildingNoOffset, FloorTextHeight, "BUILDING_NO", buildingNo.ToString(CultureInfo.InvariantCulture), fieldFlag: 0, justify: 2);
-            AppendAttrib(sb, insertion, LevelElevationOffset, FloorTextHeight, "LEVEL_ELEVATION", level ?? "", fieldFlag: 0, justify: 2);
+            AppendAttrib(sb, insertion, LevelElevationOffset, FloorTextHeight, "LEVEL_ELEVATION", FormatElevation(elevationMeters), fieldFlag: 0, justify: 2);
             AppendAttrib(sb, insertion, IsUndergroundOffset, FloorTextHeight, "IS_UNDERGROUND", isUnderground ? "1" : "0", fieldFlag: 0, justify: 2);
 
             AppendSeqend(sb, "RZ_FLOOR");
@@ -153,6 +153,18 @@ namespace RVTuk.Core.AreaSubmission
             AppendAttrib(sb, insertion, AssetOffset, AreaTextHeight, "ASSET", asset, fieldFlag: 1, justify: 4);
 
             AppendSeqend(sb, "RZ_AREA");
+        }
+
+        /// <summary>
+        /// Formats a relative level elevation the way the spec's examples do
+        /// (docs/autoarea/rishui-zamin-notes.md §5: "e.g. +3.00,+6.00,+9.00"): explicit sign,
+        /// two decimals, metres.
+        /// </summary>
+        private static string FormatElevation(double meters)
+        {
+            var rounded = Math.Round(meters, 2, MidpointRounding.AwayFromZero);
+            var text = Math.Abs(rounded).ToString("0.00", CultureInfo.InvariantCulture);
+            return (rounded < 0 ? "-" : "+") + text;
         }
 
         private static (double X, double Y) Centroid(List<Point2D> loop)
@@ -348,7 +360,10 @@ namespace RVTuk.Core.AreaSubmission
             using var stream = assembly.GetManifestResourceStream(resourceName)
                 ?? throw new InvalidOperationException($"Embedded DXF preamble resource '{resourceName}' not found.");
             using var reader = new StreamReader(stream, Encoding.UTF8);
-            _cachedPreamble = reader.ReadToEnd();
+            // The whole file must be uniformly CRLF like the generated ENTITIES section, but the
+            // embedded resource's endings depend on how git checked the repo out (the resource is
+            // committed with LF) — normalise instead of trusting the checkout.
+            _cachedPreamble = reader.ReadToEnd().Replace("\r\n", "\n").Replace("\n", Nl);
             return _cachedPreamble;
         }
     }

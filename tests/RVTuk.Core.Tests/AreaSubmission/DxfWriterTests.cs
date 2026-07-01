@@ -14,7 +14,8 @@ public class DxfWriterTests
         Name = "Storage",
         UsageCode = 115,
         Floor = "Ground Floor",
-        Level = "+0.00",
+        Level = "Ground Floor",
+        ElevationMeters = 0.0,
         PageNo = 1,
         IsUnderground = false,
         AreaValue = 12.0,
@@ -93,6 +94,31 @@ public class DxfWriterTests
 
         Assert.Contains("2\r\nUSAGE_TYPE\r\n70\r\n0\r\n", dxf);
         Assert.Contains("1\r\n115\r\n", dxf);
+    }
+
+    [Theory]
+    [InlineData(0.0, "+0.00")]
+    [InlineData(3.0, "+3.00")]
+    [InlineData(-2.5, "-2.50")]
+    [InlineData(-0.0001, "+0.00")]   // rounds to zero: no negative zero
+    public void Build_LevelElevation_IsSignedMetresNotLevelName(double meters, string expected)
+    {
+        var area = OneArea();
+        area.ElevationMeters = meters;
+
+        var dxf = DxfWriter.Build(new[] { area }, Config());
+
+        // The RZ_FLOOR_SYM attrib value (group 1) preceding the LEVEL_ELEVATION tag (group 2):
+        // spec format is a signed relative elevation like "+3.00", never the level's name.
+        // Search only the ENTITIES section — the preamble's ATTDEF also carries the tag.
+        var entitiesIndex = dxf.IndexOf("2\r\nENTITIES\r\n", StringComparison.Ordinal);
+        Assert.True(entitiesIndex >= 0, "ENTITIES section missing");
+        var tagIndex = dxf.IndexOf("2\r\nLEVEL_ELEVATION\r\n", entitiesIndex, StringComparison.Ordinal);
+        Assert.True(tagIndex >= 0, "LEVEL_ELEVATION attrib missing");
+        var attribStart = dxf.LastIndexOf("0\r\nATTRIB\r\n", tagIndex, StringComparison.Ordinal);
+        var value = dxf.Substring(attribStart, tagIndex - attribStart);
+        Assert.Contains($"1\r\n{expected}\r\n", value);
+        Assert.DoesNotContain("Ground Floor", value);
     }
 
     [Fact]

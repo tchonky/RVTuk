@@ -83,9 +83,11 @@ namespace RVTuk.Core.Util
                 var entry = raw.Trim().Trim('\\', '/');
                 if (string.IsNullOrEmpty(entry)) continue;
 
-                // Match: path equals the entry, or path starts with entry + '\\'.
+                // Match: path equals the entry, or path starts with entry + a separator.
+                // Both '\\' and '/' count as boundaries — callers may pass either form.
                 if (relativePath.Equals(entry, StringComparison.OrdinalIgnoreCase) ||
-                    relativePath.StartsWith(entry + "\\", StringComparison.OrdinalIgnoreCase))
+                    relativePath.StartsWith(entry + "\\", StringComparison.OrdinalIgnoreCase) ||
+                    relativePath.StartsWith(entry + "/", StringComparison.OrdinalIgnoreCase))
                     return true;
             }
             return false;
