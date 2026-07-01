@@ -144,6 +144,7 @@ namespace RVTuk.Revit.Commands
                     getOpenDocuments, captureOpenDoc, captureFile, pickFile,
                     saveReportHtml, loadStandard, saveStandard);
                 var window = new ComparatorWindow(vm);
+                window.Closed += (s, e) => Application.ComparatorWindow = null;
                 Application.ComparatorWindow = window;
                 window.Show();
                 return Result.Succeeded;

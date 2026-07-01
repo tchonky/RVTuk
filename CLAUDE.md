@@ -14,6 +14,7 @@ Current and planned features:
 - **Family Browser** — a searchable/filterable window over that index, with per-family rich-text instructions, tags, favourites, and custom thumbnails, plus "load/update family into the active project".
 - **Project Comparator** (a.k.a. Template Tool) — captures a snapshot of a project's key settings (view templates first), stores it in a DB, and compares two projects or audits one against a curated firm "Standard." Report-only today; writing back to models is a gated future phase. See [`docs/comparator/`](docs/comparator/features.md).
 - **Config** — a ribbon button opening a settings hub (library folder, ignored subfolders) plus the two deep-scan actions: "Scan New & Changed" (incremental) and "Re-scan All Families" (forced re-extraction of every family, non-destructive — curated data is preserved).
+- **Area Calc** (Rishui Zamin) — reads the Areas on the open sheet and exports the paired `.dxf` + `.dat` files the רישוי זמין area-calculation robot expects (`RZ_FRAME`/`RZ_FLOOR`/`RZ_AREA` layers + attribute blocks). The ribbon split button's dropdown carries the one-time "Setup RZ Parameters" command (binds `RZ_UsageType` to Areas, creates the usage key schedule). See [`docs/autoarea/rishui-zamin-notes.md`](docs/autoarea/rishui-zamin-notes.md).
 
 ### Future features
 
@@ -43,6 +44,16 @@ Each config maps to a target framework and a `DefineConstants` symbol that switc
 | `Release2025` | `net8.0-windows`  | `REVIT2025` | `Microsoft.Data.Sqlite`   | `System.Text.Json`        |
 
 Both configs use `Microsoft.Data.Sqlite`; the `REVIT2024` constant switches the JSON serializer (no `System.Text.Json` on net48) and enables the native `e_sqlite3.dll` pre-load. Build outputs land in each project's `bin\{2024|2025}\Release{...}\{tfm}\`, e.g. `src\RVTuk.Revit\bin\2024\Release2024\net48\`.
+
+## Tests
+
+Core's xunit suite lives in `tests\RVTuk.Core.Tests` (repositories, indexer, comparison engine, Area Calc writers/validator). Run it before committing Core changes:
+
+```powershell
+dotnet test tests\RVTuk.Core.Tests\RVTuk.Core.Tests.csproj
+```
+
+On a non-Windows SDK (CI, cloud agents) add `-p:EnableWindowsTargeting=true` — the suite builds and runs fine on Linux. The WPF/Revit projects (`RVTuk.UI`, `RVTuk.Revit`) can only be compiled on Windows.
 
 ## Deployment
 
