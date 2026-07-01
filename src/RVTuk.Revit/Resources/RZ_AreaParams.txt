@@ -1,0 +1,8 @@
+# This is a Revit shared parameter file.
+# Do not edit manually.
+*META	VERSION	MINVERSION
+META	2	1
+*GROUP	ID	NAME
+GROUP	1	RVTuk
+*PARAM	GUID	NAME	DATATYPE	DATACATEGORY	GROUP	VISIBLE	DESCRIPTION	USERMODIFIABLE	HIDEWHENNOVALUE
+PARAM	f80b9154-f0e7-4f01-82d0-3ec259872e5c	RZ_UsageType	INTEGER		1	1	Rishui Zamin usage-type code (see the RVTuk usage catalog)	1	0

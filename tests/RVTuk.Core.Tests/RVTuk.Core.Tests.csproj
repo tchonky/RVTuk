@@ -22,4 +22,10 @@
     <ProjectReference Include="..\..\src\RVTuk.Core\RVTuk.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="AreaSubmission\Fixtures\**\*.dxf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
