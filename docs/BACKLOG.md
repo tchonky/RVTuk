@@ -60,16 +60,20 @@ For the product vision and roadmap behind these items, see [`../VISION.md`](../V
 
 - [ ] **Deep scan is slow** — it opens every family in Revit to read parameters
   (which upgrades older families to the running version in memory), so a first
-  full scan takes a long time. ETA now shown (`87fa3e0`); still want: make it
-  resumable, or a faster path for families that don't need full metadata.
+  full scan takes a long time. ETA now shown (`87fa3e0`); resumable (`57c9ceb`);
+  now also fixed for the "opens every family" part when only thumbnails are needed
+  (see below) — still no chunked/background resumability across app restarts.
 - [x] When deep scanning, on **Cancel** keep everything already extracted so the time
   isn't lost (`57c9ceb`). New/changed rows now carry a sentinel size/date; the real
   ModifiedDate+FileSize ride on `ExtractionWorkItem` and `UpdateFamilyMetadata` writes them
   only after extraction commits, so a cancelled family stays stale and is re-scanned next
-  time. ⚠️ **Still open (separate):** the fast Sync's `UpsertFamily` writes real size/date
-  with no metadata, so a Sync-then-DeepScan skips those families — decide whether Sync should
-  mark rows "needs deep scan" too. *(Verify the cancel/resume end-to-end in Revit.)*
-- [ ] Option to deep-scan **just thumbnails** (fast) and/or **just parameters** (slow).
+  time. *(Verify the cancel/resume end-to-end in Revit.)*
+- [x] Option to deep-scan **just thumbnails** (fast) and/or **just parameters** (slow), and fix
+  the fast Sync's families being invisible to the deep scan forever — replaced the two Config
+  scan buttons with one **Scan** button + **Update thumbnails** / **Update parameters**
+  checkboxes; each facet's "needs refresh" now also fires when that family is simply missing
+  the data (not just when the file changed), so a Sync-only family gets picked up on the next
+  facet scan. See `docs/superpowers/specs/2026-07-01-scan-checkboxes-design.md`.
 
 ## 🚀 New features / ideas
 
