@@ -62,6 +62,7 @@ namespace RVTuk.UI.Views
                 item, ViewModel.InstructionsXaml, fullPath, ViewModel.Repo);
             editor.Owner = this;
             editor.ShowDialog();
+            item.UpdateThumbnail(ViewModel.Repo.GetResolvedThumbnail(item.Id));
             var sel = ViewModel.SelectedItem;
             ViewModel.SelectedItem = null;
             ViewModel.SelectedItem = sel;
