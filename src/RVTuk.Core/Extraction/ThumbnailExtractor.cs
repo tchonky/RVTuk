@@ -10,6 +10,15 @@ namespace RVTuk.Core.Extraction
     {
         private const string SummaryInfoStreamName = "\x05SummaryInformation";
         private const string BasicFileInfoStreamName = "BasicFileInfo";
+        // Modern Revit (2024/2025) stores the browse/Explorer preview as an embedded PNG
+        // inside a dedicated top-level stream named "RevitPreview4.0" — NOT in the legacy
+        // \x05SummaryInformation PIDSI_THUMBNAIL property. Current .rfa families leave that
+        // legacy property empty, which is why the SummaryInformation-only path found nothing.
+        private const string RevitPreviewStreamName = "RevitPreview4.0";
+        private const string RevitPreviewStreamPrefix = "RevitPreview";
+
+        // 8-byte PNG file signature (89 50 4E 47 0D 0A 1A 0A).
+        private static readonly byte[] PngSignature = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
 
         /// <summary>
         /// Opens the .rfa file once and extracts both the thumbnail PNG and the Revit
@@ -52,6 +61,101 @@ namespace RVTuk.Core.Extraction
         // ── thumbnail ────────────────────────────────────────────────────────────
 
         private static byte[]? TryExtractThumbnail(RootStorage rootStorage, out string reason)
+        {
+            // 1) Preferred path: the modern "RevitPreview4.0" stream holds an embedded PNG.
+            //    This is what current Revit 2024/2025 families actually populate.
+            var previewPng = TryExtractRevitPreviewPng(rootStorage, out string previewReason);
+            if (previewPng != null) { reason = previewReason; return previewPng; }
+
+            // 2) Fallback path (never worse than before): legacy \x05SummaryInformation
+            //    PIDSI_THUMBNAIL DIB. Kept for old families / files that still carry it.
+            var summaryPng = TryExtractSummaryInfoThumbnail(rootStorage, out string summaryReason);
+            reason = previewReason + "|" + summaryReason;
+            return summaryPng;
+        }
+
+        // ── modern Revit preview stream ─────────────────────────────────────────
+        // "RevitPreview4.0" is a PNG sandwiched between a small binary prefix (image
+        // type/size metadata) and a postfix, so we scan the stream for the PNG
+        // signature rather than assuming the image starts at offset 0.
+        private static byte[]? TryExtractRevitPreviewPng(RootStorage rootStorage, out string reason)
+        {
+            string? streamName = FindRevitPreviewStreamName(rootStorage);
+            if (streamName == null) { reason = "no-revitpreview-stream"; return null; }
+
+            CfbStream stream;
+            try { stream = rootStorage.OpenStream(streamName); }
+            catch (Exception ex) { reason = "revitpreview-open-threw:" + ex.GetType().Name; return null; }
+
+            using (stream)
+            {
+                byte[] data;
+                try { data = ReadAllBytes(stream); }
+                catch (Exception ex) { reason = "revitpreview-read-threw:" + ex.GetType().Name; return null; }
+
+                var png = ExtractEmbeddedPng(data);
+                if (png != null) { reason = "ok-revitpreview-png:" + png.Length; return png; }
+
+                reason = "revitpreview-no-png:len=" + data.Length;
+                return null;
+            }
+        }
+
+        // Locate the preview stream by name, tolerating future "RevitPreviewX.Y"
+        // variants. Returns null when no such stream exists.
+        private static string? FindRevitPreviewStreamName(RootStorage rootStorage)
+        {
+            try
+            {
+                string? fallback = null;
+                foreach (var entry in rootStorage.EnumerateEntries())
+                {
+                    if (entry.Type != EntryType.Stream) continue;
+                    if (string.Equals(entry.Name, RevitPreviewStreamName, StringComparison.OrdinalIgnoreCase))
+                        return entry.Name;
+                    if (fallback == null &&
+                        entry.Name.StartsWith(RevitPreviewStreamPrefix, StringComparison.OrdinalIgnoreCase))
+                        fallback = entry.Name;
+                }
+                return fallback;
+            }
+            catch
+            {
+                // If enumeration is unavailable, fall back to the canonical name only if present.
+                try { return rootStorage.ContainsEntry(RevitPreviewStreamName) ? RevitPreviewStreamName : null; }
+                catch { return null; }
+            }
+        }
+
+        /// <summary>
+        /// Returns the embedded PNG (signature .. end of IEND chunk) found anywhere inside
+        /// <paramref name="data"/>, or null if no PNG signature is present. Public so it can
+        /// be unit-tested against crafted byte buffers without a real .rfa.
+        /// </summary>
+        public static byte[]? ExtractEmbeddedPng(byte[]? data)
+        {
+            if (data == null) return null;
+            int start = IndexOf(data, PngSignature, 0);
+            if (start < 0) return null;
+
+            // Find the terminating IEND chunk: 4-byte length (0) + "IEND" + 4-byte CRC.
+            // The image ends 8 bytes after the "IEND" type marker.
+            int iend = IndexOf(data, IendChunkType, start + PngSignature.Length);
+            int end = iend >= 0 ? iend + IendChunkType.Length + 4 : data.Length;
+            if (end > data.Length) end = data.Length;
+
+            int length = end - start;
+            if (length < PngSignature.Length) return null;
+
+            var png = new byte[length];
+            Array.Copy(data, start, png, 0, length);
+            return png;
+        }
+
+        private static readonly byte[] IendChunkType = { 0x49, 0x45, 0x4E, 0x44 }; // "IEND"
+
+        // ── legacy SummaryInformation thumbnail ─────────────────────────────────
+        private static byte[]? TryExtractSummaryInfoThumbnail(RootStorage rootStorage, out string reason)
         {
             CfbStream stream;
             try
@@ -205,9 +309,12 @@ namespace RVTuk.Core.Extraction
             }
         }
 
-        private static int IndexOf(byte[] haystack, byte[] needle)
+        private static int IndexOf(byte[] haystack, byte[] needle) => IndexOf(haystack, needle, 0);
+
+        private static int IndexOf(byte[] haystack, byte[] needle, int startIndex)
         {
-            for (int i = 0; i <= haystack.Length - needle.Length; i++)
+            if (needle.Length == 0 || haystack.Length < needle.Length) return -1;
+            for (int i = Math.Max(0, startIndex); i <= haystack.Length - needle.Length; i++)
             {
                 bool match = true;
                 for (int j = 0; j < needle.Length; j++)
