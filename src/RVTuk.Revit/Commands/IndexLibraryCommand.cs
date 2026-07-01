@@ -85,9 +85,13 @@ namespace RVTuk.Revit.Commands
                         if (cancellationToken.IsCancellationRequested) break;
                         var item = workItems[i];
                         vm.UpdateProgress(Path.GetFileName(item.FullPath), i + 1, workItems.Count);
-                        handler.PrepareAndWait(item, repo, extractor);
-                        externalEvent.Raise();
-                        handler.WaitForCompletion();
+                        // IndexingGate: the browser's one-family rescan shares this handler.
+                        lock (Application.IndexingGate)
+                        {
+                            handler.PrepareAndWait(item, repo, extractor);
+                            externalEvent.Raise();
+                            handler.WaitForCompletion();
+                        }
                     }
                 }
                 catch (OperationCanceledException) { }

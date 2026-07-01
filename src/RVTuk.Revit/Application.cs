@@ -29,6 +29,11 @@ namespace RVTuk.Revit
         public static ExternalEvent AreaExtractEvent { get; private set; } = null!;
         public static SelectAreaEventHandler SelectAreaHandler { get; private set; } = null!;
         public static ExternalEvent SelectAreaEvent { get; private set; } = null!;
+        /// <summary>Serialises every IndexingHandler/IndexingEvent ping-pong: the deep scan
+        /// (Config window) and the browser's one-family rescan share the same handler singleton
+        /// and can run from different background threads at the same time.</summary>
+        public static readonly object IndexingGate = new object();
+
         public static RVTuk.UI.Views.FamilyBrowserWindow? BrowserWindow { get; set; }
         public static RVTuk.UI.Views.ComparatorWindow? ComparatorWindow { get; set; }
         public static RVTuk.UI.Views.ConfigWindow? ConfigWindow { get; set; }

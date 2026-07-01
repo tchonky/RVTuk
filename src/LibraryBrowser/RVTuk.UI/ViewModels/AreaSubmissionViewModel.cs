@@ -25,6 +25,7 @@ namespace RVTuk.UI.ViewModels
 
         private SubmissionPane _currentPane = SubmissionPane.Config;
         private AreaRowViewModel? _selectedRow;
+        private bool _isRefreshing;
 
         /// <param name="extract">Reads the areas on the open sheet (id + record).</param>
         /// <param name="selectInModel">Selects an Area in the model by element id.</param>
@@ -98,13 +99,19 @@ namespace RVTuk.UI.ViewModels
         // the results back to the Dispatcher — same pattern as the Family Browser's Sync.
         private void Refresh()
         {
+            if (_isRefreshing) return;   // a second click while one runs would just double-populate
+            _isRefreshing = true;
             System.Threading.ThreadPool.QueueUserWorkItem(_ =>
             {
                 IReadOnlyList<(long Id, AreaRecord Rec)> extracted;
                 try { extracted = _extract(); }
                 catch (Exception ex)
                 {
-                    _dispatcher.Invoke(() => ExportCompleted?.Invoke(false, "Could not read the open sheet: " + ex.Message));
+                    _dispatcher.Invoke(() =>
+                    {
+                        _isRefreshing = false;
+                        ExportCompleted?.Invoke(false, "Could not read the open sheet: " + ex.Message);
+                    });
                     return;
                 }
 
@@ -122,6 +129,7 @@ namespace RVTuk.UI.ViewModels
 
                 _dispatcher.Invoke(() =>
                 {
+                    _isRefreshing = false;
                     Levels.Clear();
                     foreach (var g in groups) Levels.Add(g);
                     CurrentPane = SubmissionPane.Areas;
