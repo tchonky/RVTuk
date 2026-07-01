@@ -43,6 +43,14 @@
     <PackageReference Include="OpenMCDF" Version="3.1.2" />
   </ItemGroup>
 
+  <!-- Verbatim HEADER/TABLES/BLOCKS preamble for DxfWriter, captured from the real Rishui
+       Zamin sample (tests/Examples Autoarea/Garmoshka.dxf) — see DxfWriter.cs remarks. -->
+  <ItemGroup>
+    <EmbeddedResource Include="AreaSubmission\DxfTemplates\Preamble.dxf">
+      <LogicalName>RVTuk.Core.AreaSubmission.DxfTemplates.Preamble.dxf</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <!-- net48: System.Drawing is a GAC assembly in .NET Framework — no NuGet needed.
        System.Drawing.Common 8.x would drag in Unsafe 6.x / System.Memory polyfills
        that conflict with Revit's preloaded versions. -->
