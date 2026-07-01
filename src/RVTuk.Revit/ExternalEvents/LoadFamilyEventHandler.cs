@@ -35,9 +35,11 @@ namespace RVTuk.Revit.ExternalEvents
 
                 using var tx = new Transaction(doc, "Load Family");
                 tx.Start();
-                doc.LoadFamily(FamilyPath, new OverwriteLoadOptions(), out _);
+                bool loaded = doc.LoadFamily(FamilyPath, new OverwriteLoadOptions(), out _);
                 tx.Commit();
-                Success = true;
+                Success = loaded;
+                if (!loaded)
+                    ErrorMessage = "Revit did not load the family (it may be invalid, or the load was rejected).";
             }
             catch (System.Exception ex)
             {

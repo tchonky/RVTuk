@@ -14,6 +14,11 @@ namespace RVTuk.Core.Database
         private readonly string _databasePath;
         private readonly SQLiteConnection _connection; // persistent READ-ONLY connection
 
+        // Serialises use of the shared read connection: the browser reads from several
+        // ThreadPool threads at once (Sync, per-selection detail loads, rescan refresh) and a
+        // SqliteConnection must not run concurrent commands.
+        private readonly object _readGate = new object();
+
         public BrowserRepository(string databasePath)
         {
             SqliteNative.EnsureLoaded();
@@ -149,7 +154,7 @@ namespace RVTuk.Core.Database
         }
 
         // Returns all families with thumbnail resolved (CustomThumbnail ?? OLE Thumbnail)
-        public List<FamilyBrowserItem> GetAllFamilies()
+        public List<FamilyBrowserItem> GetAllFamilies() => WithRead(() =>
         {
             var result = new List<FamilyBrowserItem>();
             using var cmd = _connection.CreateCommand();
@@ -185,9 +190,15 @@ namespace RVTuk.Core.Database
                 });
             }
             return result;
+        });
+
+        // Runs a read against the shared read-only connection under the gate.
+        private T WithRead<T>(Func<T> read)
+        {
+            lock (_readGate) return read();
         }
 
-        public List<string?> GetCategories()
+        public List<string?> GetCategories() => WithRead(() =>
         {
             var cats = new List<string?> { null }; // null = "All"
             using var cmd = _connection.CreateCommand();
@@ -196,18 +207,18 @@ namespace RVTuk.Core.Database
             while (reader.Read())
                 cats.Add(reader.GetString(0));
             return cats;
-        }
+        });
 
-        public string? GetInstructionsXaml(long familyId)
+        public string? GetInstructionsXaml(long familyId) => WithRead(() =>
         {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = "SELECT InstructionsXaml FROM Families WHERE Id = @id";
             AddParam(cmd, "@id", familyId);
             var result = cmd.ExecuteScalar();
             return result == DBNull.Value || result == null ? null : (string)result;
-        }
+        });
 
-        public List<ParameterModel> GetParameters(long familyId)
+        public List<ParameterModel> GetParameters(long familyId) => WithRead(() =>
         {
             var result = new List<ParameterModel>();
             using var cmd = _connection.CreateCommand();
@@ -229,33 +240,33 @@ namespace RVTuk.Core.Database
                     Formula       = reader.IsDBNull(7) ? null : reader.GetString(7),
                 });
             return result;
-        }
+        });
 
-        public (byte[]? Png, bool OleSynced) GetCustomThumbnail(long familyId)
+        public (byte[]? Png, bool OleSynced) GetCustomThumbnail(long familyId) => WithRead(() =>
         {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = "SELECT PngData, OleSynced FROM CustomThumbnail WHERE FamilyId = @id";
             AddParam(cmd, "@id", familyId);
             using var reader = cmd.ExecuteReader();
-            if (!reader.Read()) return (null, true);
-            return ((byte[])reader[0], reader.GetInt32(1) == 1);
-        }
+            if (!reader.Read()) return ((byte[]?)null, true);
+            return ((byte[]?)reader[0], reader.GetInt32(1) == 1);
+        });
 
-        public byte[]? GetOleThumbnail(long familyId)
+        public byte[]? GetOleThumbnail(long familyId) => WithRead(() =>
         {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = "SELECT PngData FROM Thumbnail WHERE FamilyId = @id";
             AddParam(cmd, "@id", familyId);
             var result = cmd.ExecuteScalar();
             return result == DBNull.Value || result == null ? null : (byte[])result;
-        }
+        });
 
         // Same resolution as GetAllFamilies: custom thumbnail wins over the OLE one.
         // Used to refresh a single family's preview after a one-off rescan.
         public byte[]? GetResolvedThumbnail(long familyId)
             => GetCustomThumbnail(familyId).Png ?? GetOleThumbnail(familyId);
 
-        public List<string> GetAllRelativePaths()
+        public List<string> GetAllRelativePaths() => WithRead(() =>
         {
             var result = new List<string>();
             using var cmd = _connection.CreateCommand();
@@ -264,16 +275,16 @@ namespace RVTuk.Core.Database
             while (reader.Read())
                 result.Add(reader.GetString(0));
             return result;
-        }
+        });
 
-        public string? GetTags(long familyId)
+        public string? GetTags(long familyId) => WithRead(() =>
         {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = "SELECT Tags FROM Families WHERE Id = @id";
             AddParam(cmd, "@id", familyId);
             var result = cmd.ExecuteScalar();
             return result == DBNull.Value || result == null ? null : (string)result;
-        }
+        });
 
         public void SaveTags(long familyId, string? tags)
         {
@@ -390,15 +401,14 @@ namespace RVTuk.Core.Database
             {
                 // Look up the family Id (RO connection) before deleting the row so we can
                 // remove its gallery folder even after the row is gone.
-                long id = 0;
-                using (var lookup = _connection.CreateCommand())
+                long id = WithRead(() =>
                 {
+                    using var lookup = _connection.CreateCommand();
                     lookup.CommandText = "SELECT Id FROM Families WHERE RelativePath = @path";
                     AddParam(lookup, "@path", path);
                     var scalar = lookup.ExecuteScalar();
-                    if (scalar != null && scalar != DBNull.Value)
-                        id = (long)scalar;
-                }
+                    return scalar != null && scalar != DBNull.Value ? (long)scalar : 0L;
+                });
 
                 WithWrite(c =>
                 {
@@ -463,7 +473,7 @@ namespace RVTuk.Core.Database
         public string GetGalleryPath(long familyId, string fileName)
             => System.IO.Path.Combine(GalleryRoot(familyId), fileName);
 
-        public List<FamilyImage> GetImages(long familyId)
+        public List<FamilyImage> GetImages(long familyId) => WithRead(() =>
         {
             var result = new List<FamilyImage>();
             using var cmd = _connection.CreateCommand();
@@ -481,7 +491,7 @@ namespace RVTuk.Core.Database
                     SortOrder = reader.GetInt32(3),
                 });
             return result;
-        }
+        });
 
         public FamilyImage AddImage(long familyId, byte[] pngData, string? caption)
         {
@@ -536,14 +546,14 @@ namespace RVTuk.Core.Database
         public void DeleteImage(long imageId)
         {
             // Look up file (RO connection) before deleting the row.
-            long familyId = 0; string? fileName = null;
-            using (var cmd = _connection.CreateCommand())
+            var (familyId, fileName) = WithRead(() =>
             {
+                using var cmd = _connection.CreateCommand();
                 cmd.CommandText = "SELECT FamilyId, FileName FROM FamilyImage WHERE Id=@id";
                 AddParam(cmd, "@id", imageId);
                 using var r = cmd.ExecuteReader();
-                if (r.Read()) { familyId = r.GetInt64(0); fileName = r.GetString(1); }
-            }
+                return r.Read() ? (r.GetInt64(0), (string?)r.GetString(1)) : (0L, null);
+            });
             WithWrite(c =>
             {
                 using var cmd = c.CreateCommand();
