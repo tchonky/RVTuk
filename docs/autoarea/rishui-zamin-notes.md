@@ -73,6 +73,12 @@ use letters/digits, **no spaces**; the path to the `.dwfx` must be **relative or
 So: user is broadly right that the machine package is DWFX + DXF + DAT, but the *official
 default* is DWFX + DWG, and DAT is undocumented.
 
+**[CONFIRMED FROM SAMPLES]** All three real example sets in `tests/Examples Autoarea/` use the
+**3-file `dwfx + dxf + dat` form** — i.e. this is the form real tools actually emit, and the
+one the AutoArea generator should target. Same base name for the three files in each set
+(e.g. `Garmoshka.dwfx` / `.dxf` / `.dat`). The DAT is now fully decoded (§5c) and the DXF
+schema is fully reverse-engineered (§5b-bis), so the earlier "DAT undocumented" gap is closed.
+
 ---
 
 ## 2. Project-level info required
@@ -238,6 +244,14 @@ enforces**, and whether the robot's code table has been revised since 2018.
   re-save to DWFX (Design Review) or use TrueView.
 - Drawing must be **1:1, centimetres**; import DWFX into a fresh drawing at 1:1 (no scale
   change) or the scale drifts.
+- **[SOLVED FROM SAMPLES] Container format:** the `.dwfx` is a standard **OPC/XPS ZIP package**
+  (starts with `PK\x03\x04`). Unzipping the samples shows the usual DWFX layout:
+  `[Content_Types].xml`, `_rels/.rels`, `FixedDocumentSequence.fdseq`,
+  `DWFDocumentSequence.dwfseq`, and under `dwf/documents/<GUID>/…` an Autodesk **ePlot** section
+  with `FixedPage.fpage` (XPS vector markup — ~5 MB, the sheet geometry), a `.png` raster
+  preview, `descriptor.xml`, and `manifest.xml`. This is a normal Autodesk DWFX; no custom
+  container. Generating it means producing a valid DWFX/XPS ePlot package (or exporting from
+  CAD), not hand-rolling bytes.
 
 ### 5b. `.dwg` (default) / `.dxf` (alternative) — area-calculation layers [OFFICIAL]
 Same schema either way; the area-calc file is authored in DWG or DXF **over the DWFX
@@ -299,14 +313,56 @@ block**, no overlap, contained in the floor polygon; the robot uses only its per
 **exactly one anchor inside each floor boundary** if used. Drawings must sit in a **positive,
 right-angle coordinate grid (m/cm/mm) within Israel's national bounds.**
 
-### 5c. `.dat` — data file (alternative 3-file form) [UNCERTAIN / NEEDS SAMPLE]
-- The official robot spec **lists** the `.dat` only as part of the alternative
-  `dwfx + dxf + dat` ZIP and **does not describe its contents, fields, or byte layout**.
-- Secondary/community sources describe it loosely as a **text file carrying the scale (קנ"מ)**
-  (and, by inference, the units / placement needed to register the DXF against the DWFX
-  sheets, i.e. the role the xref plays in the DWG form). **This is not officially confirmed.**
-- **Do NOT assume any DAT field structure.** Its exact format must come from the user's sample
-  `.dat` file. **[NEEDS SAMPLE]**
+#### 5b-bis. DXF-level encoding — REVERSE-ENGINEERED from the sample files [SOLVED FROM SAMPLES]
+Confirmed against `tests/Examples Autoarea/` (Garmoshka.dxf + תכניות…dxf = ASCII DXF; SAV401…dxf
+= **Binary DXF**). Key concrete facts the 2018 spec did not give:
+
+- **File format:** the robot accepts **both ASCII DXF and AutoCAD *Binary* DXF** (SAV401 sample
+  begins `AutoCAD Binary DXF\r\n\x1A`, version **`AC1015`** = AutoCAD 2000). Two samples are
+  plain ASCII DXF. → the generator can emit ASCII DXF (simpler).
+- **Layer table (group 8 names):** `0`, `RZ_FRAME`, `RZ_FLOOR`, `RZ_AREA` — exactly the spec's
+  mandatory/used layers. **No `RZ_LANDCOVER` in any sample** (optional, unused). `RZ_Area`
+  seen in the file is a **text style name (group 7)**, not a layer — don't confuse them.
+- **Polygons = closed `LWPOLYLINE`** (`AcDbPolyline`): group `90` = vertex count, group
+  `70` = `1` (closed flag set). One LWPOLYLINE per frame/floor/area on its matching layer.
+- **Area block = `INSERT` (`AcDbBlockReference`) of `RZ_AREA_SYM`**, on layer `RZ_AREA`,
+  insertion point (group 10/20) **inside** its polygon, `66`=`1` (attributes-follow), followed
+  by `ATTRIB` entities, then `SEQEND`. Same pattern for `RZ_FLOOR_SYM`, `RZ_FRAME_SYM`.
+- **Attribute encoding (the important bit):** in each `ATTRIB` (and in the block's `ATTDEF`):
+  - **group `2` = the TAG name** (`USAGE_TYPE`, `USAGE_TYPE_OLD`, `AREA`, `ASSET`, `PAGE_NO`,
+    `BUILDING_NO`, `FLOOR`, `LEVEL_ELEVATION`, `IS_UNDERGROUND`, `COORD_X`, `COORD_Y`).
+  - **group `1` = the VALUE** (as text). E.g. an observed residential area: `USAGE_TYPE`=`1`,
+    `USAGE_TYPE_OLD`=`1`, `AREA`=`` (empty), `ASSET`=…. Numeric codes are stored as text.
+  - group `3` in the ATTDEF = the Hebrew prompt (e.g. `PAGE_NO` prompt = `מספר גליון חישוב שטחים`).
+- **Anchor block is actually named `RZ_ANCHOR_SYM_RUNTIME`** (not `RZ_ANCHOR_SYM`) and carries
+  **two attributes the 2018 spec never documented: `COORD_X` and `COORD_Y`**, whose prompts read
+  *"קואורדינטה ברשת ישראל החדשה - X / - Y"* → **Israeli New Grid / ITM coordinates**. Observed
+  values: `COORD_X`=`216246`, `COORD_Y`=`741177` (metres, ITM). This is how the robot
+  georeferences the sheet: the anchor's drawing-space position (group 10/20, e.g. 6725, 7861)
+  is tied to the real ITM coordinate in the attribute text. Present in only 1 of 3 samples →
+  **optional**, but if geo-referencing is wanted this block+tags are the mechanism.
+- **Block inventory in samples:** `*Model_Space`, `RZ_FRAME_SYM`, `RZ_FLOOR_SYM`,
+  `RZ_AREA_SYM`, `*Paper_Space` (+ `RZ_ANCHOR_SYM_RUNTIME` when anchored). Scale of real data:
+  the SAV401 project has **903 `RZ_AREA_SYM` inserts** across 12 floors — the format scales fine.
+
+### 5c. `.dat` — data file (alternative 3-file form) [SOLVED FROM SAMPLES]
+Reverse-engineered from three real sample files in `tests/Examples Autoarea/`
+(`Garmoshka.dat`, `SAV401-… PAGE 1.dat`, `תכניות - חישוב שטחים.dat`) — **all three are byte-identical.**
+
+- The `.dat` is a tiny **ASCII text file, 14 bytes**, a single **tab-separated key/value line**:
+  ```
+  DWFX_SCALE\t10\n
+  ```
+  Exact bytes: `44 57 46 58 5F 53 43 41 4C 45  09  31 30  0A`
+  = `DWFX_SCALE` + TAB (`0x09`) + `10` + LF (`0x0A`).
+- So the DAT carries exactly one field, **`DWFX_SCALE`**, i.e. the scale factor relating the
+  DXF drawing units (cm, 1:1) to the DWFX sheet — value **`10`** in all three samples. This
+  matches the FAQ's "text file containing the scale".
+- **Format for the generator:** emit the literal key `DWFX_SCALE`, a single TAB, the integer
+  scale, and a trailing LF. Newline is bare `\n` (Unix), not CRLF, in the samples.
+- **[MINOR UNKNOWN]** Why the value is `10` (not 100 for 1:100) — likely a mm-vs-cm or
+  page-unit factor. Confirm the value for a non-1:100 job before hard-coding; the *format* is
+  certain, the *meaning of the number* is inferred.
 
 ### 5d. Output product [OFFICIAL]
 The robot returns a **DWFX** product combining the DWFX background + computed & coloured areas
@@ -339,28 +395,49 @@ Secondary / community (context only, NOT authoritative for formats):
 
 ---
 
-## 7. Open questions / what the sample files must confirm
+## 7. Open questions / what remains uncertain
 
-1. **DAT format [BIGGEST GAP].** No official field/byte spec exists. The user's sample `.dat`
-   must reveal: is it plain text? What fields (scale? units? sheet/frame registration? plot
-   area?)? How does it relate the DXF to the DWFX when no xref is embedded? **Do not invent.**
-2. **DXF vs DWG in practice.** Confirm from a sample DXF that the layer/block/attribute schema
-   (§5b) transfers 1:1 into DXF, and how the DWFX background is referenced when using the
-   DXF+DAT form (xref path? relative? or is the DWFX simply the separate ZIP member?).
-3. **Block/attribute internals.** The spec gives TAG names but not the DXF-level encoding
-   (block definition, ATTDEF/ATTRIB structure, insertion point conventions, layer colours/
-   ACI). Sample DXF needed to pin exact geometry (are polygons `LWPOLYLINE`? how is the block
-   anchored inside the polygon?). **[NEEDS SAMPLE]**
-4. **Second code list for the "total area" (שטח כולל) method** — not in the 2018 PDF. Needs a
-   current source or sample.
-5. **Regulation version currently enforced** — 1992 vs Dec-2023 amendment vs 2025 amendment /
+**Resolved by the sample files (`tests/Examples Autoarea/`):**
+- ✅ **DAT format** — fully decoded: 14-byte ASCII `DWFX_SCALE\t10\n` (§5c).
+- ✅ **DXF encoding** — layers, closed `LWPOLYLINE` polygons, `INSERT`+`ATTRIB` (tag=grp 2,
+  value=grp 1), block/tag names all confirmed (§5b-bis). ASCII *and* Binary DXF both accepted.
+- ✅ **DWFX container** — standard OPC/XPS ePlot ZIP package (§5a).
+- ✅ **Anchor mechanism** — `RZ_ANCHOR_SYM_RUNTIME` block with `COORD_X`/`COORD_Y` in ITM
+  (Israeli New Grid) metres; optional.
+- ✅ **The 3-file `dwfx+dxf+dat` form is the real target** for the generator.
+
+**Still open:**
+1. **`DWFX_SCALE` value semantics.** Format is certain; the number was `10` in every sample
+   (all 1:100 jobs). Confirm what to write for a different output scale before hard-coding.
+2. **DXF ↔ DWFX registration.** In the 3-file form there is no xref; confirm the robot aligns
+   the DXF geometry to the DWFX purely via shared drawing coordinates + `DWFX_SCALE` (the
+   samples imply yes, since both share the same 1:1 cm coordinate space).
+3. **Second code list for the "total area" (שטח כולל) method** — not in the 2018 PDF, and the
+   samples use the separation-method codes. Needs a current source/sample if שטח-כולל is
+   required.
+4. **Regulation version currently enforced** — 1992 vs Dec-2023 amendment vs 2025 amendment /
    circular 10/25. Which applies to the target committees, and did the robot's usage-code
    table change after 2018?
-6. **Codes 3 and 5** are absent from the extracted primary table — confirm whether they exist
+5. **Codes 3 and 5** are absent from the extracted primary table — confirm whether they exist
    (extraction gap) or are intentionally unused.
-7. **Target committee.** Confirm it uses the **national robot** (schema above) and **not** the
+6. **Target committee.** Confirm it uses the **national robot** (schema above) and **not** the
    separate **Tel-Aviv / Jerusalem** robots, which have their own formats.
-8. **Project-identity fields** (גוש/חלקה, address, תב"ע, rights) live in the permit request
+7. **Project-identity fields** (גוש/חלקה, address, תב"ע, rights) live in the permit request
    form, not the robot input — confirm the full list separately if the tool must fill them.
-9. **Version drift.** The spec is dated 2018 / v2.0. Confirm no newer robot spec version
-   supersedes it (layer names, tags, or size limits may have changed).
+8. **Colour/ACI conventions.** Sample entities use `62`=`256` (`ByLayer`); the robot assigns
+   colours itself from `USAGE_TYPE`. Confirm no per-entity ACI is expected on input.
+
+---
+
+## 8. Appendix — reverse-engineering evidence (from `tests/Examples Autoarea/`)
+
+Three sample sets, each a `.dwfx` + `.dxf` + `.dat` triple sharing a base name:
+- `Garmoshka.*` — ASCII DXF, 11 polygons, includes an `RZ_ANCHOR_SYM_RUNTIME` anchor
+  (ITM 216246 / 741177), `USAGE_TYPE`=1 (residential).
+- `תכניות - חישוב שטחים.*` — ASCII DXF, 52 area polygons, no anchor, no landcover.
+- `SAV401-A+Gross-Building+גרמושקה PAGE 1.*` — **Binary** DXF (`AC1015`), 903 `RZ_AREA_SYM`
+  inserts over 12 floors.
+
+All three `.dat` files are byte-identical (`md5 c45cbfc83009f35225d95e0e393978d0`).
+All three DXFs share the identical layer/block/tag schema documented in §5b / §5b-bis.
+DWFX files are OPC ZIP packages (`PK\x03\x04`) with Autodesk ePlot XPS content.
