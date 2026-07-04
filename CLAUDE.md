@@ -14,6 +14,7 @@ Current and planned features:
 - **Family Browser** — a searchable/filterable window over that index, with per-family rich-text instructions, tags, favourites, and custom thumbnails, plus "load/update family into the active project".
 - **Project Comparator** (a.k.a. Template Tool) — captures a snapshot of a project's key settings (view templates first), stores it in a DB, and compares two projects or audits one against a curated firm "Standard." Report-only today; writing back to models is a gated future phase. See [`docs/comparator/`](docs/comparator/features.md).
 - **Config** — a ribbon button opening a settings hub (library folder, ignored subfolders) plus the two deep-scan actions: "Scan New & Changed" (incremental) and "Re-scan All Families" (forced re-extraction of every family, non-destructive — curated data is preserved).
+- **Neo Properties** — a dockable pane mirroring the selected element's parameters like the native Properties palette, but with pinned parameters shown first and remaining groups in a fixed custom order. Read-only, single-element only. See [`docs/superpowers/specs/2026-07-04-neo-properties-design.md`](docs/superpowers/specs/2026-07-04-neo-properties-design.md).
 
 ### Future features
 
