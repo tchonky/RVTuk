@@ -10,6 +10,7 @@ using WpfColor = System.Windows.Media.Color;
 using WpfPoint = System.Windows.Point;
 using RVTuk.Revit.Commands;
 using RVTuk.Revit.ExternalEvents;
+using RVTuk.Revit.NeoProperties;
 
 namespace RVTuk.Revit
 {
@@ -36,6 +37,7 @@ namespace RVTuk.Revit
         public static RVTuk.UI.Views.ConfigWindow? ConfigWindow { get; set; }
         public static RVTuk.UI.Views.AreaSubmissionWindow? AreaCalcWindow { get; set; }
         public static UIApplication? CurrentUIApp { get; set; }
+        public static RVTuk.UI.ViewModels.NeoPropertiesViewModel NeoPropertiesViewModel { get; private set; } = null!;
 
         private static string? _addinDir;
 
@@ -80,6 +82,16 @@ namespace RVTuk.Revit
             SelectAreaEvent    = ExternalEvent.Create(SelectAreaHandler);
             SetupUsageKeysHandler = new SetupUsageKeysEventHandler();
             SetupUsageKeysEvent   = ExternalEvent.Create(SetupUsageKeysHandler);
+
+            NeoPropertiesViewModel = new RVTuk.UI.ViewModels.NeoPropertiesViewModel();
+            NeoPropertiesSelectionHandler.ViewModel = NeoPropertiesViewModel;
+            application.SelectionChanged += NeoPropertiesSelectionHandler.OnSelectionChanged;
+
+            var neoView = new RVTuk.UI.Views.NeoPropertiesView { DataContext = NeoPropertiesViewModel };
+            application.RegisterDockablePane(
+                NeoPropertiesPaneProvider.PaneId,
+                "Neo Properties",
+                new NeoPropertiesPaneProvider(neoView));
 
             try
             {
@@ -167,6 +179,20 @@ namespace RVTuk.Revit
             areaBtn.Image      = CreateAreaCalcIcon(16);
 
             panel.AddItem(areaBtn);
+
+            RibbonPanel neoPanel = app.CreateRibbonPanel("Neo Properties");
+            var neoBtn = new PushButtonData(
+                "NeoProperties",
+                "Neo\nProperties",
+                assemblyPath,
+                typeof(NeoPropertiesCommand).FullName!)
+            {
+                ToolTip = "Open the Neo Properties pane: same parameters as Properties, pinned/reordered"
+            };
+            neoBtn.LargeImage = CreateNeoPropertiesIcon(32);
+            neoBtn.Image      = CreateNeoPropertiesIcon(16);
+
+            neoPanel.AddItem(neoBtn);
         }
 
         private static BitmapSource CreateAreaCalcIcon(int size)
@@ -188,6 +214,36 @@ namespace RVTuk.Revit
                 pen.Freeze();
                 // outline
                 ctx.DrawRectangle(null, pen, new Rect(s * 0.16, s * 0.24, s * 0.68, s * 0.52));
+            }
+            var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            bmp.Freeze();
+            return bmp;
+        }
+
+        private static BitmapSource CreateNeoPropertiesIcon(int size)
+        {
+            var dv = new DrawingVisual();
+            using (var ctx = dv.RenderOpen())
+            {
+                double s = size;
+                ctx.DrawRectangle(new SolidColorBrush(WpfColor.FromRgb(0x25, 0x25, 0x26)), null,
+                    new Rect(0, 0, s, s));
+
+                // Three horizontal rows (parameter list) with the top row highlighted (pinned).
+                var pinned = new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00));
+                var row = new SolidColorBrush(WpfColor.FromRgb(0xD4, 0xD4, 0xD4));
+                double rowHeight = s * 0.14;
+                double rowGap = s * 0.10;
+                double x = s * 0.16;
+                double width = s * 0.68;
+                double y = s * 0.22;
+
+                ctx.DrawRectangle(pinned, null, new Rect(x, y, width, rowHeight));
+                y += rowHeight + rowGap;
+                ctx.DrawRectangle(row, null, new Rect(x, y, width, rowHeight));
+                y += rowHeight + rowGap;
+                ctx.DrawRectangle(row, null, new Rect(x, y, width, rowHeight));
             }
             var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
             bmp.Render(dv);
