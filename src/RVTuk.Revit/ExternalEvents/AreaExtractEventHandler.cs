@@ -16,7 +16,18 @@ namespace RVTuk.Revit.ExternalEvents
 
         public IReadOnlyList<ExtractedArea> Result { get; private set; } = Array.Empty<ExtractedArea>();
 
-        public void Reset() => _done.Reset();
+        public ExtractDiagnostics Diagnostics { get; private set; }
+
+        /// <summary>Set when <see cref="Execute"/> threw; the caller rethrows this after
+        /// <see cref="WaitForCompletion"/> instead of silently reporting zero areas.</summary>
+        public Exception? Error { get; private set; }
+
+        public void Reset()
+        {
+            Error = null;
+            _done.Reset();
+        }
+
         public void WaitForCompletion() => _done.Wait();
 
         public void Execute(UIApplication app)
@@ -24,13 +35,21 @@ namespace RVTuk.Revit.ExternalEvents
             try
             {
                 var uidoc = app.ActiveUIDocument;
-                Result = uidoc == null
-                    ? Array.Empty<ExtractedArea>()
-                    : new AreaExtractor().FromOpenSheet(uidoc);
+                if (uidoc == null)
+                {
+                    Result = Array.Empty<ExtractedArea>();
+                    Diagnostics = default;
+                }
+                else
+                {
+                    Result = new AreaExtractor().FromOpenSheet(uidoc, out var diagnostics);
+                    Diagnostics = diagnostics;
+                }
             }
-            catch
+            catch (Exception ex)
             {
                 Result = Array.Empty<ExtractedArea>();
+                Error = ex;
             }
             finally
             {

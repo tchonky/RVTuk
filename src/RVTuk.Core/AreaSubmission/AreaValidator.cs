@@ -26,7 +26,16 @@ namespace RVTuk.Core.AreaSubmission
         {
             var errors = AreaError.None;
 
-            if (a.UsageCode == null || !UsageCatalog.IsValidCode(a.UsageCode.Value))
+            // The robot requires at least one of USAGE_TYPE / USAGE_TYPE_OLD, and any code
+            // actually provided must exist in the catalog (a demolition area legitimately has
+            // only UsageCodePrev, with a 300-302 process code or nothing in UsageCode).
+            var hasValidCurrent = a.UsageCode != null && UsageCatalog.IsValidCode(a.UsageCode.Value);
+            var hasValidPrev = a.UsageCodePrev != null && UsageCatalog.IsValidCode(a.UsageCodePrev.Value);
+            var providedButInvalid =
+                (a.UsageCode != null && !UsageCatalog.IsValidCode(a.UsageCode.Value)) ||
+                (a.UsageCodePrev != null && !UsageCatalog.IsValidCode(a.UsageCodePrev.Value));
+
+            if ((!hasValidCurrent && !hasValidPrev) || providedButInvalid)
             {
                 errors |= AreaError.NoUsageCode;
             }
@@ -109,6 +118,29 @@ namespace RVTuk.Core.AreaSubmission
                 if (string.IsNullOrWhiteSpace(area.Number) || string.IsNullOrWhiteSpace(area.Name))
                 {
                     warnings.Add($"{label}: missing number or name.");
+                }
+
+                if (c.SheetWidthCm > 0 && c.SheetHeightCm > 0 &&
+                    area.BoundaryLoops.Any(loop => loop.Any(p =>
+                        p.X < 0 || p.Y < 0 || p.X > c.SheetWidthCm || p.Y > c.SheetHeightCm)))
+                {
+                    warnings.Add($"{label}: geometry extends outside the sheet frame.");
+                }
+            }
+
+            // Robot frame caps (physical print size): 910 mm height, 15,000 mm length
+            // (14,500 mm for the PAGE_NO=1 sheet). Drawing cm -> paper mm = cm * 10 / scale.
+            if (c.SheetWidthCm > 0 && c.SheetHeightCm > 0 && c.Scale > 0)
+            {
+                var paperHeightMm = c.SheetHeightCm * 10.0 / c.Scale;
+                var paperWidthMm = c.SheetWidthCm * 10.0 / c.Scale;
+                if (paperHeightMm > 910)
+                {
+                    warnings.Add($"Sheet height is {paperHeightMm:0} mm on paper — the robot's frame cap is 910 mm.");
+                }
+                if (paperWidthMm > 14500)
+                {
+                    warnings.Add($"Sheet length is {paperWidthMm:0} mm on paper — the robot caps page 1 at 14,500 mm (other pages 15,000 mm).");
                 }
             }
 

@@ -29,6 +29,8 @@ namespace RVTuk.Revit
         public static ExternalEvent AreaExtractEvent { get; private set; } = null!;
         public static SelectAreaEventHandler SelectAreaHandler { get; private set; } = null!;
         public static ExternalEvent SelectAreaEvent { get; private set; } = null!;
+        public static SetupUsageKeysEventHandler SetupUsageKeysHandler { get; private set; } = null!;
+        public static ExternalEvent SetupUsageKeysEvent { get; private set; } = null!;
         public static RVTuk.UI.Views.FamilyBrowserWindow? BrowserWindow { get; set; }
         public static RVTuk.UI.Views.ComparatorWindow? ComparatorWindow { get; set; }
         public static RVTuk.UI.Views.ConfigWindow? ConfigWindow { get; set; }
@@ -76,6 +78,8 @@ namespace RVTuk.Revit
             AreaExtractEvent   = ExternalEvent.Create(AreaExtractHandler);
             SelectAreaHandler  = new SelectAreaEventHandler();
             SelectAreaEvent    = ExternalEvent.Create(SelectAreaHandler);
+            SetupUsageKeysHandler = new SetupUsageKeysEventHandler();
+            SetupUsageKeysEvent   = ExternalEvent.Create(SetupUsageKeysHandler);
 
             try
             {

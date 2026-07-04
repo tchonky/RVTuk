@@ -32,6 +32,11 @@ namespace RVTuk.Core.AreaSubmission
 
             try
             {
+                // Always overwrite a previous submission's output rather than skipping or
+                // appending — re-running Export for the same base name should fully replace it.
+                if (File.Exists(dxfPath)) File.Delete(dxfPath);
+                if (File.Exists(datPath)) File.Delete(datPath);
+
                 var dxfText = DxfWriter.Build(areas, cfg);
                 File.WriteAllText(dxfPath, dxfText);
 

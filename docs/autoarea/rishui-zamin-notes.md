@@ -3,6 +3,9 @@
 > Scoping notes for a tool that generates the file package submitted to the national
 > area-calculation robot (**רכיב אוטומטי לחישוב שטחים**) inside **רישוי זמין (Rishui Zamin)**.
 >
+> **Looking for the rules themselves?** The distilled, always-current rulebook is
+> [`rishui-zamin-rules.md`](rishui-zamin-rules.md) — this file is the research trail behind it.
+>
 > **Accuracy convention used throughout:** anything marked **[OFFICIAL]** is taken from the
 > Planning Administration technical spec, the official FAQ, or the regulations (URLs in
 > §6). Anything marked **[UNCERTAIN]** or **[NEEDS SAMPLE]** is *not* fully pinned down by a
@@ -344,6 +347,28 @@ Confirmed against `tests/Examples Autoarea/` (Garmoshka.dxf + תכניות…dxf
 - **Block inventory in samples:** `*Model_Space`, `RZ_FRAME_SYM`, `RZ_FLOOR_SYM`,
   `RZ_AREA_SYM`, `*Paper_Space` (+ `RZ_ANCHOR_SYM_RUNTIME` when anchored). Scale of real data:
   the SAV401 project has **903 `RZ_AREA_SYM` inserts** across 12 floors — the format scales fine.
+- **Alternative marker form — plain TEXT (tekenplus, `tests/output/Export_example.dxf`):**
+  instead of `RZ_*_SYM` INSERT+ATTRIB blocks, each polygon carries one left/baseline-justified
+  `TEXT` (height 2.0) on the polygon's own layer whose content is the tag/value pairs joined
+  with `&&&`: frame `PAGE_NO=1` (anchor 10 units inside the frame's top-right corner), floor
+  `BUILDING_NO=1&&&FLOOR=<name>&&&LEVEL_ELEVATION=-4.90&&&IS_UNDERGROUND=0` (anchor 25 units
+  inside its box's top-right corner), area `USAGE_TYPE=108&&&USAGE_TYPE_OLD=&&&AREA=&&&ASSET=`
+  (anchor strictly *inside* the polygon — the robot matches by point-in-polygon, so concave
+  shapes need an interior point, not a centroid). `USAGE_TYPE_OLD` stays **empty** for new
+  work — it is the permit's existing usage, never a mirror of `USAGE_TYPE`.
+  `LEVEL_ELEVATION` is metres with exactly two decimals, no plus sign. The tekenplus frame is
+  the **whole physical sheet** (e.g. 40000×9000 cm = 4.0 m × 0.9 m paper at 1:100), not a
+  content bounding box. `DxfWriter` emits this TEXT form since 2026-07-02.
+- **File-structure hard requirements (learned from AutoCAD 2025 `DXFIN` rejections):** an
+  `AC1032` file must give **every entity a unique group-`5` handle** (`Handle missing` →
+  "Invalid or incomplete DXF input -- drawing discarded") and must contain an **OBJECTS
+  section with the root NamedObject dictionary** ("File lacks the NamedObject dictionary" →
+  same rejection). Hence `DxfWriter` allocates sequential handles starting at the preamble's
+  `$HANDSEED` (rewriting `$HANDSEED` afterwards) and appends `DxfTemplates/Postamble.dxf` —
+  Garmoshka's OBJECTS section (root dictionary, `ACAD_LAYOUT` + `Model`/`Layout1` LAYOUTs the
+  `BLOCK_RECORD`s point at, layer-table XDictionary) minus its project-specific
+  `DWFDEFINITION` — after ENTITIES. UTF-8 Hebrew in `ATTRIB` values reads back correctly
+  (verified char-by-char via `accoreconsole`).
 
 ### 5c. `.dat` — data file (alternative 3-file form) [SOLVED FROM SAMPLES]
 Reverse-engineered from three real sample files in `tests/Examples Autoarea/`

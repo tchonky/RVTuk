@@ -92,7 +92,7 @@ foreach ($ver in $targets) {
 
     # 1) Skip if this year's Revit is open — its add-in DLLs are loaded and locked.
     if ($runningYears -contains $ver) {
-        Write-Host "    SKIP  Revit $ver is open (files are locked). Close it to update." -ForegroundColor Yellow
+        Write-Host "    SKIP  Revit $ver is open (files are locked). Close it to update." -ForegroundColor DarkRed
         $results[$ver] = "skipped (Revit open)"
         Write-Host ""
         continue
@@ -175,7 +175,7 @@ foreach ($ver in $targets) {
     }
     catch [System.IO.IOException] {
         # Almost always a locked file: Revit (this year) has the DLL open.
-        Write-Host "    SKIP  files are locked (Revit $ver likely open): $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "    SKIP  files are locked (Revit $ver likely open): $($_.Exception.Message)" -ForegroundColor DarkRed
         $results[$ver] = "skipped (locked)"
     }
     catch {
@@ -194,7 +194,7 @@ foreach ($ver in $results.Keys) {
     $color = switch -Wildcard ($status) {
         "deployed"  { "Green" }
         "FAILED"    { "Red" }
-        default     { "Yellow" }  # skipped (*)
+        default     { "DarkRed" }  # skipped (*)
     }
     Write-Host ("    Revit {0}  : " -f $ver) -NoNewline -ForegroundColor DarkGray
     Write-Host $status -ForegroundColor $color

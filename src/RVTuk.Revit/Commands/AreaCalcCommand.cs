@@ -39,9 +39,24 @@ namespace RVTuk.Revit.Commands
                 Application.AreaExtractHandler.Reset();
                 Application.AreaExtractEvent.Raise();
                 Application.AreaExtractHandler.WaitForCompletion();
-                return Application.AreaExtractHandler.Result
+                if (Application.AreaExtractHandler.Error is { } error)
+                {
+                    throw new InvalidOperationException("Area extraction failed: " + error.Message, error);
+                }
+                var extracted = Application.AreaExtractHandler.Result
                     .Select(e => (e.ElementId, e.Record))
                     .ToList();
+
+                if (extracted.Count == 0)
+                {
+                    var diag = Application.AreaExtractHandler.Diagnostics;
+                    var reason = diag.AreaPlanCount == 0
+                        ? "the sheet has no Area Plan viewports on it"
+                        : $"found {diag.RawAreaCount} Area element(s) across {diag.AreaPlanCount} area plan(s), but none are placed (Area > 0 with a valid boundary)";
+                    throw new InvalidOperationException("No areas found — " + reason + ".");
+                }
+
+                return extracted;
             };
 
             // Select an area in the model — fire-and-forget (called on the UI thread; the event
@@ -52,9 +67,29 @@ namespace RVTuk.Revit.Commands
                 Application.SelectAreaEvent.Raise();
             };
 
-            // Export is pure (validate + write files); safe to run on the UI thread.
+            // Bind the robot's text parameters to Areas and create/top-up the usage key
+            // schedules. Blocks until Revit's main thread services it — the view model calls
+            // it on a background thread, like extract.
+            Func<(bool ok, string msg)> setupUsageKeys = () =>
+            {
+                Application.SetupUsageKeysHandler.Reset();
+                Application.SetupUsageKeysEvent.Raise();
+                Application.SetupUsageKeysHandler.WaitForCompletion();
+                return Application.SetupUsageKeysHandler.Result;
+            };
+
+            // Export is pure (validate + write files); safe to run on the UI thread. The
+            // RZ_FRAME must be the real sheet outline, so inject the title-block paper size
+            // (captured during the last extract) scaled to drawing units here, where the
+            // user-chosen Scale is final.
             Func<IReadOnlyList<AreaRecord>, AreaSubmissionConfig, (bool ok, string msg)> export =
-                (records, cfg) => AreaSubmissionExporter.Export(records, cfg);
+                (records, cfg) =>
+                {
+                    var diag = Application.AreaExtractHandler.Diagnostics;
+                    cfg.SheetWidthCm = diag.SheetPaperWidthCm * cfg.Scale;
+                    cfg.SheetHeightCm = diag.SheetPaperHeightCm * cfg.Scale;
+                    return AreaSubmissionExporter.Export(records, cfg);
+                };
 
             var crashLogPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -62,7 +97,11 @@ namespace RVTuk.Revit.Commands
 
             try
             {
-                var vm = new AreaSubmissionViewModel(extract, selectInModel, export);
+                var vm = new AreaSubmissionViewModel(extract, selectInModel, export, setupUsageKeys);
+                if (string.IsNullOrWhiteSpace(vm.Config.FileBaseName))
+                {
+                    vm.Config.FileBaseName = commandData.Application.ActiveUIDocument.Document.Title;
+                }
                 var window = new AreaSubmissionWindow(vm);
                 window.Closed += (s, e) => Application.AreaCalcWindow = null;
                 Application.AreaCalcWindow = window;

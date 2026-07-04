@@ -2,6 +2,9 @@
 bin/
 obj/
 
+# Test results
+tests/
+
 # Visual Studio
 .vs/
 *.user
@@ -28,6 +31,7 @@ desktop.ini
 # Secrets / local config
 *.env
 appsettings.local.json
+.gitignore
 
 # Runtime data folder (SQLite DB + gallery images live here, not source)
 .Setup/

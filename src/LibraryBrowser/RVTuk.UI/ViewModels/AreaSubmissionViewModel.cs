@@ -21,6 +21,7 @@ namespace RVTuk.UI.ViewModels
         private readonly Func<IReadOnlyList<(long Id, AreaRecord Rec)>> _extract;
         private readonly Action<long> _selectInModel;
         private readonly Func<IReadOnlyList<AreaRecord>, AreaSubmissionConfig, (bool ok, string msg)> _export;
+        private readonly Func<(bool ok, string msg)>? _setupUsageKeys;
         private readonly Dispatcher _dispatcher;
 
         private SubmissionPane _currentPane = SubmissionPane.Config;
@@ -29,20 +30,26 @@ namespace RVTuk.UI.ViewModels
         /// <param name="extract">Reads the areas on the open sheet (id + record).</param>
         /// <param name="selectInModel">Selects an Area in the model by element id.</param>
         /// <param name="export">Validates + writes the DXF/DAT for the given records; returns (ok, message).</param>
+        /// <param name="setupUsageKeys">Binds the robot's area text parameters and creates/tops-up
+        /// the usage key schedules in the project; returns (ok, message). Blocking — run off the
+        /// UI thread.</param>
         public AreaSubmissionViewModel(
             Func<IReadOnlyList<(long Id, AreaRecord Rec)>> extract,
             Action<long> selectInModel,
-            Func<IReadOnlyList<AreaRecord>, AreaSubmissionConfig, (bool ok, string msg)> export)
+            Func<IReadOnlyList<AreaRecord>, AreaSubmissionConfig, (bool ok, string msg)> export,
+            Func<(bool ok, string msg)>? setupUsageKeys = null)
         {
             _extract = extract;
             _selectInModel = selectInModel;
             _export = export;
+            _setupUsageKeys = setupUsageKeys;
             _dispatcher = Dispatcher.CurrentDispatcher;
 
             ShowConfigCommand = new RelayCommand(() => CurrentPane = SubmissionPane.Config);
             RefreshCommand    = new RelayCommand(Refresh);
             ExportCommand     = new RelayCommand(Export);
             BrowseOutputCommand = new RelayCommand(BrowseOutput);
+            SetupUsageKeysCommand = new RelayCommand(SetupUsageKeys);
         }
 
         public AreaSubmissionConfig Config { get; } = new AreaSubmissionConfig();
@@ -52,6 +59,7 @@ namespace RVTuk.UI.ViewModels
         public ICommand RefreshCommand { get; }
         public ICommand ExportCommand { get; }
         public ICommand BrowseOutputCommand { get; }
+        public ICommand SetupUsageKeysCommand { get; }
 
         /// <summary>Raised after an export attempt so the window can show a result dialog.</summary>
         public event Action<bool, string>? ExportCompleted;
@@ -76,6 +84,39 @@ namespace RVTuk.UI.ViewModels
         {
             get => Config.OutputFolder;
             set { if (Config.OutputFolder != value) { Config.OutputFolder = value; OnPropertyChanged(); } }
+        }
+
+        /// <summary>"Official" marker radio — Form A, the spec's block/ATTRIB encoding
+        /// (docs/autoarea/rishui-zamin-rules.md §5). Mutually exclusive with
+        /// <see cref="UseOldMarkers"/>.</summary>
+        public bool UseOfficialMarkers
+        {
+            get => Config.MarkerForm == MarkerForm.FormA;
+            set
+            {
+                if (value && Config.MarkerForm != MarkerForm.FormA)
+                {
+                    Config.MarkerForm = MarkerForm.FormA;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(UseOldMarkers));
+                }
+            }
+        }
+
+        /// <summary>"Old" marker radio — Form B, the tekenplus plain-TEXT encoding RVTuk emitted
+        /// before the Official option existed (kept for comparison/fallback).</summary>
+        public bool UseOldMarkers
+        {
+            get => Config.MarkerForm == MarkerForm.FormB;
+            set
+            {
+                if (value && Config.MarkerForm != MarkerForm.FormB)
+                {
+                    Config.MarkerForm = MarkerForm.FormB;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(UseOfficialMarkers));
+                }
+            }
         }
 
         public AreaRowViewModel? SelectedRow
@@ -109,7 +150,7 @@ namespace RVTuk.UI.ViewModels
                 }
 
                 var groups = extracted
-                    .GroupBy(e => e.Rec.Level ?? string.Empty)
+                    .GroupBy(e => e.Rec.Floor ?? string.Empty)
                     .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
                     .Select(g =>
                     {
@@ -125,6 +166,8 @@ namespace RVTuk.UI.ViewModels
                     Levels.Clear();
                     foreach (var g in groups) Levels.Add(g);
                     CurrentPane = SubmissionPane.Areas;
+                    if (extracted.Count == 0)
+                        ExportCompleted?.Invoke(false, "No areas found on the open sheet's area plan(s).");
                 });
             });
         }
@@ -139,6 +182,26 @@ namespace RVTuk.UI.ViewModels
             }
             var (ok, msg) = _export(records, Config);
             ExportCompleted?.Invoke(ok, msg);
+        }
+
+        /// <summary>Creates the usage key schedules / area parameters in the project. Blocks on
+        /// Revit's main thread, so it runs on the thread pool like <see cref="Refresh"/>.</summary>
+        private void SetupUsageKeys()
+        {
+            if (_setupUsageKeys == null)
+            {
+                ExportCompleted?.Invoke(false, "Usage key setup is not available in this context.");
+                return;
+            }
+
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                (bool ok, string msg) result;
+                try { result = _setupUsageKeys(); }
+                catch (Exception ex) { result = (false, "Usage key setup failed: " + ex.Message); }
+
+                _dispatcher.Invoke(() => ExportCompleted?.Invoke(result.ok, result.msg));
+            });
         }
 
         private void BrowseOutput()

@@ -4,7 +4,7 @@
         xmlns:vm="clr-namespace:RVTuk.UI.ViewModels"
         Title="RVTuk — Area Calc (Rishui Zamin)"
         Width="480" Height="600" MinWidth="380" MinHeight="420"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen" Topmost="True">
 
     <Window.Resources>
         <ResourceDictionary>
@@ -29,6 +29,8 @@
                     Background="{StaticResource Brush.Panel}">
             <Button Content="⚙ Config"  Command="{Binding ShowConfigCommand}" Margin="0,0,6,0" Padding="10,5"/>
             <Button Content="⟳ Refresh" Command="{Binding RefreshCommand}"   Margin="0,0,6,0" Padding="10,5"/>
+            <Button Content="🔑 Usage Keys" Command="{Binding SetupUsageKeysCommand}" Margin="0,0,6,0" Padding="10,5"
+                    ToolTip="Create the RZ usage key schedules and area text parameters in this project (idempotent — safe to re-run)"/>
             <Button Content="⬆ Export"  Command="{Binding ExportCommand}"    Padding="10,5"
                     Background="{StaticResource Brush.AccentDark}" BorderBrush="{StaticResource Brush.Accent}"/>
         </StackPanel>
@@ -48,6 +50,16 @@
 
                 <TextBlock Text="Scale value (DWFX_SCALE — 10 for 1:100)" Margin="0,0,0,2"/>
                 <TextBox Text="{Binding Config.Scale}" Margin="0,0,0,10"/>
+
+                <TextBlock Text="Marker format" Margin="0,0,0,2"/>
+                <RadioButton GroupName="MarkerForm" Margin="0,2,0,2"
+                             IsChecked="{Binding UseOfficialMarkers}"
+                             Content="Official (Form A — block attributes)"
+                             ToolTip="RZ_*_SYM block inserts with one attribute per tag — the encoding the official spec describes (Garmoshka sample)"/>
+                <RadioButton GroupName="MarkerForm" Margin="0,0,0,10"
+                             IsChecked="{Binding UseOldMarkers}"
+                             Content="Old (Form B — plain text)"
+                             ToolTip="One TEXT per polygon with KEY=VALUE&amp;&amp;&amp;… content — the tekenplus encoding RVTuk emitted before"/>
 
                 <TextBlock Text="Output file base name (no extension)" Margin="0,0,0,2"/>
                 <TextBox Text="{Binding Config.FileBaseName}" Margin="0,0,0,10"/>

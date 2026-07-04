@@ -71,6 +71,81 @@ public class AreaValidatorTests
     }
 
     [Fact]
+    public void Area_OnlyPrevUsageCode_IsValid()
+    {
+        // Demolition case: existing permit usage only, no proposed usage.
+        var a = new AreaRecord
+        {
+            UsageCode = null,
+            UsageCodePrev = 1,
+            AreaValue = 5,
+            BoundaryLoops = { new() { new() { X = 0, Y = 0 }, new() { X = 1, Y = 0 }, new() { X = 1, Y = 1 } } }
+        };
+        Assert.False(AreaValidator.CheckArea(a).HasFlag(AreaError.NoUsageCode));
+    }
+
+    [Fact]
+    public void Area_InvalidPrevUsageCode_IsError()
+    {
+        var a = new AreaRecord
+        {
+            UsageCode = 1,
+            UsageCodePrev = 9999,
+            AreaValue = 5,
+            BoundaryLoops = { new() { new() { X = 0, Y = 0 }, new() { X = 1, Y = 0 }, new() { X = 1, Y = 1 } } }
+        };
+        Assert.True(AreaValidator.CheckArea(a).HasFlag(AreaError.NoUsageCode));
+    }
+
+    [Fact]
+    public void Area_DemolitionProcessCode_IsValid()
+    {
+        // USAGE_TYPE=301 (demolition marker) with the existing usage in USAGE_TYPE_OLD.
+        var a = new AreaRecord
+        {
+            UsageCode = 301,
+            UsageCodePrev = 1,
+            AreaValue = 5,
+            BoundaryLoops = { new() { new() { X = 0, Y = 0 }, new() { X = 1, Y = 0 }, new() { X = 1, Y = 1 } } }
+        };
+        Assert.Equal(AreaError.None, AreaValidator.CheckArea(a));
+    }
+
+    [Fact]
+    public void Validate_GeometryOutsideSheet_IsWarning()
+    {
+        var areas = new System.Collections.Generic.List<AreaRecord>
+        {
+            new() { Number = "1", Name = "A", UsageCode = 1, AreaValue = 5,
+                BoundaryLoops = { new() { new() { X = -5, Y = 0 }, new() { X = 100, Y = 0 }, new() { X = 100, Y = 100 } } } }
+        };
+        var cfg = new AreaSubmissionConfig
+        {
+            OutputFolder = "C:\\out", FileBaseName = "x", Scale = 100, BuildingNo = 1,
+            SheetWidthCm = 40000, SheetHeightCm = 9000
+        };
+        var result = AreaValidator.Validate(areas, cfg);
+        Assert.Contains(result.Warnings, w => w.Contains("outside the sheet"));
+    }
+
+    [Fact]
+    public void Validate_SheetTallerThanRobotCap_IsWarning()
+    {
+        var areas = new System.Collections.Generic.List<AreaRecord>
+        {
+            new() { Number = "1", Name = "A", UsageCode = 1, AreaValue = 5,
+                BoundaryLoops = { new() { new() { X = 0, Y = 0 }, new() { X = 1, Y = 0 }, new() { X = 1, Y = 1 } } } }
+        };
+        var cfg = new AreaSubmissionConfig
+        {
+            OutputFolder = "C:\\out", FileBaseName = "x", Scale = 100, BuildingNo = 1,
+            SheetWidthCm = 40000, SheetHeightCm = 9200 // 920 mm on paper at 1:100 > 910 mm cap
+        };
+        var result = AreaValidator.Validate(areas, cfg);
+        Assert.Contains(result.Warnings, w => w.Contains("910"));
+    }
+
+    [Fact]
     public void Config_MissingOutputFolder_IsError()
     {
         var errs = AreaValidator.CheckConfig(new AreaSubmissionConfig { OutputFolder = "" });

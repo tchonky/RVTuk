@@ -29,10 +29,24 @@ namespace RVTuk.Core.AreaSubmission
     /// </summary>
     public class AreaRecord
     {
-        public string Level { get; set; } = "";
+        /// <summary>Relative level elevation in metres (LEVEL_ELEVATION, e.g. -4.9, 0, 4).</summary>
+        public double LevelElevation { get; set; }
         public string? Number { get; set; }
         public string? Name { get; set; }
+        /// <summary>Proposed usage code (USAGE_TYPE).</summary>
         public int? UsageCode { get; set; }
+        /// <summary>Usage code as existing in the current permit (USAGE_TYPE_OLD); null when the
+        /// area is new work with no permit history — emitted as an empty value, never mirrored
+        /// from <see cref="UsageCode"/>.</summary>
+        public int? UsageCodePrev { get; set; }
+        /// <summary>Area as stated in the old permit (the AREA tag) — a manual/historical text
+        /// value the robot does not recompute; empty for new work. Read from the RZ_AREA
+        /// parameter.</summary>
+        public string? PermitArea { get; set; }
+        /// <summary>Dwelling-unit / unit number (the ASSET tag) for this specific area, read
+        /// from the RZ_ASSET parameter; falls back to the submission-wide
+        /// <see cref="AreaSubmissionConfig.Asset"/> when empty.</summary>
+        public string? Asset { get; set; }
         public string Floor { get; set; } = "";
         public int PageNo { get; set; }
         public bool IsUnderground { get; set; }

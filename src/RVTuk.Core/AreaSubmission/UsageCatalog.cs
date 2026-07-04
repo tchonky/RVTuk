@@ -27,7 +27,12 @@ namespace RVTuk.Core.AreaSubmission
         Service,
 
         /// <summary>אחר — other areas, not included in the floor's area summary.</summary>
-        Other
+        Other,
+
+        /// <summary>סימוני תהליך (300-302) — process markers, not coloured by the robot; used as
+        /// USAGE_TYPE for demolition/removal/excavation with the existing usage in
+        /// USAGE_TYPE_OLD. See docs/autoarea/rishui-zamin-notes.md §3.</summary>
+        Process
     }
 
     /// <summary>One row of the Rishui Zamin usage-type table.</summary>
@@ -38,11 +43,13 @@ namespace RVTuk.Core.AreaSubmission
 
     /// <summary>
     /// The catalog of Rishui Zamin usage codes, transcribed verbatim from the official
-    /// "טבלת סוגי שימושים" (usage-type table) quoted in docs/autoarea/rishui-zamin-notes.md §3.
-    /// Covers the primary/service separation method only (codes 1-33, 101-130, 250-257);
-    /// the "not coloured" process markers (300-302) and the alternate שטח-כולל code list
-    /// are out of scope for this catalog. See the notes doc for gaps in the source table
-    /// (codes 3, 5, 117-129, 251, 253, 254 are not listed there and are omitted here).
+    /// "טבלת סוגי שימושים" (usage-type table), 20.10.2025 edition
+    /// (gov.il usage_codes_and_printing_guide.pdf; see docs/autoarea/rishui-zamin-rules.md §7).
+    /// Covers the primary/service separation method (codes 1-33, 101-130, 250-257) plus the
+    /// "not coloured" process markers (300-302, used with USAGE_TYPE_OLD for demolition
+    /// scenarios); the alternate שטח-כולל (total-area method) list of 4xx/5xx/6xx/7xx codes is
+    /// out of scope — the robot detects the method from the codes and forbids mixing. Codes
+    /// 3, 5, 120-129, 251, 253, 254 are absent from the official table and are omitted here.
     /// </summary>
     public static class UsageCatalog
     {
@@ -71,6 +78,11 @@ namespace RVTuk.Core.AreaSubmission
             // שטחי שירות — Service areas
             new UsageEntry(101, UsageKind.Service, "מרחב מוגן דירתי – שטח רצפה"),
             new UsageEntry(102, UsageKind.Service, "מרחב מוגן דירתי – שטח קירות"),
+            // 117-119 were added to the official table (20.10.2025 edition) following
+            // amendment 163 to the Planning and Building Law (extended mamad areas).
+            new UsageEntry(117, UsageKind.Service, "מרחב מוגן דירתי – מבואה בתוספת ממ\"ד"),
+            new UsageEntry(118, UsageKind.Service, "חדר רטוב לממ\"ד"),
+            new UsageEntry(119, UsageKind.Service, "הרחבת ממ\"ד"),
             new UsageEntry(103, UsageKind.Service, "מרחב מוגן קומתי / מוסדי / מקלט / מבנה שמירה"),
             new UsageEntry(104, UsageKind.Service, "מעלית"),
             new UsageEntry(105, UsageKind.Service, "מבואות וחדרי מדרגות"),
@@ -93,6 +105,11 @@ namespace RVTuk.Core.AreaSubmission
             new UsageEntry(255, UsageKind.Other, "מצללה"),
             new UsageEntry(256, UsageKind.Other, "בריכת שחיה"),
             new UsageEntry(257, UsageKind.Other, "בליטות, גגונים וקירוי"),
+
+            // סימוני תהליך — Process markers (not coloured; robot uses them with USAGE_TYPE_OLD)
+            new UsageEntry(300, UsageKind.Process, "הורדה"),
+            new UsageEntry(301, UsageKind.Process, "הריסה ופירוק"),
+            new UsageEntry(302, UsageKind.Process, "חפירה"),
         };
 
         private static readonly Dictionary<int, UsageEntry> _byCode = BuildIndex();
