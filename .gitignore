@@ -2,8 +2,9 @@
 bin/
 obj/
 
-# Test results
-tests/
+# Test results / scratch fixtures (not the tests/RVTuk.Core.Tests source)
+tests/output/
+tests/Examples Autoarea/
 
 # Visual Studio
 .vs/
