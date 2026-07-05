@@ -8,6 +8,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using WpfColor = System.Windows.Media.Color;
 using WpfPoint = System.Windows.Point;
+using RVTuk.Revit.AutoDimensions;
 using RVTuk.Revit.Commands;
 using RVTuk.Revit.ExternalEvents;
 
@@ -167,6 +168,45 @@ namespace RVTuk.Revit
             areaBtn.Image      = CreateAreaCalcIcon(16);
 
             panel.AddItem(areaBtn);
+
+            RibbonPanel autoDimPanel = app.CreateRibbonPanel("Auto Dimensions");
+            var autoDimBtn = new PushButtonData(
+                "AutoDimensions",
+                "Auto\nDimensions",
+                assemblyPath,
+                typeof(AutoDimensionsCommand).FullName!)
+            {
+                ToolTip = "Dimension every wall crossing a Dimensions_Line detail line in the active view"
+            };
+            autoDimBtn.LargeImage = CreateAutoDimensionsIcon(32);
+            autoDimBtn.Image      = CreateAutoDimensionsIcon(16);
+
+            autoDimPanel.AddItem(autoDimBtn);
+        }
+
+        private static BitmapSource CreateAutoDimensionsIcon(int size)
+        {
+            var dv = new DrawingVisual();
+            using (var ctx = dv.RenderOpen())
+            {
+                double s = size;
+                ctx.DrawRectangle(new SolidColorBrush(WpfColor.FromRgb(0x25, 0x25, 0x26)), null,
+                    new Rect(0, 0, s, s));
+
+                var pen = new Pen(new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00)), Math.Max(1, s * 0.06));
+                pen.Freeze();
+                double y = s * 0.5;
+                // Dimension line with tick marks at each end and one in the middle.
+                ctx.DrawLine(pen, new WpfPoint(s * 0.14, y), new WpfPoint(s * 0.86, y));
+                foreach (var x in new[] { s * 0.14, s * 0.5, s * 0.86 })
+                {
+                    ctx.DrawLine(pen, new WpfPoint(x, y - s * 0.16), new WpfPoint(x, y + s * 0.16));
+                }
+            }
+            var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            bmp.Freeze();
+            return bmp;
         }
 
         private static BitmapSource CreateAreaCalcIcon(int size)

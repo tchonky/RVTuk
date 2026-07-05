@@ -54,11 +54,11 @@
                 <TextBlock Text="Marker format" Margin="0,0,0,2"/>
                 <RadioButton GroupName="MarkerForm" Margin="0,2,0,2"
                              IsChecked="{Binding UseOfficialMarkers}"
-                             Content="Official (Form A — block attributes)"
+                             Content="Official (Block Attributes)"
                              ToolTip="RZ_*_SYM block inserts with one attribute per tag — the encoding the official spec describes (Garmoshka sample)"/>
                 <RadioButton GroupName="MarkerForm" Margin="0,0,0,10"
                              IsChecked="{Binding UseOldMarkers}"
-                             Content="Old (Form B — plain text)"
+                             Content="Plain text"
                              ToolTip="One TEXT per polygon with KEY=VALUE&amp;&amp;&amp;… content — the tekenplus encoding RVTuk emitted before"/>
 
                 <TextBlock Text="Output file base name (no extension)" Margin="0,0,0,2"/>
