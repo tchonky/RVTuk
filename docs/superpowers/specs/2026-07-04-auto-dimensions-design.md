@@ -1,6 +1,6 @@
 # Auto Dimensions — Design
 
-**Date:** 2026-07-04
+**Date:** 2026-07-04 (revised 2026-07-05: zero-segment dedupe, hidden-line collection)
 **Status:** Approved
 **Area:** Productivity
 **Branch:** Adimensions
@@ -117,7 +117,12 @@ Two operations only: `TryGetTrackedDimension` and `SetTrackedDimension`.
 The ribbon command (`IExternalCommand`, `TransactionMode.Manual`, one transaction for the whole
 run). Orchestrates, for the active view:
 1. `DimensionLineStyle.EnsureExists(doc)`.
-2. Collect `DetailLine`s in the active view whose line style matches (`DimensionLineStyle`). If
+2. Collect `DetailLine`s **owned by** the active view whose line style matches
+   (`DimensionLineStyle`). Collection is a document-wide `CurveElement` collector filtered by
+   `OwnerViewId == activeView.Id` — deliberately **not** a view-scoped collector, because a
+   view-scoped collector only returns elements currently *visible* in the view, and reference
+   lines hidden by the view template (line style/category unchecked) must still produce
+   dimensions. Detail lines are view-specific, so `OwnerViewId` finds exactly the same set. If
    none are found, the end-of-run summary says so explicitly (see step 5) rather than a bare
    "0 created, 0 skipped" — distinguishing "you haven't drawn any reference lines yet" from "your
    reference lines all failed."
@@ -139,8 +144,18 @@ run). Orchestrates, for the active view:
       given wall, exclude that wall from this line's dimension (tally the exclusion, don't fail
       the whole line) rather than throwing.
    e. Build the ordered `ReferenceArray` from the surviving walls → `doc.Create.NewDimension(view,
-      line.GeometryCurve as Line, referenceArray)` → `AutoDimensionTracker.SetTrackedDimension`
-      with the new dimension's id → tally created.
+      line.GeometryCurve as Line, referenceArray)`.
+   f. **Zero-segment verification**: adjacent walls (or walls sharing a face plane) can put two
+      references at the exact same station along the line, producing zero-length dimension
+      segments. After creation, scan `dimension.Segments` for any segment with value ≈ 0 (small
+      epsilon). If found, rebuild the `ReferenceArray` from `dimension.References` in order,
+      keeping the first reference and dropping every reference that *ends* a zero segment (one
+      pass collapses 2, 3, or more coincident references to one — Revit orders a dimension's
+      references along the line). Delete the bad dimension and recreate it with the filtered
+      array. If fewer than 2 references survive, delete and tally the line as skipped. Which
+      coincident reference survives is arbitrary (first wins) for now; smarter selection is a
+      future refinement.
+   g. `AutoDimensionTracker.SetTrackedDimension` with the final dimension's id → tally created.
 5. After all lines: one `TaskDialog` summary — e.g. "3 dimensions created, 1 line skipped: no
    walls found," or, if no reference lines were found at all, "No Dimensions_Line lines found —
    the line style now exists in this project; draw reference lines and run again."
@@ -161,7 +176,9 @@ Ribbon click → AutoDimensionsCommand.Execute (one transaction)
       → WallCrossingFinder.FindCrossings (Core, pure — excludes T-junctions & near-parallel walls)
       → zero crossings? tally skipped, next line
       → ordered crossing walls → HostObjectUtils.GetSideFaces (first ref per side, exclude wall if empty)
-      → ReferenceArray → NewDimension → AutoDimensionTracker.SetTrackedDimension(new id)
+      → ReferenceArray → NewDimension
+      → zero-length segments? rebuild ReferenceArray without coincident refs, delete + recreate
+      → AutoDimensionTracker.SetTrackedDimension(final id)
   → TaskDialog summary
 ```
 
@@ -217,6 +234,10 @@ it produced). This lives in the Revit model itself, not the RVTuk database.
      delete the dimension still owned by the original view.
   8. Manually delete a dimension the tool previously created, leaving its line's tracking entry
      dangling; re-run; confirm no error, and a fresh dimension is created and tracked normally.
+  9. Draw a line crossing two walls joined end-to-end (shared face plane); run; confirm the
+     dimension has no zero-length segment — only one reference survives at the shared position.
+  10. Hide the `Dimensions_Line` style via the view template; run; confirm dimensions are still
+      created for the hidden lines.
 
 ## Open questions
 - None blocking — object-type expansion (openings, columns, grids) and multi-view/whole-project
