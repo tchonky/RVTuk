@@ -27,6 +27,9 @@ namespace RVTuk.UI.ViewModels
 
         private SubmissionPane _currentPane = SubmissionPane.Config;
         private AreaRowViewModel? _selectedRow;
+        private string _buildingNoText = "";
+        private string _scaleText = "";
+        private string _fileBaseNameText = "";
 
         /// <param name="extract">Reads the areas on the open sheet (id + record).</param>
         /// <param name="selectInModel">Selects an Area in the model by element id.</param>
@@ -55,6 +58,10 @@ namespace RVTuk.UI.ViewModels
             var savedOutputFolder = ConfigManager.LoadConfig().AreaCalcOutputFolder;
             if (!string.IsNullOrWhiteSpace(savedOutputFolder))
                 Config.OutputFolder = savedOutputFolder;
+
+            _buildingNoText = Config.BuildingNo.ToString();
+            _scaleText = Config.Scale.ToString();
+            _fileBaseNameText = Config.FileBaseName;
         }
 
         public AreaSubmissionConfig Config { get; } = new AreaSubmissionConfig();
@@ -77,11 +84,22 @@ namespace RVTuk.UI.ViewModels
                 SetProperty(ref _currentPane, value);
                 OnPropertyChanged(nameof(IsConfigPane));
                 OnPropertyChanged(nameof(IsAreasPane));
+                OnPropertyChanged(nameof(CurrentPaneIndex));
             }
         }
 
         public bool IsConfigPane => _currentPane == SubmissionPane.Config;
         public bool IsAreasPane  => _currentPane == SubmissionPane.Areas;
+
+        /// <summary>Zero-based index mirror of <see cref="CurrentPane"/> for two-way binding to
+        /// the Settings/Areas <c>TabControl.SelectedIndex</c> (so clicking a tab keeps
+        /// <see cref="CurrentPane"/> in sync, and code that sets <see cref="CurrentPane"/>
+        /// programmatically — e.g. <see cref="Refresh"/> — still switches the visible tab).</summary>
+        public int CurrentPaneIndex
+        {
+            get => (int)_currentPane;
+            set => CurrentPane = (SubmissionPane)value;
+        }
 
         /// <summary>Notifying wrapper over <see cref="AreaSubmissionConfig.OutputFolder"/> so the
         /// Browse button can update the bound textbox.</summary>
@@ -93,12 +111,89 @@ namespace RVTuk.UI.ViewModels
                 if (Config.OutputFolder == value) return;
                 Config.OutputFolder = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(OutputFolderInvalid));
+                OnPropertyChanged(nameof(HasInvalidSettings));
 
                 var appConfig = ConfigManager.LoadConfig();
                 appConfig.AreaCalcOutputFolder = value;
                 ConfigManager.SaveConfig(appConfig);
             }
         }
+
+        /// <summary>True when no output folder is set — blocks export (mirrors
+        /// <c>AreaValidator.CheckConfig</c>'s "Output folder is not set" rule).</summary>
+        public bool OutputFolderInvalid => string.IsNullOrWhiteSpace(OutputFolder);
+
+        /// <summary>Notifying wrapper over <see cref="AreaSubmissionConfig.BuildingNo"/> so the
+        /// Settings tab can highlight it red when blank or non-positive. Kept as a string (rather
+        /// than binding <c>Config.BuildingNo</c> directly) so an in-progress edit — e.g. the field
+        /// briefly empty while retyping — doesn't fight WPF's built-in int type-conversion.</summary>
+        public string BuildingNoText
+        {
+            get => _buildingNoText;
+            set
+            {
+                SetProperty(ref _buildingNoText, value);
+                Config.BuildingNo = int.TryParse(value, out var n) ? n : 0;
+                OnPropertyChanged(nameof(BuildingNoInvalid));
+                OnPropertyChanged(nameof(HasInvalidSettings));
+            }
+        }
+
+        /// <summary>Mirrors <c>AreaValidator.CheckConfig</c>'s "Building number must be at least
+        /// 1" rule.</summary>
+        public bool BuildingNoInvalid => !int.TryParse(_buildingNoText, out var n) || n < 1;
+
+        /// <summary>Notifying wrapper over <see cref="AreaSubmissionConfig.Scale"/> (the
+        /// DWFX_SCALE value) so the Settings tab can highlight it red when blank or non-positive.</summary>
+        public string ScaleText
+        {
+            get => _scaleText;
+            set
+            {
+                SetProperty(ref _scaleText, value);
+                Config.Scale = int.TryParse(value, out var n) ? n : 0;
+                OnPropertyChanged(nameof(ScaleInvalid));
+                OnPropertyChanged(nameof(HasInvalidSettings));
+            }
+        }
+
+        /// <summary>Mirrors <c>AreaValidator.CheckConfig</c>'s "Scale must be greater than zero"
+        /// rule.</summary>
+        public bool ScaleInvalid => !int.TryParse(_scaleText, out var n) || n <= 0;
+
+        /// <summary>Notifying wrapper over <see cref="AreaSubmissionConfig.FileBaseName"/> so the
+        /// Settings tab can highlight it red when blank.</summary>
+        public string FileBaseNameText
+        {
+            get => _fileBaseNameText;
+            set
+            {
+                SetProperty(ref _fileBaseNameText, value);
+                Config.FileBaseName = value;
+                OnPropertyChanged(nameof(FileBaseNameInvalid));
+                OnPropertyChanged(nameof(HasInvalidSettings));
+            }
+        }
+
+        /// <summary>Mirrors <c>AreaValidator.CheckConfig</c>'s "File base name is not set" rule.</summary>
+        public bool FileBaseNameInvalid => string.IsNullOrWhiteSpace(_fileBaseNameText);
+
+        /// <summary>True when any Settings field required for export is missing or invalid —
+        /// drives the Settings tab's warning badge. Deliberately mirrors the same four checks as
+        /// <c>AreaValidator.CheckConfig</c> so the UI and the export-time check never disagree
+        /// about what counts as incomplete.</summary>
+        public bool HasInvalidSettings =>
+            BuildingNoInvalid || ScaleInvalid || FileBaseNameInvalid || OutputFolderInvalid;
+
+        /// <summary>Count of area rows currently flagged with an error — drives the Areas tab's
+        /// count badge and its summary banner. Recomputed (via <see cref="OnPropertyChanged"/>)
+        /// whenever <see cref="Refresh"/> repopulates <see cref="Levels"/>.</summary>
+        public int FlaggedCount => Levels.SelectMany(g => g.Rows).Count(r => r.HasError);
+
+        /// <summary>Total area rows currently loaded — used by the Areas tab's summary banner
+        /// text ("N of M areas flagged").</summary>
+        public int TotalAreaCount => Levels.SelectMany(g => g.Rows).Count();
 
         /// <summary>"Official" marker radio — Form A, the spec's block/ATTRIB encoding
         /// (docs/autoarea/rishui-zamin-rules.md §5). Mutually exclusive with
@@ -179,6 +274,8 @@ namespace RVTuk.UI.ViewModels
                 {
                     Levels.Clear();
                     foreach (var g in groups) Levels.Add(g);
+                    OnPropertyChanged(nameof(FlaggedCount));
+                    OnPropertyChanged(nameof(TotalAreaCount));
                     CurrentPane = SubmissionPane.Areas;
                     if (extracted.Count == 0)
                         ExportCompleted?.Invoke(false, "No areas found on the open sheet's area plan(s).");
