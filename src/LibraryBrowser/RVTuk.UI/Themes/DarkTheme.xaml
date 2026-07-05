@@ -1,23 +1,24 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- ── Brushes ────────────────────────────────────────────────────────── -->
-    <SolidColorBrush x:Key="Brush.Bg"           Color="#1E1E1E"/>
-    <SolidColorBrush x:Key="Brush.Panel"        Color="#252526"/>
-    <SolidColorBrush x:Key="Brush.Control"      Color="#2D2D2D"/>
-    <SolidColorBrush x:Key="Brush.Input"        Color="#3C3C3C"/>
-    <SolidColorBrush x:Key="Brush.Hover"        Color="#3E3E42"/>
+    <!-- ── Brushes (Revit-native dark palette) ───────────────────────────── -->
+    <SolidColorBrush x:Key="Brush.Bg"           Color="#2B2B2B"/>
+    <SolidColorBrush x:Key="Brush.Panel"        Color="#333333"/>
+    <SolidColorBrush x:Key="Brush.Control"      Color="#3C3C3C"/>
+    <SolidColorBrush x:Key="Brush.Input"        Color="#232323"/>
+    <SolidColorBrush x:Key="Brush.Hover"        Color="#454545"/>
     <SolidColorBrush x:Key="Brush.Selection"    Color="#264F78"/>
-    <SolidColorBrush x:Key="Brush.Text"         Color="#D4D4D4"/>
-    <SolidColorBrush x:Key="Brush.TextMuted"    Color="#858585"/>
-    <SolidColorBrush x:Key="Brush.TextDisabled" Color="#656565"/>
-    <SolidColorBrush x:Key="Brush.Border"       Color="#3F3F46"/>
-    <SolidColorBrush x:Key="Brush.BorderFocus"  Color="#007ACC"/>
-    <SolidColorBrush x:Key="Brush.Accent"       Color="#FF8C00"/>
-    <SolidColorBrush x:Key="Brush.AccentDark"   Color="#CC7000"/>
+    <SolidColorBrush x:Key="Brush.Text"         Color="#E3E3E3"/>
+    <SolidColorBrush x:Key="Brush.TextMuted"    Color="#9A9A9A"/>
+    <SolidColorBrush x:Key="Brush.TextDisabled" Color="#6E6E6E"/>
+    <SolidColorBrush x:Key="Brush.Border"       Color="#4A4A4A"/>
+    <SolidColorBrush x:Key="Brush.BorderFocus"  Color="#4A90D9"/>
+    <SolidColorBrush x:Key="Brush.Accent"       Color="#4A90D9"/>
+    <SolidColorBrush x:Key="Brush.AccentDark"   Color="#2B6CB0"/>
     <SolidColorBrush x:Key="Brush.Success"      Color="#4EC94E"/>
-    <SolidColorBrush x:Key="Brush.Warning"      Color="#FF6B35"/>
-    <SolidColorBrush x:Key="Brush.Splitter"     Color="#3F3F46"/>
+    <SolidColorBrush x:Key="Brush.Warning"      Color="#D64545"/>
+    <SolidColorBrush x:Key="Brush.ErrorFill"    Color="#3A2424"/>
+    <SolidColorBrush x:Key="Brush.Splitter"     Color="#4A4A4A"/>
 
     <!-- ── TextBlock ──────────────────────────────────────────────────────── -->
     <Style TargetType="TextBlock">
