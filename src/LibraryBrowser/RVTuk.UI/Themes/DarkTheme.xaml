@@ -362,4 +362,38 @@
         </Style.Triggers>
     </Style>
 
+    <!-- ── Group header panel (Settings-tab field grouping) ──────────────── -->
+    <SolidColorBrush x:Key="Brush.GroupHeader" Color="#3F3F41"/>
+
+    <Style x:Key="GroupHeaderPanel" TargetType="HeaderedContentControl">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="HeaderedContentControl">
+                    <Border BorderBrush="{StaticResource Brush.Border}" BorderThickness="1"
+                            CornerRadius="2" Margin="0,0,0,9">
+                        <DockPanel LastChildFill="True">
+                            <Border DockPanel.Dock="Top"
+                                    Background="{StaticResource Brush.GroupHeader}"
+                                    BorderBrush="{StaticResource Brush.Border}"
+                                    BorderThickness="0,0,0,1"
+                                    Padding="8,5">
+                                <Grid>
+                                    <TextBlock Text="{TemplateBinding Header}"
+                                               FontSize="11" FontWeight="SemiBold"
+                                               Foreground="{StaticResource Brush.Text}"/>
+                                    <TextBlock Text="▾" HorizontalAlignment="Right"
+                                               Foreground="{StaticResource Brush.TextMuted}"
+                                               FontSize="9"/>
+                                </Grid>
+                            </Border>
+                            <Border Background="{StaticResource Brush.Bg}" Padding="9,8">
+                                <ContentPresenter/>
+                            </Border>
+                        </DockPanel>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>
