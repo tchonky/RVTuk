@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using System.Windows.Input;
 using System.Windows.Threading;
 using RVTuk.Core.AreaSubmission;
+using RVTuk.Core.Config;
 
 namespace RVTuk.UI.ViewModels
 {
@@ -50,6 +51,10 @@ namespace RVTuk.UI.ViewModels
             ExportCommand     = new RelayCommand(Export);
             BrowseOutputCommand = new RelayCommand(BrowseOutput);
             SetupUsageKeysCommand = new RelayCommand(SetupUsageKeys);
+
+            var savedOutputFolder = ConfigManager.LoadConfig().AreaCalcOutputFolder;
+            if (!string.IsNullOrWhiteSpace(savedOutputFolder))
+                Config.OutputFolder = savedOutputFolder;
         }
 
         public AreaSubmissionConfig Config { get; } = new AreaSubmissionConfig();
@@ -83,7 +88,16 @@ namespace RVTuk.UI.ViewModels
         public string OutputFolder
         {
             get => Config.OutputFolder;
-            set { if (Config.OutputFolder != value) { Config.OutputFolder = value; OnPropertyChanged(); } }
+            set
+            {
+                if (Config.OutputFolder == value) return;
+                Config.OutputFolder = value;
+                OnPropertyChanged();
+
+                var appConfig = ConfigManager.LoadConfig();
+                appConfig.AreaCalcOutputFolder = value;
+                ConfigManager.SaveConfig(appConfig);
+            }
         }
 
         /// <summary>"Official" marker radio — Form A, the spec's block/ATTRIB encoding

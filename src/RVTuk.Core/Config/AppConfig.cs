@@ -6,6 +6,10 @@ namespace RVTuk.Core.Config
     {
         public string LibraryFolderPath { get; set; } = string.Empty;
 
+        /// <summary>Last-used output folder for the Area Calc (Rishui Zamin) export, remembered
+        /// across sessions so the user doesn't have to re-browse every time.</summary>
+        public string AreaCalcOutputFolder { get; set; } = string.Empty;
+
         // Derived — never stored separately; always lives inside the library folder.
         public string DatabasePath => Path.Combine(LibraryFolderPath, ".Setup", "RVTuk.db");
 

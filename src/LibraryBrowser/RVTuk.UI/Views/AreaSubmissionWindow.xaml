@@ -70,9 +70,8 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBox Grid.Column="0" IsReadOnly="True" Margin="0,0,6,0"
-                             Text="{Binding OutputFolder, Mode=OneWay}"
-                             Foreground="{StaticResource Brush.TextMuted}"/>
+                    <TextBox Grid.Column="0" Margin="0,0,6,0"
+                             Text="{Binding OutputFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                     <Button Grid.Column="1" Content="Browse…" Width="72" Command="{Binding BrowseOutputCommand}"/>
                 </Grid>
 
