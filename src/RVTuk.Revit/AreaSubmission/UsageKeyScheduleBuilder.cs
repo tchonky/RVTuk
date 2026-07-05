@@ -141,7 +141,9 @@ namespace RVTuk.Revit.AreaSubmission
                         ?? (ExternalDefinition)group.Definitions.Create(
                             new ExternalDefinitionCreationOptions(name, SpecTypeId.String.Text) { GUID = guid });
 
-                    doc.ParameterBindings.Insert(definition, instanceBinding, GroupTypeId.IdentityData);
+                    // GroupTypeId.General is today's ForgeTypeId for what Revit's UI used to
+                    // label "Other" — keeps these out of the crowded Identity Data group.
+                    doc.ParameterBindings.Insert(definition, instanceBinding, GroupTypeId.General);
                 }
 
                 return missing.Count;

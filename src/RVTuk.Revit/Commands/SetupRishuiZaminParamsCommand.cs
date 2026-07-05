@@ -122,12 +122,13 @@ namespace RVTuk.Revit.Commands
                 catSet.Insert(areaCategory);
 
                 var binding = app.Create.NewInstanceBinding(catSet);
-                // GroupTypeId.IdentityData is the ForgeTypeId successor to the (now-removed-in-2025)
-                // BuiltInParameterGroup.PG_IDENTITY_DATA enum member; available on both API versions.
-                bool inserted = doc.ParameterBindings.Insert(extDef, binding, GroupTypeId.IdentityData);
+                // GroupTypeId.General is today's ForgeTypeId for what Revit's UI used to label
+                // "Other" (renamed in later Revit versions) — keeps this out of the crowded
+                // Identity Data group.
+                bool inserted = doc.ParameterBindings.Insert(extDef, binding, GroupTypeId.General);
 
                 summary.AppendLine(inserted
-                    ? $"Bound '{ParamName}' (Integer, instance) to Areas under Identity Data."
+                    ? $"Bound '{ParamName}' (Integer, instance) to Areas under Other."
                     : $"Could not bind '{ParamName}' to Areas (ParameterBindings.Insert returned false).");
             }
             finally
