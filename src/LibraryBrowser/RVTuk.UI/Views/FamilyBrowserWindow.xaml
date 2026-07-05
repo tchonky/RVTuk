@@ -284,7 +284,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </StackPanel>
-                    <Border Background="#332200" BorderBrush="{StaticResource Brush.Accent}" BorderThickness="1"
+                    <Border Background="{StaticResource Brush.ErrorFill}" BorderBrush="{StaticResource Brush.Accent}" BorderThickness="1"
                             Margin="0,6,0,4" Padding="6,3" CornerRadius="3"
                             Visibility="{Binding ShowUpdateInProject, Converter={StaticResource BoolVis}}">
                         <TextBlock Text="&#x2191; Newer version available in library"
