@@ -67,8 +67,9 @@ namespace RVTuk.Revit.AutoDimensions
             DimensionLineStyle.EnsureExists(doc);
 
             var referenceLines = new FilteredElementCollector(doc, view.Id)
-                .OfClass(typeof(DetailLine))
-                .Cast<DetailLine>()
+                .OfClass(typeof(CurveElement))
+                .Cast<CurveElement>()
+                .OfType<DetailLine>()
                 .Where(DimensionLineStyle.IsDimensionsLine)
                 .ToList();
 
