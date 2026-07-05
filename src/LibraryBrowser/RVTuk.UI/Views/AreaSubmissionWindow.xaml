@@ -24,95 +24,214 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Top toolbar -->
+        <!-- Persistent toolbar — visible regardless of the active tab -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="8"
                     Background="{StaticResource Brush.Panel}">
-            <Button Content="⚙ Config"  Command="{Binding ShowConfigCommand}" Margin="0,0,6,0" Padding="10,5"/>
-            <Button Content="⟳ Refresh" Command="{Binding RefreshCommand}"   Margin="0,0,6,0" Padding="10,5"/>
-            <Button Content="🔑 Usage Keys" Command="{Binding SetupUsageKeysCommand}" Margin="0,0,6,0" Padding="10,5"
-                    ToolTip="Create the RZ usage key schedules and area text parameters in this project (idempotent — safe to re-run)"/>
-            <Button Content="⬆ Export"  Command="{Binding ExportCommand}"    Padding="10,5"
+            <Button Content="⟳ Refresh" Command="{Binding RefreshCommand}" Margin="0,0,6,0" Padding="10,5"/>
+            <Button Content="⬆ Export"  Command="{Binding ExportCommand}"  Padding="10,5"
                     Background="{StaticResource Brush.AccentDark}" BorderBrush="{StaticResource Brush.Accent}"/>
         </StackPanel>
 
-        <!-- ── CONFIG PANE ─────────────────────────────────────────── -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
-                      Visibility="{Binding IsConfigPane, Converter={StaticResource BoolVis}}">
-            <StackPanel Margin="18,14,18,14">
-                <TextBlock Text="SUBMISSION SETTINGS" Foreground="{StaticResource Brush.TextMuted}"
-                           FontSize="10" FontWeight="SemiBold" Margin="0,0,0,10"/>
+        <TabControl Grid.Row="1" SelectedIndex="{Binding CurrentPaneIndex, Mode=TwoWay}">
 
-                <TextBlock Text="Building number" Margin="0,0,0,2"/>
-                <TextBox Text="{Binding Config.BuildingNo}" Margin="0,0,0,10"/>
-
-                <TextBlock Text="Asset (optional)" Margin="0,0,0,2"/>
-                <TextBox Text="{Binding Config.Asset}" Margin="0,0,0,10"/>
-
-                <TextBlock Text="Scale value (DWFX_SCALE — 10 for 1:100)" Margin="0,0,0,2"/>
-                <TextBox Text="{Binding Config.Scale}" Margin="0,0,0,10"/>
-
-                <TextBlock Text="Marker format" Margin="0,0,0,2"/>
-                <RadioButton GroupName="MarkerForm" Margin="0,2,0,2"
-                             IsChecked="{Binding UseOfficialMarkers}"
-                             Content="Official (Block Attributes)"
-                             ToolTip="RZ_*_SYM block inserts with one attribute per tag — the encoding the official spec describes (Garmoshka sample)"/>
-                <RadioButton GroupName="MarkerForm" Margin="0,0,0,10"
-                             IsChecked="{Binding UseOldMarkers}"
-                             Content="Plain text"
-                             ToolTip="One TEXT per polygon with KEY=VALUE&amp;&amp;&amp;… content — the tekenplus encoding RVTuk emitted before"/>
-
-                <TextBlock Text="Output file base name (no extension)" Margin="0,0,0,2"/>
-                <TextBox Text="{Binding Config.FileBaseName}" Margin="0,0,0,10"/>
-
-                <TextBlock Text="Output folder" Margin="0,0,0,2"/>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBox Grid.Column="0" Margin="0,0,6,0"
-                             Text="{Binding OutputFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-                    <Button Grid.Column="1" Content="Browse…" Width="72" Command="{Binding BrowseOutputCommand}"/>
-                </Grid>
-
-                <TextBlock Foreground="{StaticResource Brush.TextMuted}" FontSize="10" Margin="0,12,0,0"
-                           TextWrapping="Wrap">
-                    Writes «base».dxf + «base».dat. Export the DWFX sheets from Revit separately.
-                    Press Refresh to list the open sheet's areas and check for errors before exporting.
-                </TextBlock>
-            </StackPanel>
-        </ScrollViewer>
-
-        <!-- ── AREAS PANE ──────────────────────────────────────────── -->
-        <TreeView x:Name="AreaTree" Grid.Row="1"
-                  Visibility="{Binding IsAreasPane, Converter={StaticResource BoolVis}}"
-                  ItemsSource="{Binding Levels}"
-                  SelectedItemChanged="AreaTree_SelectedItemChanged"
-                  BorderThickness="0" Background="{StaticResource Brush.Bg}">
-            <TreeView.Resources>
-                <HierarchicalDataTemplate DataType="{x:Type vm:AreaLevelGroupViewModel}" ItemsSource="{Binding Rows}">
+            <!-- ── SETTINGS TAB ─────────────────────────────────────────── -->
+            <TabItem>
+                <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding Header}" FontWeight="SemiBold"/>
-                        <TextBlock Text="  ⚠" Foreground="{StaticResource Brush.Accent}"
-                                   Visibility="{Binding HasError, Converter={StaticResource BoolVis}}"/>
+                        <TextBlock Text="Settings"/>
+                        <Border Background="{StaticResource Brush.ErrorFill}" CornerRadius="8" Padding="5,0" Margin="5,0,0,0"
+                                Visibility="{Binding HasInvalidSettings, Converter={StaticResource BoolVis}}">
+                            <TextBlock Text="!" FontSize="9" Foreground="{StaticResource Brush.Warning}"/>
+                        </Border>
                     </StackPanel>
-                </HierarchicalDataTemplate>
-                <DataTemplate DataType="{x:Type vm:AreaRowViewModel}">
-                    <TextBlock Text="{Binding Display}" ToolTip="{Binding ErrorSummary}">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="{StaticResource Brush.Text}"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasError}" Value="True">
-                                        <Setter Property="Foreground" Value="#FF5555"/>
-                                        <Setter Property="FontWeight" Value="SemiBold"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                </DataTemplate>
-            </TreeView.Resources>
-        </TreeView>
+                </TabItem.Header>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="12,12,12,14">
+
+                        <HeaderedContentControl Header="Submission" Style="{StaticResource GroupHeaderPanel}">
+                            <StackPanel>
+                                <TextBlock Margin="0,0,0,2">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                            <Setter Property="Text" Value="Building number"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding BuildingNoInvalid}" Value="True">
+                                                    <Setter Property="Foreground" Value="{StaticResource Brush.Warning}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBox Text="{Binding BuildingNoText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,10">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding BuildingNoInvalid}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="{StaticResource Brush.Warning}"/>
+                                                    <Setter Property="Background" Value="{StaticResource Brush.ErrorFill}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
+
+                                <TextBlock Text="Asset (optional)" Margin="0,0,0,2"/>
+                                <TextBox Text="{Binding Config.Asset}" Margin="0,0,0,10"/>
+
+                                <TextBlock Margin="0,0,0,2">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                            <Setter Property="Text" Value="Scale value (DWFX_SCALE — 10 for 1:100)"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ScaleInvalid}" Value="True">
+                                                    <Setter Property="Foreground" Value="{StaticResource Brush.Warning}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBox Text="{Binding ScaleText, UpdateSourceTrigger=PropertyChanged}">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ScaleInvalid}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="{StaticResource Brush.Warning}"/>
+                                                    <Setter Property="Background" Value="{StaticResource Brush.ErrorFill}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
+                            </StackPanel>
+                        </HeaderedContentControl>
+
+                        <HeaderedContentControl Header="Markers &amp; Output" Style="{StaticResource GroupHeaderPanel}">
+                            <StackPanel>
+                                <TextBlock Text="Marker format" Margin="0,0,0,2"/>
+                                <RadioButton GroupName="MarkerForm" Margin="0,2,0,2"
+                                             IsChecked="{Binding UseOfficialMarkers}"
+                                             Content="Official (Block Attributes)"
+                                             ToolTip="RZ_*_SYM block inserts with one attribute per tag — the encoding the official spec describes (Garmoshka sample)"/>
+                                <RadioButton GroupName="MarkerForm" Margin="0,0,0,10"
+                                             IsChecked="{Binding UseOldMarkers}"
+                                             Content="Plain text"
+                                             ToolTip="One TEXT per polygon with KEY=VALUE&amp;&amp;&amp;… content — the tekenplus encoding RVTuk emitted before"/>
+
+                                <TextBlock Margin="0,0,0,2">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                            <Setter Property="Text" Value="Output file base name (no extension)"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding FileBaseNameInvalid}" Value="True">
+                                                    <Setter Property="Foreground" Value="{StaticResource Brush.Warning}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBox Text="{Binding FileBaseNameText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,10">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding FileBaseNameInvalid}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="{StaticResource Brush.Warning}"/>
+                                                    <Setter Property="Background" Value="{StaticResource Brush.ErrorFill}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
+
+                                <TextBlock Margin="0,0,0,2">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                            <Setter Property="Text" Value="Output folder"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding OutputFolderInvalid}" Value="True">
+                                                    <Setter Property="Foreground" Value="{StaticResource Brush.Warning}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" Margin="0,0,6,0"
+                                             Text="{Binding OutputFolder, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                                        <TextBox.Style>
+                                            <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding OutputFolderInvalid}" Value="True">
+                                                        <Setter Property="BorderBrush" Value="{StaticResource Brush.Warning}"/>
+                                                        <Setter Property="Background" Value="{StaticResource Brush.ErrorFill}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBox.Style>
+                                    </TextBox>
+                                    <Button Grid.Column="1" Content="Browse…" Width="72" Command="{Binding BrowseOutputCommand}"/>
+                                </Grid>
+                            </StackPanel>
+                        </HeaderedContentControl>
+
+                        <HeaderedContentControl Header="Project setup" Style="{StaticResource GroupHeaderPanel}">
+                            <StackPanel>
+                                <Button Content="🔑 Setup Usage Keys" HorizontalAlignment="Left" Padding="10,5"
+                                        Command="{Binding SetupUsageKeysCommand}"/>
+                                <TextBlock Foreground="{StaticResource Brush.TextMuted}" FontSize="10" Margin="0,8,0,0"
+                                           TextWrapping="Wrap">
+                                    Creates the RZ usage key schedules and area text parameters in this project.
+                                    Idempotent — safe to re-run.
+                                </TextBlock>
+                            </StackPanel>
+                        </HeaderedContentControl>
+
+                        <TextBlock Foreground="{StaticResource Brush.TextMuted}" FontSize="10" Margin="0,4,0,0"
+                                   TextWrapping="Wrap">
+                            Writes «base».dxf + «base».dat. Export the DWFX sheets from Revit separately.
+                            Press Refresh to list the open sheet's areas and check for errors before exporting.
+                        </TextBlock>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ── AREAS TAB (unstyled placeholder — restyled in the next task) ── -->
+            <TabItem Header="Areas">
+                <TreeView x:Name="AreaTree"
+                          ItemsSource="{Binding Levels}"
+                          SelectedItemChanged="AreaTree_SelectedItemChanged"
+                          BorderThickness="0" Background="{StaticResource Brush.Bg}">
+                    <TreeView.Resources>
+                        <HierarchicalDataTemplate DataType="{x:Type vm:AreaLevelGroupViewModel}" ItemsSource="{Binding Rows}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Header}" FontWeight="SemiBold"/>
+                                <TextBlock Text="  ⚠" Foreground="{StaticResource Brush.Accent}"
+                                           Visibility="{Binding HasError, Converter={StaticResource BoolVis}}"/>
+                            </StackPanel>
+                        </HierarchicalDataTemplate>
+                        <DataTemplate DataType="{x:Type vm:AreaRowViewModel}">
+                            <TextBlock Text="{Binding Display}" ToolTip="{Binding ErrorSummary}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource Brush.Text}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasError}" Value="True">
+                                                <Setter Property="Foreground" Value="#FF5555"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </DataTemplate>
+                    </TreeView.Resources>
+                </TreeView>
+            </TabItem>
+
+        </TabControl>
     </Grid>
 </Window>

@@ -49,7 +49,6 @@ namespace RVTuk.UI.ViewModels
             _setupUsageKeys = setupUsageKeys;
             _dispatcher = Dispatcher.CurrentDispatcher;
 
-            ShowConfigCommand = new RelayCommand(() => CurrentPane = SubmissionPane.Config);
             RefreshCommand    = new RelayCommand(Refresh);
             ExportCommand     = new RelayCommand(Export);
             BrowseOutputCommand = new RelayCommand(BrowseOutput);
@@ -67,7 +66,6 @@ namespace RVTuk.UI.ViewModels
         public AreaSubmissionConfig Config { get; } = new AreaSubmissionConfig();
         public ObservableCollection<AreaLevelGroupViewModel> Levels { get; } = new();
 
-        public ICommand ShowConfigCommand { get; }
         public ICommand RefreshCommand { get; }
         public ICommand ExportCommand { get; }
         public ICommand BrowseOutputCommand { get; }
@@ -82,14 +80,9 @@ namespace RVTuk.UI.ViewModels
             set
             {
                 SetProperty(ref _currentPane, value);
-                OnPropertyChanged(nameof(IsConfigPane));
-                OnPropertyChanged(nameof(IsAreasPane));
                 OnPropertyChanged(nameof(CurrentPaneIndex));
             }
         }
-
-        public bool IsConfigPane => _currentPane == SubmissionPane.Config;
-        public bool IsAreasPane  => _currentPane == SubmissionPane.Areas;
 
         /// <summary>Zero-based index mirror of <see cref="CurrentPane"/> for two-way binding to
         /// the Settings/Areas <c>TabControl.SelectedIndex</c> (so clicking a tab keeps
