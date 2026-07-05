@@ -66,11 +66,14 @@ namespace RVTuk.Revit.AutoDimensions
         {
             DimensionLineStyle.EnsureExists(doc);
 
-            var referenceLines = new FilteredElementCollector(doc, view.Id)
+            // Document-wide collector filtered by OwnerViewId, not a view-scoped collector:
+            // a view-scoped collector only returns elements currently visible, and reference
+            // lines hidden by the view template must still produce dimensions.
+            var referenceLines = new FilteredElementCollector(doc)
                 .OfClass(typeof(CurveElement))
                 .Cast<CurveElement>()
                 .OfType<DetailLine>()
-                .Where(DimensionLineStyle.IsDimensionsLine)
+                .Where(l => l.OwnerViewId == view.Id && DimensionLineStyle.IsDimensionsLine(l))
                 .ToList();
 
             var straightWalls = new FilteredElementCollector(doc, view.Id)
@@ -129,9 +132,60 @@ namespace RVTuk.Revit.AutoDimensions
                 }
 
                 var dimension = doc.Create.NewDimension(view, geometryLine, referenceArray);
+                dimension = RemoveCoincidentReferences(doc, view, geometryLine, dimension);
+                if (dimension == null)
+                {
+                    skipped++;
+                    continue;
+                }
+
                 AutoDimensionTracker.SetTrackedDimension(line, dimension.Id);
                 created++;
             }
+        }
+
+        /// <summary>
+        /// Joined walls can put two face references at the same station along the line,
+        /// producing zero-length segments. Detects them on the freshly created dimension and,
+        /// if any exist, recreates it keeping only the first reference at each station.
+        /// Returns null (after deleting the dimension) when fewer than two references survive.
+        /// </summary>
+        private static Dimension? RemoveCoincidentReferences(
+            Document doc, View view, Line geometryLine, Dimension dimension)
+        {
+            var segmentValues = GetSegmentValues(dimension);
+            var keep = CoincidentReferenceFilter.KeepIndices(
+                segmentValues, doc.Application.ShortCurveTolerance);
+            if (keep.Count == segmentValues.Count + 1) return dimension;
+
+            var references = dimension.References;
+            var filtered = new ReferenceArray();
+            foreach (var index in keep)
+            {
+                filtered.Append(references.get_Item(index));
+            }
+
+            doc.Delete(dimension.Id);
+            if (filtered.Size < 2) return null;
+            return doc.Create.NewDimension(view, geometryLine, filtered);
+        }
+
+        /// <summary>
+        /// Segment values in order along the line; a single-segment dimension has an empty
+        /// Segments collection and exposes its length via Value instead.
+        /// </summary>
+        private static System.Collections.Generic.IReadOnlyList<double> GetSegmentValues(
+            Dimension dimension)
+        {
+            if (dimension.NumberOfSegments == 0)
+            {
+                return new[] { dimension.Value ?? 0.0 };
+            }
+
+            return dimension.Segments
+                .Cast<DimensionSegment>()
+                .Select(s => s.Value ?? 0.0)
+                .ToList();
         }
 
         private static void ShowSummary(int created, int skipped)
