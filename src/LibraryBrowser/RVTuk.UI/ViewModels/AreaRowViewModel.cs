@@ -21,20 +21,24 @@ namespace RVTuk.UI.ViewModels
         public int? UsageCodePrev => Record.UsageCodePrev;
         public bool HasError => Record.Errors != AreaError.None;
 
-        /// <summary>Human-readable one-line label: "«number» — «name» [code]"; a permit-history
-        /// code (USAGE_TYPE_OLD) shows as "[301←1]" so unexpected template data is visible.</summary>
-        public string Display
+        /// <summary>Left-hand label: "«number» — «name»" (or "(no #)" when the area has no
+        /// Number set).</summary>
+        public string NumberAndName
         {
             get
             {
                 var head = string.IsNullOrWhiteSpace(Number) ? "(no #)" : Number!;
                 var name = string.IsNullOrWhiteSpace(Name) ? "" : " — " + Name;
-                var code = UsageCode.HasValue || UsageCodePrev.HasValue
-                    ? "  [" + (UsageCode?.ToString() ?? "–") + (UsageCodePrev.HasValue ? "←" + UsageCodePrev : "") + "]"
-                    : "  [no code]";
-                return head + name + code;
+                return head + name;
             }
         }
+
+        /// <summary>Right-hand tag: the usage code, with a permit-history code
+        /// (USAGE_TYPE_OLD) shown as "301←1" so unexpected template data is visible, or
+        /// "⚠ no code" when neither is set.</summary>
+        public string Tag => UsageCode.HasValue || UsageCodePrev.HasValue
+            ? (UsageCode?.ToString() ?? "–") + (UsageCodePrev.HasValue ? "←" + UsageCodePrev : "")
+            : "⚠ no code";
 
         /// <summary>Comma-joined reason(s) this row is flagged, for a tooltip.</summary>
         public string? ErrorSummary => HasError ? Record.Errors.ToString() : null;
