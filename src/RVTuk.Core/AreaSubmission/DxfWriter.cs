@@ -632,7 +632,10 @@ namespace RVTuk.Core.AreaSubmission
             using var stream = assembly.GetManifestResourceStream(resourceName)
                 ?? throw new InvalidOperationException($"Embedded DXF template resource '{resourceName}' not found.");
             using var reader = new StreamReader(stream, Encoding.UTF8);
-            cache = reader.ReadToEnd();
+            // The whole file must be uniformly CRLF like the generated ENTITIES section, but the
+            // embedded resource's endings depend on how git checked the repo out (the resource is
+            // committed with LF) — normalise instead of trusting the checkout.
+            cache = reader.ReadToEnd().Replace("\r\n", "\n").Replace("\n", Nl);
             return cache;
         }
     }
