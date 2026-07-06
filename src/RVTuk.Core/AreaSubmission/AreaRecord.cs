@@ -49,6 +49,10 @@ namespace RVTuk.Core.AreaSubmission
         public string? Asset { get; set; }
         public string Floor { get; set; } = "";
         public int PageNo { get; set; }
+        /// <summary>The area plan viewport's plot scale (e.g. 100 for 1:100), read from
+        /// <c>ViewPlan.Scale</c> at extraction time so the Area Calc window can auto-fill
+        /// <see cref="AreaSubmissionConfig.Scale"/> and flag mixed scales across viewports.</summary>
+        public int Scale { get; set; }
         public bool IsUnderground { get; set; }
         public double AreaValue { get; set; }
         public List<List<Point2D>> BoundaryLoops { get; set; } = new();

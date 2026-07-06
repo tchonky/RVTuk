@@ -10,7 +10,7 @@ using RVTuk.Core.Config;
 
 namespace RVTuk.UI.ViewModels
 {
-    public enum SubmissionPane { Config, Areas }
+    public enum SubmissionPane { Areas, Config }
 
     /// <summary>
     /// View model for the Area Calc (Rishui Zamin) window. Top toolbar switches the bottom pane
@@ -25,11 +25,11 @@ namespace RVTuk.UI.ViewModels
         private readonly Func<(bool ok, string msg)>? _setupUsageKeys;
         private readonly Dispatcher _dispatcher;
 
-        private SubmissionPane _currentPane = SubmissionPane.Config;
+        private SubmissionPane _currentPane = SubmissionPane.Areas;
         private AreaRowViewModel? _selectedRow;
         private string _buildingNoText = "";
-        private string _scaleText = "";
         private string _fileBaseNameText = "";
+        private bool _scaleMismatch;
 
         /// <param name="extract">Reads the areas on the open sheet (id + record).</param>
         /// <param name="selectInModel">Selects an Area in the model by element id.</param>
@@ -54,12 +54,12 @@ namespace RVTuk.UI.ViewModels
             BrowseOutputCommand = new RelayCommand(BrowseOutput);
             SetupUsageKeysCommand = new RelayCommand(SetupUsageKeys);
 
-            var savedOutputFolder = ConfigManager.LoadConfig().AreaCalcOutputFolder;
-            if (!string.IsNullOrWhiteSpace(savedOutputFolder))
-                Config.OutputFolder = savedOutputFolder;
+            var savedConfig = ConfigManager.LoadConfig();
+            if (!string.IsNullOrWhiteSpace(savedConfig.AreaCalcOutputFolder))
+                Config.OutputFolder = savedConfig.AreaCalcOutputFolder;
+            Config.MarkerForm = savedConfig.AreaCalcMarkerForm;
 
             _buildingNoText = Config.BuildingNo.ToString();
-            _scaleText = Config.Scale.ToString();
             _fileBaseNameText = Config.FileBaseName;
         }
 
@@ -137,23 +137,22 @@ namespace RVTuk.UI.ViewModels
         /// 1" rule.</summary>
         public bool BuildingNoInvalid => !int.TryParse(_buildingNoText, out var n) || n < 1;
 
-        /// <summary>Notifying wrapper over <see cref="AreaSubmissionConfig.Scale"/> (the
-        /// DWFX_SCALE value) so the Settings tab can highlight it red when blank or non-positive.</summary>
-        public string ScaleText
+        /// <summary>The DWFX_SCALE value (e.g. 100 for 1:100), read automatically off the open
+        /// sheet's area-plan viewport(s) during <see cref="Refresh"/> — no longer user-entered.</summary>
+        public int DetectedScale => Config.Scale;
+
+        /// <summary>True when the open sheet's area-plan viewports don't all share the same plot
+        /// scale, so <see cref="DetectedScale"/> can't be trusted for the export. Drives a
+        /// warning on the Settings tab.</summary>
+        public bool ScaleMismatch
         {
-            get => _scaleText;
-            set
+            get => _scaleMismatch;
+            private set
             {
-                SetProperty(ref _scaleText, value);
-                Config.Scale = int.TryParse(value, out var n) ? n : 0;
-                OnPropertyChanged(nameof(ScaleInvalid));
+                SetProperty(ref _scaleMismatch, value);
                 OnPropertyChanged(nameof(HasInvalidSettings));
             }
         }
-
-        /// <summary>Mirrors <c>AreaValidator.CheckConfig</c>'s "Scale must be greater than zero"
-        /// rule.</summary>
-        public bool ScaleInvalid => !int.TryParse(_scaleText, out var n) || n <= 0;
 
         /// <summary>Notifying wrapper over <see cref="AreaSubmissionConfig.FileBaseName"/> so the
         /// Settings tab can highlight it red when blank.</summary>
@@ -177,7 +176,7 @@ namespace RVTuk.UI.ViewModels
         /// <c>AreaValidator.CheckConfig</c> so the UI and the export-time check never disagree
         /// about what counts as incomplete.</summary>
         public bool HasInvalidSettings =>
-            BuildingNoInvalid || ScaleInvalid || FileBaseNameInvalid || OutputFolderInvalid;
+            BuildingNoInvalid || ScaleMismatch || FileBaseNameInvalid || OutputFolderInvalid;
 
         /// <summary>Count of area rows currently flagged with an error — drives the Areas tab's
         /// count badge and its summary banner. Recomputed (via <see cref="OnPropertyChanged"/>)
@@ -201,6 +200,7 @@ namespace RVTuk.UI.ViewModels
                     Config.MarkerForm = MarkerForm.FormA;
                     OnPropertyChanged();
                     OnPropertyChanged(nameof(UseOldMarkers));
+                    SaveMarkerForm();
                 }
             }
         }
@@ -217,8 +217,16 @@ namespace RVTuk.UI.ViewModels
                     Config.MarkerForm = MarkerForm.FormB;
                     OnPropertyChanged();
                     OnPropertyChanged(nameof(UseOfficialMarkers));
+                    SaveMarkerForm();
                 }
             }
+        }
+
+        private void SaveMarkerForm()
+        {
+            var appConfig = ConfigManager.LoadConfig();
+            appConfig.AreaCalcMarkerForm = Config.MarkerForm;
+            ConfigManager.SaveConfig(appConfig);
         }
 
         public AreaRowViewModel? SelectedRow
@@ -263,12 +271,22 @@ namespace RVTuk.UI.ViewModels
                     })
                     .ToList();
 
+                var scales = extracted.Select(e => e.Rec.Scale).Where(s => s > 0).Distinct().ToList();
+
                 _dispatcher.Invoke(() =>
                 {
                     Levels.Clear();
                     foreach (var g in groups) Levels.Add(g);
                     OnPropertyChanged(nameof(FlaggedCount));
                     OnPropertyChanged(nameof(TotalAreaCount));
+
+                    if (scales.Count > 0)
+                    {
+                        Config.Scale = scales[0];
+                        ScaleMismatch = scales.Count > 1;
+                        OnPropertyChanged(nameof(DetectedScale));
+                    }
+
                     CurrentPane = SubmissionPane.Areas;
                     if (extracted.Count == 0)
                         ExportCompleted?.Invoke(false, "No areas found on the open sheet's area plan(s).");

@@ -98,9 +98,9 @@ namespace RVTuk.Revit.Commands
             try
             {
                 var vm = new AreaSubmissionViewModel(extract, selectInModel, export, setupUsageKeys);
-                if (string.IsNullOrWhiteSpace(vm.Config.FileBaseName))
+                if (string.IsNullOrWhiteSpace(vm.FileBaseNameText))
                 {
-                    vm.Config.FileBaseName = commandData.Application.ActiveUIDocument.Document.Title;
+                    vm.FileBaseNameText = commandData.Application.ActiveUIDocument.Document.Title;
                 }
                 var window = new AreaSubmissionWindow(vm);
                 window.Closed += (s, e) => Application.AreaCalcWindow = null;

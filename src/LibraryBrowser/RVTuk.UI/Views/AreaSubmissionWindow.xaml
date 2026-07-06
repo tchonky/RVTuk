@@ -21,20 +21,108 @@
     <Window.Foreground><StaticResource ResourceKey="Brush.Text"/></Window.Foreground>
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+        <TabControl SelectedIndex="{Binding CurrentPaneIndex, Mode=TwoWay}">
 
-        <!-- Persistent toolbar — visible regardless of the active tab -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="8"
-                    Background="{StaticResource Brush.Panel}">
-            <Button Content="⟳ Refresh" Command="{Binding RefreshCommand}" Margin="0,0,6,0" Padding="10,5"/>
-            <Button Content="⬆ Export"  Command="{Binding ExportCommand}"  Padding="10,5"
-                    Background="{StaticResource Brush.AccentDark}" BorderBrush="{StaticResource Brush.Accent}"/>
-        </StackPanel>
+            <!-- ── AREAS TAB ────────────────────────────────────────────── -->
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Areas"/>
+                        <Border Background="{StaticResource Brush.ErrorFill}" CornerRadius="8" Padding="5,0" Margin="5,0,0,0"
+                                Visibility="{Binding FlaggedCount, Converter={StaticResource CountVis}}">
+                            <TextBlock Text="{Binding FlaggedCount}" FontSize="9" Foreground="{StaticResource Brush.Warning}"/>
+                        </Border>
+                    </StackPanel>
+                </TabItem.Header>
 
-        <TabControl Grid.Row="1" SelectedIndex="{Binding CurrentPaneIndex, Mode=TwoWay}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8"
+                                Background="{StaticResource Brush.Panel}">
+                        <Button Content="⟳ Refresh" Command="{Binding RefreshCommand}" Margin="0,0,6,0" Padding="10,5"/>
+                        <Button Content="⬆ Export"  Command="{Binding ExportCommand}"  Padding="10,5"
+                                Background="{StaticResource Brush.AccentDark}" BorderBrush="{StaticResource Brush.Accent}"/>
+                    </StackPanel>
+
+                    <Border DockPanel.Dock="Top" Background="{StaticResource Brush.ErrorFill}"
+                            BorderBrush="{StaticResource Brush.Warning}" BorderThickness="1" CornerRadius="2"
+                            Margin="10,0,10,0" Padding="8,6"
+                            Visibility="{Binding FlaggedCount, Converter={StaticResource CountVis}}">
+                        <TextBlock Foreground="{StaticResource Brush.Text}" FontSize="11" TextWrapping="Wrap">
+                            <Run Text="{Binding FlaggedCount, Mode=OneWay}"/><Run Text=" of "/><Run Text="{Binding TotalAreaCount, Mode=OneWay}"/><Run Text=" areas flagged — check before exporting"/>
+                        </TextBlock>
+                    </Border>
+
+                    <TreeView x:Name="AreaTree"
+                              ItemsSource="{Binding Levels}"
+                              SelectedItemChanged="AreaTree_SelectedItemChanged"
+                              BorderThickness="0" Background="{StaticResource Brush.Bg}" Margin="4,6,4,4">
+                        <TreeView.Resources>
+                            <HierarchicalDataTemplate DataType="{x:Type vm:AreaLevelGroupViewModel}" ItemsSource="{Binding Rows}">
+                                <StackPanel Orientation="Horizontal" Margin="0,4,0,2">
+                                    <TextBlock Text="{Binding Header}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="  ⚠" Foreground="{StaticResource Brush.Warning}"
+                                               Visibility="{Binding HasError, Converter={StaticResource BoolVis}}"/>
+                                </StackPanel>
+                            </HierarchicalDataTemplate>
+                            <DataTemplate DataType="{x:Type vm:AreaRowViewModel}">
+                                <Grid Margin="10,2,4,2" ToolTip="{Binding ErrorSummary}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.Style>
+                                        <Style TargetType="Grid">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasError}" Value="True">
+                                                    <Setter Property="Background" Value="{StaticResource Brush.ErrorFill}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Grid.Style>
+                                    <TextBlock Grid.Column="0" Text="{Binding NumberAndName}" Margin="0,2">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{StaticResource Brush.Text}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasError}" Value="True">
+                                                        <Setter Property="Foreground" Value="{StaticResource Brush.Warning}"/>
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <Border Grid.Column="1" Background="{StaticResource Brush.Control}"
+                                            BorderBrush="{StaticResource Brush.Border}" BorderThickness="1"
+                                            CornerRadius="8" Padding="6,1" VerticalAlignment="Center">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasError}" Value="True">
+                                                        <Setter Property="BorderBrush" Value="{StaticResource Brush.Warning}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock Text="{Binding Tag}" FontSize="9">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource Brush.TextMuted}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasError}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource Brush.Warning}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </TreeView.Resources>
+                    </TreeView>
+                </DockPanel>
+            </TabItem>
 
             <!-- ── SETTINGS TAB ─────────────────────────────────────────── -->
             <TabItem>
@@ -81,30 +169,16 @@
                                 <TextBlock Text="Asset (optional)" Margin="0,0,0,2"/>
                                 <TextBox Text="{Binding Config.Asset}" Margin="0,0,0,10"/>
 
-                                <TextBlock Margin="0,0,0,2">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                                            <Setter Property="Text" Value="Scale value (DWFX_SCALE — 10 for 1:100)"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ScaleInvalid}" Value="True">
-                                                    <Setter Property="Foreground" Value="{StaticResource Brush.Warning}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
+                                <TextBlock Text="Scale (read from the sheet's area plan viewport)" Margin="0,0,0,2"/>
+                                <TextBlock Margin="0,0,0,4">
+                                    <Run Text="1:"/><Run Text="{Binding DetectedScale, Mode=OneWay}"/>
                                 </TextBlock>
-                                <TextBox Text="{Binding ScaleText, UpdateSourceTrigger=PropertyChanged}">
-                                    <TextBox.Style>
-                                        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ScaleInvalid}" Value="True">
-                                                    <Setter Property="BorderBrush" Value="{StaticResource Brush.Warning}"/>
-                                                    <Setter Property="Background" Value="{StaticResource Brush.ErrorFill}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBox.Style>
-                                </TextBox>
+                                <Border Background="{StaticResource Brush.ErrorFill}"
+                                        BorderBrush="{StaticResource Brush.Warning}" BorderThickness="1" CornerRadius="2"
+                                        Padding="8,6" Visibility="{Binding ScaleMismatch, Converter={StaticResource BoolVis}}">
+                                    <TextBlock Foreground="{StaticResource Brush.Warning}" FontSize="11" TextWrapping="Wrap"
+                                               Text="More than one scale found among this sheet's area plan viewports — verify before exporting."/>
+                                </Border>
                             </StackPanel>
                         </HeaderedContentControl>
 
@@ -199,100 +273,6 @@
                         </TextBlock>
                     </StackPanel>
                 </ScrollViewer>
-            </TabItem>
-
-            <!-- ── AREAS TAB ────────────────────────────────────────────── -->
-            <TabItem>
-                <TabItem.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Areas"/>
-                        <Border Background="{StaticResource Brush.ErrorFill}" CornerRadius="8" Padding="5,0" Margin="5,0,0,0"
-                                Visibility="{Binding FlaggedCount, Converter={StaticResource CountVis}}">
-                            <TextBlock Text="{Binding FlaggedCount}" FontSize="9" Foreground="{StaticResource Brush.Warning}"/>
-                        </Border>
-                    </StackPanel>
-                </TabItem.Header>
-
-                <DockPanel>
-                    <Border DockPanel.Dock="Top" Background="{StaticResource Brush.ErrorFill}"
-                            BorderBrush="{StaticResource Brush.Warning}" BorderThickness="1" CornerRadius="2"
-                            Margin="10,10,10,0" Padding="8,6"
-                            Visibility="{Binding FlaggedCount, Converter={StaticResource CountVis}}">
-                        <TextBlock Foreground="{StaticResource Brush.Text}" FontSize="11" TextWrapping="Wrap">
-                            <Run Text="{Binding FlaggedCount, Mode=OneWay}"/><Run Text=" of "/><Run Text="{Binding TotalAreaCount, Mode=OneWay}"/><Run Text=" areas flagged — check before exporting"/>
-                        </TextBlock>
-                    </Border>
-
-                    <TreeView x:Name="AreaTree"
-                              ItemsSource="{Binding Levels}"
-                              SelectedItemChanged="AreaTree_SelectedItemChanged"
-                              BorderThickness="0" Background="{StaticResource Brush.Bg}" Margin="4,6,4,4">
-                        <TreeView.Resources>
-                            <HierarchicalDataTemplate DataType="{x:Type vm:AreaLevelGroupViewModel}" ItemsSource="{Binding Rows}">
-                                <StackPanel Orientation="Horizontal" Margin="0,4,0,2">
-                                    <TextBlock Text="{Binding Header}" FontWeight="SemiBold"/>
-                                    <TextBlock Text="  ⚠" Foreground="{StaticResource Brush.Warning}"
-                                               Visibility="{Binding HasError, Converter={StaticResource BoolVis}}"/>
-                                </StackPanel>
-                            </HierarchicalDataTemplate>
-                            <DataTemplate DataType="{x:Type vm:AreaRowViewModel}">
-                                <Grid Margin="10,2,4,2" ToolTip="{Binding ErrorSummary}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.Style>
-                                        <Style TargetType="Grid">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding HasError}" Value="True">
-                                                    <Setter Property="Background" Value="{StaticResource Brush.ErrorFill}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Grid.Style>
-                                    <TextBlock Grid.Column="0" Text="{Binding NumberAndName}" Margin="0,2">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Foreground" Value="{StaticResource Brush.Text}"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding HasError}" Value="True">
-                                                        <Setter Property="Foreground" Value="{StaticResource Brush.Warning}"/>
-                                                        <Setter Property="FontWeight" Value="SemiBold"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                    <Border Grid.Column="1" Background="{StaticResource Brush.Control}"
-                                            BorderBrush="{StaticResource Brush.Border}" BorderThickness="1"
-                                            CornerRadius="8" Padding="6,1" VerticalAlignment="Center">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding HasError}" Value="True">
-                                                        <Setter Property="BorderBrush" Value="{StaticResource Brush.Warning}"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                        <TextBlock Text="{Binding Tag}" FontSize="9">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="{StaticResource Brush.TextMuted}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding HasError}" Value="True">
-                                                            <Setter Property="Foreground" Value="{StaticResource Brush.Warning}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </Border>
-                                </Grid>
-                            </DataTemplate>
-                        </TreeView.Resources>
-                    </TreeView>
-                </DockPanel>
             </TabItem>
 
         </TabControl>

@@ -14,6 +14,7 @@ namespace RVTuk.UI.Views
             DataContext = _vm;
             _vm.ExportCompleted += OnExportCompleted;
             Closed += (_, _) => _vm.ExportCompleted -= OnExportCompleted;
+            Loaded += (_, _) => _vm.RefreshCommand.Execute(null);
         }
 
         // TreeView.SelectedItem isn't directly bindable; forward area-row selection to the VM

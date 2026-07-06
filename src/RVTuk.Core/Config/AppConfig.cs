@@ -10,6 +10,10 @@ namespace RVTuk.Core.Config
         /// across sessions so the user doesn't have to re-browse every time.</summary>
         public string AreaCalcOutputFolder { get; set; } = string.Empty;
 
+        /// <summary>Last-used marker encoding for the Area Calc export, remembered across
+        /// sessions so the user doesn't have to re-pick it every time.</summary>
+        public AreaSubmission.MarkerForm AreaCalcMarkerForm { get; set; } = AreaSubmission.MarkerForm.FormA;
+
         // Derived — never stored separately; always lives inside the library folder.
         public string DatabasePath => Path.Combine(LibraryFolderPath, ".Setup", "RVTuk.db");
 

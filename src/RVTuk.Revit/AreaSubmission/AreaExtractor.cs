@@ -181,6 +181,10 @@ namespace RVTuk.Revit.AreaSubmission
 
             private UV CropExtent { get; }
 
+            /// <summary>The view's plot scale (e.g. 100 for 1:100), exposed so callers can
+            /// stamp it onto each <see cref="AreaRecord"/> built through this mapper.</summary>
+            public int Scale => _scale;
+
             public Point2D Map(XYZ modelPoint)
             {
                 var local = _worldToLocal.OfPoint(modelPoint);
@@ -240,6 +244,7 @@ namespace RVTuk.Revit.AreaSubmission
                 IsUnderground = level != null && elevationM < UndergroundThresholdM,
                 // Single-sheet v1: the open sheet is always page 1 (Open item for multi-sheet).
                 PageNo = 1,
+                Scale = mapper.Scale,
                 AreaValue = area.Area * SqFeetToSqM,
                 BoundaryLoops = GetBoundaryLoops(area, mapper),
             };
