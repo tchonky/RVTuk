@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RVTuk is a Revit add-in toolkit for Knafo Klimor Architects LTD. It supports Revit 2024 and 2025 simultaneously via separate build configurations (Revit 2023 was dropped).
+RVTuk is a Revit add-in toolkit for Knafo Klimor Architects LTD. It supports Revit 2024 and 2025 simultaneously via separate build configurations. Revit 2023 is served by **KKarea**, a separate minimal add-in in this repo (`src\KKarea.Revit`) that hosts only the Area Calc tool — RVTuk itself was dropped from 2023.
 
 > **Product vision, audience, and roadmap live in [`VISION.md`](VISION.md).** This file is the technical reference (build, architecture, threading, deploy).
 
@@ -24,9 +24,10 @@ Current and planned features:
 
 ## Build
 
-A solution file (`RVTuk.sln`) is present with two solution configurations — `Release2024`, `Release2025` (there is no standard `Debug`/`Release`). Build the whole solution per config:
+A solution file (`RVTuk.sln`) is present with three solution configurations — `Release2023`, `Release2024`, `Release2025` (there is no standard `Debug`/`Release`). Build the whole solution per config:
 
 ```powershell
+dotnet build RVTuk.sln -c Release2023
 dotnet build RVTuk.sln -c Release2024
 dotnet build RVTuk.sln -c Release2025
 ```
@@ -37,14 +38,17 @@ Or build a single project (its project references are built transitively). The p
 dotnet build src\RVTuk.Revit\RVTuk.Revit.csproj -c Release2024
 ```
 
-Each config maps to a target framework and a `DefineConstants` symbol that switches the JSON serializer and native-load path (see Architecture):
+Each config maps to a target framework and a per-year `DefineConstants` symbol (see Architecture); the JSON serializer and native-load path are switched separately, by target framework (see below):
 
 | Config        | TFM               | Constant    | SQLite provider           | JSON                      |
 |---------------|-------------------|-------------|---------------------------|---------------------------|
 | `Release2024` | `net48`           | `REVIT2024` | `Microsoft.Data.Sqlite`   | `DataContractJsonSerializer` |
 | `Release2025` | `net8.0-windows`  | `REVIT2025` | `Microsoft.Data.Sqlite`   | `System.Text.Json`        |
+| `Release2023` | `net48`           | `REVIT2023` | `Microsoft.Data.Sqlite`   | `DataContractJsonSerializer` |
 
-Both configs use `Microsoft.Data.Sqlite`; the `REVIT2024` constant switches the JSON serializer (no `System.Text.Json` on net48) and enables the native `e_sqlite3.dll` pre-load. Build outputs land in each project's `bin\{2024|2025}\Release{...}\{tfm}\`, e.g. `src\RVTuk.Revit\bin\2024\Release2024\net48\`.
+All three configs use `Microsoft.Data.Sqlite`. Build outputs land in each project's `bin\{2023|2024|2025}\Release{...}\{tfm}\`, e.g. `src\RVTuk.Revit\bin\2024\Release2024\net48\`.
+
+`Release2023` builds only `RVTuk.Core`, `RVTuk.UI`, and `KKarea.Revit` (the Revit 2023 host); `RVTuk.Revit` does not build for 2023. The net48-vs-net8 code split (JSON serializer choice, and the native `e_sqlite3.dll` pre-load on net48) is gated on the compiler-provided `NETFRAMEWORK` symbol, not on `REVIT2024`; the `REVIT<year>` constants are for year-specific Revit API differences only (e.g. the `ElementId` shims in the shared area sources).
 
 ## Deployment
 
@@ -56,7 +60,7 @@ Both configs use `Microsoft.Data.Sqlite`; the `REVIT2024` constant switches the 
 .\Deploy.ps1 2024       # only Revit 2024 (optional version filter)
 ```
 
-Deploys to `C:\ProgramData\Autodesk\Revit\Addins\{2024|2025}\RVTuk\`. Restart Revit after deploying. Each version deploys independently: a year whose Revit is currently open (DLLs locked) or whose build output is missing is skipped with a warning while the others proceed.
+Deploys to `C:\ProgramData\Autodesk\Revit\Addins\{2024|2025}\RVTuk\`. Restart Revit after deploying. Each version deploys independently: a year whose Revit is currently open (DLLs locked) or whose build output is missing is skipped with a warning while the others proceed. 2023 deploys **KKarea** (entry class `KKarea.Revit.Application`, its own stable ClientId `9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC`) to `...\Addins\2023\KKarea\`; 2024/2025 deploy RVTuk as before.
 
 `Deploy.ps1` copies the build output flat plus the native `e_sqlite3.dll` (from `runtimes\win-x64\native`). For this to work the build output must actually contain the dependency closure: net48 copies NuGet deps to `bin` automatically, but **net8 libraries do not** — so `RVTuk.Revit` (net8) sets `<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>` to pull `Microsoft.Data.Sqlite` + `e_sqlite3.dll` into `bin`. Without it, the Revit 2025 deploy would contain only the three project DLLs and fail to load.
 
@@ -78,6 +82,8 @@ RVTuk.Revit       — Revit add-in host: IExternalApplication entry point,
                           ribbon setup, external-event handlers; depends on Core + UI
                           src\RVTuk.Revit
 ```
+
+**KKarea.Revit** (`src\KKarea.Revit`) is a fourth project: a standalone Revit 2023 add-in hosting only Area Calc. It references Core + UI and compiles the Revit-side area sources (`AreaExtractor`, `UsageKeyScheduleBuilder`, the three area external-event handlers) as **linked shared source** from `RVTuk.Revit` against the 2023 API — it must never reference `RVTuk.Revit` itself. `#if REVIT2023` branches in those shared files cover the 2023 API gaps (`ElementId.IntegerValue` vs `.Value`, int-only `ElementId` ctor).
 
 **RVTuk.Core** holds data models, the SQLite schema/repositories, OLE thumbnail read/write, metadata-XML parsing, and config. Keep it free of Revit API and WPF types so it can be reasoned about in isolation. It multi-targets `net48` (Release2024) and `net8.0-windows` (Release2025) and **does** carry NuGet dependencies, which differ per target:
 - net48: `Microsoft.Data.Sqlite`, GAC `System.Drawing`. No `System.Text.Json` (its transitive polyfills clash with Revit's preloaded assemblies — JSON uses `DataContractJsonSerializer`).

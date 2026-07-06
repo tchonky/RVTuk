@@ -5,7 +5,7 @@ namespace RVTuk.Core.Serialization
 {
     /// <summary>
     /// JSON round-trip for snapshot payloads, isolating the multi-target split.
-    /// net48 (Revit 2023/24, REVIT2024) has no usable System.Text.Json — its transitive
+    /// net48 (Revit 2023/24, NETFRAMEWORK) has no usable System.Text.Json — its transitive
     /// polyfills clash with Revit's preloaded assemblies — so it uses DataContractJsonSerializer
     /// (hence the [DataContract]/[DataMember] DTOs). net8 (Revit 2025) uses System.Text.Json.
     ///
@@ -16,7 +16,7 @@ namespace RVTuk.Core.Serialization
     {
         public static string Serialize<T>(T value)
         {
-#if REVIT2024
+#if NETFRAMEWORK
             var serializer = new System.Runtime.Serialization.Json.DataContractJsonSerializer(typeof(T));
             using (var ms = new MemoryStream())
             {
@@ -30,7 +30,7 @@ namespace RVTuk.Core.Serialization
 
         public static T Deserialize<T>(string json)
         {
-#if REVIT2024
+#if NETFRAMEWORK
             var serializer = new System.Runtime.Serialization.Json.DataContractJsonSerializer(typeof(T));
             using (var ms = new MemoryStream(Encoding.UTF8.GetBytes(json)))
             {

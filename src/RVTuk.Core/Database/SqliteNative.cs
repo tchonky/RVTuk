@@ -19,7 +19,7 @@ namespace RVTuk.Core.Database
         {
             if (System.Threading.Interlocked.Exchange(ref _initialized, 1) != 0)
                 return;
-#if REVIT2024
+#if NETFRAMEWORK
             try
             {
                 var dir = System.IO.Path.GetDirectoryName(
@@ -33,7 +33,7 @@ namespace RVTuk.Core.Database
 #endif
         }
 
-#if REVIT2024
+#if NETFRAMEWORK
         [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
         private static extern IntPtr LoadLibrary(string dllPath);
 #endif
