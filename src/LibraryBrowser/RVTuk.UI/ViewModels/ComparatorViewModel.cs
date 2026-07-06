@@ -98,8 +98,13 @@ namespace RVTuk.UI.ViewModels
             RefreshDocumentsCommand = new RelayCommand(RefreshDocuments, () => !_busy);
             BrowseACommand = new RelayCommand(() => BrowseInto(v => SourceA = v), () => !_busy);
             BrowseBCommand = new RelayCommand(() => BrowseInto(v => SourceB = v), () => !_busy);
-            SaveSnapshotACommand = new RelayCommand(() => SaveSlot(_capturedA), () => !_busy && _capturedA != null);
-            SaveSnapshotBCommand = new RelayCommand(() => SaveSlot(_capturedB), () => !_busy && _capturedB != null);
+            // Gate on the captured snapshot's own metadata (not the combo's current text): "The
+            // Standard" already persists through its own save path, and saveProjectSnapshot does
+            // not force SourceKind="Project" the way saveStandard forces "Standard" — without
+            // this check, saving Source B in its default state (Standard) would silently insert
+            // a hidden, permanently-orphaned "Standard" row invisible to the saved-snapshot picker.
+            SaveSnapshotACommand = new RelayCommand(() => SaveSlot(_capturedA), () => !_busy && _capturedA != null && _capturedA.Meta.SourceKind != "Standard");
+            SaveSnapshotBCommand = new RelayCommand(() => SaveSlot(_capturedB), () => !_busy && _capturedB != null && _capturedB.Meta.SourceKind != "Standard");
             LoadSavedSnapshotACommand = new RelayCommand(() => PickSaved(label => SourceA = label), () => !_busy);
             LoadSavedSnapshotBCommand = new RelayCommand(() => PickSaved(label => SourceB = label), () => !_busy);
 
