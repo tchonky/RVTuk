@@ -24,9 +24,10 @@ Current and planned features:
 
 ## Build
 
-A solution file (`RVTuk.sln`) is present with two solution configurations — `Release2024`, `Release2025` (there is no standard `Debug`/`Release`). Build the whole solution per config:
+A solution file (`RVTuk.sln`) is present with three solution configurations — `Release2023`, `Release2024`, `Release2025` (there is no standard `Debug`/`Release`). Build the whole solution per config:
 
 ```powershell
+dotnet build RVTuk.sln -c Release2023
 dotnet build RVTuk.sln -c Release2024
 dotnet build RVTuk.sln -c Release2025
 ```
@@ -37,7 +38,7 @@ Or build a single project (its project references are built transitively). The p
 dotnet build src\RVTuk.Revit\RVTuk.Revit.csproj -c Release2024
 ```
 
-Each config maps to a target framework and a `DefineConstants` symbol that switches the JSON serializer and native-load path (see Architecture):
+Each config maps to a target framework and a per-year `DefineConstants` symbol (see Architecture); the JSON serializer and native-load path are switched separately, by target framework (see below):
 
 | Config        | TFM               | Constant    | SQLite provider           | JSON                      |
 |---------------|-------------------|-------------|---------------------------|---------------------------|
@@ -45,9 +46,9 @@ Each config maps to a target framework and a `DefineConstants` symbol that switc
 | `Release2025` | `net8.0-windows`  | `REVIT2025` | `Microsoft.Data.Sqlite`   | `System.Text.Json`        |
 | `Release2023` | `net48`           | `REVIT2023` | `Microsoft.Data.Sqlite`   | `DataContractJsonSerializer` |
 
-Both configs use `Microsoft.Data.Sqlite`; the `REVIT2024` constant switches the JSON serializer (no `System.Text.Json` on net48) and enables the native `e_sqlite3.dll` pre-load. Build outputs land in each project's `bin\{2024|2025}\Release{...}\{tfm}\`, e.g. `src\RVTuk.Revit\bin\2024\Release2024\net48\`.
+All three configs use `Microsoft.Data.Sqlite`. Build outputs land in each project's `bin\{2023|2024|2025}\Release{...}\{tfm}\`, e.g. `src\RVTuk.Revit\bin\2024\Release2024\net48\`.
 
-`Release2023` builds only `RVTuk.Core`, `RVTuk.UI`, and `KKarea.Revit` (the Revit 2023 host); `RVTuk.Revit` does not build for 2023. The net48-vs-net8 code split is gated on the compiler-provided `NETFRAMEWORK` symbol (not `REVIT2024`); the `REVIT<year>` constants are for year-specific Revit API differences only (e.g. the `ElementId` shims in the shared area sources).
+`Release2023` builds only `RVTuk.Core`, `RVTuk.UI`, and `KKarea.Revit` (the Revit 2023 host); `RVTuk.Revit` does not build for 2023. The net48-vs-net8 code split (JSON serializer choice, and the native `e_sqlite3.dll` pre-load on net48) is gated on the compiler-provided `NETFRAMEWORK` symbol, not on `REVIT2024`; the `REVIT<year>` constants are for year-specific Revit API differences only (e.g. the `ElementId` shims in the shared area sources).
 
 ## Deployment
 
