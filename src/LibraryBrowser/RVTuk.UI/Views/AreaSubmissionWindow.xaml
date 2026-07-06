@@ -56,13 +56,20 @@
                               ItemsSource="{Binding Levels}"
                               SelectedItemChanged="AreaTree_SelectedItemChanged"
                               BorderThickness="0" Background="{StaticResource Brush.Bg}" Margin="4,6,4,4">
+                        <TreeView.ItemContainerStyle>
+                            <Style TargetType="TreeViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            </Style>
+                        </TreeView.ItemContainerStyle>
                         <TreeView.Resources>
                             <HierarchicalDataTemplate DataType="{x:Type vm:AreaLevelGroupViewModel}" ItemsSource="{Binding Rows}">
-                                <StackPanel Orientation="Horizontal" Margin="0,4,0,2">
-                                    <TextBlock Text="{Binding Header}" FontWeight="SemiBold"/>
-                                    <TextBlock Text="  ⚠" Foreground="{StaticResource Brush.Warning}"
-                                               Visibility="{Binding HasError, Converter={StaticResource BoolVis}}"/>
-                                </StackPanel>
+                                <Border Background="{StaticResource Brush.GroupHeader}" Margin="0,2" Padding="6,4">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Header}" FontWeight="SemiBold" Foreground="{StaticResource Brush.Text}"/>
+                                        <TextBlock Text="  ⚠" Foreground="{StaticResource Brush.Warning}"
+                                                   Visibility="{Binding HasError, Converter={StaticResource BoolVis}}"/>
+                                    </StackPanel>
+                                </Border>
                             </HierarchicalDataTemplate>
                             <DataTemplate DataType="{x:Type vm:AreaRowViewModel}">
                                 <Grid Margin="10,2,4,2" ToolTip="{Binding ErrorSummary}">

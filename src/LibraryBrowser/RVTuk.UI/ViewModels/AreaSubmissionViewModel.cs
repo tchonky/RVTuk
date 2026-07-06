@@ -261,7 +261,7 @@ namespace RVTuk.UI.ViewModels
 
                 var groups = extracted
                     .GroupBy(e => e.Rec.Floor ?? string.Empty)
-                    .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(g => g.First().Rec.LevelElevation)
                     .Select(g =>
                     {
                         var vm = new AreaLevelGroupViewModel(g.Key);
