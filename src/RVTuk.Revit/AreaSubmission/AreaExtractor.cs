@@ -360,10 +360,15 @@ namespace RVTuk.Revit.AreaSubmission
             return loops;
         }
 
-        /// <summary>ElementId raw value. ElementId.Value (long) exists in Revit 2024+.</summary>
+        /// <summary>ElementId raw value. ElementId.Value (long) exists in Revit 2024+;
+        /// Revit 2023 (KKarea) uses the int-typed IntegerValue.</summary>
         private static long Raw(ElementId id)
         {
+#if REVIT2023
+            return id.IntegerValue;
+#else
             return id.Value;
+#endif
         }
     }
 }

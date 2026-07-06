@@ -40,8 +40,13 @@ namespace RVTuk.Revit.ExternalEvents
 
                 // ElementId(Int64) exists on both Revit 2024 and 2025 (2024 added it as a
                 // forward-compat overload alongside the now-deprecated ElementId(int) ctor;
-                // see AreaExtractor.Raw()'s matching note on ElementId.Value).
+                // see AreaExtractor.Raw()'s matching note on ElementId.Value). Revit 2023
+                // (KKarea) only has the int ctor; area element ids always fit in 32 bits there.
+#if REVIT2023
+                var id = new ElementId((int)ElementId);
+#else
                 var id = new ElementId(ElementId);
+#endif
                 uidoc.Selection.SetElementIds(new List<ElementId> { id });
                 Success = true;
             }
