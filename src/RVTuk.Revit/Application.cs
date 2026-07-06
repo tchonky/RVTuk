@@ -19,6 +19,10 @@ namespace RVTuk.Revit
     {
         public static IndexingExternalEventHandler IndexingHandler { get; private set; } = null!;
         public static ExternalEvent IndexingEvent { get; private set; } = null!;
+        /// <summary>Serialises every IndexingHandler/IndexingEvent ping-pong: the deep scan
+        /// (Config window) and the browser's one-family rescan share the same handler singleton
+        /// and can run from different background threads at the same time.</summary>
+        public static readonly object IndexingGate = new object();
         public static GetProjectFamiliesEventHandler GetFamiliesHandler { get; private set; } = null!;
         public static ExternalEvent GetFamiliesEvent { get; private set; } = null!;
         public static LoadFamilyEventHandler LoadFamilyHandler { get; private set; } = null!;
