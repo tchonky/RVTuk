@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- KKarea: standalone Revit 2023 host for the Area Calc (Rishui Zamin) tool.
+       Revit 2023 is net48-only, so this project has a single fixed target; it is built
+       exclusively via the Release2023 configuration (see RVTuk.sln mappings). The area
+       logic is linked shared source from RVTuk.Revit, compiled here against the 2023 API
+       with the REVIT2023 constant switching the ElementId shims. -->
+  <PropertyGroup>
+    <AssemblyName>KKarea.Revit</AssemblyName>
+    <RootNamespace>KKarea.Revit</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <TargetFramework>net48</TargetFramework>
+    <OutputPath>bin\2023\Release2023\</OutputPath>
+    <DefineConstants>REVIT2023</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Revit 2023 API packages: compile-time only, the real DLLs come from the Revit install. -->
+  <ItemGroup>
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI"
+                      Version="2023.*"
+                      IncludeAssets="compile;build;native;contentfiles;analyzers;buildtransitive"
+                      ExcludeAssets="runtime" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI"
+                      Version="2023.*"
+                      IncludeAssets="compile;build;native;contentfiles;analyzers;buildtransitive"
+                      ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RVTuk.Core\RVTuk.Core.csproj" />
+    <ProjectReference Include="..\LibraryBrowser\RVTuk.UI\RVTuk.UI.csproj" />
+  </ItemGroup>
+
+  <!-- Shared source linked from RVTuk.Revit — single-source area logic, compiled per host
+       against each host's Revit API version. KKarea must never reference RVTuk.Revit itself. -->
+  <ItemGroup>
+    <Compile Include="..\RVTuk.Revit\AreaSubmission\AreaExtractor.cs" Link="Shared\AreaExtractor.cs" />
+    <Compile Include="..\RVTuk.Revit\AreaSubmission\UsageKeyScheduleBuilder.cs" Link="Shared\UsageKeyScheduleBuilder.cs" />
+    <Compile Include="..\RVTuk.Revit\ExternalEvents\AreaExtractEventHandler.cs" Link="Shared\AreaExtractEventHandler.cs" />
+    <Compile Include="..\RVTuk.Revit\ExternalEvents\SelectAreaEventHandler.cs" Link="Shared\SelectAreaEventHandler.cs" />
+    <Compile Include="..\RVTuk.Revit\ExternalEvents\SetupUsageKeysEventHandler.cs" Link="Shared\SetupUsageKeysEventHandler.cs" />
+  </ItemGroup>
+
+</Project>
