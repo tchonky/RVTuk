@@ -16,6 +16,7 @@ Current and planned features:
 - **Config** — a ribbon button opening a settings hub (library folder, ignored subfolders) plus the two deep-scan actions: "Scan New & Changed" (incremental) and "Re-scan All Families" (forced re-extraction of every family, non-destructive — curated data is preserved).
 - **Auto Dimensions** — draw a detail line on the dedicated "Dimensions_Line" style as a positional reference; a ribbon command dimensions every wall crossing it, re-runnable after model changes without re-picking references. See [`docs/superpowers/specs/2026-07-04-auto-dimensions-design.md`](docs/superpowers/specs/2026-07-04-auto-dimensions-design.md).
 - **Neo Properties** — a dockable pane mirroring the selected element's parameters like the native Properties palette, but with pinned parameters shown first and remaining groups in a fixed custom order. Read-only, single-element only. See [`docs/superpowers/specs/2026-07-04-neo-properties-design.md`](docs/superpowers/specs/2026-07-04-neo-properties-design.md).
+- **Area Calc** (Rishui Zamin) — reads the Areas on the open sheet and exports the paired `.dxf` + `.dat` files the רישוי זמין area-calculation robot expects (`RZ_FRAME`/`RZ_FLOOR`/`RZ_AREA` layers + attribute blocks). The window's "Setup Usage Keys" action binds the `RZ_*` shared parameters to Areas and creates/tops-up the usage key schedules (`UsageKeyScheduleBuilder`) — no separate ribbon command needed. Also shipped as **KKarea**, a standalone Revit 2023 add-in (see Project Overview). See [`docs/autoarea/rishui-zamin-notes.md`](docs/autoarea/rishui-zamin-notes.md).
 
 ### Future features
 
@@ -49,6 +50,16 @@ Each config maps to a target framework and a per-year `DefineConstants` symbol (
 All three configs use `Microsoft.Data.Sqlite`. Build outputs land in each project's `bin\{2023|2024|2025}\Release{...}\{tfm}\`, e.g. `src\RVTuk.Revit\bin\2024\Release2024\net48\`.
 
 `Release2023` builds only `RVTuk.Core`, `RVTuk.UI`, and `KKarea.Revit` (the Revit 2023 host); `RVTuk.Revit` does not build for 2023. The net48-vs-net8 code split (JSON serializer choice, and the native `e_sqlite3.dll` pre-load on net48) is gated on the compiler-provided `NETFRAMEWORK` symbol, not on `REVIT2024`; the `REVIT<year>` constants are for year-specific Revit API differences only (e.g. the `ElementId` shims in the shared area sources).
+
+## Tests
+
+Core's xunit suite lives in `tests\RVTuk.Core.Tests` (repositories, indexer, comparison engine, Area Calc writers/validator). Run it before committing Core changes:
+
+```powershell
+dotnet test tests\RVTuk.Core.Tests\RVTuk.Core.Tests.csproj
+```
+
+On a non-Windows SDK (CI, cloud agents) add `-p:EnableWindowsTargeting=true` — the suite builds and runs fine on Linux. The WPF/Revit projects (`RVTuk.UI`, `RVTuk.Revit`, `KKarea.Revit`) can only be compiled on Windows.
 
 ## Deployment
 

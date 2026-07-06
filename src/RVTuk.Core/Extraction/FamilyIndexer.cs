@@ -108,6 +108,11 @@ namespace RVTuk.Core.Extraction
 
                 var existing = _repository.GetFamilyByPath(relativePath);
 
+                // A case-only rename on disk must not orphan the row: re-key it to the on-disk
+                // casing so the exact-match writes below hit it and the stale prune keeps it.
+                if (existing != null && !string.Equals(existing.RelativePath, relativePath, StringComparison.Ordinal))
+                    _repository.UpdateRelativePathCasing(existing.Id, relativePath, fileName);
+
                 bool fileChanged = existing == null
                     || existing.FileSize != fileSize
                     || Math.Abs((existing.ModifiedDate - modifiedDate).TotalSeconds) > 1;

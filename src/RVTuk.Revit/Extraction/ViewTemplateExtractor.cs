@@ -168,7 +168,9 @@ namespace RVTuk.Revit.Extraction
                 {
                     case StorageType.String: return p.AsString();
                     case StorageType.Integer: return p.AsInteger().ToString();
-                    case StorageType.Double: return p.AsDouble().ToString("R");
+                    // InvariantCulture: the value is persisted in snapshots and compared across
+                    // machines — a locale-dependent decimal separator would produce false diffs.
+                    case StorageType.Double: return p.AsDouble().ToString("R", System.Globalization.CultureInfo.InvariantCulture);
                     case StorageType.ElementId: return p.AsElementId() == null ? null : Raw(p.AsElementId()).ToString();
                     default: return null;
                 }

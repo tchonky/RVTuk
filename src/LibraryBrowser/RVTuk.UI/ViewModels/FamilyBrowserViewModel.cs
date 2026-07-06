@@ -305,6 +305,10 @@ namespace RVTuk.UI.ViewModels
                         .ToList();
                     _dispatcher.Invoke(() =>
                     {
+                        // Selection may have moved on while this load ran; a stale result must
+                        // not overwrite the currently selected family's detail pane.
+                        if (!ReferenceEquals(SelectedItem, item)) return;
+
                         InstructionsXaml = xaml;
                         Parameters = prms;
                         item.Model.Tags = tags;

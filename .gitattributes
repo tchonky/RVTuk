@@ -1,0 +1,7 @@
+# DXF files are byte-format references (embedded preamble, golden fixtures, captured
+# samples) — never let git rewrite their line endings on checkout/commit.
+*.dxf -text
+*.dat -text
+
+# Fake/real binary fixtures.
+*.rfa -text

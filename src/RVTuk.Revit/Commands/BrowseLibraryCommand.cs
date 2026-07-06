@@ -81,18 +81,29 @@ namespace RVTuk.Revit.Commands
                 {
                     using var repo = new IndexRepository(ConfigManager.LoadConfig().DatabasePath);
                     var (thumb, year) = ThumbnailExtractor.ExtractFromRfa(fullPath);
+                    // Carry the file's real size/date: the handler writes them into the row on
+                    // success, and leaving them at their defaults would store the sentinel values
+                    // (MinValue/0) — making the family look stale so every deep scan after a
+                    // one-off rescan re-extracted it for nothing.
+                    var fi = new FileInfo(fullPath);
                     var workItem = new ExtractionWorkItem
                     {
                         FamilyId = familyId,
                         FullPath = fullPath,
                         RelativePath = string.Empty,
                         ThumbnailPng = thumb,
-                        FileRevitYear = year
+                        FileRevitYear = year,
+                        ModifiedDate = fi.LastWriteTimeUtc,
+                        FileSize = fi.Length
                     };
                     var extractor = new FamilyMetadataExtractor(capturedUIApp.Application);
-                    Application.IndexingHandler.PrepareAndWait(workItem, repo, extractor);
-                    Application.IndexingEvent.Raise();
-                    Application.IndexingHandler.WaitForCompletion();
+                    // IndexingGate: the deep scan (Config window) shares this handler.
+                    lock (Application.IndexingGate)
+                    {
+                        Application.IndexingHandler.PrepareAndWait(workItem, repo, extractor);
+                        Application.IndexingEvent.Raise();
+                        Application.IndexingHandler.WaitForCompletion();
+                    }
                     return true;
                 }
                 catch { return false; }
