@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-#if REVIT2024
+#if NETFRAMEWORK
 // net48 has no built-in System.Runtime.CompilerServices.IsExternalInit — the compiler
 // needs this marker type to allow `init`-only members (and positional records, which
 // generate them). net8 already ships it in the BCL.

@@ -10,12 +10,17 @@
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)'=='Release2023'">
+    <TargetFramework>net48</TargetFramework>
+    <OutputPath>bin\2023\Release2023\</OutputPath>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(Configuration)'=='Release2024'">
     <TargetFramework>net48</TargetFramework>
     <OutputPath>bin\2024\Release2024\</OutputPath>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)'!='Release2024'">
+  <PropertyGroup Condition="'$(Configuration)'!='Release2024' and '$(Configuration)'!='Release2023'">
     <TargetFramework>net8.0-windows</TargetFramework>
     <OutputPath>bin\2025\Release2025\</OutputPath>
   </PropertyGroup>

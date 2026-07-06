@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-#if REVIT2024
+#if NETFRAMEWORK
 using System.Runtime.Serialization.Json;
 using System.Text;
 #else
@@ -26,7 +26,7 @@ namespace RVTuk.Core.Config
             try
             {
                 var json = File.ReadAllText(ConfigFilePath);
-#if REVIT2024
+#if NETFRAMEWORK
                 var bytes = Encoding.UTF8.GetBytes(json);
                 using var ms = new MemoryStream(bytes);
                 return (AppConfig?)new DataContractJsonSerializer(typeof(AppConfig)).ReadObject(ms) ?? new AppConfig();
@@ -43,7 +43,7 @@ namespace RVTuk.Core.Config
         public static void SaveConfig(AppConfig config)
         {
             Directory.CreateDirectory(ConfigDir);
-#if REVIT2024
+#if NETFRAMEWORK
             using var ms = new MemoryStream();
             new DataContractJsonSerializer(typeof(AppConfig)).WriteObject(ms, config);
             File.WriteAllText(ConfigFilePath, Encoding.UTF8.GetString(ms.ToArray()));
