@@ -82,6 +82,24 @@ public class SnapshotRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void DeleteSnapshot_RemovesMetaAndCategories()
+    {
+        var snap = new ViewTemplatesSnapshot();
+        snap.Templates.Add(new ViewTemplateDto { Name = "FP", ViewType = "FloorPlan" });
+        var meta = new SnapshotMeta { SourceKind = "Project", SourceName = "Alpha", CapturedUtc = DateTime.UtcNow.ToString("o") };
+
+        using var repo = new SnapshotRepository(_dbPath);
+        var id = repo.SaveSnapshot(meta, new[] { Payload(snap) });
+        Assert.Single(repo.ListSnapshots());
+
+        repo.DeleteSnapshot(id);
+
+        Assert.Empty(repo.ListSnapshots());
+        Assert.Null(repo.GetMeta(id));
+        Assert.Empty(repo.LoadCategories(id, (catId, json) => SnapshotJson.Deserialize<ViewTemplatesSnapshot>(json)));
+    }
+
+    [Fact]
     public void Snapshot_IsMutableFlag_RoundTrips()
     {
         using var repo = new SnapshotRepository(_dbPath);

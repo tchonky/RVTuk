@@ -167,3 +167,33 @@ RVTuk.UI/ViewModels/   ComparatorViewModel (mode, sources, category list)
 | `Esc` closes window | No — popups only |
 | Ghost "Apply" button | Omit in v1 |
 | Report logo | Could (configurable path) |
+
+---
+
+## 11. Saved snapshots (save/load)
+
+Extends §4: a *Project* snapshot (Source A or B, when not "The Standard") can now be persisted to
+the same `SnapshotRepository` store and reloaded later without the source file/document present —
+e.g. compare a project's state today against a snapshot saved a month ago.
+
+**Implemented this pass (functional core):**
+- **Save** (💾 button next to each Source combo): persists whatever was captured for that slot in
+  the last Compare run (`SourceKind="Project"`, default name = the document's title, capture
+  timestamp preserved from the original capture — no separate rename step).
+- **Load saved snapshot…** (📂 button next to each Source combo): opens a modal picker
+  (`SnapshotPickerWindow`) listing saved Project snapshots — Name, Captured date (local time),
+  Revit year — with a per-row 🗑 delete. Picking one sets that combo's display text to
+  `"{name} ({captured date})"` and resolves through it on the next Compare.
+- `SnapshotRepository.DeleteSnapshot` added (cascades to `SnapshotCategory` via the existing FK).
+
+**Deferred (noted, not built this pass — see UI-specialist consult):**
+- Inline rename-before-save popup (Save currently uses the auto-generated name outright).
+- Live filter/search box inside the picker (fine at current expected volumes; add if the list
+  grows unwieldy).
+- Non-modal "toast" for delete (current delete is immediate + un-confirmed, matching the rest of
+  the picker's lightweight modal chrome rather than the app's non-modal error-bar convention).
+- Status-bar/detail-header subtext distinguishing "live" vs "saved" provenance at a glance (today
+  the combo's own label — `"{name} ({date})"` vs a live document title — is the only cue).
+
+These are fast-follow polish, not required for the "store and compare stored snapshots" capability
+itself, which is now real end-to-end (round-tripped through SQLite exactly like the Standard is).

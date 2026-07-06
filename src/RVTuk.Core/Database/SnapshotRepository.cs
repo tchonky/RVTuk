@@ -172,6 +172,15 @@ namespace RVTuk.Core.Database
             cmd.ExecuteNonQuery();
         }
 
+        /// <summary>Deletes a snapshot and its categories (ON DELETE CASCADE). Used to let the
+        /// user prune saved project snapshots from the picker; never called on the Standard.</summary>
+        public void DeleteSnapshot(long id)
+        {
+            using var cmd = CreateCommand("DELETE FROM Snapshot WHERE Id=@id");
+            AddParam(cmd, "@id", id);
+            cmd.ExecuteNonQuery();
+        }
+
         public int CountStandardChanges(long standardId)
         {
             using var cmd = CreateCommand("SELECT COUNT(*) FROM StandardChangeLog WHERE SnapshotId=@id");

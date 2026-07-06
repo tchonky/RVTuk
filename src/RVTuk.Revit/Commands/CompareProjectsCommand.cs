@@ -138,11 +138,44 @@ namespace RVTuk.Revit.Commands
                 repo.SaveSnapshot(std.Meta, payloads);
             };
 
+            // --- persist an arbitrary captured Project snapshot so it can be reloaded and
+            // compared later without the source file/document present ---
+            Action<CapturedSnapshot> saveProjectSnapshot = snap =>
+            {
+                using var repo = new SnapshotRepository(stdDbPath);
+                var payloads = snap.Categories.Select(ToPayload).ToList();
+                repo.SaveSnapshot(snap.Meta, payloads);
+            };
+
+            Func<IReadOnlyList<SnapshotMeta>> listSavedSnapshots = () =>
+            {
+                using var repo = new SnapshotRepository(stdDbPath);
+                return repo.ListSnapshots().Where(m => m.SourceKind == "Project").ToList();
+            };
+
+            Func<long, CapturedSnapshot> loadSavedSnapshot = id =>
+            {
+                using var repo = new SnapshotRepository(stdDbPath);
+                var meta = repo.GetMeta(id);
+                if (meta == null) return new CapturedSnapshot { Error = "Saved snapshot not found — it may have been deleted." };
+                var cats = repo.LoadCategories(id, DeserializeCategory);
+                var result = new CapturedSnapshot { Meta = meta };
+                result.Categories.AddRange(cats);
+                return result;
+            };
+
+            Action<long> deleteSavedSnapshot = id =>
+            {
+                using var repo = new SnapshotRepository(stdDbPath);
+                repo.DeleteSnapshot(id);
+            };
+
             try
             {
                 var vm = new ComparatorViewModel(
                     getOpenDocuments, captureOpenDoc, captureFile, pickFile,
-                    saveReportHtml, loadStandard, saveStandard);
+                    saveReportHtml, loadStandard, saveStandard,
+                    saveProjectSnapshot, listSavedSnapshots, loadSavedSnapshot, deleteSavedSnapshot);
                 var window = new ComparatorWindow(vm);
                 Application.ComparatorWindow = window;
                 window.Show();

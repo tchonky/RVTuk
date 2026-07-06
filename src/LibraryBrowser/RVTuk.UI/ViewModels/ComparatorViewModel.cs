@@ -7,6 +7,7 @@ using System.Windows.Input;
 using RVTuk.Core.Comparison;
 using RVTuk.Core.Models.Comparison;
 using RVTuk.Core.Reporting;
+using RVTuk.UI.Views;
 
 namespace RVTuk.UI.ViewModels
 {
@@ -24,6 +25,16 @@ namespace RVTuk.UI.ViewModels
         private readonly Action<string> _saveReportHtml;
         private readonly Func<StandardSnapshot> _loadStandard;
         private readonly Action<StandardSnapshot> _saveStandard;
+        private readonly Action<CapturedSnapshot> _saveProjectSnapshot;
+        private readonly Func<IReadOnlyList<SnapshotMeta>> _listSavedSnapshots;
+        private readonly Func<long, CapturedSnapshot> _loadSavedSnapshot;
+        private readonly Action<long> _deleteSavedSnapshot;
+
+        // A saved snapshot's combo entry is labeled "name (captured date)" and resolves to its DB
+        // id through this map — so CaptureSide works off whatever text is currently selected with
+        // no separate per-slot state to keep in sync (retyping/re-picking just misses the lookup
+        // and falls through to the normal live-capture heuristics).
+        private readonly Dictionary<string, long> _savedSnapshotIdsByLabel = new();
 
         private readonly ComparisonEngine _engine;
         private readonly StandardCurator _curator;
@@ -41,7 +52,11 @@ namespace RVTuk.UI.ViewModels
             Func<string?> pickFile,
             Action<string> saveReportHtml,
             Func<StandardSnapshot> loadStandard,
-            Action<StandardSnapshot> saveStandard)
+            Action<StandardSnapshot> saveStandard,
+            Action<CapturedSnapshot> saveProjectSnapshot,
+            Func<IReadOnlyList<SnapshotMeta>> listSavedSnapshots,
+            Func<long, CapturedSnapshot> loadSavedSnapshot,
+            Action<long> deleteSavedSnapshot)
         {
             _getOpenDocuments = getOpenDocuments;
             _captureOpenDoc = captureOpenDoc;
@@ -50,6 +65,10 @@ namespace RVTuk.UI.ViewModels
             _saveReportHtml = saveReportHtml;
             _loadStandard = loadStandard;
             _saveStandard = saveStandard;
+            _saveProjectSnapshot = saveProjectSnapshot;
+            _listSavedSnapshots = listSavedSnapshots;
+            _loadSavedSnapshot = loadSavedSnapshot;
+            _deleteSavedSnapshot = deleteSavedSnapshot;
 
             var registry = new CategoryRegistry();
             registry.Register(new ViewTemplateComparer());
@@ -79,6 +98,10 @@ namespace RVTuk.UI.ViewModels
             RefreshDocumentsCommand = new RelayCommand(RefreshDocuments, () => !_busy);
             BrowseACommand = new RelayCommand(() => BrowseInto(v => SourceA = v), () => !_busy);
             BrowseBCommand = new RelayCommand(() => BrowseInto(v => SourceB = v), () => !_busy);
+            SaveSnapshotACommand = new RelayCommand(() => SaveSlot(_capturedA), () => !_busy && _capturedA != null);
+            SaveSnapshotBCommand = new RelayCommand(() => SaveSlot(_capturedB), () => !_busy && _capturedB != null);
+            LoadSavedSnapshotACommand = new RelayCommand(() => PickSaved(label => SourceA = label), () => !_busy);
+            LoadSavedSnapshotBCommand = new RelayCommand(() => PickSaved(label => SourceB = label), () => !_busy);
 
             StatusText = "Select two sources and press Compare.";
         }
@@ -115,6 +138,10 @@ namespace RVTuk.UI.ViewModels
         public ICommand RefreshDocumentsCommand { get; }
         public ICommand BrowseACommand { get; }
         public ICommand BrowseBCommand { get; }
+        public ICommand SaveSnapshotACommand { get; }
+        public ICommand SaveSnapshotBCommand { get; }
+        public ICommand LoadSavedSnapshotACommand { get; }
+        public ICommand LoadSavedSnapshotBCommand { get; }
 
         private void RefreshDocuments()
         {
@@ -178,12 +205,46 @@ namespace RVTuk.UI.ViewModels
         {
             if (selection == StandardLabel)
                 return new CapturedSnapshot { Meta = _standard.Meta, Categories = _standard.Categories };
+            if (_savedSnapshotIdsByLabel.TryGetValue(selection, out var savedId))
+                return _loadSavedSnapshot(savedId);
             if (selection == ActiveDocLabel)
                 return _captureOpenDoc(null);
             if (LooksLikeFile(selection))
                 return _captureFile(selection);
             return _captureOpenDoc(selection);
         }
+
+        /// <summary>Persists a captured slot (already resolved by a Compare run) as a named,
+        /// reloadable snapshot. Does nothing to Revit — same "report-only" guarantee as the rest
+        /// of the Comparator.</summary>
+        private void SaveSlot(CapturedSnapshot? captured)
+        {
+            if (captured == null) return;
+            _saveProjectSnapshot(captured);
+            StatusText = $"Saved snapshot \"{captured.Meta.SourceName}\" (captured {FormatCapturedUtc(captured.Meta.CapturedUtc)}).";
+        }
+
+        /// <summary>Opens the saved-snapshot picker; on a pick, registers its display label so
+        /// <see cref="CaptureSide"/> resolves it, then hands the label to the caller to assign to
+        /// SourceA/SourceB.</summary>
+        private void PickSaved(Action<string> assignLabel)
+        {
+            var picker = new SnapshotPickerWindow(_listSavedSnapshots(), _deleteSavedSnapshot);
+            if (picker.ShowDialog() != true || picker.SelectedMeta == null) return;
+
+            var meta = picker.SelectedMeta;
+            var label = $"{meta.SourceName} ({FormatCapturedUtc(meta.CapturedUtc)})";
+            _savedSnapshotIdsByLabel[label] = meta.Id;
+
+            if (!SourceAOptions.Contains(label)) SourceAOptions.Add(label);
+            if (!SourceBOptions.Contains(label)) SourceBOptions.Add(label);
+            assignLabel(label);
+        }
+
+        private static string FormatCapturedUtc(string capturedUtc) =>
+            DateTime.TryParse(capturedUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt)
+                ? dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                : capturedUtc;
 
         private static bool LooksLikeFile(string s) =>
             s.EndsWith(".rvt", StringComparison.OrdinalIgnoreCase)

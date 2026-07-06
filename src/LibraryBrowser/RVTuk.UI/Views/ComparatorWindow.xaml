@@ -48,14 +48,18 @@
                 <TextBlock Text="A:" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{StaticResource Brush.TextMuted}"/>
                 <ComboBox Width="220" Margin="0,0,2,0"
                           ItemsSource="{Binding SourceAOptions}" SelectedItem="{Binding SourceA}" IsEditable="True"/>
-                <Button Content="…" Width="24" Margin="0,0,12,0" Command="{Binding BrowseACommand}" ToolTip="Browse for a .rvt/.rte"/>
+                <Button Content="…" Width="24" Margin="0,0,2,0" Command="{Binding BrowseACommand}" ToolTip="Browse for a .rvt/.rte"/>
+                <Button Content="💾" Width="24" Margin="0,0,2,0" Command="{Binding SaveSnapshotACommand}" ToolTip="Save Source A as a reloadable snapshot"/>
+                <Button Content="📂" Width="24" Margin="0,0,12,0" Command="{Binding LoadSavedSnapshotACommand}" ToolTip="Load a saved snapshot into Source A"/>
 
                 <TextBlock Text="⇌" VerticalAlignment="Center" Margin="0,0,12,0" FontSize="16" Foreground="{StaticResource Brush.TextMuted}"/>
 
                 <TextBlock Text="B:" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{StaticResource Brush.TextMuted}"/>
                 <ComboBox Width="220" Margin="0,0,2,0"
                           ItemsSource="{Binding SourceBOptions}" SelectedItem="{Binding SourceB}" IsEditable="True"/>
-                <Button Content="…" Width="24" Margin="0,0,12,0" Command="{Binding BrowseBCommand}" ToolTip="Browse for a .rvt/.rte"/>
+                <Button Content="…" Width="24" Margin="0,0,2,0" Command="{Binding BrowseBCommand}" ToolTip="Browse for a .rvt/.rte"/>
+                <Button Content="💾" Width="24" Margin="0,0,2,0" Command="{Binding SaveSnapshotBCommand}" ToolTip="Save Source B as a reloadable snapshot"/>
+                <Button Content="📂" Width="24" Margin="0,0,12,0" Command="{Binding LoadSavedSnapshotBCommand}" ToolTip="Load a saved snapshot into Source B"/>
 
                 <Button Content="Compare ▶" Margin="0,0,6,0" Padding="10,4"
                         Background="{StaticResource Brush.Accent}" Foreground="Black"
