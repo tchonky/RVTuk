@@ -1,13 +1,9 @@
 using System;
 using System.IO;
-using System.Threading;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
-using System.Windows.Threading;
 using RVTuk.Core.Database;
 using RVTuk.Core.Extraction;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
 
 namespace RVTuk.UI.ViewModels
 {
@@ -16,7 +12,6 @@ namespace RVTuk.UI.ViewModels
         private readonly BrowserRepository _repo;
         private readonly long _familyId;
         private readonly string _rfaFullPath;
-        private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
 
         private string? _instructionsXaml;
         private string _tagsText = string.Empty;
@@ -59,12 +54,6 @@ namespace RVTuk.UI.ViewModels
 
         public bool CanUpdateOle => _customThumbPng != null && !_oleSynced;
 
-        public ObservableCollection<GalleryItemViewModel> GalleryItems { get; } = new();
-        public ICommand AddImageCommand { get; }
-        public ICommand DeleteImageCommand { get; }
-        public ICommand MoveImageLeftCommand { get; }
-        public ICommand MoveImageRightCommand { get; }
-
         public ICommand SaveCommand { get; }
         public ICommand CancelCommand { get; }
         public ICommand ReplaceThumbnailCommand { get; }
@@ -92,11 +81,6 @@ namespace RVTuk.UI.ViewModels
             ReplaceThumbnailCommand = new RelayCommand(ReplaceThumbnail);
             ResetThumbnailCommand   = new RelayCommand(ResetThumbnail);
             UpdateOleCommand        = new RelayCommand(UpdateOle, () => CanUpdateOle);
-            AddImageCommand        = new RelayCommand(AddImage);
-            DeleteImageCommand     = new RelayCommand<long>(DeleteImage);
-            MoveImageLeftCommand   = new RelayCommand<long>(MoveImageLeft);
-            MoveImageRightCommand  = new RelayCommand<long>(MoveImageRight);
-            ReloadGallery();
 
             LoadThumbnailState();
         }
@@ -195,98 +179,6 @@ namespace RVTuk.UI.ViewModels
 
             CloseRequested?.Invoke();
         }
-
-        private void ReloadGallery()
-        {
-            var specs = new List<(long Id, string? Caption, string Path)>();
-            foreach (var im in _repo.GetImages(_familyId))
-                specs.Add((im.Id, im.Caption, _repo.GetGalleryPath(_familyId, im.FileName)));
-
-            GalleryItems.Clear();
-            ThreadPool.QueueUserWorkItem(_ =>
-            {
-                var vms = new List<GalleryItemViewModel>(specs.Count);
-                foreach (var s in specs)
-                    vms.Add(new GalleryItemViewModel(s.Id, s.Caption, s.Path));
-                _dispatcher.Invoke(() =>
-                {
-                    GalleryItems.Clear();
-                    foreach (var vm in vms) GalleryItems.Add(vm);
-                });
-            });
-        }
-
-        private void AddImage()
-        {
-            var dlg = new Microsoft.Win32.OpenFileDialog
-            {
-                Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp",
-                Title  = "Add gallery image",
-                Multiselect = true
-            };
-            if (dlg.ShowDialog() != true) return;
-            try
-            {
-                foreach (var file in dlg.FileNames)
-                {
-                    var png = ConvertToPng(File.ReadAllBytes(file));
-                    _repo.AddImage(_familyId, png, Path.GetFileNameWithoutExtension(file));
-                }
-                ReloadGallery();
-            }
-            catch (Exception ex)
-            {
-                System.Windows.MessageBox.Show($"Could not add image: {ex.Message}");
-            }
-        }
-
-        private void DeleteImage(long imageId)
-        {
-            var result = System.Windows.MessageBox.Show(
-                "Delete this image? This permanently removes the file from disk.",
-                "RVTuk",
-                System.Windows.MessageBoxButton.YesNo,
-                System.Windows.MessageBoxImage.Warning);
-            if (result != System.Windows.MessageBoxResult.Yes) return;
-            _repo.DeleteImage(imageId);
-            ReloadGallery();
-        }
-
-        private void MoveImageLeft(long id)
-        {
-            int index = IndexOf(id);
-            if (index <= 0) return;
-            var list = BuildIdList();
-            (list[index - 1], list[index]) = (list[index], list[index - 1]);
-            _repo.ReorderImages(_familyId, list);
-            ReloadGallery();
-        }
-
-        private void MoveImageRight(long id)
-        {
-            int index = IndexOf(id);
-            if (index < 0 || index >= GalleryItems.Count - 1) return;
-            var list = BuildIdList();
-            (list[index], list[index + 1]) = (list[index + 1], list[index]);
-            _repo.ReorderImages(_familyId, list);
-            ReloadGallery();
-        }
-
-        private int IndexOf(long id)
-        {
-            for (int i = 0; i < GalleryItems.Count; i++)
-                if (GalleryItems[i].Id == id) return i;
-            return -1;
-        }
-
-        private System.Collections.Generic.List<long> BuildIdList()
-        {
-            var list = new System.Collections.Generic.List<long>(GalleryItems.Count);
-            foreach (var item in GalleryItems) list.Add(item.Id);
-            return list;
-        }
-
-        public void SaveCaption(long imageId, string? caption) => _repo.UpdateCaption(imageId, caption);
 
         private static byte[] ConvertToPng(byte[] rawBytes)
         {

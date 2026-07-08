@@ -1,3 +1,5 @@
+> **Archived 2026-07-07 — superseded by [`../superpowers/specs/family-browser-design.md`](../superpowers/specs/family-browser-design.md)** (consolidated Family Browser design). The ribbon Config window this doc describes was removed and settings were re-embedded directly into the Family Browser window (a gear-button toggle in a new footer row). Kept as a point-in-time record.
+
 # Config Hub + Dual Deep Scan — Design
 
 **Date:** 2026-06-30

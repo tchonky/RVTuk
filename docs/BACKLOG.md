@@ -13,9 +13,12 @@ For the product vision and roadmap behind these items, see [`../VISION.md`](../V
   (tags, favourites, two-line toolbar, multi-version filter, in-project/outdated filters, scan
   ETA, off-thread gallery) is **committed but NOT yet verified in Revit**.
 - **To test:** close Revit 2024 → elevated `.\Deploy.ps1 2024` → restart Revit → Browse Library.
-  Confirm: toolbar popups open, favourites ★ persist, tags edit/search, version multi-select,
-  Sync dropdown filters. ⚠️ "In the project" is **checked by default**, so the list narrows to
-  project families after the first Sync — user may want it default-unchecked (awaiting feedback).
+  Confirm: toolbar popups open, favourites ★ persist, tags edit/search.
+- **Resolved (2026-07-07 redesign):** the "In the project checked by default, narrows the list
+  after Sync" concern below is settled — the source/status filters were replaced with three
+  exclusion-style toggle buttons (⬅️/⭐/➡️), all on by default, so nothing is hidden until the
+  user explicitly excludes something. The Revit-year "Versions" filter mentioned below was
+  removed entirely, no replacement. See `docs/superpowers/specs/family-browser-design.md`.
 - **Then** decide on merging `family-explorer` → `main`.
 - Working style: replies terse; **minimal code comments** (comment once it works); run git for the
   user (git novice) and explain simply; move items to Done here with the commit hash as they ship.
@@ -46,16 +49,16 @@ For the product vision and roadmap behind these items, see [`../VISION.md`](../V
 
 ## ✨ Improvements (to existing features)
 
-- [ ] **Config: ignored-list change doesn't refresh an open browser.** Editing IGNORED
-  SUBFOLDERS in the Config window saves config but does not refresh an already-open Family
-  Browser (the old inline panel refreshed instantly via `ApplyFilter`). Wire the
-  ignored-list change to the existing browser-reload delegate (`onLibraryFolderChanged`
-  in `OpenConfigCommand` → `FamilyBrowserWindow.ReloadConfig`). Deferred: needs an in-Revit
-  check that the reload doesn't flicker/steal focus.
-- [ ] **Deep-scan re-entrancy.** With the modeless Config window and two scan buttons, a user
-  can start a second scan while one is running; both share `IndexingHandler` /
-  `IndexingEvent` and would race. Disable the scan buttons (or guard `RunDeepScan`) while a
-  scan is in progress. Pre-existing risk, now easier to hit.
+- [x] **Config: ignored-list change doesn't refresh an open browser.** Moot as of the
+  2026-07-07 redesign: the separate ribbon Config window is gone and settings render inline in
+  the Family Browser itself (⚙️ footer toggle, reusing `ConfigViewModel` as
+  `FamilyBrowserViewModel.Settings`), so there's no cross-window reload to wire up anymore — an
+  ignored-list edit and `ApplyFilter` happen in the same window/VM.
+- [ ] **Deep-scan re-entrancy.** The embedded Settings panel (§4b of
+  `family-browser-design.md`) exposes one **Scan** button; a user can still click it twice in a
+  row while a scan is in progress. Both runs would share `IndexingHandler` / `IndexingEvent` and
+  race. Disable the Scan button (or guard `RunDeepScan`) while a scan is in progress.
+  Pre-existing risk, unaffected by where the panel lives.
 
 
 - [ ] **Deep scan is slow** — it opens every family in Revit to read parameters
@@ -81,14 +84,17 @@ For the product vision and roadmap behind these items, see [`../VISION.md`](../V
   pick-from-existing list so spelling stays consistent; a dedicated "has tag" filter
   separate from the free-text search.
 - [ ] **Recently used** — track the last N families loaded into a project for quick access.
-- [ ] Toolbar polish: the new Version/Sync/Favourites buttons use default (light) WPF chrome;
-  style them to match the dark theme. Also style the popup checkboxes.
+- [ ] Toolbar polish: the ⬅️/⭐/➡️ toggle buttons and Sync button use default (light) WPF
+  chrome; style them to match the dark theme. Also style the category checkbox popover. (Version
+  filter no longer exists — removed in the 2026-07-07 redesign.)
 
 ## ⏳ Known deferred (from the Family Explorer build/review — decided "later")
 
 - [ ] Parameter **write-back** — let the tool actually fix/reorganize parameters in
   the families (currently view/audit only).
-- [ ] UI styling/layout polish for the new gallery + parameter regions.
+- [ ] UI styling/layout polish for the parameter regions. (The gallery region this item
+  originally also covered no longer exists — the gallery feature was removed 2026-07-07 in
+  favour of inline instruction images.)
 
 ## ✅ Done
 

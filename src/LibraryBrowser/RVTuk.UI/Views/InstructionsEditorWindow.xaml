@@ -9,15 +9,37 @@
         ShowInTaskbar="False">
 
     <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolVis"/>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/RVTuk.UI;component/Themes/DarkTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <BooleanToVisibilityConverter x:Key="BoolVis"/>
+
+            <!-- Small square drag-handle used for both resize and crop corners. -->
+            <Style x:Key="HandleThumb" TargetType="{x:Type Thumb}">
+                <Setter Property="Width"  Value="12"/>
+                <Setter Property="Height" Value="12"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type Thumb}">
+                            <Rectangle Fill="{StaticResource Brush.Accent}"
+                                       Stroke="White" StrokeThickness="1"/>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
     </Window.Resources>
 
-    <Grid>
+    <Window.Background><StaticResource ResourceKey="Brush.Bg"/></Window.Background>
+    <Window.Foreground><StaticResource ResourceKey="Brush.Text"/></Window.Foreground>
+
+    <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>  <!-- gallery -->
             <RowDefinition Height="Auto"/>  <!-- footer -->
         </Grid.RowDefinitions>
 
@@ -63,82 +85,150 @@
 
             <StackPanel Grid.Column="1" Margin="10,4,0,4" VerticalAlignment="Center">
                 <TextBlock Text="{Binding FamilyDisplayName}" FontSize="13" FontWeight="Bold"/>
-                <TextBlock Text="{Binding ThumbStatus}" FontSize="10" Foreground="Gray" Margin="0,2,0,0"/>
+                <TextBlock Text="{Binding ThumbStatus}" FontSize="10"
+                           Foreground="{StaticResource Brush.TextMuted}" Margin="0,2,0,0"/>
                 <DockPanel Margin="0,6,0,0">
                     <TextBlock Text="&#x1F3F7; Tags:" DockPanel.Dock="Left" VerticalAlignment="Center"
-                               FontSize="10" Foreground="Gray" Margin="0,0,6,0"/>
+                               FontSize="10" Foreground="{StaticResource Brush.TextMuted}" Margin="0,0,6,0"/>
                     <TextBox Text="{Binding TagsText, UpdateSourceTrigger=PropertyChanged}"
                              ToolTip="Comma-separated tags, e.g. door, exterior, ADA"/>
                 </DockPanel>
             </StackPanel>
         </Grid>
 
-        <!-- TOOLBAR -->
-        <ToolBar Grid.Row="1">
-            <Button Content="B" FontWeight="Bold"  Click="Bold_Click" Width="24"/>
-            <Button Content="I" FontStyle="Italic" Click="Italic_Click" Width="24"/>
-            <Button Click="Underline_Click" Width="24">
-                <TextBlock Text="U" TextDecorations="Underline"/>
-            </Button>
-            <Separator/>
-            <Button Content="H1" Click="H1_Click" Width="28"/>
-            <Button Content="H2" Click="H2_Click" Width="28"/>
-            <Button Content="&#x2261; List" Click="List_Click"/>
-            <Separator/>
-            <Button Content="&#x1F5BC; Add Image" Click="AddImage_Click"/>
-        </ToolBar>
+        <!-- TOOLBAR: formatting buttons (left) + Preview/Raw toggle (right) -->
+        <Border Grid.Row="1" Background="{StaticResource Brush.Panel}"
+                BorderBrush="{StaticResource Brush.Border}" BorderThickness="0,1,0,1" Padding="6,4">
+            <DockPanel>
+                <!-- Preview / Raw segmented toggle, pinned right -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="PreviewBtn" Content="Preview" Width="62" Click="PreviewMode_Click"/>
+                    <Button x:Name="RawBtn"     Content="Raw"     Width="52" Margin="-1,0,0,0" Click="RawMode_Click"/>
+                </StackPanel>
 
-        <!-- EDITOR BODY -->
-        <RichTextBox Grid.Row="2" x:Name="Editor" Margin="8" AcceptsReturn="True"
-                     VerticalScrollBarVisibility="Auto"
-                     AllowDrop="True"
-                     ctrl:RichTextBoxHelper.DocumentXaml="{Binding InstructionsXaml}"/>
+                <!-- Formatting buttons; disabled as a group while in Raw mode -->
+                <WrapPanel x:Name="FormattingButtons" VerticalAlignment="Center">
+                    <Button Content="B" FontWeight="Bold"  Click="Bold_Click"      Width="24" Margin="0,0,2,0"/>
+                    <Button Content="I" FontStyle="Italic" Click="Italic_Click"    Width="24" Margin="0,0,2,0"/>
+                    <Button Click="Underline_Click" Width="24" Margin="0,0,6,0">
+                        <TextBlock Text="U" TextDecorations="Underline"/>
+                    </Button>
+                    <Button Content="H1" Click="H1_Click" Width="28" Margin="0,0,2,0"/>
+                    <Button Content="H2" Click="H2_Click" Width="28" Margin="0,0,6,0"/>
+                    <Button Content="&#x2261; List" Click="List_Click" Margin="0,0,6,0"/>
+                    <Button Content="&#x1F5BC; Add Image" Click="AddImage_Click" Margin="0,0,2,0"/>
+                    <Button x:Name="TableButton" Content="&#x229E; Table" Click="TableButton_Click"/>
+                </WrapPanel>
+            </DockPanel>
+        </Border>
 
-        <!-- GALLERY -->
-        <DockPanel Grid.Row="3" Margin="8,0,8,0" LastChildFill="False">
-            <TextBlock Text="GALLERY" FontWeight="SemiBold" FontSize="11"
-                       VerticalAlignment="Center" DockPanel.Dock="Left"/>
-            <Button Content="Add to Gallery…" Command="{Binding AddImageCommand}"
-                    DockPanel.Dock="Right"/>
-        </DockPanel>
-        <ScrollViewer Grid.Row="3" Margin="8,22,8,4" MaxHeight="150"
-                      VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding GalleryItems}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <StackPanel Width="150" Margin="6">
-                            <Image Source="{Binding Image}" Height="90" Stretch="Uniform"/>
-                            <TextBox Text="{Binding Caption}" Margin="0,3,0,0"
-                                     Tag="{Binding Id}" LostFocus="Caption_LostFocus"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-                                <Button Content="&#x25C0;" Width="26"
-                                        Command="{Binding DataContext.MoveImageLeftCommand,
-                                                  RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                        CommandParameter="{Binding Id}"/>
-                                <Button Content="&#x25B6;" Width="26" Margin="4,0,0,0"
-                                        Command="{Binding DataContext.MoveImageRightCommand,
-                                                  RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                        CommandParameter="{Binding Id}"/>
-                            </StackPanel>
-                            <Button Content="Delete" Margin="0,3,0,0"
-                                    Command="{Binding DataContext.DeleteImageCommand,
-                                              RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                    CommandParameter="{Binding Id}"/>
-                        </StackPanel>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+        <!-- EDITOR BODY: rich preview + raw Markdown source view (one visible at a time) -->
+        <Grid Grid.Row="2">
+            <RichTextBox x:Name="Editor" Margin="8" AcceptsReturn="True"
+                         VerticalScrollBarVisibility="Auto"
+                         AllowDrop="True"
+                         ctrl:RichTextBoxHelper.DocumentXaml="{Binding InstructionsXaml}"/>
+            <TextBox x:Name="RawEditor" Margin="8" Visibility="Collapsed"
+                     FontFamily="Consolas" FontSize="12"
+                     AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
+                     ToolTip="Markdown source (the document is still saved as rich text)"
+                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+        </Grid>
 
         <!-- FOOTER -->
-        <Grid Grid.Row="4" Margin="8,4,8,8">
+        <Grid Grid.Row="3" Margin="8,4,8,8">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="Cancel" Command="{Binding CancelCommand}" Width="70" Margin="0,0,8,0"/>
                 <Button Content="Save"   Click="Save_Click"                Width="70"/>
             </StackPanel>
         </Grid>
+
+        <!-- ── Selected-image overlay ─────────────────────────────────────────────
+             This Canvas is REMOVED from the Grid in the ctor and hosted in the Editor's
+             AdornerLayer (via SingleChildAdorner) while an image is selected. An Adorner
+             lives in the main visual tree over the Editor, so its Thumbs/buttons reliably
+             receive mouse input — unlike a Popup anchored to an Image buried inside the
+             RichTextBox's internal FlowDocument view. Handles are positioned in Editor-
+             relative coordinates by LayoutHandles. -->
+        <Canvas x:Name="OverlayCanvas" Background="{x:Null}" Visibility="Collapsed">
+            <!-- Crop masks (dim area outside the crop rect) -->
+            <Rectangle x:Name="MaskTop"    Fill="#99000000" Visibility="Collapsed"/>
+            <Rectangle x:Name="MaskBottom" Fill="#99000000" Visibility="Collapsed"/>
+            <Rectangle x:Name="MaskLeft"   Fill="#99000000" Visibility="Collapsed"/>
+            <Rectangle x:Name="MaskRight"  Fill="#99000000" Visibility="Collapsed"/>
+
+            <!-- Crop rectangle + body-drag surface -->
+            <Rectangle x:Name="CropRect" Stroke="White" StrokeThickness="1"
+                       StrokeDashArray="4 2" Fill="{x:Null}" Visibility="Collapsed"/>
+            <Thumb x:Name="CropBody" Cursor="SizeAll" Visibility="Collapsed"
+                   DragDelta="CropBody_DragDelta">
+                <Thumb.Template>
+                    <ControlTemplate TargetType="{x:Type Thumb}">
+                        <Rectangle Fill="Transparent"/>
+                    </ControlTemplate>
+                </Thumb.Template>
+            </Thumb>
+
+            <!-- Crop corner handles -->
+            <Thumb x:Name="CropNW" Style="{StaticResource HandleThumb}" Cursor="SizeNWSE" Visibility="Collapsed" DragDelta="CropNW_DragDelta"/>
+            <Thumb x:Name="CropNE" Style="{StaticResource HandleThumb}" Cursor="SizeNESW" Visibility="Collapsed" DragDelta="CropNE_DragDelta"/>
+            <Thumb x:Name="CropSW" Style="{StaticResource HandleThumb}" Cursor="SizeNESW" Visibility="Collapsed" DragDelta="CropSW_DragDelta"/>
+            <Thumb x:Name="CropSE" Style="{StaticResource HandleThumb}" Cursor="SizeNWSE" Visibility="Collapsed" DragDelta="CropSE_DragDelta"/>
+
+            <!-- Resize corner handles (normal mode) -->
+            <Thumb x:Name="ResizeNW" Style="{StaticResource HandleThumb}" Cursor="SizeNWSE" DragDelta="ResizeNW_DragDelta"/>
+            <Thumb x:Name="ResizeNE" Style="{StaticResource HandleThumb}" Cursor="SizeNESW" DragDelta="ResizeNE_DragDelta"/>
+            <Thumb x:Name="ResizeSW" Style="{StaticResource HandleThumb}" Cursor="SizeNESW" DragDelta="ResizeSW_DragDelta"/>
+            <Thumb x:Name="ResizeSE" Style="{StaticResource HandleThumb}" Cursor="SizeNWSE" DragDelta="ResizeSE_DragDelta"/>
+
+            <!-- Floating toolbar above the selected image (auto-flips below if no room). -->
+            <Border x:Name="OverlayToolbar"
+                    Background="{StaticResource Brush.Panel}" BorderBrush="{StaticResource Brush.Border}"
+                    BorderThickness="1" CornerRadius="2" Padding="3">
+                <StackPanel Orientation="Horizontal">
+                    <StackPanel x:Name="NormalTools" Orientation="Horizontal">
+                        <Button Content="S"    Width="26" Margin="1,0" Click="PresetS_Click"/>
+                        <Button Content="M"    Width="26" Margin="1,0" Click="PresetM_Click"/>
+                        <Button Content="L"    Width="26" Margin="1,0" Click="PresetL_Click"/>
+                        <Button Content="Full" Width="36" Margin="1,0" Click="PresetFull_Click"/>
+                        <Button Content="Crop" Margin="6,0,1,0" Click="Crop_Click"/>
+                        <Button Content="&#x2715; Remove" Margin="1,0" Click="RemoveImage_Click"/>
+                    </StackPanel>
+                    <StackPanel x:Name="CropTools" Orientation="Horizontal" Visibility="Collapsed">
+                        <Button Content="&#x2713; Apply crop" Margin="1,0" Click="ApplyCrop_Click"/>
+                        <Button Content="Cancel" Margin="1,0" Click="CancelCrop_Click"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Canvas>
+
+        <!-- Insert-table popup -->
+        <Popup x:Name="TablePopup" StaysOpen="False" AllowsTransparency="True"
+               Placement="Bottom" PlacementTarget="{Binding ElementName=TableButton}">
+            <Border Background="{StaticResource Brush.Panel}" BorderBrush="{StaticResource Brush.Border}"
+                    BorderThickness="1" CornerRadius="2" Padding="10">
+                <StackPanel Width="170">
+                    <TextBlock Text="Insert Table" FontWeight="Bold" Margin="0,0,0,8"/>
+                    <Grid Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Rows" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" x:Name="RowsBox" Text="3" Width="50" TextAlignment="Center"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Columns" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1" x:Name="ColsBox" Text="3" Width="50" TextAlignment="Center"/>
+                    </Grid>
+                    <CheckBox x:Name="TableHeaderCheck" Content="Header row" IsChecked="True" Margin="0,0,0,8"/>
+                    <Button Content="Insert" HorizontalAlignment="Right" Width="70" Click="InsertTable_Click"/>
+                </StackPanel>
+            </Border>
+        </Popup>
     </Grid>
 </Window>

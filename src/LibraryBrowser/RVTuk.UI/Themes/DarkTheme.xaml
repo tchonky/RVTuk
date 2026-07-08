@@ -17,6 +17,7 @@
     <SolidColorBrush x:Key="Brush.AccentDark"   Color="#2B6CB0"/>
     <SolidColorBrush x:Key="Brush.Success"      Color="#4EC94E"/>
     <SolidColorBrush x:Key="Brush.Warning"      Color="#D64545"/>
+    <SolidColorBrush x:Key="Brush.UpdateOrange" Color="#D9822B"/>
     <SolidColorBrush x:Key="Brush.ErrorFill"    Color="#3A2424"/>
     <SolidColorBrush x:Key="Brush.Splitter"     Color="#4A4A4A"/>
 
@@ -107,6 +108,50 @@
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Bd" Property="Background"   Value="{StaticResource Brush.Selection}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource Brush.TextDisabled}"/>
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ── ToggleButton (default) ────────────────────────────────────────────
+         Without this, every plain <ToggleButton> (category/tri-toggles, footer
+         Settings/Help, etc.) fell back to WPF's default light chrome — a light-
+         colored icon on that reads as washed-out grey-on-grey. The keyed
+         DarkComboToggle style below is unaffected (explicit Style wins over this
+         implicit one). -->
+    <Style TargetType="ToggleButton">
+        <Setter Property="Background"      Value="{StaticResource Brush.Control}"/>
+        <Setter Property="Foreground"      Value="{StaticResource Brush.Text}"/>
+        <Setter Property="BorderBrush"     Value="{StaticResource Brush.Border}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding"         Value="8,4"/>
+        <Setter Property="Cursor"          Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}"
+                            CornerRadius="2">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background"   Value="{StaticResource Brush.Hover}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush"  Value="{StaticResource Brush.BorderFocus}"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background"  Value="{StaticResource Brush.Selection}"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Brush.Accent}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Foreground" Value="{StaticResource Brush.TextDisabled}"/>

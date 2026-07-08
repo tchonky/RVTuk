@@ -28,6 +28,25 @@ namespace RVTuk.UI.Controls
         public static void SetDocumentXaml(DependencyObject obj, string? value)
             => obj.SetValue(DocumentXamlProperty, value);
 
+        // Renders a markdown string (e.g. Help panel content fetched over HTTP, or a fallback
+        // string) into the RichTextBox via MarkdownConverter.Build, following the exact same
+        // attached-property pattern as DocumentXaml above.
+        public static readonly DependencyProperty MarkdownSourceProperty =
+            DependencyProperty.RegisterAttached(
+                "MarkdownSource",
+                typeof(string),
+                typeof(RichTextBoxHelper),
+                new FrameworkPropertyMetadata(
+                    null,
+                    FrameworkPropertyMetadataOptions.None,
+                    OnMarkdownSourceChanged));
+
+        public static string? GetMarkdownSource(DependencyObject obj)
+            => (string?)obj.GetValue(MarkdownSourceProperty);
+
+        public static void SetMarkdownSource(DependencyObject obj, string? value)
+            => obj.SetValue(MarkdownSourceProperty, value);
+
         // Base64-encoded PNG bytes for an inline image. XamlWriter.Save cannot serialize a
         // BitmapImage built from a MemoryStream (it has no UriSource), and attempting it throws,
         // which previously caused SerializeDocument to lose the entire document. We instead carry
@@ -54,28 +73,50 @@ namespace RVTuk.UI.Controls
             _updating = true;
             try
             {
-                var xaml = e.NewValue as string;
-                if (string.IsNullOrWhiteSpace(xaml))
-                {
-                    rtb.Document = new FlowDocument();
-                }
-                else
-                {
-                    try
-                    {
-                        var doc = (FlowDocument)XamlReader.Parse(xaml);
-                        RehydrateImages(doc);
-                        rtb.Document = doc;
-                    }
-                    catch
-                    {
-                        rtb.Document = new FlowDocument();
-                    }
-                }
+                rtb.Document = ParseDocumentXaml(e.NewValue as string);
             }
             finally
             {
                 _updating = false;
+            }
+        }
+
+        // Parse a XAML string into a FlowDocument (rehydrating inline image sources from their
+        // ImageData), returning an empty document on null/empty/parse-failure. Shared by the
+        // DocumentXaml attached-property callback and the editor's Raw→Preview toggle so both use
+        // identical parse-and-rehydrate semantics.
+        public static FlowDocument ParseDocumentXaml(string? xaml)
+        {
+            if (string.IsNullOrWhiteSpace(xaml))
+                return new FlowDocument();
+            try
+            {
+                var doc = (FlowDocument)XamlReader.Parse(xaml);
+                RehydrateImages(doc);
+                return doc;
+            }
+            catch
+            {
+                return new FlowDocument();
+            }
+        }
+
+        private static bool _updatingMarkdown;
+
+        private static void OnMarkdownSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (_updatingMarkdown || d is not RichTextBox rtb) return;
+            _updatingMarkdown = true;
+            try
+            {
+                var markdown = e.NewValue as string;
+                rtb.Document = string.IsNullOrEmpty(markdown)
+                    ? new FlowDocument()
+                    : RVTuk.UI.Helpers.MarkdownConverter.Build(markdown);
+            }
+            finally
+            {
+                _updatingMarkdown = false;
             }
         }
 

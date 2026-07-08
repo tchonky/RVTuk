@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Windows;
 using System.Windows.Input;
@@ -14,37 +15,45 @@ using RVTuk.Core.Util;
 
 namespace RVTuk.UI.ViewModels
 {
+    public enum FamilyBrowserRightView { Detail, Settings, Help }
+
     public class FamilyBrowserViewModel : ViewModelBase, IDisposable
     {
+        // Points at the team's docs repo. Update this once the real repo/path is known.
+        private const string HelpMarkdownUrl = "https://raw.githubusercontent.com/knafo-klimor/rvtuk-docs/main/help.md";
+
         private readonly AppConfig _config;
         private readonly BrowserRepository _repo;
         private readonly Func<IReadOnlyList<string>> _getProjectFamilies;
         private readonly Func<string, (bool Success, string? Error)> _loadFamily;
         private readonly Func<long, string, bool> _rescanFamily;
+        private readonly Action<string> _openInFamilyEditor;
         private readonly Dispatcher _dispatcher;
         private readonly object _loadLock = new object();
+        private static readonly HttpClient _http = new HttpClient();
 
         private List<FamilyBrowserItemViewModel> _allItems = new();
         private string _searchText = string.Empty;
-        private string _selectedCategory = "";
         private FamilyBrowserItemViewModel? _selectedItem;
-        private bool _showFavoritesOnly;
-        private bool _showInProjectOnly = true;
-        private bool _showOutdatedOnly;
-        private bool _isSyncMenuOpen;
-        private bool _syncHasRun;
+        private bool _showInProjectFamilies;
+        private bool _showFavoriteFamilies;
+        private bool _showLibraryOnlyFamilies;
+        private bool _isGridView;
+        private bool? _isAllCategoriesSelected = true;
         private bool _isSyncing;
         private bool _isRescanning;
         private int _outdatedCount;
         private string? _instructionsXaml;
         private List<ParameterModel> _parameters = new();
         private string _parameterFilter = string.Empty;
-        public ObservableCollection<ParameterModel> FilteredParameters { get; } = new();
-        public ObservableCollection<GalleryItemViewModel> GalleryItems { get; } = new();
+        private FamilyBrowserRightView _rightView = FamilyBrowserRightView.Detail;
+        private bool _helpLoaded;
+        private string _helpSourceLabel = string.Empty;
+        private string? _helpMarkdownRaw;
 
+        public ObservableCollection<ParameterModel> FilteredParameters { get; } = new();
         public ObservableCollection<FamilyBrowserItemViewModel> FilteredItems { get; } = new();
-        public ObservableCollection<string> Categories { get; } = new();
-        public ObservableCollection<VersionFilterOption> VersionOptions { get; } = new();
+        public ObservableCollection<CategoryFilterOption> CategoryOptions { get; } = new();
 
         public string SearchText
         {
@@ -52,40 +61,77 @@ namespace RVTuk.UI.ViewModels
             set { SetProperty(ref _searchText, value); ApplyFilter(); }
         }
 
-        public string SelectedCategory
+        // All default off (unfiltered — nothing hidden). Pressing one or more filters the list
+        // to families matching ANY pressed toggle (OR/union), not all of them — otherwise
+        // pressing just Favourites while Project/Library-only were exclusion toggles would AND
+        // against that complementary, exhaustive pair and always yield nothing. With no toggle
+        // pressed, the list is unfiltered by source/status.
+        public bool ShowInProjectFamilies
         {
-            get => _selectedCategory;
-            set { SetProperty(ref _selectedCategory, value ?? ""); ApplyFilter(); }
+            get => _showInProjectFamilies;
+            set { SetProperty(ref _showInProjectFamilies, value); ApplyFilter(); }
         }
 
-        public bool ShowFavoritesOnly
+        public bool ShowFavoriteFamilies
         {
-            get => _showFavoritesOnly;
-            set { SetProperty(ref _showFavoritesOnly, value); ApplyFilter(); }
+            get => _showFavoriteFamilies;
+            set { SetProperty(ref _showFavoriteFamilies, value); ApplyFilter(); }
         }
 
-        public bool ShowInProjectOnly
+        public bool ShowLibraryOnlyFamilies
         {
-            get => _showInProjectOnly;
-            set { SetProperty(ref _showInProjectOnly, value); ApplyFilter(); }
+            get => _showLibraryOnlyFamilies;
+            set { SetProperty(ref _showLibraryOnlyFamilies, value); ApplyFilter(); }
         }
 
-        public bool ShowOutdatedOnly
+        // Toggles the family list between the compact row list and the 2-column large-thumbnail
+        // card grid. In-memory only (no persistence) — both views bind the same FilteredItems /
+        // SelectedItem, so selection and keyboard navigation carry across the switch.
+        public bool IsGridView
         {
-            get => _showOutdatedOnly;
-            set { SetProperty(ref _showOutdatedOnly, value); ApplyFilter(); }
+            get => _isGridView;
+            set => SetProperty(ref _isGridView, value);
         }
 
-        // Opening the Sync menu the first time triggers the project/version check so the
-        // "In the project" / "Outdated" filters have data to work with.
-        public bool IsSyncMenuOpen
+        // Tri-state master checkbox for CategoryOptions: true = all selected, false = none,
+        // null = mixed (indeterminate, display-only — the setter only ever receives true/false,
+        // driven by a deterministic Click handler in code-behind rather than WPF's native
+        // three-way cycling).
+        public bool? IsAllCategoriesSelected
         {
-            get => _isSyncMenuOpen;
+            get => _isAllCategoriesSelected;
             set
             {
-                SetProperty(ref _isSyncMenuOpen, value);
-                if (value && !_syncHasRun && !IsSyncing) Sync();
+                if (value == true || value == false)
+                    foreach (var c in CategoryOptions) c.IsSelected = value.Value;
             }
+        }
+
+        public string CategorySummary
+        {
+            get
+            {
+                if (CategoryOptions.Count == 0) return "All categories";
+                var selected = CategoryOptions.Count(o => o.IsSelected);
+                if (selected == CategoryOptions.Count) return "All categories";
+                if (selected == 0) return "No categories";
+                if (selected == 1) return CategoryOptions.First(o => o.IsSelected).Name;
+                return $"{selected} categories";
+            }
+        }
+
+        private void UpdateCategoryAllState()
+        {
+            bool? next;
+            if (CategoryOptions.Count == 0) next = true;
+            else
+            {
+                var selected = CategoryOptions.Count(o => o.IsSelected);
+                next = selected == CategoryOptions.Count ? true : selected == 0 ? (bool?)false : null;
+            }
+            _isAllCategoriesSelected = next;
+            OnPropertyChanged(nameof(IsAllCategoriesSelected));
+            OnPropertyChanged(nameof(CategorySummary));
         }
 
         public FamilyBrowserItemViewModel? SelectedItem
@@ -97,13 +143,16 @@ namespace RVTuk.UI.ViewModels
                 LoadDetailAsync(value);
                 OnPropertyChanged(nameof(HasSelection));
                 OnPropertyChanged(nameof(ShowFamilyDetail));
+                OnPropertyChanged(nameof(ShowDetailPane));
                 OnPropertyChanged(nameof(ShowUpdateInProject));
+                if (value != null) RightView = FamilyBrowserRightView.Detail;
             }
         }
 
         public bool HasSelection => _selectedItem != null;
         public bool ShowUpdateInProject => _selectedItem?.VersionStatus == VersionStatus.UpdateAvailable;
         public bool ShowFamilyDetail => HasSelection;
+        public bool ShowDetailPane => IsShowingDetail && HasSelection;
 
         public bool IsSyncing
         {
@@ -167,13 +216,19 @@ namespace RVTuk.UI.ViewModels
 
         private void ApplyParameterFilter()
         {
-            var q = _parameterFilter.Trim();
+            // Multi-word: split on whitespace; every token must appear somewhere in the name,
+            // group, or kind (any order/position) — matching the same convention as the family
+            // search above. A single literal-phrase match would fail as soon as a second word
+            // didn't appear verbatim in one field (e.g. "seat length" never matches a parameter
+            // named "Length" in group "Dimensions" — those are two different fields).
+            var tokens = _parameterFilter.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             IEnumerable<ParameterModel> src = _parameters;
-            if (!string.IsNullOrEmpty(q))
+            if (tokens.Length > 0)
                 src = src.Where(p =>
-                    (p.ParameterName?.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0) ||
-                    (p.ParamGroup?.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0) ||
-                    (p.Kind?.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0));
+                    tokens.All(t =>
+                        (p.ParameterName?.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                        (p.ParamGroup?.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                        (p.Kind?.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0)));
 
             FilteredParameters.Clear();
             foreach (var p in src) FilteredParameters.Add(p);
@@ -181,14 +236,54 @@ namespace RVTuk.UI.ViewModels
 
         public BrowserRepository Repo => _repo;
 
+        // Right panel: family detail (default), embedded settings, or the help/about page.
+        public FamilyBrowserRightView RightView
+        {
+            get => _rightView;
+            set
+            {
+                SetProperty(ref _rightView, value);
+                OnPropertyChanged(nameof(IsShowingDetail));
+                OnPropertyChanged(nameof(IsShowingSettings));
+                OnPropertyChanged(nameof(IsShowingHelp));
+                OnPropertyChanged(nameof(ShowDetailPane));
+                if (value == FamilyBrowserRightView.Help) _ = LoadHelpDocumentAsync();
+            }
+        }
+
+        public bool IsShowingDetail => _rightView == FamilyBrowserRightView.Detail;
+        public bool IsShowingSettings => _rightView == FamilyBrowserRightView.Settings;
+        public bool IsShowingHelp => _rightView == FamilyBrowserRightView.Help;
+
+        public string? HelpMarkdownRaw
+        {
+            get => _helpMarkdownRaw;
+            private set => SetProperty(ref _helpMarkdownRaw, value);
+        }
+
+        public string HelpSourceLabel
+        {
+            get => _helpSourceLabel;
+            private set => SetProperty(ref _helpSourceLabel, value);
+        }
+
+        // The embedded settings surface (library folder, scan, ignored subfolders) — composed
+        // rather than duplicated, reusing the same ConfigViewModel that used to back the
+        // standalone ribbon Config window.
+        public ConfigViewModel Settings { get; }
+
         public ICommand SyncCommand { get; }
         public ICommand UpdateAllCommand { get; }
         public ICommand LoadFamilyCommand { get; }
         public ICommand UpdateInProjectCommand { get; }
         public ICommand EditInfoCommand { get; }
         public ICommand RescanFamilyCommand { get; }
+        public ICommand OpenFamilyEditorCommand { get; }
         public ICommand FilterByTagCommand { get; }
         public ICommand ToggleFavoriteCommand { get; }
+        public ICommand ToggleSettingsCommand { get; }
+        public ICommand ToggleHelpCommand { get; }
+        public ICommand ClearSearchCommand { get; }
 
         public event Action<FamilyBrowserItemViewModel>? EditInfoRequested;
 
@@ -197,27 +292,38 @@ namespace RVTuk.UI.ViewModels
             BrowserRepository repo,
             Func<IReadOnlyList<string>> getProjectFamilies,
             Func<string, (bool Success, string? Error)> loadFamily,
-            Func<long, string, bool> rescanFamily)
+            Func<long, string, bool> rescanFamily,
+            Action<bool, bool> scan,
+            Action<string> openInFamilyEditor,
+            Action? onLibraryFolderChanged = null)
         {
             _config = config;
             _repo = repo;
             _getProjectFamilies = getProjectFamilies;
             _loadFamily = loadFamily;
             _rescanFamily = rescanFamily;
+            _openInFamilyEditor = openInFamilyEditor;
             _dispatcher = Dispatcher.CurrentDispatcher;
 
-            SyncCommand           = new RelayCommand(Sync, () => !IsSyncing);
-            UpdateAllCommand      = new RelayCommand(UpdateAll,     () => OutdatedCount > 0);
-            LoadFamilyCommand     = new RelayCommand(LoadSelected,  () => SelectedItem != null);
-            UpdateInProjectCommand= new RelayCommand(UpdateSelected,() => ShowUpdateInProject);
-            EditInfoCommand       = new RelayCommand(RequestEditInfo, () => SelectedItem != null);
-            RescanFamilyCommand   = new RelayCommand(RescanSelected, () => SelectedItem != null && !IsRescanning);
-            FilterByTagCommand    = new RelayCommand<string>(t => { if (!string.IsNullOrWhiteSpace(t)) SearchText = t.Trim(); });
-            ToggleFavoriteCommand = new RelayCommand<FamilyBrowserItemViewModel>(ToggleFavorite);
+            Settings = new ConfigViewModel(config, scan, onLibraryFolderChanged);
+
+            SyncCommand            = new RelayCommand(Sync, () => !IsSyncing);
+            UpdateAllCommand       = new RelayCommand(UpdateAll,     () => OutdatedCount > 0);
+            LoadFamilyCommand      = new RelayCommand(LoadSelected,  () => SelectedItem != null);
+            UpdateInProjectCommand = new RelayCommand(UpdateSelected,() => ShowUpdateInProject);
+            EditInfoCommand        = new RelayCommand(RequestEditInfo, () => SelectedItem != null);
+            RescanFamilyCommand    = new RelayCommand(RescanSelected, () => SelectedItem != null && !IsRescanning);
+            OpenFamilyEditorCommand= new RelayCommand(OpenInFamilyEditor, () => SelectedItem != null);
+            FilterByTagCommand     = new RelayCommand<string>(t => { if (!string.IsNullOrWhiteSpace(t)) SearchText = t.Trim(); });
+            ToggleFavoriteCommand  = new RelayCommand<FamilyBrowserItemViewModel>(ToggleFavorite);
+            ToggleSettingsCommand  = new RelayCommand(() => RightView = RightView == FamilyBrowserRightView.Settings
+                ? FamilyBrowserRightView.Detail : FamilyBrowserRightView.Settings);
+            ToggleHelpCommand      = new RelayCommand(() => RightView = RightView == FamilyBrowserRightView.Help
+                ? FamilyBrowserRightView.Detail : FamilyBrowserRightView.Help);
+            ClearSearchCommand     = new RelayCommand(() => SearchText = string.Empty);
 
             LoadFamilies();
             LoadCategories();
-            LoadVersions();
         }
 
         private void LoadFamilies()
@@ -230,27 +336,17 @@ namespace RVTuk.UI.ViewModels
 
         private void LoadCategories()
         {
-            Categories.Clear();
-            Categories.Add(""); // "" = "All" sentinel (avoids null items in WPF 4.x CollectionView)
-            foreach (var cat in _repo.GetCategories().Where(c => c != null))
-                Categories.Add(cat!);
-            SelectedCategory = "";
-        }
-
-        private void LoadVersions()
-        {
-            var previouslySelected = VersionOptions.Where(o => o.IsSelected).Select(o => o.Year).ToHashSet();
-            VersionOptions.Clear();
-            foreach (var y in _allItems
-                .Select(i => i.RevitYear)
-                .Where(y => y > 0)
-                .Distinct()
-                .OrderByDescending(y => y))
+            // Preserve which categories were deselected across a reload (e.g. after Sync).
+            var previouslyDeselected = CategoryOptions.Where(o => !o.IsSelected).Select(o => o.Name).ToHashSet();
+            CategoryOptions.Clear();
+            foreach (var cat in _repo.GetCategories().Where(c => !string.IsNullOrEmpty(c)))
             {
-                var opt = new VersionFilterOption(y) { IsSelected = previouslySelected.Contains(y) };
-                opt.PropertyChanged += (_, __) => ApplyFilter();
-                VersionOptions.Add(opt);
+                var opt = new CategoryFilterOption(cat!) { IsSelected = !previouslyDeselected.Contains(cat!) };
+                opt.PropertyChanged += (_, __) => { UpdateCategoryAllState(); ApplyFilter(); };
+                CategoryOptions.Add(opt);
             }
+            UpdateCategoryAllState();
+            ApplyFilter();
         }
 
         private void ApplyFilter()
@@ -264,22 +360,24 @@ namespace RVTuk.UI.ViewModels
                     tokens.All(t =>
                         i.DisplayName.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0 ||
                         (i.Tags != null && i.Tags.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0)));
-            if (!string.IsNullOrEmpty(_selectedCategory))
-                filtered = filtered.Where(i => i.Category == _selectedCategory);
 
-            var selectedYears = VersionOptions.Where(o => o.IsSelected).Select(o => o.Year).ToHashSet();
-            if (selectedYears.Count > 0)
-                filtered = filtered.Where(i => selectedYears.Contains(i.RevitYear));
+            if (CategoryOptions.Count > 0)
+            {
+                var selectedCats = CategoryOptions.Where(o => o.IsSelected).Select(o => o.Name).ToHashSet();
+                if (selectedCats.Count < CategoryOptions.Count)
+                    filtered = filtered.Where(i => i.Category != null && selectedCats.Contains(i.Category));
+            }
 
-            if (_showFavoritesOnly)
-                filtered = filtered.Where(i => i.IsFavorite);
-
-            // In-project / outdated need the Sync check to know what's loaded in the project;
-            // until it has run, show everything regardless of those toggles.
-            if (_syncHasRun && _showInProjectOnly)
-                filtered = filtered.Where(i => i.VersionStatus != VersionStatus.None);
-            if (_syncHasRun && _showOutdatedOnly)
-                filtered = filtered.Where(i => i.VersionStatus == VersionStatus.UpdateAvailable);
+            // Source/status toggles: OR, not AND. With none pressed, unfiltered. Pressing any
+            // combination shows the union of what they represent — pressing only Favourites
+            // must show every favourite regardless of project/library status, which an
+            // exclusion/AND model can't express here since in-project and library-only are a
+            // complementary, exhaustive pair (excluding both always yields nothing).
+            if (_showInProjectFamilies || _showFavoriteFamilies || _showLibraryOnlyFamilies)
+                filtered = filtered.Where(i =>
+                    (_showInProjectFamilies && i.VersionStatus != VersionStatus.None) ||
+                    (_showLibraryOnlyFamilies && i.VersionStatus == VersionStatus.None) ||
+                    (_showFavoriteFamilies && i.IsFavorite));
 
             // Hide families under an ignored subfolder (kept in the DB, just not shown).
             if (_config.IgnoredSubfolders != null && _config.IgnoredSubfolders.Count > 0)
@@ -292,7 +390,7 @@ namespace RVTuk.UI.ViewModels
 
         private void LoadDetailAsync(FamilyBrowserItemViewModel? item)
         {
-            if (item == null) { InstructionsXaml = null; Parameters = new List<ParameterModel>(); GalleryItems.Clear(); SelectedTags = null; return; }
+            if (item == null) { InstructionsXaml = null; Parameters = new List<ParameterModel>(); SelectedTags = null; return; }
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 try
@@ -300,9 +398,6 @@ namespace RVTuk.UI.ViewModels
                     var xaml = _repo.GetInstructionsXaml(item.Id);
                     var prms = _repo.GetParameters(item.Id);
                     var tags = _repo.GetTags(item.Id);
-                    var images = _repo.GetImages(item.Id)
-                        .Select(im => new GalleryItemViewModel(im.Id, im.Caption, _repo.GetGalleryPath(item.Id, im.FileName)))
-                        .ToList();
                     _dispatcher.Invoke(() =>
                     {
                         // Selection may have moved on while this load ran; a stale result must
@@ -313,12 +408,30 @@ namespace RVTuk.UI.ViewModels
                         Parameters = prms;
                         item.Model.Tags = tags;
                         SelectedTags = tags;
-                        GalleryItems.Clear();
-                        foreach (var g in images) GalleryItems.Add(g);
                     });
                 }
                 catch { /* swallow — detail load failure is non-fatal */ }
             });
+        }
+
+        private async System.Threading.Tasks.Task LoadHelpDocumentAsync()
+        {
+            if (_helpLoaded) return;
+            _helpLoaded = true;
+            HelpSourceLabel = "Loading…";
+            try
+            {
+                var markdown = await _http.GetStringAsync(HelpMarkdownUrl);
+                HelpMarkdownRaw = markdown;
+                HelpSourceLabel = "Source: " + HelpMarkdownUrl;
+            }
+            catch (Exception ex)
+            {
+                HelpSourceLabel = "Couldn't load help — " + ex.Message;
+                HelpMarkdownRaw =
+                    "# Help unavailable\n\nCouldn't reach the docs repo. Check your network connection, " +
+                    "or reach the RVTuk team directly.";
+            }
         }
 
         private void Sync()
@@ -386,9 +499,7 @@ namespace RVTuk.UI.ViewModels
                     _dispatcher.Invoke(() =>
                     {
                         _allItems = finalItems;
-                        _syncHasRun = true;
                         LoadCategories();
-                        LoadVersions();
                         OutdatedCount = finalOutdated;
                         OnPropertyChanged(nameof(ShowUpdateInProject));
                         IsSyncing = false;
@@ -461,7 +572,7 @@ namespace RVTuk.UI.ViewModels
             item.IsFavorite = !item.IsFavorite;
             try { _repo.SetFavorite(item.Id, item.IsFavorite); }
             catch { /* read-only share; favourite stays in-memory only */ }
-            if (_showFavoritesOnly) ApplyFilter();
+            ApplyFilter();
         }
 
         // Re-extracts metadata (category, parameters, thumbnail) for just the selected family,
@@ -494,6 +605,24 @@ namespace RVTuk.UI.ViewModels
                     }
                     else MessageBox.Show("Could not rescan this family.", "RVTuk");
                 });
+            });
+        }
+
+        // Opens the .rfa directly in Revit's Family Editor. Runs off the UI thread since it
+        // blocks on the same ExternalEvent ping-pong pattern as load/rescan.
+        private void OpenInFamilyEditor()
+        {
+            var item = SelectedItem;
+            if (item == null) return;
+            var fullPath = Path.Combine(_config.LibraryFolderPath, item.RelativePath);
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string? error = null;
+                try { _openInFamilyEditor(fullPath); }
+                catch (Exception ex) { error = ex.Message; }
+                if (error != null)
+                    _dispatcher.Invoke(() =>
+                        MessageBox.Show($"Could not open family editor: {error}", "RVTuk"));
             });
         }
 

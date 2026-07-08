@@ -69,8 +69,20 @@ namespace RVTuk.Revit.Commands
                 return (Application.LoadFamilyHandler.Success, Application.LoadFamilyHandler.ErrorMessage);
             };
 
+            Action<string> openInFamilyEditor = path =>
+            {
+                Application.OpenFamilyEditorHandler.Prepare(path);
+                Application.OpenFamilyEditorEvent.Raise();
+                Application.OpenFamilyEditorHandler.WaitForCompletion();
+            };
+
             Application.CurrentUIApp = commandData.Application;
             var capturedUIApp = commandData.Application;
+
+            // Runs a scan (used by the browser's embedded Settings panel — the ribbon Config
+            // window was removed in favour of settings embedded directly in the browser).
+            Action<bool, bool> scan = (includeThumbnails, includeParameters) =>
+                IndexLibraryCommand.RunScan(capturedUIApp, ConfigManager.LoadConfig(), includeThumbnails, includeParameters);
 
             // Re-extract metadata for ONE family (selected in the browser), reusing the same
             // indexing ExternalEvent ping-pong. Called from a background thread by the VM, so
@@ -159,7 +171,7 @@ namespace RVTuk.Revit.Commands
             try
             {
                 System.Windows.Application.Current.DispatcherUnhandledException += dispatcherHandler;
-                var window = new FamilyBrowserWindow(config, getProjectFamilies, loadFamily, rescanFamily);
+                var window = new FamilyBrowserWindow(config, getProjectFamilies, loadFamily, rescanFamily, scan, openInFamilyEditor);
                 window.Closed += (s, e) =>
                     System.Windows.Application.Current.DispatcherUnhandledException -= dispatcherHandler;
                 Application.BrowserWindow = window; // set before Show() so handler can close it if layout throws

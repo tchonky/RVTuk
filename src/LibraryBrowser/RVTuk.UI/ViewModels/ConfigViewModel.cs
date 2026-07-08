@@ -9,10 +9,10 @@ using RVTuk.Core.Config;
 namespace RVTuk.UI.ViewModels
 {
     /// <summary>
-    /// View model for the ribbon-launched Config hub. Today it hosts the Family Library
-    /// settings (library root, scan, ignored subfolders) that previously lived in an
-    /// inline panel inside the Family Browser. Built as a hub so other tools' settings can be
-    /// added as further tabs later.
+    /// View model for the Family Library settings (library root, scan, ignored subfolders).
+    /// Embedded directly in <see cref="FamilyBrowserViewModel.Settings"/> and rendered in the
+    /// Family Browser's right panel behind the gear button — there is no separate ribbon Config
+    /// window (removed; this was the only tab it ever grew).
     /// </summary>
     public class ConfigViewModel : ViewModelBase
     {

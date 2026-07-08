@@ -29,4 +29,11 @@
     <ProjectReference Include="..\..\RVTuk.Core\RVTuk.Core.csproj" />
   </ItemGroup>
 
+  <!-- net48 doesn't implicitly resolve System.Net.Http (used for the Help panel's markdown
+       fetch) — a transitive package pulls in a facade at a different version, so the compiler
+       needs an explicit reference to disambiguate. -->
+  <ItemGroup Condition="'$(TargetFramework)'=='net48'">
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
 </Project>
