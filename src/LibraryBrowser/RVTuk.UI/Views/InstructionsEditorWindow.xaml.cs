@@ -55,7 +55,7 @@ namespace RVTuk.UI.Views
             Editor.PreviewKeyDown += Editor_PreviewKeyDown;
 
             // Right-click an inline image to format it (size / replace / crop / remove).
-            Editor.PreviewMouseRightButtonUp += Editor_PreviewMouseRightButtonUp;
+            Editor.ContextMenuOpening += Editor_ContextMenuOpening;
 
             // Drag-drop onto thumbnail
             ThumbnailImage.Drop     += ThumbnailImage_Drop;
@@ -404,18 +404,23 @@ namespace RVTuk.UI.Views
         private Border NewSelectionBorder() =>
             new Border { Style = (Style)Resources["ImageHoverBorder"] };
 
-        private void Editor_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+        // Handle ContextMenuOpening (not the mouse event): the RichTextBox raises its default
+        // cut/copy/paste menu here, so marking the event handled is what suppresses it. We then
+        // open our own image menu. OriginalSource can be a text run beside the image, so also fall
+        // back to the element directly under the mouse.
+        private void Editor_ContextMenuOpening(object sender, ContextMenuEventArgs e)
         {
-            if (_isRawMode) return;
-            var img = FindImageFrom(e.OriginalSource as DependencyObject);
-            if (img == null) return;
+            if (_isRawMode) return; // let the default editing menu show
+            var img = FindImageFrom(e.OriginalSource as DependencyObject)
+                      ?? FindImageFrom(Mouse.DirectlyOver as DependencyObject);
+            if (img == null) return; // not on an image — allow the default editing menu
 
             _menuTargetImage = img;
+            e.Handled = true; // suppress the RichTextBox's default cut/copy/paste menu
             var menu = (ContextMenu)Resources["ImageMenu"];
             menu.PlacementTarget = Editor;
             menu.Placement = PlacementMode.MousePoint;
             menu.IsOpen = true;
-            e.Handled = true; // suppress the RichTextBox's own cut/copy/paste menu
         }
 
         // Walk up from the click's original source to the enclosing inline Image, if any.
