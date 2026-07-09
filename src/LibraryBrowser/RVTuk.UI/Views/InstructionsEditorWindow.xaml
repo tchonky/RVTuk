@@ -31,6 +31,17 @@
                 <Separator/>
                 <MenuItem Header="Remove image"          Click="RemoveImage_Click"/>
             </ContextMenu>
+
+            <!-- Inline images light up on hover to signal they're interactive (right-click to format). -->
+            <Style x:Key="ImageHoverBorder" TargetType="Border">
+                <Setter Property="BorderThickness" Value="2"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
         </ResourceDictionary>
     </Window.Resources>
 

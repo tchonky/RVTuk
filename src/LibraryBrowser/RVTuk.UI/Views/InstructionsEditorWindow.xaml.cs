@@ -34,6 +34,8 @@ namespace RVTuk.UI.Views
         // Image targeted by the right-click context menu.
         private Image? _menuTargetImage;
 
+        private const string ImageTip = "Right-click to resize, crop, or replace.";
+
         public InstructionsEditorWindow(
             FamilyBrowserItemViewModel item,
             string? currentXaml,
@@ -218,8 +220,8 @@ namespace RVTuk.UI.Views
             RawBtn.Background     = _isRawMode ? AccentBrush  : ControlBrush;
         }
 
-        // Insert an inline image wrapped in a selection Border (transparent until selected) and
-        // tagged with its PNG bytes (base64) so it survives the XAML save/load round-trip.
+        // Insert an inline image wrapped in a hover Border and tagged with its PNG bytes (base64)
+        // so it survives the XAML save/load round-trip.
         private void InsertImageIntoEditor(byte[] pngData)
         {
             try
@@ -232,6 +234,7 @@ namespace RVTuk.UI.Views
                     Stretch = Stretch.Uniform,
                     Width   = Math.Min(400, bmp.PixelWidth)
                 };
+                image.ToolTip = ImageTip;
                 RichTextBoxHelper.SetImageData(image, Convert.ToBase64String(pngData));
 
                 var border = NewSelectionBorder();
@@ -360,8 +363,8 @@ namespace RVTuk.UI.Views
         // Inline image: right-click context menu
         // ─────────────────────────────────────────────────────────────────────────
 
-        private static Border NewSelectionBorder() =>
-            new Border { BorderThickness = new Thickness(2), BorderBrush = Brushes.Transparent };
+        private Border NewSelectionBorder() =>
+            new Border { Style = (Style)Resources["ImageHoverBorder"] };
 
         private void Editor_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
         {
@@ -478,11 +481,12 @@ namespace RVTuk.UI.Views
                     var border = NewSelectionBorder();
                     border.Child = bare;
                     container.Child = border;
+                    bare.ToolTip = ImageTip;
                 }
-                else if (container.Child is Border b && b.Child is Image)
+                else if (container.Child is Border b && b.Child is Image wrapped)
                 {
-                    b.BorderThickness = new Thickness(2);
-                    if (b.BorderBrush == null) b.BorderBrush = Brushes.Transparent;
+                    b.Style = (Style)Resources["ImageHoverBorder"];
+                    wrapped.ToolTip = ImageTip;
                 }
             }
         }
