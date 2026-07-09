@@ -16,19 +16,21 @@
 
             <BooleanToVisibilityConverter x:Key="BoolVis"/>
 
-            <!-- Small square drag-handle used for both resize and crop corners. -->
-            <Style x:Key="HandleThumb" TargetType="{x:Type Thumb}">
-                <Setter Property="Width"  Value="12"/>
-                <Setter Property="Height" Value="12"/>
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="{x:Type Thumb}">
-                            <Rectangle Fill="{StaticResource Brush.Accent}"
-                                       Stroke="White" StrokeThickness="1"/>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
+            <!-- Right-click menu for an inline image in the instructions body. -->
+            <ContextMenu x:Key="ImageMenu">
+                <MenuItem Header="Size">
+                    <MenuItem Header="Small"      Click="SizeSmall_Click"/>
+                    <MenuItem Header="Medium"     Click="SizeMedium_Click"/>
+                    <MenuItem Header="Large"      Click="SizeLarge_Click"/>
+                    <MenuItem Header="Full width" Click="SizeFull_Click"/>
+                    <Separator/>
+                    <MenuItem Header="Custom width&#x2026;" Click="SizeCustom_Click"/>
+                </MenuItem>
+                <MenuItem Header="Replace image&#x2026;" Click="ReplaceImage_Click"/>
+                <MenuItem Header="Crop&#x2026;"          Click="CropImage_Click"/>
+                <Separator/>
+                <MenuItem Header="Remove image"          Click="RemoveImage_Click"/>
+            </ContextMenu>
         </ResourceDictionary>
     </Window.Resources>
 
@@ -143,65 +145,6 @@
             </StackPanel>
         </Grid>
 
-        <!-- ── Selected-image overlay ─────────────────────────────────────────────
-             This Canvas is REMOVED from the Grid in the ctor and hosted in the Editor's
-             AdornerLayer (via SingleChildAdorner) while an image is selected. An Adorner
-             lives in the main visual tree over the Editor, so its Thumbs/buttons reliably
-             receive mouse input — unlike a Popup anchored to an Image buried inside the
-             RichTextBox's internal FlowDocument view. Handles are positioned in Editor-
-             relative coordinates by LayoutHandles. -->
-        <Canvas x:Name="OverlayCanvas" Background="{x:Null}" Visibility="Collapsed">
-            <!-- Crop masks (dim area outside the crop rect) -->
-            <Rectangle x:Name="MaskTop"    Fill="#99000000" Visibility="Collapsed"/>
-            <Rectangle x:Name="MaskBottom" Fill="#99000000" Visibility="Collapsed"/>
-            <Rectangle x:Name="MaskLeft"   Fill="#99000000" Visibility="Collapsed"/>
-            <Rectangle x:Name="MaskRight"  Fill="#99000000" Visibility="Collapsed"/>
-
-            <!-- Crop rectangle + body-drag surface -->
-            <Rectangle x:Name="CropRect" Stroke="White" StrokeThickness="1"
-                       StrokeDashArray="4 2" Fill="{x:Null}" Visibility="Collapsed"/>
-            <Thumb x:Name="CropBody" Cursor="SizeAll" Visibility="Collapsed"
-                   DragDelta="CropBody_DragDelta">
-                <Thumb.Template>
-                    <ControlTemplate TargetType="{x:Type Thumb}">
-                        <Rectangle Fill="Transparent"/>
-                    </ControlTemplate>
-                </Thumb.Template>
-            </Thumb>
-
-            <!-- Crop corner handles -->
-            <Thumb x:Name="CropNW" Style="{StaticResource HandleThumb}" Cursor="SizeNWSE" Visibility="Collapsed" DragDelta="CropNW_DragDelta"/>
-            <Thumb x:Name="CropNE" Style="{StaticResource HandleThumb}" Cursor="SizeNESW" Visibility="Collapsed" DragDelta="CropNE_DragDelta"/>
-            <Thumb x:Name="CropSW" Style="{StaticResource HandleThumb}" Cursor="SizeNESW" Visibility="Collapsed" DragDelta="CropSW_DragDelta"/>
-            <Thumb x:Name="CropSE" Style="{StaticResource HandleThumb}" Cursor="SizeNWSE" Visibility="Collapsed" DragDelta="CropSE_DragDelta"/>
-
-            <!-- Resize corner handles (normal mode) -->
-            <Thumb x:Name="ResizeNW" Style="{StaticResource HandleThumb}" Cursor="SizeNWSE" DragDelta="ResizeNW_DragDelta"/>
-            <Thumb x:Name="ResizeNE" Style="{StaticResource HandleThumb}" Cursor="SizeNESW" DragDelta="ResizeNE_DragDelta"/>
-            <Thumb x:Name="ResizeSW" Style="{StaticResource HandleThumb}" Cursor="SizeNESW" DragDelta="ResizeSW_DragDelta"/>
-            <Thumb x:Name="ResizeSE" Style="{StaticResource HandleThumb}" Cursor="SizeNWSE" DragDelta="ResizeSE_DragDelta"/>
-
-            <!-- Floating toolbar above the selected image (auto-flips below if no room). -->
-            <Border x:Name="OverlayToolbar"
-                    Background="{StaticResource Brush.Panel}" BorderBrush="{StaticResource Brush.Border}"
-                    BorderThickness="1" CornerRadius="2" Padding="3">
-                <StackPanel Orientation="Horizontal">
-                    <StackPanel x:Name="NormalTools" Orientation="Horizontal">
-                        <Button Content="S"    Width="26" Margin="1,0" Click="PresetS_Click"/>
-                        <Button Content="M"    Width="26" Margin="1,0" Click="PresetM_Click"/>
-                        <Button Content="L"    Width="26" Margin="1,0" Click="PresetL_Click"/>
-                        <Button Content="Full" Width="36" Margin="1,0" Click="PresetFull_Click"/>
-                        <Button Content="Crop" Margin="6,0,1,0" Click="Crop_Click"/>
-                        <Button Content="&#x2715; Remove" Margin="1,0" Click="RemoveImage_Click"/>
-                    </StackPanel>
-                    <StackPanel x:Name="CropTools" Orientation="Horizontal" Visibility="Collapsed">
-                        <Button Content="&#x2713; Apply crop" Margin="1,0" Click="ApplyCrop_Click"/>
-                        <Button Content="Cancel" Margin="1,0" Click="CancelCrop_Click"/>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-        </Canvas>
-
         <!-- Insert-table popup -->
         <Popup x:Name="TablePopup" StaysOpen="False" AllowsTransparency="True"
                Placement="Bottom" PlacementTarget="{Binding ElementName=TableButton}">
@@ -227,6 +170,18 @@
                     </Grid>
                     <CheckBox x:Name="TableHeaderCheck" Content="Header row" IsChecked="True" Margin="0,0,0,8"/>
                     <Button Content="Insert" HorizontalAlignment="Right" Width="70" Click="InsertTable_Click"/>
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <!-- Custom-width popup for an inline image (mirrors the Insert-table popup). -->
+        <Popup x:Name="CustomWidthPopup" StaysOpen="False" AllowsTransparency="True" Placement="Mouse">
+            <Border Background="{StaticResource Brush.Panel}" BorderBrush="{StaticResource Brush.Border}"
+                    BorderThickness="1" CornerRadius="2" Padding="10">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Width" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                    <TextBox x:Name="CustomWidthBox" Width="60" TextAlignment="Center"/>
+                    <Button Content="Apply" Width="56" Margin="6,0,0,0" Click="ApplyCustomWidth_Click"/>
                 </StackPanel>
             </Border>
         </Popup>
