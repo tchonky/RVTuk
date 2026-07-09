@@ -66,8 +66,9 @@ namespace RVTuk.UI.Views
                 e.Handled = true;
             };
 
-            // Drag-drop onto editor body
-            Editor.Drop += Editor_Drop;
+            // Drag-drop onto editor body (Preview events; the RichTextBox vetoes plain drops)
+            Editor.PreviewDragOver += Editor_PreviewDragOver;
+            Editor.PreviewDrop     += Editor_PreviewDrop;
 
             // Wire up any images that arrived from stored XAML.
             Loaded += (s, e) => { WireExistingImages(); UpdateToggleButtons(); };
@@ -131,19 +132,54 @@ namespace RVTuk.UI.Views
             }
         }
 
-        private void Editor_Drop(object sender, DragEventArgs e)
+        private static bool IsImageFile(string path)
         {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp";
+        }
+
+        private static bool HasImagePayload(IDataObject data)
+        {
+            if (data.GetDataPresent(DataFormats.Bitmap)) return true;
+            if (data.GetDataPresent(DataFormats.FileDrop))
+                return ((string[])data.GetData(DataFormats.FileDrop)).Any(IsImageFile);
+            return false;
+        }
+
+        // The RichTextBox's internal editor vetoes drops in its own DragOver; handling the
+        // tunnelling Preview events (and marking them handled) is what makes image drops work.
+        private void Editor_PreviewDragOver(object sender, DragEventArgs e)
+        {
+            e.Effects = HasImagePayload(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Handled = true;
+        }
+
+        private void Editor_PreviewDrop(object sender, DragEventArgs e)
+        {
+            if (!HasImagePayload(e.Data)) return;
+
+            // Drop where the pointer is, not at the previous caret.
+            var pos = Editor.GetPositionFromPoint(e.GetPosition(Editor), true);
+            if (pos != null) Editor.CaretPosition = pos;
+
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
-                var files = (string[])e.Data.GetData(DataFormats.FileDrop);
-                foreach (var file in files)
-                {
-                    var ext = Path.GetExtension(file).ToLowerInvariant();
-                    if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp")
-                        InsertImageIntoEditor(File.ReadAllBytes(file));
-                }
-                e.Handled = true;
+                foreach (var file in (string[])e.Data.GetData(DataFormats.FileDrop))
+                    if (IsImageFile(file)) InsertImageIntoEditor(File.ReadAllBytes(file));
             }
+            else
+            {
+                var raw = e.Data.GetData(DataFormats.Bitmap);
+                if (raw is BitmapSource bs)
+                    InsertImageIntoEditor(BitmapSourceToPng(bs));
+                else if (raw is System.Drawing.Bitmap gdi)
+                {
+                    using var ms = new MemoryStream();
+                    gdi.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                    InsertImageIntoEditor(ms.ToArray());
+                }
+            }
+            e.Handled = true;
         }
 
         private void LoadThumbnailFromFile(string path)
