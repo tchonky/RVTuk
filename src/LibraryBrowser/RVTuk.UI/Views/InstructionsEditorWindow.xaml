@@ -64,7 +64,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- Thumbnail with ⁝ menu button -->
-            <Grid Grid.Column="0" Width="84" Height="68">
+            <Grid Grid.Column="0" Width="80" Height="80">
                 <Border BorderThickness="2" CornerRadius="4">
                     <Border.Style>
                         <Style TargetType="Border">
@@ -121,13 +121,13 @@
 
                 <!-- Formatting buttons; disabled as a group while in Raw mode -->
                 <WrapPanel x:Name="FormattingButtons" VerticalAlignment="Center">
-                    <Button Content="B" FontWeight="Bold"  Click="Bold_Click"      Width="24" Margin="0,0,2,0"/>
-                    <Button Content="I" FontStyle="Italic" Click="Italic_Click"    Width="24" Margin="0,0,2,0"/>
-                    <Button Click="Underline_Click" Width="24" Margin="0,0,6,0">
+                    <Button Content="B" FontWeight="Bold"  Click="Bold_Click"   Width="26" Padding="2,3" Margin="0,0,2,0"/>
+                    <Button Content="I" FontStyle="Italic" Click="Italic_Click" Width="26" Padding="2,3" Margin="0,0,2,0"/>
+                    <Button Click="Underline_Click" Width="26" Padding="2,3" Margin="0,0,6,0">
                         <TextBlock Text="U" TextDecorations="Underline"/>
                     </Button>
-                    <Button Content="H1" Click="H1_Click" Width="28" Margin="0,0,2,0"/>
-                    <Button Content="H2" Click="H2_Click" Width="28" Margin="0,0,6,0"/>
+                    <Button Content="H1" Click="H1_Click" Width="34" Padding="2,3" Margin="0,0,2,0"/>
+                    <Button Content="H2" Click="H2_Click" Width="34" Padding="2,3" Margin="0,0,6,0"/>
                     <Button Content="&#x2261; List" Click="List_Click" Margin="0,0,6,0"/>
                     <Button Content="&#x1F5BC; Add Image" Click="AddImage_Click" Margin="0,0,2,0"/>
                     <Button x:Name="TableButton" Content="&#x229E; Table" Click="TableButton_Click"/>

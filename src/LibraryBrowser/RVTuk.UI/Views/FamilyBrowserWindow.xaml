@@ -212,7 +212,7 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Image Grid.Column="0" Source="{Binding Thumbnail}" Width="48" Height="36" Stretch="Uniform"/>
+                            <Image Grid.Column="0" Source="{Binding Thumbnail}" Width="48" Height="48" Stretch="Uniform"/>
                             <StackPanel Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
                                            TextWrapping="Wrap" MaxHeight="48"/>

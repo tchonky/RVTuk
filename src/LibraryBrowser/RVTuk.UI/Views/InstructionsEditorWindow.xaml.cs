@@ -117,10 +117,12 @@ namespace RVTuk.UI.Views
         protected override void OnPreviewKeyDown(KeyEventArgs e)
         {
             base.OnPreviewKeyDown(e);
-            // Paste image from clipboard onto thumbnail when thumbnail has mouse focus
+            // Ctrl+V with an image on the clipboard goes to the thumbnail whenever the writing area
+            // isn't focused; when the editor has focus it falls through to Editor_PreviewKeyDown
+            // (inline paste). Text paste into the Tags box is unaffected (no image on the clipboard).
             if (e.Key == Key.V && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
             {
-                if (ThumbnailImage.IsMouseOver && Clipboard.ContainsImage())
+                if (!Editor.IsKeyboardFocusWithin && Clipboard.ContainsImage())
                 {
                     var bmpSrc = Clipboard.GetImage();
                     if (bmpSrc != null)
