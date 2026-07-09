@@ -181,6 +181,7 @@
             <ListBox Grid.Row="3"
                      ItemsSource="{Binding FilteredItems}"
                      SelectedItem="{Binding SelectedItem}"
+                     AlternationCount="2"
                      BorderThickness="0,1,0,0">
                 <ListBox.Style>
                     <Style TargetType="ListBox" BasedOn="{StaticResource {x:Type ListBox}}">
@@ -191,16 +192,27 @@
                         </Style.Triggers>
                     </Style>
                 </ListBox.Style>
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                        <!-- Zero padding + zebra background so rows sit flush yet stay separable. -->
+                        <Setter Property="Padding" Value="0"/>
+                        <Style.Triggers>
+                            <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                                <Setter Property="Background" Value="Black"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:FamilyBrowserItemViewModel}">
-                        <Grid Margin="4,3">
+                        <Grid Margin="6,3">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="36"/>
+                                <ColumnDefinition Width="52"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Image Grid.Column="0" Source="{Binding Thumbnail}" Width="32" Height="24" Stretch="Uniform"/>
+                            <Image Grid.Column="0" Source="{Binding Thumbnail}" Width="48" Height="36" Stretch="Uniform"/>
                             <StackPanel Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
                                            TextWrapping="Wrap" MaxHeight="48"/>
