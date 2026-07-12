@@ -460,8 +460,8 @@ namespace RVTuk.Core.Database
         // (orphan cleanup of pre-existing data, not a new gallery feature).
         private string GalleryRoot(long familyId)
         {
-            var setupDir = System.IO.Path.GetDirectoryName(_databasePath)!; // the .Setup folder
-            return System.IO.Path.Combine(setupDir, "Gallery", familyId.ToString());
+            var dbDir = System.IO.Path.GetDirectoryName(_databasePath)!; // the .DB folder
+            return System.IO.Path.Combine(dbDir, "Gallery", familyId.ToString());
         }
 
         public void Dispose() => _connection.Dispose();

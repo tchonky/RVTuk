@@ -1,9 +1,16 @@
+using System;
 using System.IO;
 
 namespace RVTuk.Core.Config
 {
     public class AppConfig
     {
+        /// <summary>Name of the folder inside the library root that holds the shared databases.</summary>
+        public const string DbFolderName = ".DB";
+
+        /// <summary>Pre-rename name of the DB folder; migrated to <see cref="DbFolderName"/> on sight.</summary>
+        public const string LegacyDbFolderName = ".Setup";
+
         public string LibraryFolderPath { get; set; } = string.Empty;
 
         /// <summary>Last-used output folder for the Area Calc (Rishui Zamin) export, remembered
@@ -15,10 +22,7 @@ namespace RVTuk.Core.Config
         public AreaSubmission.MarkerForm AreaCalcMarkerForm { get; set; } = AreaSubmission.MarkerForm.FormA;
 
         // Derived — never stored separately; always lives inside the library folder.
-        public string DatabasePath => Path.Combine(LibraryFolderPath, ".Setup", "RVTuk.db");
-
-        // Derived — the Project Comparator's snapshots + Standard live alongside the family DB.
-        public string StandardsDatabasePath => Path.Combine(LibraryFolderPath, ".Setup", "RVTuk.Standards.db");
+        public string DatabasePath => Path.Combine(LibraryFolderPath, DbFolderName, "RVTuk.db");
 
         /// <summary>
         /// Subfolder paths (relative to the library root, using '\' separators) that should be
@@ -26,5 +30,39 @@ namespace RVTuk.Core.Config
         /// extraction but their existing DB rows are preserved (not treated as stale).
         /// </summary>
         public System.Collections.Generic.List<string> IgnoredSubfolders { get; set; } = new System.Collections.Generic.List<string>();
+
+        /// <summary>
+        /// Regular expressions matched (case-insensitively) against the file NAME; matching
+        /// families get the same treatment as ignored subfolders — skipped by scans, hidden in
+        /// the browser, existing DB rows preserved. Seeded with the Revit backup-file pattern
+        /// (e.g. "Door.0001.rfa") so backups never clutter the library. See
+        /// <see cref="Util.IgnoredFileMatcher"/> for the matching rules.
+        /// </summary>
+        public System.Collections.Generic.List<string> IgnoredFilePatterns { get; set; } =
+            new System.Collections.Generic.List<string> { @".*\.\d{4}\.rfa" };
+
+        /// <summary>
+        /// One-time folder rename for libraries created before the DB folder was renamed from
+        /// ".Setup" to ".DB": renames the old folder (databases and all) so curated data —
+        /// instructions, tags, favourites, custom thumbnails — survives the update. No-op when
+        /// ".DB" already exists or there is nothing to migrate. Best-effort: if the rename fails
+        /// (folder locked by another Revit session, read-only share), callers proceed exactly as
+        /// they would for a brand-new library. Call before touching <see cref="DatabasePath"/>.
+        /// </summary>
+        public static void MigrateLegacyDbFolder(string libraryFolderPath)
+        {
+            if (string.IsNullOrWhiteSpace(libraryFolderPath)) return;
+            try
+            {
+                var newDir = Path.Combine(libraryFolderPath, DbFolderName);
+                var oldDir = Path.Combine(libraryFolderPath, LegacyDbFolderName);
+                if (!Directory.Exists(newDir) && Directory.Exists(oldDir))
+                    Directory.Move(oldDir, newDir);
+            }
+            catch
+            {
+                // Locked or unwritable — leave the legacy folder alone; a fresh .DB gets created.
+            }
+        }
     }
 }

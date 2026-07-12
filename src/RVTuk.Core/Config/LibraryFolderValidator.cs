@@ -23,16 +23,20 @@ namespace RVTuk.Core.Config
             if (!Directory.Exists(libraryFolderPath))
                 return "Library folder does not exist.";
 
-            var setupDir = Path.Combine(libraryFolderPath, ".Setup");
-            var dbPath = Path.Combine(setupDir, "RVTuk.db");
+            var dbDir = Path.Combine(libraryFolderPath, AppConfig.DbFolderName);
+            var legacyDir = Path.Combine(libraryFolderPath, AppConfig.LegacyDbFolderName);
 
-            // An existing DB is enough — browsing works even on a read-only share.
-            if (File.Exists(dbPath))
+            // An existing DB is enough — browsing works even on a read-only share. A DB still in
+            // the legacy ".Setup" folder counts too: it is migrated to ".DB" on first use.
+            if (File.Exists(Path.Combine(dbDir, "RVTuk.db")) ||
+                File.Exists(Path.Combine(legacyDir, "RVTuk.db")))
                 return null;
 
             // No DB yet: we must be able to write here to create a new one. Probe the deepest
-            // existing folder so we don't create .Setup just to test a folder we may not use.
-            var probeDir = Directory.Exists(setupDir) ? setupDir : libraryFolderPath;
+            // existing folder so we don't create .DB just to test a folder we may not use.
+            var probeDir = Directory.Exists(dbDir) ? dbDir
+                         : Directory.Exists(legacyDir) ? legacyDir
+                         : libraryFolderPath;
             return CanWriteInto(probeDir) ? null : DbMissingNoWriteMessage;
         }
 

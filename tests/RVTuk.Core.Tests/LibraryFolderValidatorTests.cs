@@ -41,9 +41,21 @@ public class LibraryFolderValidatorTests : IDisposable
     [Fact]
     public void FolderWithExistingDatabase_IsAccepted()
     {
-        var setup = Path.Combine(_root, ".Setup");
-        Directory.CreateDirectory(setup);
-        File.WriteAllText(Path.Combine(setup, "RVTuk.db"), "");
+        var dbDir = Path.Combine(_root, AppConfig.DbFolderName);
+        Directory.CreateDirectory(dbDir);
+        File.WriteAllText(Path.Combine(dbDir, "RVTuk.db"), "");
+
+        Assert.Null(LibraryFolderValidator.Validate(_root));
+    }
+
+    [Fact]
+    public void FolderWithDatabaseInLegacySetupFolder_IsAccepted()
+    {
+        // Pre-rename libraries still have their DB in ".Setup"; it is migrated on first use,
+        // so the validator must treat it as an existing database.
+        var legacy = Path.Combine(_root, AppConfig.LegacyDbFolderName);
+        Directory.CreateDirectory(legacy);
+        File.WriteAllText(Path.Combine(legacy, "RVTuk.db"), "");
 
         Assert.Null(LibraryFolderValidator.Validate(_root));
     }

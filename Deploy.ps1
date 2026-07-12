@@ -73,6 +73,16 @@ function Get-RunningRevitYears {
 
 Write-Banner
 
+# Show the source revision being deployed, so it's obvious *what* is going out.
+$branch = (& git -C $root rev-parse --abbrev-ref HEAD 2>$null)
+$commit = (& git -C $root rev-parse --short HEAD 2>$null)
+if ($branch) {
+    $dirty = if (& git -C $root status --porcelain 2>$null) { " +local-changes" } else { "" }
+    Write-Host "  Source : " -NoNewline -ForegroundColor DarkGray
+    Write-Host "$branch @ $commit$dirty" -ForegroundColor White
+    Write-Host ""
+}
+
 $runningYears = Get-RunningRevitYears
 if ($runningYears.Count -gt 0) {
     Write-Host "  Revit running: " -NoNewline -ForegroundColor DarkGray
@@ -110,14 +120,28 @@ foreach ($ver in $targets) {
         continue
     }
 
-    # 2) Locate build output (SDK TFM subfolder, with flat fallback).
+    # 2) Build fresh so we never ship stale binaries. Copying a stale bin is the #1 cause of
+    #    "I deployed but nothing changed" — the on-disk bin can lag the source you just edited.
+    $proj = "$root\src\$($info.Project)\$($info.Project).csproj"
+    Write-Host "    build $config ..." -NoNewline -ForegroundColor DarkGray
+    $buildLog = & dotnet build $proj -c $config --nologo -v minimal 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host " FAILED" -ForegroundColor Red
+        $buildLog | Select-Object -Last 12 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkYellow }
+        $results[$ver] = "skipped (build failed)"
+        Write-Host ""
+        continue
+    }
+    Write-Host " ok" -ForegroundColor DarkGreen
+
+    # 3) Locate build output (SDK TFM subfolder, with flat fallback).
     $srcDir = "$root\src\$($info.Project)\bin\$ver\$config\$tfm"
     if (-not (Test-Path "$srcDir\$assemblyDll")) {
         $srcDir = "$root\src\$($info.Project)\bin\$ver\$config"
     }
     if (-not (Test-Path "$srcDir\$assemblyDll")) {
-        Write-Host "    SKIP  build output not found. Run: dotnet build -c $config" -ForegroundColor Yellow
-        $results[$ver] = "skipped (not built)"
+        Write-Host "    SKIP  build output not found under bin\$ver\$config." -ForegroundColor Yellow
+        $results[$ver] = "skipped (no output)"
         Write-Host ""
         continue
     }
@@ -181,7 +205,13 @@ foreach ($ver in $targets) {
 "@ | Out-File $addinFile -Encoding utf8 -Force -ErrorAction Stop
 
         $dllCount = (Get-ChildItem "$dllDir\*.dll" -ErrorAction SilentlyContinue | Measure-Object).Count
-        Write-Host "    OK    $dllCount DLLs -> $dllDir" -ForegroundColor Green
+        Write-Host "    OK    copied $dllCount DLLs -> $dllDir" -ForegroundColor Green
+        # Read the deployed DLLs back and show their build time: proof the overwrite took and that
+        # it's a fresh build, not a stale copy. If these timestamps look old, the deploy didn't take.
+        foreach ($name in @($assemblyDll, "RVTuk.UI.dll", "RVTuk.Core.dll")) {
+            $f = Get-Item "$dllDir\$name" -ErrorAction SilentlyContinue
+            if ($f) { Write-Host ("          {0,-16} built {1:yyyy-MM-dd HH:mm:ss}" -f $f.Name, $f.LastWriteTime) -ForegroundColor DarkGreen }
+        }
         Write-Host "          manifest -> $addinFile" -ForegroundColor DarkGreen
         $results[$ver] = "deployed"
     }

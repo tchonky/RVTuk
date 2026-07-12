@@ -9,10 +9,10 @@ using RVTuk.Core.Config;
 namespace RVTuk.UI.ViewModels
 {
     /// <summary>
-    /// View model for the Family Library settings (library root, scan, ignored subfolders).
-    /// Embedded directly in <see cref="FamilyBrowserViewModel.Settings"/> and rendered in the
-    /// Family Browser's right panel behind the gear button — there is no separate ribbon Config
-    /// window (removed; this was the only tab it ever grew).
+    /// View model for the Family Library settings (library root, scan, ignored subfolders and
+    /// ignored file patterns). Embedded directly in <see cref="FamilyBrowserViewModel.Settings"/>
+    /// and rendered in the Family Browser's right panel behind the gear button — there is no
+    /// separate ribbon Config window (removed; this was the only tab it ever grew).
     /// </summary>
     public class ConfigViewModel : ViewModelBase
     {
@@ -21,6 +21,7 @@ namespace RVTuk.UI.ViewModels
         private readonly Action? _onLibraryFolderChanged;
 
         private string? _ignoredSubfoldersText;
+        private string? _ignoredFilePatternsText;
         private bool _scanThumbnails;
         private bool _scanParameters;
 
@@ -94,6 +95,29 @@ namespace RVTuk.UI.ViewModels
             }
         }
 
+        /// <summary>
+        /// One regex per line, matched against family file names (see
+        /// <see cref="RVTuk.Core.Util.IgnoredFileMatcher"/>). Mirrors
+        /// <see cref="IgnoredSubfoldersText"/>: parsed and saved on every change.
+        /// </summary>
+        public string IgnoredFilePatternsText
+        {
+            get => _ignoredFilePatternsText ?? string.Join(Environment.NewLine,
+                       _config.IgnoredFilePatterns ?? new System.Collections.Generic.List<string>());
+            set
+            {
+                if (Equals(_ignoredFilePatternsText, value)) return;
+                _ignoredFilePatternsText = value;
+                _config.IgnoredFilePatterns = (value ?? string.Empty)
+                    .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim())
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .ToList();
+                ConfigManager.SaveConfig(_config);
+                OnPropertyChanged();
+            }
+        }
+
         public ICommand BrowseLibraryCommand { get; }
         public ICommand ScanCommand { get; }
 
@@ -115,7 +139,8 @@ namespace RVTuk.UI.ViewModels
             }
 
             LibraryFolderPath = dialog.SelectedPath;
-            Directory.CreateDirectory(Path.Combine(dialog.SelectedPath, ".Setup"));
+            AppConfig.MigrateLegacyDbFolder(dialog.SelectedPath);
+            Directory.CreateDirectory(Path.Combine(dialog.SelectedPath, AppConfig.DbFolderName));
             ConfigManager.SaveConfig(_config);
             CommandManager.InvalidateRequerySuggested(); // re-enable the Scan button now a folder is set
             _onLibraryFolderChanged?.Invoke();

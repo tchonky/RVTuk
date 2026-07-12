@@ -383,6 +383,11 @@ namespace RVTuk.UI.ViewModels
             if (_config.IgnoredSubfolders != null && _config.IgnoredSubfolders.Count > 0)
                 filtered = filtered.Where(i => !PathUtil.IsUnderIgnoredFolder(i.RelativePath, _config.IgnoredSubfolders));
 
+            // Hide files matching an ignored-file pattern, e.g. Revit backups (same semantics).
+            var ignoredFiles = new IgnoredFileMatcher(_config.IgnoredFilePatterns);
+            if (ignoredFiles.HasPatterns)
+                filtered = filtered.Where(i => !ignoredFiles.IsIgnored(i.FileName));
+
             FilteredItems.Clear();
             foreach (var item in filtered.OrderBy(i => i.DisplayName))
                 FilteredItems.Add(item);
@@ -445,13 +450,15 @@ namespace RVTuk.UI.ViewModels
                 {
                     var root = _config.LibraryFolderPath;
                     var foundRelPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var ignoredFiles = new IgnoredFileMatcher(_config.IgnoredFilePatterns);
 
                     foreach (var fullPath in PathUtil.SafeEnumerateFiles(root, "*.rfa"))
                     {
                         if (fullPath.Length >= 260) continue; // unusable on .NET Framework; skip
                         var relativePath = PathUtil.GetRelativePath(root, fullPath);
 
-                        if (PathUtil.IsUnderIgnoredFolder(relativePath, _config.IgnoredSubfolders))
+                        if (PathUtil.IsUnderIgnoredFolder(relativePath, _config.IgnoredSubfolders)
+                            || ignoredFiles.IsIgnored(Path.GetFileName(fullPath)))
                         {
                             // Ignored: skip upsert but add to foundRelPaths so existing DB rows
                             // for this family are not treated as stale and deleted.

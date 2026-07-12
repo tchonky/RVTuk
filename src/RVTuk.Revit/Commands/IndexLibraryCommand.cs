@@ -62,8 +62,10 @@ namespace RVTuk.Revit.Commands
                 int skippedIgnored = 0;
                 try
                 {
+                    AppConfig.MigrateLegacyDbFolder(config.LibraryFolderPath);
                     using var repo = new IndexRepository(config.DatabasePath);
-                    var indexer = new FamilyIndexer(repo, config.LibraryFolderPath, config.IgnoredSubfolders);
+                    var indexer = new FamilyIndexer(repo, config.LibraryFolderPath,
+                        config.IgnoredSubfolders, config.IgnoredFilePatterns);
 
                     var workItems = indexer.Scan(
                         (fileName, current, total) => vm.UpdateProgress(fileName, current, total),

@@ -13,22 +13,26 @@ namespace RVTuk.Core.Extraction
         private readonly IndexRepository _repository;
         private readonly string _libraryRoot;
         private readonly IReadOnlyList<string> _ignoredSubfolders;
+        private readonly IgnoredFileMatcher _ignoredFiles;
 
         /// <summary>Families skipped because their full path exceeds Windows MAX_PATH (set by the last Scan).</summary>
         public int SkippedLongPath { get; private set; }
 
-        /// <summary>Families skipped because they live under an ignored subfolder (set by the last Scan).</summary>
+        /// <summary>Families skipped because they live under an ignored subfolder or their file
+        /// name matches an ignored-file pattern (set by the last Scan).</summary>
         public int SkippedIgnored { get; private set; }
 
         /// <summary>Families whose thumbnail was committed directly without queuing Revit parameter extraction (set by the last Scan).</summary>
         public int ThumbnailOnlyCount { get; private set; }
 
         public FamilyIndexer(IndexRepository repository, string libraryRootPath,
-            IReadOnlyList<string> ignoredSubfolders = null)
+            IReadOnlyList<string>? ignoredSubfolders = null,
+            IReadOnlyList<string>? ignoredFilePatterns = null)
         {
             _repository = repository;
             _libraryRoot = libraryRootPath;
             _ignoredSubfolders = ignoredSubfolders ?? new List<string>();
+            _ignoredFiles = new IgnoredFileMatcher(ignoredFilePatterns);
         }
 
         /// <summary>
@@ -99,6 +103,16 @@ namespace RVTuk.Core.Extraction
                 string fileName = Path.GetFileName(fullPath);
 
                 progressCallback(fileName, i + 1, total);
+
+                // Ignored-file pattern (e.g. Revit backups "Door.0001.rfa"): skip extraction but
+                // add to scannedPaths so a previously indexed row is preserved, mirroring the
+                // ignored-subfolder semantics (the browser hides it; data is kept).
+                if (_ignoredFiles.IsIgnored(fileName))
+                {
+                    scannedPaths.Add(relativePath);
+                    SkippedIgnored++;
+                    continue;
+                }
 
                 scannedPaths.Add(relativePath);
 

@@ -214,6 +214,58 @@ public class FamilyIndexerTests : IDisposable
     }
 
     [Fact]
+    public void Scan_SkipsFilesMatchingIgnoredFilePattern()
+    {
+        WriteRfa("Doors/Door.rfa");
+        WriteRfa("Doors/Door.0001.rfa");   // Revit backup file
+        using var repo = new IndexRepository(_dbPath);
+        var indexer = new FamilyIndexer(repo, _root,
+            ignoredFilePatterns: new List<string> { @".*\.\d{4}\.rfa" });
+
+        var work = indexer.Scan(NoProgress, default, includeParameters: true);
+
+        Assert.Single(work);                                          // only the real family
+        Assert.Null(repo.GetFamilyByPath("Doors\\Door.0001.rfa"));    // backup never indexed
+        Assert.Equal(1, indexer.SkippedIgnored);
+    }
+
+    [Fact]
+    public void Scan_PreservesPreviouslyIndexedFamilyWhenItMatchesIgnoredFilePattern()
+    {
+        WriteRfa("Doors/Door.rfa");
+        WriteRfa("Doors/Door.0001.rfa");
+        using var repo = new IndexRepository(_dbPath);
+
+        // Indexed before the pattern existed: both rows created.
+        new FamilyIndexer(repo, _root).Scan(NoProgress, default, includeParameters: true);
+        Assert.Equal(2, repo.GetAllRelativePaths().Count);
+
+        // Rescan with the backup pattern: the backup's row is kept (browser hides it), not
+        // pruned as stale, and not re-extracted — mirrors the ignored-subfolder semantics.
+        var indexer = new FamilyIndexer(repo, _root,
+            ignoredFilePatterns: new List<string> { @".*\.\d{4}\.rfa" });
+        var work = indexer.Scan(NoProgress, default, includeParameters: true);
+
+        Assert.Equal(2, repo.GetAllRelativePaths().Count);            // backup row preserved
+        var item = Assert.Single(work);                               // only the real family re-queued
+        Assert.EndsWith("Door.rfa", item.RelativePath);
+    }
+
+    [Fact]
+    public void Scan_InvalidIgnoredFilePattern_IsSkippedNotFatal()
+    {
+        WriteRfa("Doors/Door.rfa");
+        using var repo = new IndexRepository(_dbPath);
+        var indexer = new FamilyIndexer(repo, _root,
+            ignoredFilePatterns: new List<string> { "([unclosed" });
+
+        var work = indexer.Scan(NoProgress, default, includeParameters: true);
+
+        Assert.Single(work);                   // scan unaffected by the broken pattern
+        Assert.Equal(0, indexer.SkippedIgnored);
+    }
+
+    [Fact]
     public void Scan_PrunesFamiliesWhoseFileIsGone()
     {
         var a = WriteRfa("Doors/A.rfa");

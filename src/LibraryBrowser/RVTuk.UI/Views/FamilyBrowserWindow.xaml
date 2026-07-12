@@ -599,7 +599,7 @@
                     </Grid>
                     <TextBlock Foreground="{StaticResource Brush.TextMuted}" FontSize="10"
                                Margin="0,5,0,0" TextWrapping="Wrap">
-                        The .Setup folder with the database will be created here automatically.
+                        The .DB folder with the database will be created here automatically.
                     </TextBlock>
 
                     <Separator Margin="0,26,0,22"/>
@@ -643,6 +643,20 @@
                         One subfolder per line, relative to the library root. Families under these
                         folders are skipped by scans and hidden in the browser; their existing data
                         is kept.
+                    </TextBlock>
+
+                    <TextBlock Text="IGNORED FILES (REGEX)" Foreground="{StaticResource Brush.TextMuted}"
+                               FontSize="10" FontWeight="SemiBold" Margin="0,18,0,8"/>
+                    <TextBox AcceptsReturn="True" Height="60"
+                             VerticalScrollBarVisibility="Auto"
+                             FontFamily="Consolas"
+                             Text="{Binding IgnoredFilePatternsText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                    <TextBlock Foreground="{StaticResource Brush.TextMuted}" FontSize="10"
+                               Margin="0,5,0,0" TextWrapping="Wrap">
+                        One regular expression per line, matched against the file name. Matching
+                        families are skipped by scans and hidden in the browser; their existing
+                        data is kept. The default pattern .*\.\d{4}\.rfa hides Revit backup files
+                        (e.g. Door.0001.rfa). Invalid expressions are ignored.
                     </TextBlock>
                 </StackPanel>
             </ScrollViewer>

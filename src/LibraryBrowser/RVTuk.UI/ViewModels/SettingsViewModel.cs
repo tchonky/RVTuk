@@ -24,7 +24,7 @@ namespace RVTuk.UI.ViewModels
         public string DerivedDatabasePath =>
             string.IsNullOrWhiteSpace(_libraryFolderPath)
                 ? string.Empty
-                : Path.Combine(_libraryFolderPath, ".Setup", "RVTuk.db");
+                : new AppConfig { LibraryFolderPath = _libraryFolderPath }.DatabasePath;
 
         public string ValidationMessage
         {
@@ -71,15 +71,20 @@ namespace RVTuk.UI.ViewModels
 
             try
             {
-                Directory.CreateDirectory(Path.Combine(LibraryFolderPath, ".Setup"));
+                AppConfig.MigrateLegacyDbFolder(LibraryFolderPath);
+                Directory.CreateDirectory(Path.Combine(LibraryFolderPath, AppConfig.DbFolderName));
             }
             catch (Exception ex)
             {
-                ValidationMessage = $"Cannot create .Setup folder: {ex.Message}";
+                ValidationMessage = $"Cannot create {AppConfig.DbFolderName} folder: {ex.Message}";
                 return;
             }
 
-            ConfigManager.SaveConfig(new AppConfig { LibraryFolderPath = LibraryFolderPath });
+            // Update the saved config in place — a fresh AppConfig here would wipe the other
+            // persisted settings (ignored subfolders/file patterns, Area Calc preferences).
+            var config = ConfigManager.LoadConfig();
+            config.LibraryFolderPath = LibraryFolderPath;
+            ConfigManager.SaveConfig(config);
 
             Saved = true;
             RequestClose?.Invoke();

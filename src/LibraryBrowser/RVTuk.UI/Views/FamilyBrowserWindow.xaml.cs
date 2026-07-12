@@ -53,8 +53,9 @@ namespace RVTuk.UI.Views
         private void LoadWithConfig(AppConfig config)
         {
             _config = config;
-            var setupDir = Path.Combine(config.LibraryFolderPath, ".Setup");
-            Directory.CreateDirectory(setupDir);
+            AppConfig.MigrateLegacyDbFolder(config.LibraryFolderPath);
+            var dbDir = Path.Combine(config.LibraryFolderPath, AppConfig.DbFolderName);
+            Directory.CreateDirectory(dbDir);
             var repo = new BrowserRepository(config.DatabasePath);
             var vm = new FamilyBrowserViewModel(
                 config, repo, _getProjectFamilies, _loadFamily, _rescanFamily,

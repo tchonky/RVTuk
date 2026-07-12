@@ -3,7 +3,6 @@
 > Top-level product doc — what RVTuk is, who it's for, and where it's going.
 > For build/architecture/threading/deploy see [`CLAUDE.md`](CLAUDE.md) (authoritative technical reference).
 > For the live task list see [`docs/BACKLOG.md`](docs/BACKLOG.md).
-> For the Standardization feature see [`docs/comparator/`](docs/comparator/features.md).
 
 ---
 
@@ -61,7 +60,10 @@ either **compare two projects** or **audit a project against a curated firm "Sta
 The BIM Manager builds the Standard by accepting best-of-breed items (with their
 dependencies) out of live projects. Report-only today; **writing the Standard back into
 models is a deliberate, gated future phase**.
-**Status:** in active development. See [`docs/comparator/`](docs/comparator/features.md).
+**Status:** moved out of RVTuk into its own separate project (July 2026, while preparing
+the v1 launch — RVTuk v1 ships only the Family Browser and Area Calc). The comparator
+code, tests, and specs were stripped from this repo; recover them from git history when
+seeding the new project.
 
 ### 3. Productivity tools
 Focused, interactive daily-work buttons:
@@ -79,10 +81,10 @@ Focused, interactive daily-work buttons:
 ## Roadmap (near-term order)
 
 1. **Finish + verify Family Explorer** in Revit; decide on merging `family-explorer` work to `main`.
-2. **Land Project Comparator v1** — View Templates, build the Standard, report-only (zero writes to models).
+2. **Land Project Comparator v1** *as its own separate project* — View Templates, build the Standard, report-only (zero writes to models). Tracked in that project's repo, not here.
 3. **Productivity buttons** — interactive room renumbering, then **absorb `KKimensions` auto-dimensions** into RVTuk.
 4. **In-Revit Instructions** feature.
-5. **Comparator phase 2+** — more categories, then eventual gated write-back (see [`docs/comparator/features.md`](docs/comparator/features.md)).
+5. **Comparator phase 2+** — more categories, then eventual gated write-back (tracked in the separate comparator project).
 6. **Toward phase (b)** — proper installer, onboarding, and firm-wide rollout.
 
 ---
@@ -102,9 +104,10 @@ Focused, interactive daily-work buttons:
 ## Principles
 
 - **One toolkit, one ribbon, one install.** Features are peers, not separate add-ins
-  (this is why `KKimensions` folds in).
-- **Never destabilize the user's model.** The Comparator is report-only until write-back
-  is deliberately gated, per item, with confirmation.
+  (this is why `KKimensions` folds in). The Project Comparator is the deliberate
+  exception — split into its own tool in July 2026.
+- **Never destabilize the user's model.** The Comparator (now its own tool) stays
+  report-only until write-back is deliberately gated, per item, with confirmation.
 - **Standardize the firm's *real* standards.** Harvest best-of-breed from live projects
   into the Standard; don't impose a stale master template.
 - **Shippable-to-everyone is the quality bar** for reaching phase (b).
@@ -118,6 +121,5 @@ Focused, interactive daily-work buttons:
 | [`CLAUDE.md`](CLAUDE.md) | Build, architecture, threading, deploy — authoritative technical reference |
 | [`README.md`](README.md) | Short public-facing overview + build/deploy quickstart |
 | [`docs/BACKLOG.md`](docs/BACKLOG.md) | Live task list and working notes |
-| [`docs/comparator/`](docs/comparator/features.md) | Project Comparator — product, UX, and BIM-domain specs |
 | `docs/superpowers/specs` & `plans` | Per-feature design specs and implementation plans |
 | `docs/archive/` | Retired historical docs |

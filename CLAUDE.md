@@ -8,14 +8,15 @@ RVTuk is a Revit add-in toolkit for Knafo Klimor Architects LTD. It supports Rev
 
 > **Product vision, audience, and roadmap live in [`VISION.md`](VISION.md).** This file is the technical reference (build, architecture, threading, deploy).
 
-Current and planned features:
+**v1 launch surface:** only the **Family Browser** and **Area Calc** are registered (ribbon buttons, panes). Auto Dimensions and Neo Properties are code-complete but hidden behind the `RegisterUnreleasedTools` flag in `src\RVTuk.Revit\Application.cs`. The Project Comparator was stripped from this repo entirely in July 2026 — code, tests, and specs — and continues as its own separate project; recover the pre-strip sources from git history (the `family-browser-polish` branch history) if the new project needs them.
+
+Features:
 
 - **Family Library Indexer** — scans a folder of `.rfa` files, extracts metadata (category, parameters, thumbnails) via the Revit API, and stores it in a shared database.
-- **Family Browser** — a searchable/filterable window over that index, with per-family rich-text instructions, tags, favourites, and custom thumbnails, plus a merged "Load/Update family into the active project" button. Settings (library root folder, ignored subfolders, deep scan) and a Help/About panel are accessed from within the Family Browser itself, toggled via footer buttons — there is no separate ribbon Config window.
-- **Project Comparator** (a.k.a. Template Tool) — captures a snapshot of a project's key settings (view templates first), stores it in a DB, and compares two projects or audits one against a curated firm "Standard." Report-only today; writing back to models is a gated future phase. See [`docs/comparator/`](docs/comparator/features.md).
-- **Auto Dimensions** — draw a detail line on the dedicated "Dimensions_Line" style as a positional reference; a ribbon command dimensions every wall crossing it, re-runnable after model changes without re-picking references. See [`docs/superpowers/specs/2026-07-04-auto-dimensions-design.md`](docs/superpowers/specs/2026-07-04-auto-dimensions-design.md).
-- **Neo Properties** — a dockable pane mirroring the selected element's parameters like the native Properties palette, but with pinned parameters shown first and remaining groups in a fixed custom order. Read-only, single-element only. See [`docs/superpowers/specs/2026-07-04-neo-properties-design.md`](docs/superpowers/specs/2026-07-04-neo-properties-design.md).
+- **Family Browser** — a searchable/filterable window over that index, with per-family rich-text instructions, tags, favourites, and custom thumbnails, plus a merged "Load/Update family into the active project" button. Settings (library root folder, ignored subfolders, ignored file patterns, deep scan) and a Help/About panel are accessed from within the Family Browser itself, toggled via footer buttons — there is no separate ribbon Config window.
 - **Area Calc** (Rishui Zamin) — reads the Areas on the open sheet and exports the paired `.dxf` + `.dat` files the רישוי זמין area-calculation robot expects (`RZ_FRAME`/`RZ_FLOOR`/`RZ_AREA` layers + attribute blocks). The window's "Setup Usage Keys" action binds the `RZ_*` shared parameters to Areas and creates/tops-up the usage key schedules (`UsageKeyScheduleBuilder`) — no separate ribbon command needed. Also shipped as **KKarea**, a standalone Revit 2023 add-in (see Project Overview). See [`docs/autoarea/rishui-zamin-notes.md`](docs/autoarea/rishui-zamin-notes.md).
+- **Auto Dimensions** (hidden for v1) — draw a detail line on the dedicated "Dimensions_Line" style as a positional reference; a ribbon command dimensions every wall crossing it, re-runnable after model changes without re-picking references. See [`docs/superpowers/specs/2026-07-04-auto-dimensions-design.md`](docs/superpowers/specs/2026-07-04-auto-dimensions-design.md).
+- **Neo Properties** (hidden for v1) — a dockable pane mirroring the selected element's parameters like the native Properties palette, but with pinned parameters shown first and remaining groups in a fixed custom order. Read-only, single-element only. See [`docs/superpowers/specs/2026-07-04-neo-properties-design.md`](docs/superpowers/specs/2026-07-04-neo-properties-design.md).
 
 ### Future features
 
@@ -52,7 +53,7 @@ All three configs use `Microsoft.Data.Sqlite`. Build outputs land in each projec
 
 ## Tests
 
-Core's xunit suite lives in `tests\RVTuk.Core.Tests` (repositories, indexer, comparison engine, Area Calc writers/validator). Run it before committing Core changes:
+Core's xunit suite lives in `tests\RVTuk.Core.Tests` (repositories, indexer, config/migration, Area Calc writers/validator). Run it before committing Core changes:
 
 ```powershell
 dotnet test tests\RVTuk.Core.Tests\RVTuk.Core.Tests.csproj

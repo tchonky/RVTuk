@@ -1,18 +1,21 @@
 # 🏗️ RVTuk
 
 A Revit add-in toolkit for **Knafo Klimor Architects LTD**. One ribbon, one install, a
-growing set of tools for managing the family library, standardizing projects, and
-automating repetitive drafting.
+growing set of tools for managing the family library and automating repetitive work.
 
 - 🗂️ **Family Browser** — search, browse, load, and manage your Revit family library from a dark-themed side panel. Syncs the library database on demand and supports deep-scan indexing (category, parameters, thumbnail) using the Revit engine.
-- 📊 **Project Comparator** — capture a snapshot of a project's settings (view templates first), then compare two projects or audit one against a curated firm "Standard." Report-only (in active development).
+- 📐 **Area Calc** (Rishui Zamin) — reads the Areas on the open sheet and exports the paired `.dxf` + `.dat` files the רישוי זמין area-calculation robot expects.
+
+(The Project Comparator moved to its own separate project. Auto Dimensions and Neo
+Properties exist in the codebase but are hidden until release.)
 
 ## 🧩 Supported Revit Versions
 
-| Configuration  | Revit Version | Target Framework |
-|---------------|--------------|-----------------|
-| Release2024   | 2024         | net48           |
-| Release2025   | 2025         | net8.0-windows  |
+| Configuration  | Revit Version | Target Framework | Add-in |
+|---------------|--------------|-----------------|--------|
+| Release2024   | 2024         | net48           | RVTuk |
+| Release2025   | 2025         | net8.0-windows  | RVTuk |
+| Release2023   | 2023         | net48           | KKarea (Area Calc only) |
 
 ## 📁 Project Structure
 
@@ -22,7 +25,10 @@ RVTuk/
 │   ├── RVTuk.Core/          # Business logic, database (SQLite), config — no Revit/WPF deps
 │   ├── LibraryBrowser/
 │   │   └── RVTuk.UI/        # WPF windows and view models
-│   └── RVTuk.Revit/         # Revit add-in host (ribbon, external events, commands)
+│   ├── RVTuk.Revit/         # Revit add-in host (ribbon, external events, commands)
+│   └── KKarea.Revit/        # Standalone Revit 2023 host for Area Calc only
+├── tests/
+│   └── RVTuk.Core.Tests/    # xunit suite for Core
 ├── Deploy.ps1                     # Build + deploy to Revit add-ins directory
 └── CLAUDE.md                      # AI assistant instructions
 ```

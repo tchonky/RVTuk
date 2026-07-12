@@ -34,7 +34,13 @@ namespace RVTuk.UI.Views
         // Image targeted by the right-click context menu.
         private Image? _menuTargetImage;
 
-        private const string ImageTip = "Right-click to resize, crop, or replace.";
+        // Corner-drag resize state (image being dragged, pointer + width at drag start).
+        private Image? _resizeImage;
+        private Point _resizeStart;
+        private double _resizeStartWidth;
+        private const double GripSize = 16; // px square at the image's bottom-right corner
+
+        private const string ImageTip = "Drag the bottom-right corner to resize · right-click to resize, crop, or replace.";
 
         public InstructionsEditorWindow(
             FamilyBrowserItemViewModel item,
@@ -272,7 +278,7 @@ namespace RVTuk.UI.Views
                     Stretch = Stretch.Uniform,
                     Width   = Math.Min(400, bmp.PixelWidth)
                 };
-                image.ToolTip = ImageTip;
+                WireImage(image);
                 RichTextBoxHelper.SetImageData(image, Convert.ToBase64String(pngData));
 
                 var border = NewSelectionBorder();
@@ -507,6 +513,68 @@ namespace RVTuk.UI.Views
         }
 
         // ─────────────────────────────────────────────────────────────────────────
+        // Inline image: corner-drag resize
+        // ─────────────────────────────────────────────────────────────────────────
+
+        // True when the pointer is inside the resize grip zone at the image's bottom-right.
+        private static bool InGripZone(Image img, Point p) =>
+            p.X >= img.ActualWidth - GripSize && p.Y >= img.ActualHeight - GripSize;
+
+        private void Image_MouseMove(object sender, MouseEventArgs e)
+        {
+            var img = (Image)sender;
+            if (ReferenceEquals(_resizeImage, img) && img.IsMouseCaptured)
+            {
+                // Measure against the editor, not the image: the image moves under the
+                // pointer while it resizes, which would feed back into the delta.
+                double delta = e.GetPosition(Editor).X - _resizeStart.X;
+                img.Width = Math.Max(40, Math.Min(2000, _resizeStartWidth + delta));
+                e.Handled = true;
+                return;
+            }
+            img.Cursor = InGripZone(img, e.GetPosition(img)) ? Cursors.SizeNWSE : null;
+        }
+
+        private void Image_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            var img = (Image)sender;
+            if (!InGripZone(img, e.GetPosition(img))) return;
+            _resizeImage      = img;
+            _resizeStart      = e.GetPosition(Editor);
+            _resizeStartWidth = double.IsNaN(img.Width) ? img.ActualWidth : img.Width;
+            img.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void Image_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            var img = (Image)sender;
+            if (!ReferenceEquals(_resizeImage, img)) return;
+            img.ReleaseMouseCapture();
+            _resizeImage = null;
+            e.Handled = true;
+        }
+
+        private void Image_LostMouseCapture(object sender, MouseEventArgs e) =>
+            _resizeImage = null;
+
+        // Attach tooltip + resize handlers. Idempotent (remove-then-add) because images can be
+        // re-wired, e.g. WireExistingImages running over a document that already went through
+        // InsertImageIntoEditor.
+        private void WireImage(Image img)
+        {
+            img.ToolTip = ImageTip;
+            img.MouseMove           -= Image_MouseMove;
+            img.MouseMove           += Image_MouseMove;
+            img.MouseLeftButtonDown -= Image_MouseLeftButtonDown;
+            img.MouseLeftButtonDown += Image_MouseLeftButtonDown;
+            img.MouseLeftButtonUp   -= Image_MouseLeftButtonUp;
+            img.MouseLeftButtonUp   += Image_MouseLeftButtonUp;
+            img.LostMouseCapture    -= Image_LostMouseCapture;
+            img.LostMouseCapture    += Image_LostMouseCapture;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────────
         // Load-time image wiring
         // ─────────────────────────────────────────────────────────────────────────
 
@@ -524,12 +592,12 @@ namespace RVTuk.UI.Views
                     var border = NewSelectionBorder();
                     border.Child = bare;
                     container.Child = border;
-                    bare.ToolTip = ImageTip;
+                    WireImage(bare);
                 }
                 else if (container.Child is Border b && b.Child is Image wrapped)
                 {
                     b.Style = (Style)Resources["ImageHoverBorder"];
-                    wrapped.ToolTip = ImageTip;
+                    WireImage(wrapped);
                 }
             }
         }

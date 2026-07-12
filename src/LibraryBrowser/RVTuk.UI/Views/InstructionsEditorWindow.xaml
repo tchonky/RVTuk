@@ -137,9 +137,13 @@
 
         <!-- EDITOR BODY: rich preview + raw Markdown source view (one visible at a time) -->
         <Grid Grid.Row="2">
+            <!-- IsDocumentEnabled: without it WPF disables every UIElement embedded in the
+                 document, so inline images get no mouse input at all (no hover style, no
+                 tooltip, no right-click menu, no resize grip). -->
             <RichTextBox x:Name="Editor" Margin="8" AcceptsReturn="True"
                          VerticalScrollBarVisibility="Auto"
                          AllowDrop="True"
+                         IsDocumentEnabled="True"
                          ctrl:RichTextBoxHelper.DocumentXaml="{Binding InstructionsXaml}"/>
             <TextBox x:Name="RawEditor" Margin="8" Visibility="Collapsed"
                      FontFamily="Consolas" FontSize="12"
