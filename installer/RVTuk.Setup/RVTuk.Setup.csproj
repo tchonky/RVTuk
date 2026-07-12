@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Standalone installer for other computers — NOT part of RVTuk.sln (it has no
+       Release{year} configs). Built by Build-Installer.ps1, which stages payload.zip
+       first; a plain `dotnet build` without the zip produces an exe that refuses to run.
+       net48 so the single exe runs on any Windows 10/11 machine with no .NET install. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>RVTuk.Setup</RootNamespace>
+    <AssemblyName>RVTukSetup</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.0.0</Version>
+    <Company>Knafo Klimor Architects LTD</Company>
+    <Product>RVTuk</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.IO.Compression" />
+    <EmbeddedResource Include="payload.zip" Condition="Exists('payload.zip')" />
+  </ItemGroup>
+
+</Project>

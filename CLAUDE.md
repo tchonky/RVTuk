@@ -80,6 +80,10 @@ The `.addin` manifest registers the add-in with:
 - **Client ID**: `D71D7480-4A21-474E-A47E-3E8DF8C1BDA5`
 - **Vendor ID**: `KnafoKlimor`
 
+### Installer for other computers
+
+`Build-Installer.ps1` produces `dist\RVTukSetup.exe` — a standalone net48 console exe (`installer\RVTuk.Setup`, deliberately **not** in `RVTuk.sln` since it has no `Release{year}` configs) with the per-year payload embedded as `payload.zip`. It wipes each project's `bin\{year}` and rebuilds so stale DLLs from dropped packages can't ship, stages with the same copy/strip rules as `Deploy.ps1` (the version table and staging rules in the two scripts must stay in sync), and writes the same `.addin` manifests. On a target machine the exe self-elevates, installs only for the Revit years whose `Addins\{year}` folder exists, and skips years whose Revit is running. Flags: `--uninstall`, `--all` (ignore year detection), `--target <dir>` (redirect to another folder for testing, skips elevation), `--no-pause`.
+
 ## Architecture
 
 Three projects with a strict dependency order (no circular references):

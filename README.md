@@ -29,7 +29,10 @@ RVTuk/
 │   └── KKarea.Revit/        # Standalone Revit 2023 host for Area Calc only
 ├── tests/
 │   └── RVTuk.Core.Tests/    # xunit suite for Core
-├── Deploy.ps1                     # Build + deploy to Revit add-ins directory
+├── installer/
+│   └── RVTuk.Setup/         # Standalone installer exe (built by Build-Installer.ps1)
+├── Deploy.ps1                     # Build + deploy to Revit add-ins directory (dev machine)
+├── Build-Installer.ps1            # Build dist\RVTukSetup.exe for other computers
 └── CLAUDE.md                      # AI assistant instructions
 ```
 
@@ -49,6 +52,16 @@ Run as Administrator from the repo root:
 ```
 
 Copies DLLs to `C:\ProgramData\Autodesk\Revit\Addins\{2024|2025}\RVTuk\` and writes the `.addin` manifest. Restart Revit after deploying.
+
+## 📦 Installing on other computers
+
+Build the standalone installer once, then hand out the exe:
+
+```powershell
+.\Build-Installer.ps1        # produces dist\RVTukSetup.exe
+```
+
+On the target computer just double-click `RVTukSetup.exe` — it asks for admin rights, detects which Revit versions are installed (2023 gets KKarea, 2024/2025 get RVTuk), and installs for each of them. Skips any Revit that is currently running; close it and re-run. `RVTukSetup.exe --uninstall` removes the add-ins again. No other software is needed on the target machine.
 
 ## ✨ Family Browser Features
 
