@@ -38,11 +38,17 @@ namespace RVTuk.UI.ViewModels
                 SetProperty(ref _versionStatus, value);
                 OnPropertyChanged(nameof(ShowUpToDate));
                 OnPropertyChanged(nameof(ShowUpdateAvailable));
+                OnPropertyChanged(nameof(IsModelOnly));
             }
         }
 
         public bool ShowUpToDate => _versionStatus == VersionStatus.UpToDate;
         public bool ShowUpdateAvailable => _versionStatus == VersionStatus.UpdateAvailable;
+
+        // A synthetic row for a family loaded in the project but absent from the library.
+        // It has no .rfa, no DB row (Id 0), no thumbnail — every library-backed action
+        // (load, favourite, edit info, rescan, open in editor) must be disabled for it.
+        public bool IsModelOnly => _versionStatus == VersionStatus.ModelOnly;
 
         private BitmapSource? _thumbnail;
         public BitmapSource? Thumbnail

@@ -121,6 +121,11 @@ namespace RVTuk.Core.Database
             paramsExtractedCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='ParametersExtracted'";
             if ((long)(paramsExtractedCheck.ExecuteScalar() ?? 0L) == 0)
                 Execute("ALTER TABLE Families ADD COLUMN ParametersExtracted INTEGER NOT NULL DEFAULT 0");
+
+            using var versionCheck = _connection.CreateCommand();
+            versionCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='Version'";
+            if ((long)(versionCheck.ExecuteScalar() ?? 0L) == 0)
+                Execute("ALTER TABLE Families ADD COLUMN Version TEXT");
         }
 
         public FamilyModel? GetFamilyByPath(string relativePath)
@@ -132,7 +137,7 @@ namespace RVTuk.Core.Database
             // pruned as stale. SQLite's NOCASE folds ASCII only, which covers the drive-letter/
             // Latin part of library paths; Hebrew has no case to fold.
             using var cmd = CreateCommand(
-                "SELECT Id, RelativePath, FileName, ModifiedDate, FileSize, Category, IndexedDate FROM Families " +
+                "SELECT Id, RelativePath, FileName, ModifiedDate, FileSize, Category, IndexedDate, Version FROM Families " +
                 "WHERE RelativePath = @path COLLATE NOCASE " +
                 "ORDER BY (CASE WHEN RelativePath = @path THEN 0 ELSE 1 END) LIMIT 1");
             AddParam(cmd, "@path", relativePath);
@@ -220,11 +225,23 @@ namespace RVTuk.Core.Database
 
         public void UpsertFamilyFileInfo(string relativePath, string fileName, long fileSize, DateTime modifiedDateUtc)
         {
+            // A changed file invalidates the stored _Version value (it was read from the old
+            // file contents by the deep scan) — clear it rather than let a stale value feed the
+            // browser's update check, and drop ParametersExtracted so the next deep scan
+            // re-extracts (otherwise the new size/date written here makes the file "look up to
+            // date" and it would be skipped forever). Both dates are written by
+            // DateTime.ToString("o"), so plain string equality detects "unchanged".
             using var cmd = CreateCommand(@"
                 INSERT INTO Families (RelativePath, FileName, ModifiedDate, FileSize)
                 VALUES (@path, @name, @modified, @size)
                 ON CONFLICT(RelativePath) DO UPDATE SET
                     FileName = excluded.FileName,
+                    Version = CASE WHEN Families.ModifiedDate = excluded.ModifiedDate
+                                    AND Families.FileSize = excluded.FileSize
+                              THEN Families.Version ELSE NULL END,
+                    ParametersExtracted = CASE WHEN Families.ModifiedDate = excluded.ModifiedDate
+                                                AND Families.FileSize = excluded.FileSize
+                                          THEN Families.ParametersExtracted ELSE 0 END,
                     ModifiedDate = excluded.ModifiedDate,
                     FileSize = excluded.FileSize;");
             AddParam(cmd, "@path", relativePath);
@@ -235,7 +252,7 @@ namespace RVTuk.Core.Database
         }
 
         public void UpdateFamilyMetadata(long familyId, string? category, IReadOnlyList<ParameterModel> parameters, byte[]? thumbnailPng, int revitYear = 0,
-            DateTime modifiedDate = default, long fileSize = 0)
+            DateTime modifiedDate = default, long fileSize = 0, string? familyVersion = null)
         {
             using var transaction = _connection.BeginTransaction();
             try
@@ -243,7 +260,8 @@ namespace RVTuk.Core.Database
                 // Write the file's real size/date HERE, in the same transaction as the extracted
                 // metadata: a successful extraction is what marks the row current. (FamilyIndexer
                 // inserts a sentinel size/date, so until this commits the family is re-scannable.)
-                using var catCmd = CreateCommand("UPDATE Families SET Category=@cat, IndexedDate=@now, RevitYear=@year, ModifiedDate=@modified, FileSize=@size, ParametersExtracted=1 WHERE Id=@id", transaction);
+                using var catCmd = CreateCommand("UPDATE Families SET Category=@cat, IndexedDate=@now, RevitYear=@year, ModifiedDate=@modified, FileSize=@size, ParametersExtracted=1, Version=@version WHERE Id=@id", transaction);
+                AddParam(catCmd, "@version", (object?)familyVersion ?? DBNull.Value);
                 AddParam(catCmd, "@cat", category ?? (object)DBNull.Value);
                 AddParam(catCmd, "@now", DateTime.UtcNow.ToString("o"));
                 AddParam(catCmd, "@year", revitYear);
@@ -303,8 +321,14 @@ namespace RVTuk.Core.Database
                 AddParam(thumbCmd, "@png", thumbnailPng);
                 thumbCmd.ExecuteNonQuery();
 
+                // Same staleness rule as UpsertFamilyFileInfo: a changed file invalidates the
+                // stored _Version and needs its parameters re-extracted (this path refreshes
+                // only the thumbnail).
                 using var famCmd = CreateCommand(
-                    "UPDATE Families SET RevitYear=@year, ModifiedDate=@modified, FileSize=@size, IndexedDate=@now WHERE Id=@id",
+                    "UPDATE Families SET RevitYear=@year, " +
+                    "Version = CASE WHEN ModifiedDate=@modified AND FileSize=@size THEN Version ELSE NULL END, " +
+                    "ParametersExtracted = CASE WHEN ModifiedDate=@modified AND FileSize=@size THEN ParametersExtracted ELSE 0 END, " +
+                    "ModifiedDate=@modified, FileSize=@size, IndexedDate=@now WHERE Id=@id",
                     transaction);
                 AddParam(famCmd, "@year", revitYear);
                 AddParam(famCmd, "@modified", modifiedDate.ToString("o"));
@@ -399,7 +423,8 @@ namespace RVTuk.Core.Database
             ModifiedDate = DbConvert.ParseUtc(r.GetString(3)),
             FileSize     = r.GetInt64(4),
             Category     = r.IsDBNull(5) ? null : r.GetString(5),
-            IndexedDate  = DbConvert.ParseUtc(r.GetString(6))
+            IndexedDate  = DbConvert.ParseUtc(r.GetString(6)),
+            Version      = r.IsDBNull(7) ? null : r.GetString(7)
         };
 
         private string GalleryRoot(long familyId) =>

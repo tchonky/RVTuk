@@ -4,6 +4,7 @@ using System.Windows;
 using System.Collections.Generic;
 using RVTuk.Core.Config;
 using RVTuk.Core.Database;
+using RVTuk.Core.Models;
 using RVTuk.UI.ViewModels;
 
 namespace RVTuk.UI.Views
@@ -11,7 +12,7 @@ namespace RVTuk.UI.Views
     public partial class FamilyBrowserWindow : Window
     {
         private AppConfig _config = null!;
-        private readonly Func<IReadOnlyList<string>> _getProjectFamilies;
+        private readonly Func<IReadOnlyList<ProjectFamilyInfo>> _getProjectFamilies;
         private readonly Func<string, (bool Success, string? Error)> _loadFamily;
         private readonly Func<long, string, bool> _rescanFamily;
         private readonly Action<bool, bool> _scan;
@@ -28,7 +29,7 @@ namespace RVTuk.UI.Views
 
         public FamilyBrowserWindow(
             AppConfig config,
-            Func<IReadOnlyList<string>> getProjectFamilies,
+            Func<IReadOnlyList<ProjectFamilyInfo>> getProjectFamilies,
             Func<string, (bool Success, string? Error)> loadFamily,
             Func<long, string, bool> rescanFamily,
             Action<bool, bool> scan,

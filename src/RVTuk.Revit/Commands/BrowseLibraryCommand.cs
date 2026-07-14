@@ -53,7 +53,7 @@ namespace RVTuk.Revit.Commands
             // Create delegates that wrap ExternalEvent ping-pong.
             // These lambdas live in the Revit project (which CAN reference ExternalEvent).
             // FamilyBrowserWindow (UI project) only sees Func<> delegates — no Revit types.
-            Func<IReadOnlyList<string>> getProjectFamilies = () =>
+            Func<IReadOnlyList<ProjectFamilyInfo>> getProjectFamilies = () =>
             {
                 Application.GetFamiliesHandler.Reset();
                 Application.GetFamiliesEvent.Raise();

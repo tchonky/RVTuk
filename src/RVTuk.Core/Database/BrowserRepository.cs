@@ -14,6 +14,12 @@ namespace RVTuk.Core.Database
         private readonly string _databasePath;
         private readonly SQLiteConnection _connection; // persistent READ-ONLY connection
 
+        // False when the DB predates the Version/ParametersExtracted columns AND the best-effort
+        // migration below couldn't run (read-only share, DB locked). Reads then surface a null
+        // Version and writes skip the new clauses — the version check is simply off until a
+        // writable open (here or a deep scan) migrates the schema.
+        private readonly bool _hasVersionColumns;
+
         // Serialises use of the shared read connection: the browser reads from several
         // ThreadPool threads at once (Sync, per-selection detail loads, rescan thumbnail
         // refresh) and a SqliteConnection must not run concurrent commands.
@@ -37,6 +43,16 @@ namespace RVTuk.Core.Database
             _connection = OpenRead();
             ExecuteOn(_connection, "PRAGMA busy_timeout=5000;");
             ExecuteOn(_connection, "PRAGMA foreign_keys=ON;");
+
+            _hasVersionColumns = ColumnExists(_connection, "Families", "Version")
+                              && ColumnExists(_connection, "Families", "ParametersExtracted");
+        }
+
+        private static bool ColumnExists(SQLiteConnection c, string table, string column)
+        {
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name='{column}'";
+            return (long)(cmd.ExecuteScalar() ?? 0L) > 0;
         }
 
         // Persistent read-only connection for all Get* methods.
@@ -149,6 +165,18 @@ namespace RVTuk.Core.Database
             favCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='IsFavorite'";
             if ((long)(favCheck.ExecuteScalar() ?? 0L) == 0)
                 ExecuteOn(c, "ALTER TABLE Families ADD COLUMN IsFavorite INTEGER NOT NULL DEFAULT 0");
+
+            using var versionCheck = c.CreateCommand();
+            versionCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='Version'";
+            if ((long)(versionCheck.ExecuteScalar() ?? 0L) == 0)
+                ExecuteOn(c, "ALTER TABLE Families ADD COLUMN Version TEXT");
+
+            // Owned by the deep scan (IndexRepository) but referenced by UpsertFamily's staleness
+            // CASE, so the browser must be able to create it on a DB no deep scan has touched yet.
+            using var paramsExtractedCheck = c.CreateCommand();
+            paramsExtractedCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='ParametersExtracted'";
+            if ((long)(paramsExtractedCheck.ExecuteScalar() ?? 0L) == 0)
+                ExecuteOn(c, "ALTER TABLE Families ADD COLUMN ParametersExtracted INTEGER NOT NULL DEFAULT 0");
         }
 
         // Returns all families with thumbnail resolved (CustomThumbnail ?? OLE Thumbnail)
@@ -156,14 +184,15 @@ namespace RVTuk.Core.Database
         {
             var result = new List<FamilyBrowserItem>();
             using var cmd = _connection.CreateCommand();
-            cmd.CommandText = @"
+            cmd.CommandText = $@"
                 SELECT f.Id, f.FileName, f.RelativePath, f.Category, f.ModifiedDate,
                        t.PngData  AS OlePng,
                        ct.PngData AS CustomPng,
                        ct.OleSynced,
                        f.RevitYear,
                        f.Tags,
-                       f.IsFavorite
+                       f.IsFavorite,
+                       {(_hasVersionColumns ? "f.Version" : "NULL")}
                 FROM Families f
                 LEFT JOIN Thumbnail t ON t.FamilyId = f.Id
                 LEFT JOIN CustomThumbnail ct ON ct.FamilyId = f.Id
@@ -185,6 +214,7 @@ namespace RVTuk.Core.Database
                     RevitYear        = reader.IsDBNull(8) ? 0 : reader.GetInt32(8),
                     Tags             = reader.IsDBNull(9) ? null : reader.GetString(9),
                     IsFavorite       = !reader.IsDBNull(10) && reader.GetInt32(10) == 1,
+                    Version          = reader.IsDBNull(11) ? null : reader.GetString(11),
                 });
             }
             return result;
@@ -329,12 +359,13 @@ namespace RVTuk.Core.Database
             });
         }
 
-        // NOTE: The fast Sync path intentionally writes the file's real size/date with no extracted
-        // metadata. Consequently a Sync-marked family then "looks up to date" to the deep scan
-        // (its stored size/date matches the file) and is skipped — so its parameters/category are
-        // never extracted. That is a separate, known issue (whether Sync should mark rows "needs
-        // deep scan") tracked in docs/BACKLOG.md and is OUT OF SCOPE for the resumable-deep-scan
-        // change. Deliberately left unchanged here.
+        // The fast Sync path writes the file's real size/date with no extracted metadata. So the
+        // deep scan can still tell "this file changed since its parameters were extracted", a
+        // CHANGED file's write below also clears Version and drops ParametersExtracted — otherwise
+        // the new size/date would make the family "look up to date" to the deep scan and its
+        // parameters/category/_Version would silently stay stale forever (the old form of this
+        // gap was tracked in docs/BACKLOG.md). A NEW row still gets no extracted data; the deep
+        // scan picks it up via its missing-facet checks (no thumbnail row, ParametersExtracted=0).
         public void UpsertFamily(string relativePath, string fileName, DateTime modifiedDateUtc, long fileSize)
         {
             WithWrite(c =>
@@ -356,13 +387,25 @@ namespace RVTuk.Core.Database
                         id = (long)scalar;
                 }
 
+                // A changed file invalidates the stored _Version value (it was read from the old
+                // file contents by the deep scan) — clear it rather than let a stale value feed
+                // the update check, and drop ParametersExtracted so the next deep scan re-extracts.
+                // Both dates are written by DateTime.ToString("o"), so plain string equality
+                // detects "unchanged".
+                // The staleness clauses reference columns a not-yet-migrated DB lacks; skip them
+                // there (see _hasVersionColumns) so the fast Sync still works.
                 using var cmd = c.CreateCommand();
                 if (id != 0)
                 {
-                    cmd.CommandText = @"
+                    string staleClauses = _hasVersionColumns ? @"
+                            Version = CASE WHEN ModifiedDate = @modified AND FileSize = @size
+                                      THEN Version ELSE NULL END,
+                            ParametersExtracted = CASE WHEN ModifiedDate = @modified AND FileSize = @size
+                                                  THEN ParametersExtracted ELSE 0 END," : "";
+                    cmd.CommandText = $@"
                         UPDATE Families SET
                             RelativePath = @rel,
-                            FileName = @name,
+                            FileName = @name,{staleClauses}
                             ModifiedDate = @modified,
                             FileSize = @size
                         WHERE Id = @id";
@@ -370,12 +413,19 @@ namespace RVTuk.Core.Database
                 }
                 else
                 {
+                    string staleClauses = _hasVersionColumns ? @"
+                            Version = CASE WHEN Families.ModifiedDate = excluded.ModifiedDate
+                                            AND Families.FileSize = excluded.FileSize
+                                      THEN Families.Version ELSE NULL END,
+                            ParametersExtracted = CASE WHEN Families.ModifiedDate = excluded.ModifiedDate
+                                                        AND Families.FileSize = excluded.FileSize
+                                                  THEN Families.ParametersExtracted ELSE 0 END," : "";
                     // ON CONFLICT kept for safety under concurrent writers on the shared DB.
-                    cmd.CommandText = @"
+                    cmd.CommandText = $@"
                         INSERT INTO Families (RelativePath, FileName, ModifiedDate, FileSize)
                         VALUES (@rel, @name, @modified, @size)
                         ON CONFLICT(RelativePath) DO UPDATE SET
-                            FileName = excluded.FileName,
+                            FileName = excluded.FileName,{staleClauses}
                             ModifiedDate = excluded.ModifiedDate,
                             FileSize = excluded.FileSize";
                 }

@@ -24,7 +24,7 @@ namespace RVTuk.UI.ViewModels
 
         private readonly AppConfig _config;
         private readonly BrowserRepository _repo;
-        private readonly Func<IReadOnlyList<string>> _getProjectFamilies;
+        private readonly Func<IReadOnlyList<ProjectFamilyInfo>> _getProjectFamilies;
         private readonly Func<string, (bool Success, string? Error)> _loadFamily;
         private readonly Func<long, string, bool> _rescanFamily;
         private readonly Action<string> _openInFamilyEditor;
@@ -290,7 +290,7 @@ namespace RVTuk.UI.ViewModels
         public FamilyBrowserViewModel(
             AppConfig config,
             BrowserRepository repo,
-            Func<IReadOnlyList<string>> getProjectFamilies,
+            Func<IReadOnlyList<ProjectFamilyInfo>> getProjectFamilies,
             Func<string, (bool Success, string? Error)> loadFamily,
             Func<long, string, bool> rescanFamily,
             Action<bool, bool> scan,
@@ -309,11 +309,13 @@ namespace RVTuk.UI.ViewModels
 
             SyncCommand            = new RelayCommand(Sync, () => !IsSyncing);
             UpdateAllCommand       = new RelayCommand(UpdateAll,     () => OutdatedCount > 0);
-            LoadFamilyCommand      = new RelayCommand(LoadSelected,  () => SelectedItem != null);
+            // Model-only rows have no .rfa and no DB row behind them, so every library-backed
+            // action stays disabled for them.
+            LoadFamilyCommand      = new RelayCommand(LoadSelected,  () => SelectedItem != null && !SelectedItem.IsModelOnly);
             UpdateInProjectCommand = new RelayCommand(UpdateSelected,() => ShowUpdateInProject);
-            EditInfoCommand        = new RelayCommand(RequestEditInfo, () => SelectedItem != null);
-            RescanFamilyCommand    = new RelayCommand(RescanSelected, () => SelectedItem != null && !IsRescanning);
-            OpenFamilyEditorCommand= new RelayCommand(OpenInFamilyEditor, () => SelectedItem != null);
+            EditInfoCommand        = new RelayCommand(RequestEditInfo, () => SelectedItem != null && !SelectedItem.IsModelOnly);
+            RescanFamilyCommand    = new RelayCommand(RescanSelected, () => SelectedItem != null && !SelectedItem.IsModelOnly && !IsRescanning);
+            OpenFamilyEditorCommand= new RelayCommand(OpenInFamilyEditor, () => SelectedItem != null && !SelectedItem.IsModelOnly);
             FilterByTagCommand     = new RelayCommand<string>(t => { if (!string.IsNullOrWhiteSpace(t)) SearchText = t.Trim(); });
             ToggleFavoriteCommand  = new RelayCommand<FamilyBrowserItemViewModel>(ToggleFavorite);
             ToggleSettingsCommand  = new RelayCommand(() => RightView = RightView == FamilyBrowserRightView.Settings
@@ -395,7 +397,9 @@ namespace RVTuk.UI.ViewModels
 
         private void LoadDetailAsync(FamilyBrowserItemViewModel? item)
         {
-            if (item == null) { InstructionsXaml = null; Parameters = new List<ParameterModel>(); SelectedTags = null; return; }
+            // Model-only rows have no DB row (Id 0) — nothing to fetch, and Id 0 must never
+            // reach the repository queries.
+            if (item == null || item.IsModelOnly) { InstructionsXaml = null; Parameters = new List<ParameterModel>(); SelectedTags = null; return; }
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 try
@@ -480,18 +484,42 @@ namespace RVTuk.UI.ViewModels
                         .Select(f => new FamilyBrowserItemViewModel(f))
                         .ToList();
 
-                    IReadOnlyList<string> projectFamilies = _getProjectFamilies();
-                    var projectSet = new HashSet<string>(projectFamilies, StringComparer.OrdinalIgnoreCase);
+                    // Version check compares the _Version shared parameter: the library value is
+                    // captured into the index by the deep scan, the project value is read off the
+                    // loaded family's symbols. A family missing the parameter on either side is
+                    // simply "in project" with no update verdict (FamilyVersionCheck returns false).
+                    // (Families can share a name across categories; first occurrence wins.)
+                    var projectFamilies = new Dictionary<string, ProjectFamilyInfo>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var pf in _getProjectFamilies())
+                        if (!projectFamilies.ContainsKey(pf.Name))
+                            projectFamilies[pf.Name] = pf;
+
+                    var libraryNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     foreach (var item in newAllItems)
                     {
                         var nameNoExt = Path.GetFileNameWithoutExtension(item.FileName);
-                        if (!projectSet.Contains(nameNoExt)) continue;
-                        var fullPath = Path.Combine(root, item.RelativePath);
-                        bool isNewer = File.Exists(fullPath) &&
-                            new FileInfo(fullPath).LastWriteTimeUtc > item.Model.ModifiedDate.AddSeconds(1);
+                        libraryNames.Add(nameNoExt);
+                        if (!projectFamilies.TryGetValue(nameNoExt, out var pf)) continue;
+                        bool isNewer = FamilyVersionCheck.IsUpdateAvailable(item.Model.Version, pf.Version);
                         item.VersionStatus = isNewer ? VersionStatus.UpdateAvailable : VersionStatus.UpToDate;
                         if (isNewer) outdated++;
                     }
+
+                    // Project families with no library counterpart get a synthetic "model only"
+                    // row so the browser shows the whole picture, not just the library. The
+                    // ".rfa" suffix keeps DisplayName's extension-stripping from eating part of
+                    // a family name that contains a dot.
+                    foreach (var pf in projectFamilies.Values)
+                        if (!libraryNames.Contains(pf.Name))
+                            newAllItems.Add(new FamilyBrowserItemViewModel(new FamilyBrowserItem
+                            {
+                                Id = 0,
+                                FileName = pf.Name + ".rfa",
+                                RelativePath = string.Empty,
+                                Category = pf.Category,
+                                Version = pf.Version,
+                                VersionStatus = VersionStatus.ModelOnly,
+                            }));
                 }
                 catch (Exception ex)
                 {
@@ -575,7 +603,7 @@ namespace RVTuk.UI.ViewModels
 
         private void ToggleFavorite(FamilyBrowserItemViewModel? item)
         {
-            if (item == null) return;
+            if (item == null || item.IsModelOnly) return; // no DB row to persist a favourite on
             item.IsFavorite = !item.IsFavorite;
             try { _repo.SetFavorite(item.Id, item.IsFavorite); }
             catch { /* read-only share; favourite stays in-memory only */ }

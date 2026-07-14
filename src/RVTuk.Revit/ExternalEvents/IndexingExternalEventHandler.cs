@@ -40,6 +40,7 @@ namespace RVTuk.Revit.ExternalEvents
                 // Skip families newer than the running Revit version — opening such a family
                 // document triggers native processing that can crash Revit.
                 string? category = null;
+                string? familyVersion = null;
                 IReadOnlyList<RVTuk.Core.Models.ParameterModel> parameters = System.Array.Empty<RVTuk.Core.Models.ParameterModel>();
 
                 bool tooNew = CurrentItem.FileRevitYear > 0
@@ -48,7 +49,7 @@ namespace RVTuk.Revit.ExternalEvents
 
                 if (!tooNew)
                 {
-                    try { (category, parameters) = Extractor.ExtractMetadata(CurrentItem.FullPath); }
+                    try { (category, parameters, familyVersion) = Extractor.ExtractMetadata(CurrentItem.FullPath); }
                     catch { /* skip family if extraction fails */ }
                 }
 
@@ -56,7 +57,7 @@ namespace RVTuk.Revit.ExternalEvents
                 // successful extraction) is what marks the row current. A cancelled family is
                 // never updated, so it stays stale and is re-scanned next time.
                 Repository.UpdateFamilyMetadata(CurrentItem.FamilyId, category, parameters, CurrentItem.ThumbnailPng, CurrentItem.FileRevitYear,
-                    CurrentItem.ModifiedDate, CurrentItem.FileSize);
+                    CurrentItem.ModifiedDate, CurrentItem.FileSize, familyVersion);
             }
             finally
             {

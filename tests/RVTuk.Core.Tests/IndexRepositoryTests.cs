@@ -91,4 +91,103 @@ public class IndexRepositoryTests : IDisposable
 
         Assert.DoesNotContain(id, repo.GetFamilyIdsWithThumbnail());
     }
+
+    [Fact]
+    public void UpdateFamilyMetadata_StoresFamilyVersion()
+    {
+        using var repo = new IndexRepository(_dbPath);
+        long id = repo.InsertFamily("Doors/A.rfa", "A.rfa");
+
+        repo.UpdateFamilyMetadata(id, "Doors", new List<ParameterModel>(), null,
+            revitYear: 0, modifiedDate: DateTime.UtcNow, fileSize: 10, familyVersion: "3");
+
+        Assert.Equal("3", repo.GetFamilyByPath("Doors/A.rfa")!.Version);
+    }
+
+    [Fact]
+    public void UpsertFamilyFileInfo_UnchangedFile_KeepsVersion()
+    {
+        using var repo = new IndexRepository(_dbPath);
+        long id = repo.InsertFamily("Doors/A.rfa", "A.rfa");
+        var modified = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        repo.UpdateFamilyMetadata(id, "Doors", new List<ParameterModel>(), null,
+            revitYear: 0, modifiedDate: modified, fileSize: 10, familyVersion: "3");
+
+        repo.UpsertFamilyFileInfo("Doors/A.rfa", "A.rfa", 10, modified);
+
+        Assert.Equal("3", repo.GetFamilyByPath("Doors/A.rfa")!.Version);
+    }
+
+    [Fact]
+    public void UpsertFamilyFileInfo_ChangedFile_ClearsStaleVersion()
+    {
+        using var repo = new IndexRepository(_dbPath);
+        long id = repo.InsertFamily("Doors/A.rfa", "A.rfa");
+        var modified = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        repo.UpdateFamilyMetadata(id, "Doors", new List<ParameterModel>(), null,
+            revitYear: 0, modifiedDate: modified, fileSize: 10, familyVersion: "3");
+
+        repo.UpsertFamilyFileInfo("Doors/A.rfa", "A.rfa", 10, modified.AddMinutes(5));
+
+        Assert.Null(repo.GetFamilyByPath("Doors/A.rfa")!.Version);
+    }
+
+    [Fact]
+    public void UpdateThumbnailOnly_ChangedFile_ClearsStaleVersion()
+    {
+        using var repo = new IndexRepository(_dbPath);
+        long id = repo.InsertFamily("Doors/A.rfa", "A.rfa");
+        var modified = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        repo.UpdateFamilyMetadata(id, "Doors", new List<ParameterModel>(), null,
+            revitYear: 0, modifiedDate: modified, fileSize: 10, familyVersion: "3");
+
+        repo.UpdateThumbnailOnly(id, new byte[] { 1 }, revitYear: 2024, modified.AddMinutes(5), fileSize: 11);
+
+        Assert.Null(repo.GetFamilyByPath("Doors/A.rfa")!.Version);
+    }
+
+    // Writing a CHANGED file's info without re-extracting must also drop ParametersExtracted,
+    // or the next deep scan sees matching size/date + "already extracted" and skips the family
+    // forever — its stored parameters (and _Version) would silently stay stale.
+    [Fact]
+    public void UpsertFamilyFileInfo_ChangedFile_MarksParametersStale()
+    {
+        using var repo = new IndexRepository(_dbPath);
+        long id = repo.InsertFamily("Doors/A.rfa", "A.rfa");
+        var modified = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        repo.UpdateFamilyMetadata(id, "Doors", new List<ParameterModel>(), null,
+            revitYear: 0, modifiedDate: modified, fileSize: 10, familyVersion: "3");
+
+        repo.UpsertFamilyFileInfo("Doors/A.rfa", "A.rfa", 10, modified.AddMinutes(5));
+
+        Assert.DoesNotContain(id, repo.GetFamilyIdsWithParametersExtracted());
+    }
+
+    [Fact]
+    public void UpsertFamilyFileInfo_UnchangedFile_KeepsParametersExtracted()
+    {
+        using var repo = new IndexRepository(_dbPath);
+        long id = repo.InsertFamily("Doors/A.rfa", "A.rfa");
+        var modified = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        repo.UpdateFamilyMetadata(id, "Doors", new List<ParameterModel>(), null,
+            revitYear: 0, modifiedDate: modified, fileSize: 10, familyVersion: "3");
+
+        repo.UpsertFamilyFileInfo("Doors/A.rfa", "A.rfa", 10, modified);
+
+        Assert.Contains(id, repo.GetFamilyIdsWithParametersExtracted());
+    }
+
+    [Fact]
+    public void UpdateThumbnailOnly_ChangedFile_MarksParametersStale()
+    {
+        using var repo = new IndexRepository(_dbPath);
+        long id = repo.InsertFamily("Doors/A.rfa", "A.rfa");
+        var modified = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        repo.UpdateFamilyMetadata(id, "Doors", new List<ParameterModel>(), null,
+            revitYear: 0, modifiedDate: modified, fileSize: 10, familyVersion: "3");
+
+        repo.UpdateThumbnailOnly(id, new byte[] { 1 }, revitYear: 2024, modified.AddMinutes(5), fileSize: 11);
+
+        Assert.DoesNotContain(id, repo.GetFamilyIdsWithParametersExtracted());
+    }
 }

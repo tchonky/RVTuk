@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Autodesk.Revit.DB;
 using RVTuk.Core.Models;
+using RVTuk.Core.Util;
 using RevitApplication = Autodesk.Revit.ApplicationServices.Application;
 
 namespace RVTuk.Revit.Extraction
@@ -21,40 +22,71 @@ namespace RVTuk.Revit.Extraction
             _app = app;
         }
 
-        public (string? Category, IReadOnlyList<ParameterModel> Parameters) ExtractMetadata(string rfaPath)
+        public (string? Category, IReadOnlyList<ParameterModel> Parameters, string? Version) ExtractMetadata(string rfaPath)
         {
             // Revit's OpenDocumentFile throws / shows a modal "path too long" dialog for paths
             // over Windows MAX_PATH on .NET Framework. Such families are already skipped during the
             // scan; guard here too so extraction can never surface that dialog.
             if (string.IsNullOrEmpty(rfaPath) || rfaPath.Length >= 260)
-                return (null, Array.Empty<ParameterModel>());
+                return (null, Array.Empty<ParameterModel>(), null);
 
             Document? doc = null;
             try
             {
                 doc = _app.OpenDocumentFile(rfaPath);
                 if (doc == null || !doc.IsFamilyDocument)
-                    return (null, Array.Empty<ParameterModel>());
+                    return (null, Array.Empty<ParameterModel>(), null);
 
                 string? category = null;
                 try { category = doc.OwnerFamily?.FamilyCategory?.Name; } catch { }
 
                 var parameters = new List<ParameterModel>();
+                FamilyParameter? versionParam = null;
                 foreach (FamilyParameter fp in doc.FamilyManager.Parameters)
                 {
-                    try { parameters.Add(ReadParameter(fp)); }
+                    try
+                    {
+                        parameters.Add(ReadParameter(fp));
+                        if (versionParam == null && string.Equals(fp.Definition.Name,
+                                FamilyVersionCheck.ParameterName, StringComparison.OrdinalIgnoreCase))
+                            versionParam = fp;
+                    }
                     catch { /* skip a single unreadable parameter */ }
                 }
-                return (category, parameters);
+
+                string? version = null;
+                try { version = ReadVersionValue(doc.FamilyManager, versionParam); } catch { }
+
+                return (category, parameters, version);
             }
             catch
             {
-                return (null, Array.Empty<ParameterModel>());
+                return (null, Array.Empty<ParameterModel>(), null);
             }
             finally
             {
                 try { doc?.Close(false); } catch { }
             }
+        }
+
+        // Parameter values live per family type; read _Version off the current (or first) type.
+        private static string? ReadVersionValue(FamilyManager fm, FamilyParameter? fp)
+        {
+            if (fp == null) return null;
+
+            FamilyType? type = fm.CurrentType;
+            if (type == null)
+                foreach (FamilyType t in fm.Types) { type = t; break; }
+            if (type == null) return null;
+
+            string? raw = fp.StorageType switch
+            {
+                StorageType.String  => type.AsString(fp),
+                StorageType.Integer => type.AsInteger(fp)?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                StorageType.Double  => type.AsDouble(fp)?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                _                   => type.AsValueString(fp),
+            };
+            return FamilyVersionCheck.Normalize(raw);
         }
 
         private static ParameterModel ReadParameter(FamilyParameter fp)

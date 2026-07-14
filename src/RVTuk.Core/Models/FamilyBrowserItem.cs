@@ -13,6 +13,9 @@ namespace RVTuk.Core.Models
         public bool HasCustomThumbnail { get; set; }
         public bool OleSynced { get; set; } = true;
         public VersionStatus VersionStatus { get; set; } = VersionStatus.None;
+        // Value of the "_Version" shared parameter, captured by the deep scan (null when the
+        // family doesn't carry it or hasn't been deep-scanned since it last changed on disk).
+        public string? Version { get; set; }
         public int RevitYear { get; set; }
         public string? Tags { get; set; }
         public bool IsFavorite { get; set; }
