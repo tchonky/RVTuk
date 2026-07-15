@@ -3,11 +3,11 @@ using RVTuk.UI.RishuiZamin.ViewModels;
 
 namespace RVTuk.UI.RishuiZamin.Views
 {
-    public partial class AreaSubmissionWindow : Window
+    public partial class RishuiZaminWindow : Window
     {
-        private readonly AreaSubmissionViewModel _vm;
+        private readonly RishuiZaminViewModel _vm;
 
-        public AreaSubmissionWindow(AreaSubmissionViewModel viewModel)
+        public RishuiZaminWindow(RishuiZaminViewModel viewModel)
         {
             InitializeComponent();
             _vm = viewModel;

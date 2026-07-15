@@ -12,7 +12,7 @@ namespace RVTuk.Core.RishuiZamin
     public record ValidationResult(IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings);
 
     /// <summary>
-    /// Validates <see cref="AreaRecord"/>s and <see cref="AreaSubmissionConfig"/> ahead of
+    /// Validates <see cref="AreaRecord"/>s and <see cref="RishuiZaminConfig"/> ahead of
     /// area-submission export: flags missing/invalid usage codes, degenerate boundaries,
     /// zero-or-negative areas, and incomplete config, without touching the Revit API.
     /// </summary>
@@ -57,7 +57,7 @@ namespace RVTuk.Core.RishuiZamin
         /// Checks the submission config and returns human-readable error messages for any
         /// missing/invalid settings. Empty list means the config is valid.
         /// </summary>
-        public static IReadOnlyList<string> CheckConfig(AreaSubmissionConfig c)
+        public static IReadOnlyList<string> CheckConfig(RishuiZaminConfig c)
         {
             var errors = new List<string>();
 
@@ -90,7 +90,7 @@ namespace RVTuk.Core.RishuiZamin
         /// non-blocking issues (areas missing a number or name) into
         /// <see cref="ValidationResult.Warnings"/>.
         /// </summary>
-        public static ValidationResult Validate(IReadOnlyList<AreaRecord> areas, AreaSubmissionConfig c)
+        public static ValidationResult Validate(IReadOnlyList<AreaRecord> areas, RishuiZaminConfig c)
         {
             var errors = new List<string>();
             var warnings = new List<string>();

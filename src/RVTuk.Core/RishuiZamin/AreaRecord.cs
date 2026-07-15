@@ -45,13 +45,13 @@ namespace RVTuk.Core.RishuiZamin
         public string? PermitArea { get; set; }
         /// <summary>Dwelling-unit / unit number (the ASSET tag) for this specific area, read
         /// from the RZ_ASSET parameter; falls back to the submission-wide
-        /// <see cref="AreaSubmissionConfig.Asset"/> when empty.</summary>
+        /// <see cref="RishuiZaminConfig.Asset"/> when empty.</summary>
         public string? Asset { get; set; }
         public string Floor { get; set; } = "";
         public int PageNo { get; set; }
         /// <summary>The area plan viewport's plot scale (e.g. 100 for 1:100), read from
         /// <c>ViewPlan.Scale</c> at extraction time so the Area Calc window can auto-fill
-        /// <see cref="AreaSubmissionConfig.Scale"/> and flag mixed scales across viewports.</summary>
+        /// <see cref="RishuiZaminConfig.Scale"/> and flag mixed scales across viewports.</summary>
         public int Scale { get; set; }
         public bool IsUnderground { get; set; }
         public double AreaValue { get; set; }

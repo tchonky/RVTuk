@@ -10,16 +10,16 @@ namespace RVTuk.Core.RishuiZamin
     /// the Rishui Zamin robot expects. Pure file I/O — no Revit API dependency, so it lives in
     /// RVTuk.Core and is fully unit-testable.
     /// </summary>
-    public static class AreaSubmissionExporter
+    public static class RishuiZaminExporter
     {
         /// <summary>
         /// Validates <paramref name="areas"/>/<paramref name="cfg"/> via <see cref="AreaValidator.Validate"/>.
         /// If there are blocking errors, writes nothing and returns <c>(false, joined errors)</c>.
         /// Otherwise writes <c>{FileBaseName}.dxf</c> and <c>{FileBaseName}.dat</c> into
-        /// <see cref="AreaSubmissionConfig.OutputFolder"/> and returns <c>(true, ...)</c> naming
+        /// <see cref="RishuiZaminConfig.OutputFolder"/> and returns <c>(true, ...)</c> naming
         /// the written paths. IO failures are caught and returned as <c>(false, ex.Message)</c>.
         /// </summary>
-        public static (bool ok, string message) Export(IReadOnlyList<AreaRecord> areas, AreaSubmissionConfig cfg)
+        public static (bool ok, string message) Export(IReadOnlyList<AreaRecord> areas, RishuiZaminConfig cfg)
         {
             var validation = AreaValidator.Validate(areas, cfg);
             if (validation.Errors.Count > 0)

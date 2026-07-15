@@ -36,7 +36,7 @@ public class DxfWriterTests
     // Most of the suite pins Form B (the tekenplus TEXT encoding the golden fixture was
     // captured for); Form A tests opt in explicitly. The config default itself is Form A —
     // covered by Build_DefaultMarkerForm_IsOfficialFormA.
-    private static AreaSubmissionConfig Config() => new()
+    private static RishuiZaminConfig Config() => new()
     {
         BuildingNo = 1,
         Asset = null,
@@ -46,7 +46,7 @@ public class DxfWriterTests
         MarkerForm = MarkerForm.FormB,
     };
 
-    private static AreaSubmissionConfig FormAConfig()
+    private static RishuiZaminConfig FormAConfig()
     {
         var cfg = Config();
         cfg.MarkerForm = MarkerForm.FormA;
@@ -206,7 +206,7 @@ public class DxfWriterTests
     [Fact]
     public void Build_DefaultMarkerForm_IsOfficialFormA()
     {
-        Assert.Equal(MarkerForm.FormA, new AreaSubmissionConfig().MarkerForm);
+        Assert.Equal(MarkerForm.FormA, new RishuiZaminConfig().MarkerForm);
     }
 
     [Fact]

@@ -21,7 +21,7 @@ namespace RVTuk.Core.RishuiZamin
     /// <summary>
     /// Configuration for area submission export settings.
     /// </summary>
-    public class AreaSubmissionConfig
+    public class RishuiZaminConfig
     {
         public int BuildingNo { get; set; } = 1;
         public string? Asset { get; set; }

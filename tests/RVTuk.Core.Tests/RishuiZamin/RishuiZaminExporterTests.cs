@@ -6,11 +6,11 @@ using Xunit;
 
 namespace RVTuk.Core.Tests.RishuiZamin;
 
-public class AreaSubmissionExporterTests : IDisposable
+public class RishuiZaminExporterTests : IDisposable
 {
     private readonly string _outputFolder;
 
-    public AreaSubmissionExporterTests()
+    public RishuiZaminExporterTests()
     {
         _outputFolder = Path.Combine(Path.GetTempPath(), "rvtuk_test_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_outputFolder);
@@ -30,7 +30,7 @@ public class AreaSubmissionExporterTests : IDisposable
         BoundaryLoops = { new() { new() { X = 0, Y = 0 }, new() { X = 1, Y = 0 }, new() { X = 1, Y = 1 } } }
     };
 
-    private AreaSubmissionConfig ValidConfig() => new()
+    private RishuiZaminConfig ValidConfig() => new()
     {
         OutputFolder = _outputFolder,
         FileBaseName = "submission",
@@ -44,7 +44,7 @@ public class AreaSubmissionExporterTests : IDisposable
         var areas = new List<AreaRecord> { ValidArea() };
         var config = ValidConfig();
 
-        var (ok, message) = AreaSubmissionExporter.Export(areas, config);
+        var (ok, message) = RishuiZaminExporter.Export(areas, config);
 
         Assert.True(ok, message);
         Assert.NotNull(message);
@@ -71,7 +71,7 @@ public class AreaSubmissionExporterTests : IDisposable
         var areas = new List<AreaRecord> { badArea };
         var config = ValidConfig();
 
-        var (ok, message) = AreaSubmissionExporter.Export(areas, config);
+        var (ok, message) = RishuiZaminExporter.Export(areas, config);
 
         Assert.False(ok);
         Assert.Contains("usage code", message, StringComparison.OrdinalIgnoreCase);

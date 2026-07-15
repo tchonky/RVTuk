@@ -19,11 +19,11 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
     /// between the Config fields and the area tree; Revit behaviour is injected as delegates so
     /// this project takes no Revit dependency.
     /// </summary>
-    public class AreaSubmissionViewModel : ViewModelBase
+    public class RishuiZaminViewModel : ViewModelBase
     {
         private readonly Func<IReadOnlyList<(long Id, AreaRecord Rec)>> _extract;
         private readonly Action<long> _selectInModel;
-        private readonly Func<IReadOnlyList<AreaRecord>, AreaSubmissionConfig, (bool ok, string msg)> _export;
+        private readonly Func<IReadOnlyList<AreaRecord>, RishuiZaminConfig, (bool ok, string msg)> _export;
         private readonly Func<(bool ok, string msg)>? _setupUsageKeys;
         private readonly Dispatcher _dispatcher;
 
@@ -40,10 +40,10 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         /// <param name="setupUsageKeys">Binds the robot's area text parameters and creates/tops-up
         /// the usage key schedules in the project; returns (ok, message). Blocking — run off the
         /// UI thread.</param>
-        public AreaSubmissionViewModel(
+        public RishuiZaminViewModel(
             Func<IReadOnlyList<(long Id, AreaRecord Rec)>> extract,
             Action<long> selectInModel,
-            Func<IReadOnlyList<AreaRecord>, AreaSubmissionConfig, (bool ok, string msg)> export,
+            Func<IReadOnlyList<AreaRecord>, RishuiZaminConfig, (bool ok, string msg)> export,
             Func<(bool ok, string msg)>? setupUsageKeys = null)
         {
             _extract = extract;
@@ -66,7 +66,7 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
             _fileBaseNameText = Config.FileBaseName;
         }
 
-        public AreaSubmissionConfig Config { get; } = new AreaSubmissionConfig();
+        public RishuiZaminConfig Config { get; } = new RishuiZaminConfig();
         public ObservableCollection<AreaLevelGroupViewModel> Levels { get; } = new();
 
         public ICommand RefreshCommand { get; }
@@ -97,7 +97,7 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
             set => CurrentPane = (SubmissionPane)value;
         }
 
-        /// <summary>Notifying wrapper over <see cref="AreaSubmissionConfig.OutputFolder"/> so the
+        /// <summary>Notifying wrapper over <see cref="RishuiZaminConfig.OutputFolder"/> so the
         /// Browse button can update the bound textbox.</summary>
         public string OutputFolder
         {
@@ -120,7 +120,7 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         /// <c>AreaValidator.CheckConfig</c>'s "Output folder is not set" rule).</summary>
         public bool OutputFolderInvalid => string.IsNullOrWhiteSpace(OutputFolder);
 
-        /// <summary>Notifying wrapper over <see cref="AreaSubmissionConfig.BuildingNo"/> so the
+        /// <summary>Notifying wrapper over <see cref="RishuiZaminConfig.BuildingNo"/> so the
         /// Settings tab can highlight it red when blank or non-positive. Kept as a string (rather
         /// than binding <c>Config.BuildingNo</c> directly) so an in-progress edit — e.g. the field
         /// briefly empty while retyping — doesn't fight WPF's built-in int type-conversion.</summary>
@@ -157,7 +157,7 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
             }
         }
 
-        /// <summary>Notifying wrapper over <see cref="AreaSubmissionConfig.FileBaseName"/> so the
+        /// <summary>Notifying wrapper over <see cref="RishuiZaminConfig.FileBaseName"/> so the
         /// Settings tab can highlight it red when blank.</summary>
         public string FileBaseNameText
         {

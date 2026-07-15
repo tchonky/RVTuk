@@ -39,7 +39,7 @@ namespace RVTuk.Revit
         public static SetupUsageKeysEventHandler SetupUsageKeysHandler { get; private set; } = null!;
         public static ExternalEvent SetupUsageKeysEvent { get; private set; } = null!;
         public static RVTuk.UI.FamilyBrowser.Views.FamilyBrowserWindow? BrowserWindow { get; set; }
-        public static RVTuk.UI.RishuiZamin.Views.AreaSubmissionWindow? AreaCalcWindow { get; set; }
+        public static RVTuk.UI.RishuiZamin.Views.RishuiZaminWindow? RishuiZaminWindow { get; set; }
         public static UIApplication? CurrentUIApp { get; set; }
         public static RVTuk.UI.NeoProperties.ViewModels.NeoPropertiesViewModel NeoPropertiesViewModel { get; private set; } = null!;
 
@@ -159,7 +159,7 @@ namespace RVTuk.Revit
                 "AreaCalc",
                 "Area\nCalc",
                 assemblyPath,
-                typeof(AreaCalcCommand).FullName!)
+                typeof(RishuiZaminCommand).FullName!)
             {
                 ToolTip = "Rishui Zamin area calculation: generate the .dxf + .dat from the open sheet's Areas"
             };

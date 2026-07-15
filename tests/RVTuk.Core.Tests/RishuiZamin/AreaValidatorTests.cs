@@ -119,7 +119,7 @@ public class AreaValidatorTests
             new() { Number = "1", Name = "A", UsageCode = 1, AreaValue = 5,
                 BoundaryLoops = { new() { new() { X = -5, Y = 0 }, new() { X = 100, Y = 0 }, new() { X = 100, Y = 100 } } } }
         };
-        var cfg = new AreaSubmissionConfig
+        var cfg = new RishuiZaminConfig
         {
             OutputFolder = "C:\\out", FileBaseName = "x", Scale = 100, BuildingNo = 1,
             SheetWidthCm = 40000, SheetHeightCm = 9000
@@ -136,7 +136,7 @@ public class AreaValidatorTests
             new() { Number = "1", Name = "A", UsageCode = 1, AreaValue = 5,
                 BoundaryLoops = { new() { new() { X = 0, Y = 0 }, new() { X = 1, Y = 0 }, new() { X = 1, Y = 1 } } } }
         };
-        var cfg = new AreaSubmissionConfig
+        var cfg = new RishuiZaminConfig
         {
             OutputFolder = "C:\\out", FileBaseName = "x", Scale = 100, BuildingNo = 1,
             SheetWidthCm = 40000, SheetHeightCm = 9200 // 920 mm on paper at 1:100 > 910 mm cap
@@ -148,35 +148,35 @@ public class AreaValidatorTests
     [Fact]
     public void Config_MissingOutputFolder_IsError()
     {
-        var errs = AreaValidator.CheckConfig(new AreaSubmissionConfig { OutputFolder = "" });
+        var errs = AreaValidator.CheckConfig(new RishuiZaminConfig { OutputFolder = "" });
         Assert.Contains(errs, e => e.Contains("output", System.StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
     public void Config_MissingFileBaseName_IsError()
     {
-        var errs = AreaValidator.CheckConfig(new AreaSubmissionConfig { OutputFolder = "C:\\out", FileBaseName = "" });
+        var errs = AreaValidator.CheckConfig(new RishuiZaminConfig { OutputFolder = "C:\\out", FileBaseName = "" });
         Assert.Contains(errs, e => e.Contains("file", System.StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
     public void Config_ZeroScale_IsError()
     {
-        var errs = AreaValidator.CheckConfig(new AreaSubmissionConfig { OutputFolder = "C:\\out", FileBaseName = "x", Scale = 0, BuildingNo = 1 });
+        var errs = AreaValidator.CheckConfig(new RishuiZaminConfig { OutputFolder = "C:\\out", FileBaseName = "x", Scale = 0, BuildingNo = 1 });
         Assert.Contains(errs, e => e.Contains("scale", System.StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
     public void Config_BuildingNoBelowOne_IsError()
     {
-        var errs = AreaValidator.CheckConfig(new AreaSubmissionConfig { OutputFolder = "C:\\out", FileBaseName = "x", Scale = 100, BuildingNo = 0 });
+        var errs = AreaValidator.CheckConfig(new RishuiZaminConfig { OutputFolder = "C:\\out", FileBaseName = "x", Scale = 100, BuildingNo = 0 });
         Assert.Contains(errs, e => e.Contains("building", System.StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
     public void Config_AllValid_HasNoErrors()
     {
-        var errs = AreaValidator.CheckConfig(new AreaSubmissionConfig
+        var errs = AreaValidator.CheckConfig(new RishuiZaminConfig
         {
             OutputFolder = "C:\\out",
             FileBaseName = "x",
@@ -194,7 +194,7 @@ public class AreaValidatorTests
             new() { Number = "101", Name = "Living", UsageCode = null, AreaValue = 5,
                 BoundaryLoops = { new() { new() { X = 0, Y = 0 }, new() { X = 1, Y = 0 }, new() { X = 1, Y = 1 } } } }
         };
-        var config = new AreaSubmissionConfig { OutputFolder = "", FileBaseName = "x", Scale = 100, BuildingNo = 1 };
+        var config = new RishuiZaminConfig { OutputFolder = "", FileBaseName = "x", Scale = 100, BuildingNo = 1 };
 
         var result = AreaValidator.Validate(areas, config);
 
@@ -210,7 +210,7 @@ public class AreaValidatorTests
             new() { Number = null, Name = null, UsageCode = 1, AreaValue = 5,
                 BoundaryLoops = { new() { new() { X = 0, Y = 0 }, new() { X = 1, Y = 0 }, new() { X = 1, Y = 1 } } } }
         };
-        var config = new AreaSubmissionConfig { OutputFolder = "C:\\out", FileBaseName = "x", Scale = 100, BuildingNo = 1 };
+        var config = new RishuiZaminConfig { OutputFolder = "C:\\out", FileBaseName = "x", Scale = 100, BuildingNo = 1 };
 
         var result = AreaValidator.Validate(areas, config);
 
@@ -226,7 +226,7 @@ public class AreaValidatorTests
             new() { Number = "101", Name = "Living", UsageCode = 1, AreaValue = 5,
                 BoundaryLoops = { new() { new() { X = 0, Y = 0 }, new() { X = 1, Y = 0 }, new() { X = 1, Y = 1 } } } }
         };
-        var config = new AreaSubmissionConfig { OutputFolder = "C:\\out", FileBaseName = "x", Scale = 100, BuildingNo = 1 };
+        var config = new RishuiZaminConfig { OutputFolder = "C:\\out", FileBaseName = "x", Scale = 100, BuildingNo = 1 };
 
         var result = AreaValidator.Validate(areas, config);
 

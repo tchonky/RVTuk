@@ -12,7 +12,7 @@ using RVTuk.UI.RishuiZamin.Views;
 namespace KKarea.Revit.Commands
 {
     [Transaction(TransactionMode.Manual)]
-    public class AreaCalcCommand : IExternalCommand
+    public class RishuiZaminCommand : IExternalCommand
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -26,9 +26,9 @@ namespace KKarea.Revit.Commands
             }
 
             // Single-instance: bring an open window to front instead of opening another.
-            if (Application.AreaCalcWindow != null && Application.AreaCalcWindow.IsLoaded)
+            if (Application.RishuiZaminWindow != null && Application.RishuiZaminWindow.IsLoaded)
             {
-                Application.AreaCalcWindow.Activate();
+                Application.RishuiZaminWindow.Activate();
                 return Result.Succeeded;
             }
 
@@ -82,13 +82,13 @@ namespace KKarea.Revit.Commands
             // RZ_FRAME must be the real sheet outline, so inject the title-block paper size
             // (captured during the last extract) scaled to drawing units here, where the
             // user-chosen Scale is final.
-            Func<IReadOnlyList<AreaRecord>, AreaSubmissionConfig, (bool ok, string msg)> export =
+            Func<IReadOnlyList<AreaRecord>, RishuiZaminConfig, (bool ok, string msg)> export =
                 (records, cfg) =>
                 {
                     var diag = Application.AreaExtractHandler.Diagnostics;
                     cfg.SheetWidthCm = diag.SheetPaperWidthCm * cfg.Scale;
                     cfg.SheetHeightCm = diag.SheetPaperHeightCm * cfg.Scale;
-                    return AreaSubmissionExporter.Export(records, cfg);
+                    return RishuiZaminExporter.Export(records, cfg);
                 };
 
             var crashLogPath = Path.Combine(
@@ -97,14 +97,14 @@ namespace KKarea.Revit.Commands
 
             try
             {
-                var vm = new AreaSubmissionViewModel(extract, selectInModel, export, setupUsageKeys);
+                var vm = new RishuiZaminViewModel(extract, selectInModel, export, setupUsageKeys);
                 if (string.IsNullOrWhiteSpace(vm.FileBaseNameText))
                 {
                     vm.FileBaseNameText = commandData.Application.ActiveUIDocument.Document.Title;
                 }
-                var window = new AreaSubmissionWindow(vm);
-                window.Closed += (s, e) => Application.AreaCalcWindow = null;
-                Application.AreaCalcWindow = window;
+                var window = new RishuiZaminWindow(vm);
+                window.Closed += (s, e) => Application.RishuiZaminWindow = null;
+                Application.RishuiZaminWindow = window;
                 window.Show();
                 return Result.Succeeded;
             }

@@ -13,7 +13,7 @@ namespace RVTuk.Core.RishuiZamin
     /// שטחים" schema: <c>RZ_FRAME</c>/<c>RZ_FLOOR</c>/<c>RZ_AREA</c> layers with closed
     /// <c>LWPOLYLINE</c> polygons, each carrying one marker whose anchor point lies strictly
     /// inside its polygon (the robot matches markers to polygons by point-in-polygon). Two
-    /// marker encodings are supported, selected by <see cref="AreaSubmissionConfig.MarkerForm"/>
+    /// marker encodings are supported, selected by <see cref="RishuiZaminConfig.MarkerForm"/>
     /// (rules §5): Form A — the official block form (an <c>RZ_*_SYM</c> INSERT with one ATTRIB
     /// per tag, closed by SEQEND, as in the Garmoshka sample) — and Form B — the tekenplus
     /// plain-TEXT form whose content is <c>KEY=VALUE&amp;&amp;&amp;KEY=VALUE…</c> pairs (see
@@ -100,14 +100,14 @@ namespace RVTuk.Core.RishuiZamin
         /// each area's <c>RZ_AREA</c> polygon + marker <c>TEXT</c>, then the OBJECTS postamble and
         /// <c>EOF</c>.
         ///
-        /// When <see cref="AreaSubmissionConfig.SheetWidthCm"/>/<see cref="AreaSubmissionConfig.SheetHeightCm"/>
+        /// When <see cref="RishuiZaminConfig.SheetWidthCm"/>/<see cref="RishuiZaminConfig.SheetHeightCm"/>
         /// are set, each page's RZ_FRAME is that exact rectangle anchored at (0,0) — the real
         /// physical sheet — and the sheet-relative geometry is emitted untranslated. Otherwise the
         /// frame falls back to the page's content bounding box expanded by <see cref="FrameMargin"/>,
         /// translated so the frame's bottom-left corner lands at (0,0) as in the real samples.
         /// Pages are laid out right-to-left (PAGE_NO=1 rightmost, per the robot's reading order).
         /// </summary>
-        public static string Build(IReadOnlyList<AreaRecord> areas, AreaSubmissionConfig config)
+        public static string Build(IReadOnlyList<AreaRecord> areas, RishuiZaminConfig config)
         {
             if (areas == null) throw new ArgumentNullException(nameof(areas));
             if (config == null) throw new ArgumentNullException(nameof(config));
@@ -184,7 +184,7 @@ namespace RVTuk.Core.RishuiZamin
 
         private static IEnumerable<Point2D> AllPoints(AreaRecord a) => a.BoundaryLoops.SelectMany(loop => loop);
 
-        private static void AppendFrame(StringBuilder sb, HandleAllocator handles, AreaSubmissionConfig config, int pageNo, BBox box)
+        private static void AppendFrame(StringBuilder sb, HandleAllocator handles, RishuiZaminConfig config, int pageNo, BBox box)
         {
             AppendPolyline(sb, handles, "RZ_FRAME", RectCorners(box));
 
@@ -204,7 +204,7 @@ namespace RVTuk.Core.RishuiZamin
             }
         }
 
-        private static void AppendFloor(StringBuilder sb, HandleAllocator handles, AreaSubmissionConfig config, string floor, double levelElevation, int buildingNo, bool isUnderground, BBox box)
+        private static void AppendFloor(StringBuilder sb, HandleAllocator handles, RishuiZaminConfig config, string floor, double levelElevation, int buildingNo, bool isUnderground, BBox box)
         {
             AppendPolyline(sb, handles, "RZ_FLOOR", RectCorners(box));
 
@@ -239,7 +239,7 @@ namespace RVTuk.Core.RishuiZamin
             }
         }
 
-        private static void AppendArea(StringBuilder sb, HandleAllocator handles, AreaRecord area, AreaSubmissionConfig config, double offsetX, double offsetY)
+        private static void AppendArea(StringBuilder sb, HandleAllocator handles, AreaRecord area, RishuiZaminConfig config, double offsetX, double offsetY)
         {
             var loop = area.BoundaryLoops.First(l => l.Count >= 3);
             var shifted = loop.Select(p => (X: p.X + offsetX, Y: p.Y + offsetY)).ToList();
