@@ -2,6 +2,13 @@
 
 ## Ideas / future
 
+- Companion AutoCAD script for layout paper size: Revit's API can't set the exported
+  layout's page setup (see README "Known limitation"), but we can measure the real
+  title-block size (as the Rishui Zamin extractor already does) and emit one script
+  alongside the DWGs that stamps every layout's paper size — exact ISO names for
+  standard sheets, explicit width/height for custom ones (office is "mostly ISO, some
+  custom"). Declined for now (2026-07-15) in favour of documenting the limitation.
+
 - DXF output flavour: same window, list `ExportDXFSettings` alongside the DWG setups.
 - Built-in view/sheet set editor (the PDF dialog's pencil button) instead of relying on
   the native Print/PDF dialogs to manage `ViewSheetSet`s.

@@ -3,6 +3,13 @@ using System.IO;
 
 namespace RVTuk.Core.Shared.Config
 {
+    /// <summary>One model's remembered DWG export output folder (see AppConfig.DwgExportFolders).</summary>
+    public class DwgExportFolderEntry
+    {
+        public string ModelKey { get; set; } = string.Empty;
+        public string Folder { get; set; } = string.Empty;
+    }
+
     public class AppConfig
     {
         /// <summary>Name of the folder inside the library root that holds the shared databases.</summary>
@@ -23,12 +30,44 @@ namespace RVTuk.Core.Shared.Config
 
         /// <summary>Last-used values for the DWG Export dialog, remembered across sessions.
         /// Setup/set names are matched by name next time; a name that no longer exists in the
-        /// open document silently falls back to the first available entry.</summary>
+        /// open document silently falls back to the first available entry. The output folder is
+        /// remembered per model (<see cref="DwgExportFolders"/>); <see cref="DwgExportFolder"/>
+        /// is the global fallback a model without its own entry inherits.</summary>
         public string DwgExportFolder { get; set; } = string.Empty;
         public string DwgExportPdfSetupName { get; set; } = string.Empty;
         public string DwgExportDwgSetupName { get; set; } = string.Empty;
         public string DwgExportSheetSetName { get; set; } = string.Empty;
         public bool DwgExportUseCurrentWindow { get; set; }
+
+        /// <summary>Per-model output folders, most-recently-used last, capped at
+        /// <see cref="DwgExportFolderCap"/> so the config file can't grow unbounded.</summary>
+        public System.Collections.Generic.List<DwgExportFolderEntry> DwgExportFolders { get; set; } =
+            new System.Collections.Generic.List<DwgExportFolderEntry>();
+
+        public const int DwgExportFolderCap = 30;
+
+        /// <summary>The remembered output folder for a model (key = document path, or title for
+        /// unsaved documents), falling back to the global last-used folder.</summary>
+        public string GetDwgExportFolder(string modelKey)
+        {
+            var entry = DwgExportFolders.Find(e =>
+                string.Equals(e.ModelKey, modelKey, StringComparison.OrdinalIgnoreCase));
+            return entry != null && !string.IsNullOrWhiteSpace(entry.Folder) ? entry.Folder : DwgExportFolder;
+        }
+
+        /// <summary>Upserts the model's folder (MRU: entry moves to the end; oldest entries are
+        /// dropped past the cap) and updates the global fallback.</summary>
+        public void SetDwgExportFolder(string modelKey, string folder)
+        {
+            DwgExportFolder = folder;
+            if (string.IsNullOrWhiteSpace(modelKey)) return;
+
+            DwgExportFolders.RemoveAll(e =>
+                string.Equals(e.ModelKey, modelKey, StringComparison.OrdinalIgnoreCase));
+            DwgExportFolders.Add(new DwgExportFolderEntry { ModelKey = modelKey, Folder = folder });
+            while (DwgExportFolders.Count > DwgExportFolderCap)
+                DwgExportFolders.RemoveAt(0);
+        }
 
         // Derived — never stored separately; always lives inside the library folder.
         public string DatabasePath => Path.Combine(LibraryFolderPath, DbFolderName, "RVTuk.db");

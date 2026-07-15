@@ -113,4 +113,66 @@ public class AppConfigTests : IDisposable
         Assert.Equal("Sheets for Publish", loaded.DwgExportSheetSetName);
         Assert.True(loaded.DwgExportUseCurrentWindow);
     }
+
+    [Fact]
+    public void GetDwgExportFolder_FallsBackToGlobal_WhenModelUnknown()
+    {
+        var config = new AppConfig { DwgExportFolder = @"D:\global" };
+
+        Assert.Equal(@"D:\global", config.GetDwgExportFolder(@"C:\Projects\Tower.rvt"));
+        Assert.Equal(@"D:\global", config.GetDwgExportFolder(""));
+    }
+
+    [Fact]
+    public void SetDwgExportFolder_RemembersPerModel_AndUpdatesGlobalFallback()
+    {
+        var config = new AppConfig();
+
+        config.SetDwgExportFolder(@"C:\Projects\Tower.rvt", @"D:\out\tower");
+        config.SetDwgExportFolder(@"C:\Projects\School.rvt", @"D:\out\school");
+
+        Assert.Equal(@"D:\out\tower", config.GetDwgExportFolder(@"C:\Projects\Tower.rvt"));
+        Assert.Equal(@"D:\out\school", config.GetDwgExportFolder(@"C:\Projects\School.rvt"));
+        // Global fallback = last used anywhere, so a brand-new model inherits it.
+        Assert.Equal(@"D:\out\school", config.DwgExportFolder);
+        Assert.Equal(@"D:\out\school", config.GetDwgExportFolder(@"C:\Projects\New.rvt"));
+    }
+
+    [Fact]
+    public void SetDwgExportFolder_UpsertsExistingModel_CaseInsensitively()
+    {
+        var config = new AppConfig();
+
+        config.SetDwgExportFolder(@"C:\Projects\Tower.rvt", @"D:\out\v1");
+        config.SetDwgExportFolder(@"c:\projects\TOWER.RVT", @"D:\out\v2");
+
+        Assert.Single(config.DwgExportFolders);
+        Assert.Equal(@"D:\out\v2", config.GetDwgExportFolder(@"C:\Projects\Tower.rvt"));
+    }
+
+    [Fact]
+    public void SetDwgExportFolder_CapsEntries_DroppingOldest()
+    {
+        var config = new AppConfig();
+        for (int i = 0; i < 35; i++)
+            config.SetDwgExportFolder($@"C:\Projects\Model{i}.rvt", $@"D:\out\{i}");
+
+        Assert.Equal(30, config.DwgExportFolders.Count);
+        // Oldest (0..4) dropped: Model0 now falls back to the global folder (last set anywhere).
+        Assert.Equal(@"D:\out\34", config.GetDwgExportFolder(@"C:\Projects\Model0.rvt"));
+        Assert.Equal(@"D:\out\5", config.DwgExportFolders[0].Folder);
+        Assert.Equal(@"D:\out\34", config.GetDwgExportFolder(@"C:\Projects\Model34.rvt"));
+    }
+
+    [Fact]
+    public void DwgExportFolders_RoundTripThroughJson()
+    {
+        var config = new AppConfig();
+        config.SetDwgExportFolder(@"C:\Projects\Tower.rvt", @"D:\out\tower");
+
+        var json = System.Text.Json.JsonSerializer.Serialize(config);
+        var loaded = System.Text.Json.JsonSerializer.Deserialize<AppConfig>(json)!;
+
+        Assert.Equal(@"D:\out\tower", loaded.GetDwgExportFolder(@"C:\Projects\Tower.rvt"));
+    }
 }

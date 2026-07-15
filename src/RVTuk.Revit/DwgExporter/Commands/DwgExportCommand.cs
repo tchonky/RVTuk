@@ -75,6 +75,9 @@ namespace RVTuk.Revit.DwgExporter.Commands
                     ? vs.SheetNumber + " - " + vs.Name
                     : activeView?.Name ?? "(no graphical view)";
 
+                // Per-model key for remembering the output folder; unsaved docs fall back to title.
+                var modelKey = string.IsNullOrWhiteSpace(doc.PathName) ? doc.Title : doc.PathName;
+
                 // ── Delegates (run on the UI thread inside this command's API context) ──
                 Func<DwgExportRequest, string> evaluateExample = request =>
                 {
@@ -103,7 +106,7 @@ namespace RVTuk.Revit.DwgExporter.Commands
                     };
 
                 var vm = new DwgExportViewModel(
-                    pdfItems, dwgNames, sheetSets, currentViewLabel,
+                    pdfItems, dwgNames, sheetSets, currentViewLabel, modelKey,
                     evaluateExample, planExport, runExport);
                 var window = new DwgExportWindow(vm);
                 new System.Windows.Interop.WindowInteropHelper(window)

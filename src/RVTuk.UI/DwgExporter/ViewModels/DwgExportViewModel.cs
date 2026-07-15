@@ -17,6 +17,9 @@ namespace RVTuk.UI.DwgExporter.ViewModels
         private readonly Func<DwgExportRequest, string> _evaluateExample;
         private readonly Func<DwgExportRequest, DwgExportPlan> _planExport;
         private readonly Func<DwgExportRequest, Action<int, int, string>, DwgExportResult> _runExport;
+        /// <summary>Identifies the open model (document path, or title while unsaved) so the
+        /// output folder can be remembered per model.</summary>
+        private readonly string _modelKey;
 
         /// <summary>Asks the user to confirm overwriting N existing files. Wired by the window.</summary>
         public Func<string, bool>? ConfirmOverwrite { get; set; }
@@ -37,6 +40,7 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             IReadOnlyList<string> dwgSetupNames,
             IReadOnlyList<SheetSetItem> sheetSets,
             string currentViewLabel,
+            string modelKey,
             Func<DwgExportRequest, string> evaluateExample,
             Func<DwgExportRequest, DwgExportPlan> planExport,
             Func<DwgExportRequest, Action<int, int, string>, DwgExportResult> runExport)
@@ -45,6 +49,7 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             DwgSetupNames = dwgSetupNames;
             SheetSets = sheetSets;
             CurrentViewLabel = currentViewLabel;
+            _modelKey = modelKey;
             _evaluateExample = evaluateExample;
             _planExport = planExport;
             _runExport = runExport;
@@ -53,7 +58,7 @@ namespace RVTuk.UI.DwgExporter.ViewModels
 
             // Restore last-used choices; unknown names fall back to the first entry.
             var config = ConfigManager.LoadConfig();
-            _outputFolder = config.DwgExportFolder;
+            _outputFolder = config.GetDwgExportFolder(modelKey);
             _useCurrentWindow = config.DwgExportUseCurrentWindow || sheetSets.Count == 0;
             _selectedPdfSetup =
                 pdfSetups.FirstOrDefault(s => s.Name == config.DwgExportPdfSetupName) ?? pdfSetups.FirstOrDefault();
@@ -240,7 +245,7 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             try
             {
                 var config = ConfigManager.LoadConfig();
-                config.DwgExportFolder = OutputFolder.Trim();
+                config.SetDwgExportFolder(_modelKey, OutputFolder.Trim());
                 config.DwgExportPdfSetupName = SelectedPdfSetup?.Name ?? "";
                 config.DwgExportDwgSetupName = SelectedDwgSetup ?? "";
                 config.DwgExportSheetSetName = SelectedSheetSet?.Name ?? "";

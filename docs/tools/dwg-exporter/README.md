@@ -14,6 +14,17 @@ verification — see the checklist in
 **Names:** code `DwgExporter`; ribbon button displays "DWG Export" (internal id
 `DwgExport`).
 
+## Known limitation: layout paper size
+
+The exported DWG's layout does **not** carry the Revit title-block sheet size — the
+Revit API offers no control over the layout page setup (`DWGExportOptions` has no paper
+option; confirmed long-standing gap, tracked as an open
+[Autodesk Idea](https://forums.autodesk.com/t5/revit-ideas/add-paper-size-option-on-dwg-export-command/idi-p/9560587)).
+AutoCAD shows the default plot device's paper until the page setup is set there. Decided
+2026-07-15 to accept and document rather than work around; a possible future mitigation
+(companion AutoCAD script that stamps each layout with the measured title-block size) is
+in [backlog.md](backlog.md).
+
 ## Code
 
 | Layer | Folder |
