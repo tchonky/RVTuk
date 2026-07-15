@@ -1,9 +1,9 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI.Events;
 using RVTuk.Core.NeoProperties;
-using RVTuk.UI.ViewModels;
+using RVTuk.UI.NeoProperties.ViewModels;
 
 namespace RVTuk.Revit.NeoProperties
 {

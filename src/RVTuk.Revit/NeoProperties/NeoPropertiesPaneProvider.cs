@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 using Autodesk.Revit.UI;
-using RVTuk.UI.Views;
+using RVTuk.UI.NeoProperties.Views;
 
 namespace RVTuk.Revit.NeoProperties
 {

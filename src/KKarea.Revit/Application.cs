@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Reflection;
 using System.Windows;
@@ -24,7 +24,7 @@ namespace KKarea.Revit
         public static ExternalEvent SelectAreaEvent { get; private set; } = null!;
         public static SetupUsageKeysEventHandler SetupUsageKeysHandler { get; private set; } = null!;
         public static ExternalEvent SetupUsageKeysEvent { get; private set; } = null!;
-        public static RVTuk.UI.Views.AreaSubmissionWindow? AreaCalcWindow { get; set; }
+        public static RVTuk.UI.RishuiZamin.Views.AreaSubmissionWindow? AreaCalcWindow { get; set; }
 
         private static string? _addinDir;
 

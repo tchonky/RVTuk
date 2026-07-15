@@ -9,7 +9,7 @@ using RVTuk.Core.Shared.Config;
 using RVTuk.Core.FamilyBrowser.Database;
 using RVTuk.Core.FamilyBrowser.Extraction;
 using RVTuk.Revit.Extraction;
-using RVTuk.UI.Views;
+using RVTuk.UI.FamilyBrowser.Views;
 
 namespace RVTuk.Revit.Commands
 {

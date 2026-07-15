@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Reflection;
 using System.Windows;
@@ -35,10 +35,10 @@ namespace RVTuk.Revit
         public static ExternalEvent SelectAreaEvent { get; private set; } = null!;
         public static SetupUsageKeysEventHandler SetupUsageKeysHandler { get; private set; } = null!;
         public static ExternalEvent SetupUsageKeysEvent { get; private set; } = null!;
-        public static RVTuk.UI.Views.FamilyBrowserWindow? BrowserWindow { get; set; }
-        public static RVTuk.UI.Views.AreaSubmissionWindow? AreaCalcWindow { get; set; }
+        public static RVTuk.UI.FamilyBrowser.Views.FamilyBrowserWindow? BrowserWindow { get; set; }
+        public static RVTuk.UI.RishuiZamin.Views.AreaSubmissionWindow? AreaCalcWindow { get; set; }
         public static UIApplication? CurrentUIApp { get; set; }
-        public static RVTuk.UI.ViewModels.NeoPropertiesViewModel NeoPropertiesViewModel { get; private set; } = null!;
+        public static RVTuk.UI.NeoProperties.ViewModels.NeoPropertiesViewModel NeoPropertiesViewModel { get; private set; } = null!;
 
         /// <summary>
         /// v1 launch surface: only the Family Browser and Area Calc are registered. Flip to true
@@ -93,11 +93,11 @@ namespace RVTuk.Revit
 
             if (RegisterUnreleasedTools)
             {
-                NeoPropertiesViewModel = new RVTuk.UI.ViewModels.NeoPropertiesViewModel();
+                NeoPropertiesViewModel = new RVTuk.UI.NeoProperties.ViewModels.NeoPropertiesViewModel();
                 NeoPropertiesSelectionHandler.ViewModel = NeoPropertiesViewModel;
                 application.SelectionChanged += NeoPropertiesSelectionHandler.OnSelectionChanged;
 
-                var neoView = new RVTuk.UI.Views.NeoPropertiesView { DataContext = NeoPropertiesViewModel };
+                var neoView = new RVTuk.UI.NeoProperties.Views.NeoPropertiesView { DataContext = NeoPropertiesViewModel };
                 application.RegisterDockablePane(
                     NeoPropertiesPaneProvider.PaneId,
                     "Neo Properties",

@@ -6,8 +6,8 @@ using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RVTuk.Core.RishuiZamin;
-using RVTuk.UI.ViewModels;
-using RVTuk.UI.Views;
+using RVTuk.UI.RishuiZamin.ViewModels;
+using RVTuk.UI.RishuiZamin.Views;
 
 namespace KKarea.Revit.Commands
 {
