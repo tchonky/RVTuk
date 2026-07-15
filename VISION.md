@@ -50,8 +50,8 @@ Index the firm's `.rfa` library (category, parameters, thumbnails) into a shared
 database; search/filter/browse it from a dark-themed panel; load or update families
 straight into the active project; keep per-family instructions, tags, favourites, and
 custom thumbnails.
-**Status:** shipped. A large "Family Explorer" enhancement batch is committed and awaiting
-in-Revit verification and a merge decision.
+**Status:** shipped in v1, together with **Rishui Zamin** (the רישוי זמין area-submission
+export; ribbon button "Area Calc" — see `docs/tools/rishui-zamin/`).
 
 ### 2. Standardization — *Project Comparator* (the "Template Snapshot")
 Capture a snapshot of a project's most important settings — **view templates first**,
@@ -80,7 +80,7 @@ Focused, interactive daily-work buttons:
 
 ## Roadmap (near-term order)
 
-1. **Finish + verify Family Explorer** in Revit; decide on merging `family-explorer` work to `main`.
+1. ~~Finish + verify Family Explorer~~ — **done**: merged and shipped in v1 as the Family Browser.
 2. **Land Project Comparator v1** *as its own separate project* — View Templates, build the Standard, report-only (zero writes to models). Tracked in that project's repo, not here.
 3. **Productivity buttons** — interactive room renumbering, then **absorb `KKimensions` auto-dimensions** into RVTuk.
 4. **In-Revit Instructions** feature.
@@ -120,6 +120,8 @@ Focused, interactive daily-work buttons:
 |-----|---------|
 | [`CLAUDE.md`](CLAUDE.md) | Build, architecture, threading, deploy — authoritative technical reference |
 | [`README.md`](README.md) | Short public-facing overview + build/deploy quickstart |
-| [`docs/BACKLOG.md`](docs/BACKLOG.md) | Live task list and working notes |
-| `docs/superpowers/specs` & `plans` | Per-feature design specs and implementation plans |
+| [`docs/BACKLOG.md`](docs/BACKLOG.md) | Toolkit-wide task list (links to per-tool backlogs) |
+| `docs/tools/<tool>/` | Per-tool README, backlog, design specs and plans |
+| `docs/toolkit/` | Toolkit-wide specs and plans |
+| `docs/future/` | Specs for tools not yet built |
 | `docs/archive/` | Retired historical docs |

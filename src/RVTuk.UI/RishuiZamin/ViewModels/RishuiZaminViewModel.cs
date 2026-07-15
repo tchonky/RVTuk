@@ -191,7 +191,7 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         public int TotalAreaCount => Levels.SelectMany(g => g.Rows).Count();
 
         /// <summary>"Official" marker radio — Form A, the spec's block/ATTRIB encoding
-        /// (docs/autoarea/rishui-zamin-rules.md §5). Mutually exclusive with
+        /// (docs/tools/rishui-zamin/rules.md §5). Mutually exclusive with
         /// <see cref="UseOldMarkers"/>.</summary>
         public bool UseOfficialMarkers
         {

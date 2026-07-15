@@ -4,7 +4,7 @@ A Revit add-in toolkit for **Knafo Klimor Architects LTD**. One ribbon, one inst
 growing set of tools for managing the family library and automating repetitive work.
 
 - 🗂️ **Family Browser** — search, browse, load, and manage your Revit family library from a dark-themed side panel. Syncs the library database on demand and supports deep-scan indexing (category, parameters, thumbnail) using the Revit engine.
-- 📐 **Area Calc** (Rishui Zamin) — reads the Areas on the open sheet and exports the paired `.dxf` + `.dat` files the רישוי זמין area-calculation robot expects.
+- 📐 **Rishui Zamin** (ribbon button "Area Calc") — reads the Areas on the open sheet and exports the paired `.dxf` + `.dat` files the רישוי זמין area-calculation robot expects.
 
 (The Project Comparator moved to its own separate project. Auto Dimensions and Neo
 Properties exist in the codebase but are hidden until release.)
@@ -22,15 +22,17 @@ Properties exist in the codebase but are hidden until release.)
 ```
 RVTuk/
 ├── src/
-│   ├── RVTuk.Core/          # Business logic, database (SQLite), config — no Revit/WPF deps
-│   ├── LibraryBrowser/
-│   │   └── RVTuk.UI/        # WPF windows and view models
-│   ├── RVTuk.Revit/         # Revit add-in host (ribbon, external events, commands)
-│   └── KKarea.Revit/        # Standalone Revit 2023 host for Area Calc only
+│   ├── RVTuk.Core/          # Business logic per tool + Shared (SQLite, config) — no Revit/WPF deps
+│   ├── RVTuk.UI/            # WPF windows and view models, one folder per tool + Shared
+│   ├── RVTuk.Revit/         # Revit add-in host (ribbon, external events, commands), per-tool folders
+│   └── KKarea.Revit/        # Standalone Revit 2023 host for Rishui Zamin (Area Calc) only
 ├── tests/
-│   └── RVTuk.Core.Tests/    # xunit suite for Core
+│   └── RVTuk.Core.Tests/    # xunit suite for Core, mirrors the per-tool folders
 ├── installer/
 │   └── RVTuk.Setup/         # Standalone installer exe (built by Build-Installer.ps1)
+├── docs/
+│   ├── tools/<tool>/        # Per-tool README, backlog, specs, plans
+│   └── toolkit/             # Toolkit-wide specs and plans
 ├── Deploy.ps1                     # Build + deploy to Revit add-ins directory (dev machine)
 ├── Build-Installer.ps1            # Build dist\RVTukSetup.exe for other computers
 └── CLAUDE.md                      # AI assistant instructions

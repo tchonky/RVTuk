@@ -4,7 +4,7 @@ namespace RVTuk.Core.RishuiZamin
 {
     /// <summary>
     /// Which of the two accepted marker encodings the DXF carries (the tag/value payload is
-    /// identical; only the carrier differs — docs/autoarea/rishui-zamin-rules.md §5).
+    /// identical; only the carrier differs — docs/tools/rishui-zamin/rules.md §5).
     /// </summary>
     public enum MarkerForm
     {

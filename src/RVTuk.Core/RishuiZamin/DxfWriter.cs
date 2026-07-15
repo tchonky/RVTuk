@@ -21,7 +21,7 @@ namespace RVTuk.Core.RishuiZamin
     ///
     /// The HEADER/TABLES/BLOCKS preamble and the OBJECTS postamble are captured verbatim from
     /// a real sample (<c>tests/Examples Autoarea/Garmoshka.dxf</c>, see
-    /// <c>docs/autoarea/rishui-zamin-notes.md</c> §5b-bis) and embedded as resources; only the
+    /// <c>docs/tools/rishui-zamin/notes.md</c> §5b-bis) and embedded as resources; only the
     /// ENTITIES section is generated per call. The postamble matters: AutoCAD rejects an AC1032
     /// file whose OBJECTS section (root NamedObject dictionary, LAYOUT objects the
     /// BLOCK_RECORDs point at) is missing with "File lacks the NamedObject dictionary —

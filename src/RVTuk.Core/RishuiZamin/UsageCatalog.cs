@@ -16,7 +16,7 @@ namespace RVTuk.Core.RishuiZamin
 {
     /// <summary>
     /// Broad grouping of a Rishui Zamin usage code, per the official
-    /// "טבלת סוגי שימושים" (usage-type table). See docs/autoarea/rishui-zamin-notes.md §3.
+    /// "טבלת סוגי שימושים" (usage-type table). See docs/tools/rishui-zamin/notes.md §3.
     /// </summary>
     public enum UsageKind
     {
@@ -31,7 +31,7 @@ namespace RVTuk.Core.RishuiZamin
 
         /// <summary>סימוני תהליך (300-302) — process markers, not coloured by the robot; used as
         /// USAGE_TYPE for demolition/removal/excavation with the existing usage in
-        /// USAGE_TYPE_OLD. See docs/autoarea/rishui-zamin-notes.md §3.</summary>
+        /// USAGE_TYPE_OLD. See docs/tools/rishui-zamin/notes.md §3.</summary>
         Process
     }
 
@@ -44,7 +44,7 @@ namespace RVTuk.Core.RishuiZamin
     /// <summary>
     /// The catalog of Rishui Zamin usage codes, transcribed verbatim from the official
     /// "טבלת סוגי שימושים" (usage-type table), 20.10.2025 edition
-    /// (gov.il usage_codes_and_printing_guide.pdf; see docs/autoarea/rishui-zamin-rules.md §7).
+    /// (gov.il usage_codes_and_printing_guide.pdf; see docs/tools/rishui-zamin/rules.md §7).
     /// Covers the primary/service separation method (codes 1-33, 101-130, 250-257) plus the
     /// "not coloured" process markers (300-302, used with USAGE_TYPE_OLD for demolition
     /// scenarios); the alternate שטח-כולל (total-area method) list of 4xx/5xx/6xx/7xx codes is

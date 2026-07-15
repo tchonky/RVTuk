@@ -4,19 +4,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RVTuk is a Revit add-in toolkit for Knafo Klimor Architects LTD. It supports Revit 2024 and 2025 simultaneously via separate build configurations. Revit 2023 is served by **KKarea**, a separate minimal add-in in this repo (`src\KKarea.Revit`) that hosts only the Area Calc tool — RVTuk itself was dropped from 2023.
+RVTuk is a Revit add-in toolkit for Knafo Klimor Architects LTD. It supports Revit 2024 and 2025 simultaneously via separate build configurations. Revit 2023 is served by **KKarea**, a separate minimal add-in in this repo (`src\KKarea.Revit`) that hosts only the Rishui Zamin (Area Calc) tool — RVTuk itself was dropped from 2023.
 
 > **Product vision, audience, and roadmap live in [`VISION.md`](VISION.md).** This file is the technical reference (build, architecture, threading, deploy).
 
-**v1 launch surface:** only the **Family Browser** and **Area Calc** are registered (ribbon buttons, panes). Auto Dimensions and Neo Properties are code-complete but hidden behind the `RegisterUnreleasedTools` flag in `src\RVTuk.Revit\Application.cs`. The Project Comparator was stripped from this repo entirely in July 2026 — code, tests, and specs — and continues as its own separate project; recover the pre-strip sources from git history (the `family-browser-polish` branch history) if the new project needs them.
+## Terminology
+
+| Term | Meaning |
+|------|---------|
+| **Toolkit** | RVTuk itself: one add-in, one ribbon, one install. |
+| **Tool** | A user-facing feature with its own button/pane and UI: **Family Browser**, **Rishui Zamin** (ribbon label "Area Calc"), **Auto Dimensions**, **Neo Properties**. |
+| **Layer** | A C# project: `RVTuk.Core` (logic) → `RVTuk.UI` (WPF) → `RVTuk.Revit` (Revit host). A tool is a vertical slice across the layers. |
+| **Host** | A project that loads into Revit: `RVTuk.Revit` (2024/25) and `KKarea.Revit` (2023, ships only the Rishui Zamin tool). |
+
+Canonical tool names in code and folders: `FamilyBrowser`, `RishuiZamin`,
+`AutoDimensions`, `NeoProperties`. Inside every project (and the test project) the
+structure is one folder per tool plus `Shared/`, and **namespace = root namespace +
+folder path, exactly**. A file lives in a tool folder iff only that tool uses it.
+
+**v1 launch surface:** only the **Family Browser** and **Rishui Zamin** (ribbon "Area Calc") are registered (ribbon buttons, panes). Auto Dimensions and Neo Properties are code-complete but hidden behind the `RegisterUnreleasedTools` flag in `src\RVTuk.Revit\Application.cs`. The Project Comparator was stripped from this repo entirely in July 2026 — code, tests, and specs — and continues as its own separate project; recover the pre-strip sources from git history (the `family-browser-polish` branch history) if the new project needs them.
 
 Features:
 
 - **Family Library Indexer** — scans a folder of `.rfa` files, extracts metadata (category, parameters, thumbnails) via the Revit API, and stores it in a shared database.
 - **Family Browser** — a searchable/filterable window over that index, with per-family rich-text instructions, tags, favourites, and custom thumbnails, plus a merged "Load/Update family into the active project" button. Settings (library root folder, ignored subfolders, ignored file patterns, deep scan) and a Help/About panel are accessed from within the Family Browser itself, toggled via footer buttons — there is no separate ribbon Config window.
-- **Area Calc** (Rishui Zamin) — reads the Areas on the open sheet and exports the paired `.dxf` + `.dat` files the רישוי זמין area-calculation robot expects (`RZ_FRAME`/`RZ_FLOOR`/`RZ_AREA` layers + attribute blocks). The window's "Setup Usage Keys" action binds the `RZ_*` shared parameters to Areas and creates/tops-up the usage key schedules (`UsageKeyScheduleBuilder`) — no separate ribbon command needed. Also shipped as **KKarea**, a standalone Revit 2023 add-in (see Project Overview). See [`docs/autoarea/rishui-zamin-notes.md`](docs/autoarea/rishui-zamin-notes.md).
-- **Auto Dimensions** (hidden for v1) — draw a detail line on the dedicated "Dimensions_Line" style as a positional reference; a ribbon command dimensions every wall crossing it, re-runnable after model changes without re-picking references. See [`docs/superpowers/specs/2026-07-04-auto-dimensions-design.md`](docs/superpowers/specs/2026-07-04-auto-dimensions-design.md).
-- **Neo Properties** (hidden for v1) — a dockable pane mirroring the selected element's parameters like the native Properties palette, but with pinned parameters shown first and remaining groups in a fixed custom order. Read-only, single-element only. See [`docs/superpowers/specs/2026-07-04-neo-properties-design.md`](docs/superpowers/specs/2026-07-04-neo-properties-design.md).
+- **Rishui Zamin** (ribbon button "Area Calc") — reads the Areas on the open sheet and exports the paired `.dxf` + `.dat` files the רישוי זמין area-calculation robot expects (`RZ_FRAME`/`RZ_FLOOR`/`RZ_AREA` layers + attribute blocks). The window's "Setup Usage Keys" action binds the `RZ_*` shared parameters to Areas and creates/tops-up the usage key schedules (`UsageKeyScheduleBuilder`) — no separate ribbon command needed. Also shipped as **KKarea**, a standalone Revit 2023 add-in (see Project Overview). See [`docs/tools/rishui-zamin/notes.md`](docs/tools/rishui-zamin/notes.md).
+- **Auto Dimensions** (hidden for v1) — draw a detail line on the dedicated "Dimensions_Line" style as a positional reference; a ribbon command dimensions every wall crossing it, re-runnable after model changes without re-picking references. See [`docs/tools/auto-dimensions/specs/2026-07-04-auto-dimensions-design.md`](docs/tools/auto-dimensions/specs/2026-07-04-auto-dimensions-design.md).
+- **Neo Properties** (hidden for v1) — a dockable pane mirroring the selected element's parameters like the native Properties palette, but with pinned parameters shown first and remaining groups in a fixed custom order. Read-only, single-element only. See [`docs/tools/neo-properties/specs/2026-07-04-neo-properties-design.md`](docs/tools/neo-properties/specs/2026-07-04-neo-properties-design.md).
 
 ### Future features
 
@@ -53,7 +67,7 @@ All three configs use `Microsoft.Data.Sqlite`. Build outputs land in each projec
 
 ## Tests
 
-Core's xunit suite lives in `tests\RVTuk.Core.Tests` (repositories, indexer, config/migration, Area Calc writers/validator). Run it before committing Core changes:
+Core's xunit suite lives in `tests\RVTuk.Core.Tests` (repositories, indexer, config/migration, Rishui Zamin writers/validator), mirroring the per-tool folders. Run it before committing Core changes:
 
 ```powershell
 dotnet test tests\RVTuk.Core.Tests\RVTuk.Core.Tests.csproj
@@ -92,24 +106,42 @@ Three projects with a strict dependency order (no circular references):
 RVTuk.Core        — pure business logic, no Revit or UI dependency
        ↑                  src\RVTuk.Core
 RVTuk.UI          — WPF dialogs/views (MVVM), depends on Core only
-       ↑                  src\LibraryBrowser\RVTuk.UI
+       ↑                  src\RVTuk.UI
 RVTuk.Revit       — Revit add-in host: IExternalApplication entry point,
                           ribbon setup, external-event handlers; depends on Core + UI
                           src\RVTuk.Revit
 ```
 
-**KKarea.Revit** (`src\KKarea.Revit`) is a fourth project: a standalone Revit 2023 add-in hosting only Area Calc. It references Core + UI and compiles the Revit-side area sources (`AreaExtractor`, `UsageKeyScheduleBuilder`, the three area external-event handlers) as **linked shared source** from `RVTuk.Revit` against the 2023 API — it must never reference `RVTuk.Revit` itself. `#if REVIT2023` branches in those shared files cover the 2023 API gaps (`ElementId.IntegerValue` vs `.Value`, int-only `ElementId` ctor).
+Inside each project (and `tests\RVTuk.Core.Tests`) the structure is **one folder per
+tool** (`FamilyBrowser/`, `RishuiZamin/`, `AutoDimensions/`, `NeoProperties/`) plus
+`Shared/` for genuinely cross-tool code (`AppConfig`/`ConfigManager`, `PathUtil`, the
+UI's `ViewModelBase`/`RelayCommand`/converters/theme). Namespaces follow folders
+exactly (e.g. `RVTuk.Core.FamilyBrowser.Database`, `RVTuk.UI.RishuiZamin.Views`,
+`RVTuk.Core.Shared.Config`). `RVTuk.Revit.Application` stays at the project root —
+it is the `.addin` entry class.
+
+**KKarea.Revit** (`src\KKarea.Revit`) is a fourth project: a standalone Revit 2023 add-in hosting only Rishui Zamin. It references Core + UI and compiles the Revit-side area sources (`AreaExtractor`, `UsageKeyScheduleBuilder`, the three area external-event handlers from `RVTuk.Revit\RishuiZamin\`) as **linked shared source** from `RVTuk.Revit` against the 2023 API — it must never reference `RVTuk.Revit` itself. `#if REVIT2023` branches in those shared files cover the 2023 API gaps (`ElementId.IntegerValue` vs `.Value`, int-only `ElementId` ctor).
 
 **RVTuk.Core** holds data models, the SQLite schema/repositories, OLE thumbnail read/write, metadata-XML parsing, and config. Keep it free of Revit API and WPF types so it can be reasoned about in isolation. It multi-targets `net48` (Release2024) and `net8.0-windows` (Release2025) and **does** carry NuGet dependencies, which differ per target:
 - net48: `Microsoft.Data.Sqlite`, GAC `System.Drawing`. No `System.Text.Json` (its transitive polyfills clash with Revit's preloaded assemblies — JSON uses `DataContractJsonSerializer`).
 - net8: `Microsoft.Data.Sqlite`, `System.Text.Json`, `System.Drawing.Common`.
 - both: `OpenMCDF` pinned to `3.1.2` (matches the version other Revit add-ins preload).
 
-**SQLite provider:** all configs use `Microsoft.Data.Sqlite`. `System.Data.SQLite` was dropped because its native win32 VFS **cannot open databases over some UNC shares** (`\\server\share`) — it throws `unable to open database file` even when the file is readable, while `Microsoft.Data.Sqlite`'s bundled `e_sqlite3` opens the same file fine. The repositories alias `SQLiteConnection`/`SQLiteCommand` to the `Microsoft.Data.Sqlite` types. `Database/SqliteNative.EnsureLoaded()` (called by every repository ctor) pre-loads `e_sqlite3.dll` by full path on net48, because Revit resolves native libs relative to `Revit.exe`, not the add-in folder; `Deploy.ps1` copies `e_sqlite3.dll` flat into the add-in folder. Keep SQL portable (e.g. one statement per `ExecuteScalar`).
+**SQLite provider:** all configs use `Microsoft.Data.Sqlite`. `System.Data.SQLite` was dropped because its native win32 VFS **cannot open databases over some UNC shares** (`\\server\share`) — it throws `unable to open database file` even when the file is readable, while `Microsoft.Data.Sqlite`'s bundled `e_sqlite3` opens the same file fine. The repositories alias `SQLiteConnection`/`SQLiteCommand` to the `Microsoft.Data.Sqlite` types. `FamilyBrowser/Database/SqliteNative.EnsureLoaded()` (called by every repository ctor) pre-loads `e_sqlite3.dll` by full path on net48, because Revit resolves native libs relative to `Revit.exe`, not the add-in folder; `Deploy.ps1` copies `e_sqlite3.dll` flat into the add-in folder. Keep SQL portable (e.g. one statement per `ExecuteScalar`).
 
 **RVTuk.UI** multi-targets the same frameworks, uses WPF (`UseWPF`) and WinForms (`UseWindowsForms`), and contains all user-facing windows/controls. Depends on Core only — it must not reference any Revit type. Revit interactions are passed in as plain `Func<>`/`Action` delegates from the Revit project.
 
 **RVTuk.Revit** is the only project that references the Revit API (`Nice3point.Revit.Api.RevitAPI` / `RevitAPIUI`, pinned `2024.*` / `2025.*`, `compile`-only with `ExcludeAssets="runtime"`). It hosts the ribbon, commands, and the `ExternalEvent` handlers, and wires UI delegates to that API.
+
+### Docs layout
+
+Everything about one tool lives in `docs/tools/<tool>/` — `README.md` (what it is,
+status, entry points), `backlog.md` (its bugs/ideas/done), living design docs, and
+dated `specs/` + `plans/`. **New specs and plans go there** (toolkit-wide ones go to
+`docs/toolkit/specs|plans/`) — this overrides any default location a planning skill
+suggests. `docs/BACKLOG.md` holds toolkit-wide items only. `docs/future/` holds specs
+for tools not yet built; `docs/archive/` holds retired/superseded docs, kept verbatim
+(historical docs reference pre-reorg paths — that's intentional).
 
 ## Threading Model
 
