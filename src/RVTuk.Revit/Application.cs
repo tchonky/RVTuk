@@ -9,6 +9,7 @@ using Autodesk.Revit.UI;
 using WpfColor = System.Windows.Media.Color;
 using WpfPoint = System.Windows.Point;
 using RVTuk.Revit.AutoDimensions;
+using RVTuk.Revit.DwgExporter.Commands;
 using RVTuk.Revit.FamilyBrowser.Commands;
 using RVTuk.Revit.NeoProperties.Commands;
 using RVTuk.Revit.RishuiZamin.Commands;
@@ -168,6 +169,19 @@ namespace RVTuk.Revit
 
             panel.AddItem(areaBtn);
 
+            var dwgBtn = new PushButtonData(
+                "DwgExport",
+                "DWG\nExport",
+                assemblyPath,
+                typeof(DwgExportCommand).FullName!)
+            {
+                ToolTip = "Batch-export a sheet set to DWG, named by the PDF export setups' naming rules"
+            };
+            dwgBtn.LargeImage = CreateDwgExportIcon(32);
+            dwgBtn.Image      = CreateDwgExportIcon(16);
+
+            panel.AddItem(dwgBtn);
+
             if (!RegisterUnreleasedTools) return;
 
             RibbonPanel autoDimPanel = app.CreateRibbonPanel("Auto Dimensions");
@@ -243,6 +257,54 @@ namespace RVTuk.Revit
                 pen.Freeze();
                 // outline
                 ctx.DrawRectangle(null, pen, new Rect(s * 0.16, s * 0.24, s * 0.68, s * 0.52));
+            }
+            var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            bmp.Freeze();
+            return bmp;
+        }
+
+        private static BitmapSource CreateDwgExportIcon(int size)
+        {
+            var dv = new DrawingVisual();
+            using (var ctx = dv.RenderOpen())
+            {
+                double s = size;
+                ctx.DrawRectangle(new SolidColorBrush(WpfColor.FromRgb(0x25, 0x25, 0x26)), null,
+                    new Rect(0, 0, s, s));
+
+                // Document sheet with a folded corner.
+                var sheetBrush = new SolidColorBrush(WpfColor.FromRgb(0xD4, 0xD4, 0xD4));
+                var foldBrush  = new SolidColorBrush(WpfColor.FromRgb(0x9A, 0x9A, 0x9A));
+                var sheetGeo = new StreamGeometry();
+                using (var g = sheetGeo.Open())
+                {
+                    g.BeginFigure(new WpfPoint(s * 0.20, s * 0.10), true, true);
+                    g.LineTo(new WpfPoint(s * 0.62, s * 0.10), true, false);
+                    g.LineTo(new WpfPoint(s * 0.76, s * 0.24), true, false);
+                    g.LineTo(new WpfPoint(s * 0.76, s * 0.62), true, false);
+                    g.LineTo(new WpfPoint(s * 0.20, s * 0.62), true, false);
+                }
+                sheetGeo.Freeze();
+                ctx.DrawGeometry(sheetBrush, null, sheetGeo);
+
+                var foldGeo = new StreamGeometry();
+                using (var g = foldGeo.Open())
+                {
+                    g.BeginFigure(new WpfPoint(s * 0.62, s * 0.10), true, true);
+                    g.LineTo(new WpfPoint(s * 0.76, s * 0.24), true, false);
+                    g.LineTo(new WpfPoint(s * 0.62, s * 0.24), true, false);
+                }
+                foldGeo.Freeze();
+                ctx.DrawGeometry(foldBrush, null, foldGeo);
+
+                // Orange export arrow under the sheet.
+                var pen = new Pen(new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00)),
+                    Math.Max(1, s * 0.09));
+                pen.Freeze();
+                ctx.DrawLine(pen, new WpfPoint(s * 0.24, s * 0.78), new WpfPoint(s * 0.72, s * 0.78));
+                ctx.DrawLine(pen, new WpfPoint(s * 0.60, s * 0.67), new WpfPoint(s * 0.72, s * 0.78));
+                ctx.DrawLine(pen, new WpfPoint(s * 0.60, s * 0.89), new WpfPoint(s * 0.72, s * 0.78));
             }
             var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
             bmp.Render(dv);
