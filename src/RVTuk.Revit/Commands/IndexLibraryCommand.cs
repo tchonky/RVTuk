@@ -1,13 +1,13 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text;
 using System.Threading;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using RVTuk.Core.Config;
-using RVTuk.Core.Database;
-using RVTuk.Core.Extraction;
+using RVTuk.Core.Shared.Config;
+using RVTuk.Core.FamilyBrowser.Database;
+using RVTuk.Core.FamilyBrowser.Extraction;
 using RVTuk.Revit.Extraction;
 using RVTuk.UI.Views;
 

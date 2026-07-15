@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <AssemblyName>RVTuk.Core</AssemblyName>
@@ -53,11 +53,11 @@
        from the real Rishui Zamin sample (tests/Examples Autoarea/Garmoshka.dxf) — see
        DxfWriter.cs remarks. -->
   <ItemGroup>
-    <EmbeddedResource Include="AreaSubmission\DxfTemplates\Preamble.dxf">
-      <LogicalName>RVTuk.Core.AreaSubmission.DxfTemplates.Preamble.dxf</LogicalName>
+    <EmbeddedResource Include="RishuiZamin\DxfTemplates\Preamble.dxf">
+      <LogicalName>RVTuk.Core.RishuiZamin.DxfTemplates.Preamble.dxf</LogicalName>
     </EmbeddedResource>
-    <EmbeddedResource Include="AreaSubmission\DxfTemplates\Postamble.dxf">
-      <LogicalName>RVTuk.Core.AreaSubmission.DxfTemplates.Postamble.dxf</LogicalName>
+    <EmbeddedResource Include="RishuiZamin\DxfTemplates\Postamble.dxf">
+      <LogicalName>RVTuk.Core.RishuiZamin.DxfTemplates.Postamble.dxf</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 

@@ -1,12 +1,12 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Forms;
 using System.Windows.Input;
 using System.Windows.Threading;
-using RVTuk.Core.AreaSubmission;
-using RVTuk.Core.Config;
+using RVTuk.Core.RishuiZamin;
+using RVTuk.Core.Shared.Config;
 
 namespace RVTuk.UI.ViewModels
 {

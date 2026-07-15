@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows;
 using System.Collections.Generic;
-using RVTuk.Core.Config;
-using RVTuk.Core.Database;
-using RVTuk.Core.Models;
+using RVTuk.Core.Shared.Config;
+using RVTuk.Core.FamilyBrowser.Database;
+using RVTuk.Core.FamilyBrowser.Models;
 using RVTuk.UI.ViewModels;
 
 namespace RVTuk.UI.Views

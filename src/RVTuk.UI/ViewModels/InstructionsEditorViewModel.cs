@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
-using RVTuk.Core.Database;
-using RVTuk.Core.Extraction;
+using RVTuk.Core.FamilyBrowser.Database;
+using RVTuk.Core.FamilyBrowser.Extraction;
 
 namespace RVTuk.UI.ViewModels
 {

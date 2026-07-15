@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using RVTuk.Core.Models;
-using RVTuk.Core.Util;
+using RVTuk.Core.FamilyBrowser.Models;
+using RVTuk.Core.FamilyBrowser.Util;
 
 namespace RVTuk.Revit.ExternalEvents
 {

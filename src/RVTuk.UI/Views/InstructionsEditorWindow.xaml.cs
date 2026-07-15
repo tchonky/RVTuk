@@ -1,4 +1,4 @@
-// RVTuk.UI/Views/InstructionsEditorWindow.xaml.cs
+﻿// RVTuk.UI/Views/InstructionsEditorWindow.xaml.cs
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,7 +10,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using RVTuk.Core.Database;
+using RVTuk.Core.FamilyBrowser.Database;
 using RVTuk.UI.Controls;
 using RVTuk.UI.Helpers;
 using RVTuk.UI.ViewModels;

@@ -1,10 +1,11 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Input;
-using RVTuk.Core.Config;
+using RVTuk.Core.Shared.Config;
+using RVTuk.Core.FamilyBrowser.Config;
 
 namespace RVTuk.UI.ViewModels
 {
@@ -97,7 +98,7 @@ namespace RVTuk.UI.ViewModels
 
         /// <summary>
         /// One regex per line, matched against family file names (see
-        /// <see cref="RVTuk.Core.Util.IgnoredFileMatcher"/>). Mirrors
+        /// <see cref="RVTuk.Core.FamilyBrowser.Util.IgnoredFileMatcher"/>). Mirrors
         /// <see cref="IgnoredSubfoldersText"/>: parsed and saved on every change.
         /// </summary>
         public string IgnoredFilePatternsText

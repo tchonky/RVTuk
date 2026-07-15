@@ -1,4 +1,4 @@
-using RVTuk.Core.AreaSubmission;
+﻿using RVTuk.Core.RishuiZamin;
 
 namespace RVTuk.UI.ViewModels
 {

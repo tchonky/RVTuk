@@ -1,8 +1,8 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading;
 using Autodesk.Revit.UI;
-using RVTuk.Core.Database;
-using RVTuk.Core.Models;
+using RVTuk.Core.FamilyBrowser.Database;
+using RVTuk.Core.FamilyBrowser.Models;
 using RVTuk.Revit.Extraction;
 
 namespace RVTuk.Revit.ExternalEvents
@@ -41,7 +41,7 @@ namespace RVTuk.Revit.ExternalEvents
                 // document triggers native processing that can crash Revit.
                 string? category = null;
                 string? familyVersion = null;
-                IReadOnlyList<RVTuk.Core.Models.ParameterModel> parameters = System.Array.Empty<RVTuk.Core.Models.ParameterModel>();
+                IReadOnlyList<RVTuk.Core.FamilyBrowser.Models.ParameterModel> parameters = System.Array.Empty<RVTuk.Core.FamilyBrowser.Models.ParameterModel>();
 
                 bool tooNew = CurrentItem.FileRevitYear > 0
                     && int.TryParse(app.Application.VersionNumber, out int runningYear)

@@ -1,7 +1,7 @@
-// RVTuk.UI/ViewModels/FamilyBrowserItemViewModel.cs
+﻿// RVTuk.UI/ViewModels/FamilyBrowserItemViewModel.cs
 using System.IO;
 using System.Windows.Media.Imaging;
-using RVTuk.Core.Models;
+using RVTuk.Core.FamilyBrowser.Models;
 
 namespace RVTuk.UI.ViewModels
 {

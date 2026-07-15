@@ -1,10 +1,10 @@
-using Autodesk.Revit.Attributes;
+﻿using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using RVTuk.Core.Config;
-using RVTuk.Core.Database;
-using RVTuk.Core.Extraction;
-using RVTuk.Core.Models;
+using RVTuk.Core.Shared.Config;
+using RVTuk.Core.FamilyBrowser.Database;
+using RVTuk.Core.FamilyBrowser.Extraction;
+using RVTuk.Core.FamilyBrowser.Models;
 using RVTuk.Revit.Extraction;
 using RVTuk.UI.Views;
 using System;

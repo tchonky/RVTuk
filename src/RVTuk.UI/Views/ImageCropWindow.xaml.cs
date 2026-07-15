@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media.Imaging;
-using RVTuk.Core.Util;
+using RVTuk.Core.FamilyBrowser.Util;
 
 namespace RVTuk.UI.Views
 {

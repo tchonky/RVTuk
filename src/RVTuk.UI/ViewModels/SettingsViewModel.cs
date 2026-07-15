@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows.Forms;
 using System.Windows.Input;
-using RVTuk.Core.Config;
+using RVTuk.Core.Shared.Config;
+using RVTuk.Core.FamilyBrowser.Config;
 
 namespace RVTuk.UI.ViewModels
 {

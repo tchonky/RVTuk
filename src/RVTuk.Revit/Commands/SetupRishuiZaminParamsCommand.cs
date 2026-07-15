@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -6,7 +6,7 @@ using System.Text;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using RVTuk.Core.AreaSubmission;
+using RVTuk.Core.RishuiZamin;
 using RevitApplication = Autodesk.Revit.ApplicationServices.Application;
 
 namespace RVTuk.Revit.Commands
@@ -183,7 +183,7 @@ namespace RVTuk.Revit.Commands
                     $"NOTE: Revit's API has no supported way to insert key-schedule rows " +
                     $"programmatically, so the {UsageCatalog.All.Count} usage rows were NOT pre-filled. " +
                     "Open the schedule, use \"New Row\" for each code, and set the key Name to the " +
-                    $"Hebrew name and '{ParamName}' to the code (see RVTuk.Core.AreaSubmission.UsageCatalog " +
+                    $"Hebrew name and '{ParamName}' to the code (see RVTuk.Core.RishuiZamin.UsageCatalog " +
                     "for the full code/name list).");
             }
             catch (Exception ex)
