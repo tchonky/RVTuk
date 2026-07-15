@@ -45,7 +45,7 @@ namespace RVTuk.Revit
         public static RVTuk.UI.NeoProperties.ViewModels.NeoPropertiesViewModel NeoPropertiesViewModel { get; private set; } = null!;
 
         /// <summary>
-        /// v1 launch surface: only the Family Browser and Area Calc are registered. Flip to true
+        /// v1 launch surface: only the Family Browser, Area Calc, and DWG Export are registered. Flip to true
         /// in a dev build to also register the unreleased tools — Auto Dimensions and Neo
         /// Properties (their ribbon panels plus the Neo dockable pane and selection tracking).
         /// (The Project Comparator was removed from this repo entirely — it lives on as its own

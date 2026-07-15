@@ -7,7 +7,9 @@ DWGs come out named exactly like the PDFs (e.g.
 exporter's `Sheet - A101 - ….dwg`. Layers/lines/colors come from a native DWG export
 setup (`ExportDWGSettings`) picked in the same window.
 
-**Status:** in development (design approved 2026-07-15, not yet implemented).
+**Status:** implemented and registered on the ribbon (2026-07-15); pending in-Revit
+verification — see the checklist in
+[plans/2026-07-15-dwg-exporter.md](plans/2026-07-15-dwg-exporter.md) Task 6.
 
 **Names:** code `DwgExporter`; ribbon button displays "DWG Export" (internal id
 `DwgExport`).
