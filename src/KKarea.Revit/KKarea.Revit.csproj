@@ -31,7 +31,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RVTuk.Core\RVTuk.Core.csproj" />
-    <ProjectReference Include="..\LibraryBrowser\RVTuk.UI\RVTuk.UI.csproj" />
+    <ProjectReference Include="..\RVTuk.UI\RVTuk.UI.csproj" />
   </ItemGroup>
 
   <!-- Shared source linked from RVTuk.Revit — single-source area logic, compiled per host

@@ -5,7 +5,7 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RVTuk.Core", "src\RVTuk.Core\RVTuk.Core.csproj", "{A1B2C3D4-AAAA-BBBB-CCCC-000000000001}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RVTuk.UI", "src\LibraryBrowser\RVTuk.UI\RVTuk.UI.csproj", "{A1B2C3D4-AAAA-BBBB-CCCC-000000000002}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RVTuk.UI", "src\RVTuk.UI\RVTuk.UI.csproj", "{A1B2C3D4-AAAA-BBBB-CCCC-000000000002}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RVTuk.Revit", "src\RVTuk.Revit\RVTuk.Revit.csproj", "{A1B2C3D4-AAAA-BBBB-CCCC-000000000003}"
 EndProject

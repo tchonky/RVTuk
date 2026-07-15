@@ -52,7 +52,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RVTuk.Core\RVTuk.Core.csproj" />
-    <ProjectReference Include="..\LibraryBrowser\RVTuk.UI\RVTuk.UI.csproj" />
+    <ProjectReference Include="..\RVTuk.UI\RVTuk.UI.csproj" />
   </ItemGroup>
 
   <!-- Shared-parameter definition file used by SetupRishuiZaminParamsCommand. Must land flat in

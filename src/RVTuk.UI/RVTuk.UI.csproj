@@ -26,7 +26,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\RVTuk.Core\RVTuk.Core.csproj" />
+    <ProjectReference Include="..\RVTuk.Core\RVTuk.Core.csproj" />
   </ItemGroup>
 
   <!-- net48 doesn't implicitly resolve System.Net.Http (used for the Help panel's markdown
