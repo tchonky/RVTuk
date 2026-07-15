@@ -7,7 +7,7 @@ using Autodesk.Revit.UI;
 using RVTuk.Core.FamilyBrowser.Models;
 using RVTuk.Core.FamilyBrowser.Util;
 
-namespace RVTuk.Revit.ExternalEvents
+namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
 {
     public class GetProjectFamiliesEventHandler : IExternalEventHandler
     {

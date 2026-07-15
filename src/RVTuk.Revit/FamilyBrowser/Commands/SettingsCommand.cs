@@ -3,7 +3,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RVTuk.UI.FamilyBrowser.Views;
 
-namespace RVTuk.Revit.Commands
+namespace RVTuk.Revit.FamilyBrowser.Commands
 {
     [Transaction(TransactionMode.Manual)]
     public class SettingsCommand : IExternalCommand

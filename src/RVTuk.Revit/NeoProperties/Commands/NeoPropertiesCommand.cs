@@ -1,9 +1,9 @@
-using Autodesk.Revit.Attributes;
+﻿using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RVTuk.Revit.NeoProperties;
 
-namespace RVTuk.Revit.Commands
+namespace RVTuk.Revit.NeoProperties.Commands
 {
     [Transaction(TransactionMode.Manual)]
     public class NeoPropertiesCommand : IExternalCommand

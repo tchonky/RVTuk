@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- KKarea: standalone Revit 2023 host for the Area Calc (Rishui Zamin) tool.
        Revit 2023 is net48-only, so this project has a single fixed target; it is built
@@ -37,11 +37,11 @@
   <!-- Shared source linked from RVTuk.Revit — single-source area logic, compiled per host
        against each host's Revit API version. KKarea must never reference RVTuk.Revit itself. -->
   <ItemGroup>
-    <Compile Include="..\RVTuk.Revit\AreaSubmission\AreaExtractor.cs" Link="Shared\AreaExtractor.cs" />
-    <Compile Include="..\RVTuk.Revit\AreaSubmission\UsageKeyScheduleBuilder.cs" Link="Shared\UsageKeyScheduleBuilder.cs" />
-    <Compile Include="..\RVTuk.Revit\ExternalEvents\AreaExtractEventHandler.cs" Link="Shared\AreaExtractEventHandler.cs" />
-    <Compile Include="..\RVTuk.Revit\ExternalEvents\SelectAreaEventHandler.cs" Link="Shared\SelectAreaEventHandler.cs" />
-    <Compile Include="..\RVTuk.Revit\ExternalEvents\SetupUsageKeysEventHandler.cs" Link="Shared\SetupUsageKeysEventHandler.cs" />
+    <Compile Include="..\RVTuk.Revit\RishuiZamin\AreaExtractor.cs" Link="Shared\AreaExtractor.cs" />
+    <Compile Include="..\RVTuk.Revit\RishuiZamin\UsageKeyScheduleBuilder.cs" Link="Shared\UsageKeyScheduleBuilder.cs" />
+    <Compile Include="..\RVTuk.Revit\RishuiZamin\ExternalEvents\AreaExtractEventHandler.cs" Link="Shared\AreaExtractEventHandler.cs" />
+    <Compile Include="..\RVTuk.Revit\RishuiZamin\ExternalEvents\SelectAreaEventHandler.cs" Link="Shared\SelectAreaEventHandler.cs" />
+    <Compile Include="..\RVTuk.Revit\RishuiZamin\ExternalEvents\SetupUsageKeysEventHandler.cs" Link="Shared\SetupUsageKeysEventHandler.cs" />
   </ItemGroup>
 
 </Project>

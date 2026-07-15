@@ -7,7 +7,7 @@ using System.Text;
 using Autodesk.Revit.DB;
 using RVTuk.Core.RishuiZamin;
 
-namespace RVTuk.Revit.AreaSubmission
+namespace RVTuk.Revit.RishuiZamin
 {
     /// <summary>
     /// Sets a project up for area submission: binds the five robot text parameters

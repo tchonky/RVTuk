@@ -9,7 +9,7 @@ using Autodesk.Revit.UI;
 using RVTuk.Core.RishuiZamin;
 using RevitApplication = Autodesk.Revit.ApplicationServices.Application;
 
-namespace RVTuk.Revit.Commands
+namespace RVTuk.Revit.RishuiZamin.Commands
 {
     /// <summary>
     /// One-time (idempotent) setup command for the Rishui Zamin area workflow: binds the

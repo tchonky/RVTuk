@@ -5,7 +5,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RVTuk.Core.RishuiZamin;
 
-namespace RVTuk.Revit.AreaSubmission
+namespace RVTuk.Revit.RishuiZamin
 {
     /// <summary>
     /// One extracted Revit Area: its element id (for later selection/highlighting in Revit)

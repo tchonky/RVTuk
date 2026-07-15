@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Threading;
 using Autodesk.Revit.UI;
-using RVTuk.Revit.AreaSubmission;
+using RVTuk.Revit.RishuiZamin;
 
-namespace RVTuk.Revit.ExternalEvents
+namespace RVTuk.Revit.RishuiZamin.ExternalEvents
 {
     /// <summary>
     /// Runs <see cref="UsageKeyScheduleBuilder.EnsureUsageKeySchedules"/> against the active

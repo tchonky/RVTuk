@@ -8,10 +8,10 @@ using Autodesk.Revit.UI;
 using RVTuk.Core.Shared.Config;
 using RVTuk.Core.FamilyBrowser.Database;
 using RVTuk.Core.FamilyBrowser.Extraction;
-using RVTuk.Revit.Extraction;
+using RVTuk.Revit.FamilyBrowser.Extraction;
 using RVTuk.UI.FamilyBrowser.Views;
 
-namespace RVTuk.Revit.Commands
+namespace RVTuk.Revit.FamilyBrowser.Commands
 {
     [Transaction(TransactionMode.Manual)]
     public class IndexLibraryCommand : IExternalCommand

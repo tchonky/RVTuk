@@ -9,7 +9,7 @@ using RVTuk.Core.RishuiZamin;
 using RVTuk.UI.RishuiZamin.ViewModels;
 using RVTuk.UI.RishuiZamin.Views;
 
-namespace RVTuk.Revit.Commands
+namespace RVTuk.Revit.RishuiZamin.Commands
 {
     [Transaction(TransactionMode.Manual)]
     public class AreaCalcCommand : IExternalCommand

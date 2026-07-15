@@ -3,9 +3,9 @@ using System.Threading;
 using Autodesk.Revit.UI;
 using RVTuk.Core.FamilyBrowser.Database;
 using RVTuk.Core.FamilyBrowser.Models;
-using RVTuk.Revit.Extraction;
+using RVTuk.Revit.FamilyBrowser.Extraction;
 
-namespace RVTuk.Revit.ExternalEvents
+namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
 {
     /// <summary>
     /// Executes on Revit's main thread. Called once per family needing extraction.

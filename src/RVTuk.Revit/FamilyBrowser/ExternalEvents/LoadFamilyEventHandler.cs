@@ -1,8 +1,8 @@
-using System.Threading;
+﻿using System.Threading;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
-namespace RVTuk.Revit.ExternalEvents
+namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
 {
     public class LoadFamilyEventHandler : IExternalEventHandler
     {

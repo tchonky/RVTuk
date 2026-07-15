@@ -5,7 +5,7 @@ using RVTuk.Core.FamilyBrowser.Models;
 using RVTuk.Core.FamilyBrowser.Util;
 using RevitApplication = Autodesk.Revit.ApplicationServices.Application;
 
-namespace RVTuk.Revit.Extraction
+namespace RVTuk.Revit.FamilyBrowser.Extraction
 {
     /// <summary>
     /// Must be called only from Revit's main thread (inside an ExternalEvent handler).
