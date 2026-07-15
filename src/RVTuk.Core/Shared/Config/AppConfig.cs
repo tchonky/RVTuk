@@ -21,6 +21,15 @@ namespace RVTuk.Core.Shared.Config
         /// sessions so the user doesn't have to re-pick it every time.</summary>
         public RishuiZamin.MarkerForm AreaCalcMarkerForm { get; set; } = RishuiZamin.MarkerForm.FormA;
 
+        /// <summary>Last-used values for the DWG Export dialog, remembered across sessions.
+        /// Setup/set names are matched by name next time; a name that no longer exists in the
+        /// open document silently falls back to the first available entry.</summary>
+        public string DwgExportFolder { get; set; } = string.Empty;
+        public string DwgExportPdfSetupName { get; set; } = string.Empty;
+        public string DwgExportDwgSetupName { get; set; } = string.Empty;
+        public string DwgExportSheetSetName { get; set; } = string.Empty;
+        public bool DwgExportUseCurrentWindow { get; set; }
+
         // Derived — never stored separately; always lives inside the library folder.
         public string DatabasePath => Path.Combine(LibraryFolderPath, DbFolderName, "RVTuk.db");
 

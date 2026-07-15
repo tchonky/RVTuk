@@ -82,4 +82,35 @@ public class AppConfigTests : IDisposable
     {
         Assert.Contains(@".*\.\d{4}\.rfa", new AppConfig().IgnoredFilePatterns);
     }
+
+    [Fact]
+    public void DwgExportSettings_DefaultEmpty_AndRoundTripThroughJson()
+    {
+        var fresh = new AppConfig();
+        Assert.Equal("", fresh.DwgExportFolder);
+        Assert.Equal("", fresh.DwgExportPdfSetupName);
+        Assert.Equal("", fresh.DwgExportDwgSetupName);
+        Assert.Equal("", fresh.DwgExportSheetSetName);
+        Assert.False(fresh.DwgExportUseCurrentWindow);
+
+        // The test project runs on net8, so this exercises the same serializer branch
+        // ConfigManager uses there; net48's DataContractJsonSerializer handles plain
+        // get/set string/bool properties identically.
+        var config = new AppConfig
+        {
+            DwgExportFolder = @"D:\out",
+            DwgExportPdfSetupName = "KKarc - Sheets (No Revision)",
+            DwgExportDwgSetupName = "KKarc standard DWG",
+            DwgExportSheetSetName = "Sheets for Publish",
+            DwgExportUseCurrentWindow = true,
+        };
+        var json = System.Text.Json.JsonSerializer.Serialize(config);
+        var loaded = System.Text.Json.JsonSerializer.Deserialize<AppConfig>(json)!;
+
+        Assert.Equal(@"D:\out", loaded.DwgExportFolder);
+        Assert.Equal("KKarc - Sheets (No Revision)", loaded.DwgExportPdfSetupName);
+        Assert.Equal("KKarc standard DWG", loaded.DwgExportDwgSetupName);
+        Assert.Equal("Sheets for Publish", loaded.DwgExportSheetSetName);
+        Assert.True(loaded.DwgExportUseCurrentWindow);
+    }
 }
