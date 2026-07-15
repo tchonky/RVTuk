@@ -247,10 +247,15 @@
                                       IsChecked="{Binding IsDropDownOpen,
                                           RelativeSource={RelativeSource TemplatedParent},
                                           Mode=TwoWay}"/>
+                        <!-- ContentTemplateSelector must be bound: DisplayMemberPath is implemented
+                             by WPF as an internal ItemTemplateSelector, so without it the closed
+                             combo shows the item's ToString() while the dropdown renders fine. -->
                         <ContentPresenter x:Name="ContentSite"
                                           IsHitTestVisible="False"
                                           Content="{TemplateBinding SelectionBoxItem}"
                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                          ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
                                           Margin="6,2,22,2"
                                           VerticalAlignment="Center"/>
                         <Popup x:Name="PART_Popup"
