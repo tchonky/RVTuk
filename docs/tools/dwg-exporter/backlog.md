@@ -2,15 +2,16 @@
 
 ## 🚀 New features (requested 2026-07-16)
 
-- [ ] **Naming-rule editor** — modify the naming rules from within the tool, like the
-  PDF exporter's pencil button (today the rules are read-only from the PDF export
-  setups, by design; this adds create/edit/override).
-- [ ] **View/sheet set editor** — change the views/sheets set from within the tool (the
-  PDF dialog's pencil button) instead of relying on the native Print/PDF dialogs to
-  manage `ViewSheetSet`s.
-- [ ] **DWG export settings editor** — change the DWG export setup (layers, lines,
-  colors…) from within the tool instead of the native "Modify DWG/DXF Export Setup"
-  dialog.
+- [x] **Naming-rule editor** — shipped 2026-07-16 as a **hand-off**, not a custom
+  editor ([spec](specs/2026-07-16-native-dialog-handoff-design.md)): "Edit…" posts
+  Revit's own PDF Export dialog (`PostableCommand.ExportPDF`), whose pencil button is
+  the real rule editor. The window closes first (posted commands run after the modal
+  command ends); reopening re-reads setups and restores selections. Custom in-tool
+  editors stay off the table unless the hop proves unusable.
+- [x] **View/sheet set editor** — same hand-off, same dialog (its pencil also manages
+  `ViewSheetSet`s). "Edit…" button on the range row.
+- [x] **DWG export settings editor** — shipped as a hand-off straight to the native
+  "Modify DWG/DXF Export Setup" dialog (`PostableCommand.ExportOptionsExportSetupsDWGOrDXF`).
 - [x] **Export DWG + PDF together** — one command produces both file sets, same
   filenames (they already share the naming rules), same range, side by side. Shipped
   2026-07-16 ([spec](specs/2026-07-16-dwg-pdf-combined-export-design.md)): DWG/PDF

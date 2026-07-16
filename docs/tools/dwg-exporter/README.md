@@ -8,7 +8,9 @@ exporter's `Sheet - A101 - ….dwg`. Layers/lines/colors come from a native DWG 
 setup (`ExportDWGSettings`) picked in the same window. Format checkboxes let one run
 also (or only) produce **PDFs** — one per sheet, named by Revit's own evaluation of the
 same naming rule, so `.dwg`/`.pdf` basenames pair exactly (window title: "Sheet Export
-(DWG / PDF)").
+(DWG / PDF)"). "Edit…" buttons hand off to the native dialogs (PDF Export for naming
+rules and view/sheet sets, Modify DWG/DXF Export Setup for DWG setups) — the window
+closes, you edit, reopen, and everything is re-read with your selections restored.
 
 **Status:** implemented and registered on the ribbon (2026-07-15); pending in-Revit
 verification — see the checklist in
