@@ -5,7 +5,10 @@ naming rules of the document's saved **PDF** export setups (`ExportPDFSettings`)
 DWGs come out named exactly like the PDFs (e.g.
 `<Project Number>-A-BLD_<Building Number>-<Sheet Number>.dwg`), instead of the native
 exporter's `Sheet - A101 - ….dwg`. Layers/lines/colors come from a native DWG export
-setup (`ExportDWGSettings`) picked in the same window.
+setup (`ExportDWGSettings`) picked in the same window. Format checkboxes let one run
+also (or only) produce **PDFs** — one per sheet, named by Revit's own evaluation of the
+same naming rule, so `.dwg`/`.pdf` basenames pair exactly (window title: "Sheet Export
+(DWG / PDF)").
 
 **Status:** implemented and registered on the ribbon (2026-07-15); pending in-Revit
 verification — see the checklist in

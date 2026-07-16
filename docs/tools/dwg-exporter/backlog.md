@@ -11,8 +11,12 @@
 - [ ] **DWG export settings editor** — change the DWG export setup (layers, lines,
   colors…) from within the tool instead of the native "Modify DWG/DXF Export Setup"
   dialog.
-- [ ] **Export DWG + PDF together** — one command produces both file sets, same
-  filenames (they already share the naming rules), same range, side by side.
+- [x] **Export DWG + PDF together** — one command produces both file sets, same
+  filenames (they already share the naming rules), same range, side by side. Shipped
+  2026-07-16 ([spec](specs/2026-07-16-dwg-pdf-combined-export-design.md)): DWG/PDF
+  format checkboxes, PDF always one file per sheet (Combine forced off), Revit itself
+  evaluates the naming rule for PDFs. Caveat: for a non-sheet *current view*, the PDF
+  name (rule-based) can differ from the DWG name (view name); sheets always pair.
 
 ## 🔬 To research (feasibility, requested 2026-07-16)
 
