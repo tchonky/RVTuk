@@ -20,13 +20,19 @@
 
 ## 🔬 To research (feasibility, requested 2026-07-16)
 
-- [ ] **Model-space export matching the sheet** — check if the DWG can be exported so
-  the *Model* tab shows the sheet as it looks in Revit (viewports in the same positions),
-  not just the paper-space layout. Today only the layout matches the Revit sheet.
-- [ ] **Layer customisation beyond the native mapping** — check what's possible past the
-  native export setup, e.g.: separate CAD layers per wall layer (structure/finish/…);
-  preserving coincident lines while doing so; keeping nested families on the host
-  family's layer (e.g. a door with a nested detail family exporting as one door layer).
+- [x] **Model-space export matching the sheet** — researched 2026-07-16, see
+  [research/2026-07-16-model-space-and-layers.md](research/2026-07-16-model-space-and-layers.md).
+  Verdict: impossible from Revit; AutoCAD's `EXPORTLAYOUT` does exactly this and is
+  scriptable per batch (companion-script candidate below).
+- [x] **Layer customisation beyond the native mapping** — researched 2026-07-16, same
+  doc. Verdicts: per-wall-layer CAD layers — not achievable at export time (mapping is
+  per category/subcategory; modifiers are whole-element); preserve coincident lines —
+  already native in the DWG setup; nested-family-on-host-layer — solve in the family
+  library (subcategory assignment) or via in-block layer remap in a CAD-side script.
+- [ ] **Companion CAD-side script (umbrella follow-up)** — one accoreconsole batch
+  emitted next to the exports covering the achievable wishes: stamp layout paper sizes,
+  `EXPORTLAYOUT` flatten to model space, in-block layer remaps. Decide whether to build
+  after reading the research doc.
 
 ## Ideas / future
 
