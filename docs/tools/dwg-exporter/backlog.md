@@ -1,5 +1,29 @@
 # DWG Exporter — backlog
 
+## 🚀 New features (requested 2026-07-16)
+
+- [ ] **Naming-rule editor** — modify the naming rules from within the tool, like the
+  PDF exporter's pencil button (today the rules are read-only from the PDF export
+  setups, by design; this adds create/edit/override).
+- [ ] **View/sheet set editor** — change the views/sheets set from within the tool (the
+  PDF dialog's pencil button) instead of relying on the native Print/PDF dialogs to
+  manage `ViewSheetSet`s.
+- [ ] **DWG export settings editor** — change the DWG export setup (layers, lines,
+  colors…) from within the tool instead of the native "Modify DWG/DXF Export Setup"
+  dialog.
+- [ ] **Export DWG + PDF together** — one command produces both file sets, same
+  filenames (they already share the naming rules), same range, side by side.
+
+## 🔬 To research (feasibility, requested 2026-07-16)
+
+- [ ] **Model-space export matching the sheet** — check if the DWG can be exported so
+  the *Model* tab shows the sheet as it looks in Revit (viewports in the same positions),
+  not just the paper-space layout. Today only the layout matches the Revit sheet.
+- [ ] **Layer customisation beyond the native mapping** — check what's possible past the
+  native export setup, e.g.: separate CAD layers per wall layer (structure/finish/…);
+  preserving coincident lines while doing so; keeping nested families on the host
+  family's layer (e.g. a door with a nested detail family exporting as one door layer).
+
 ## Ideas / future
 
 - Companion AutoCAD script for layout paper size: Revit's API can't set the exported
@@ -10,10 +34,6 @@
   custom"). Declined for now (2026-07-15) in favour of documenting the limitation.
 
 - DXF output flavour: same window, list `ExportDXFSettings` alongside the DWG setups.
-- Built-in view/sheet set editor (the PDF dialog's pencil button) instead of relying on
-  the native Print/PDF dialogs to manage `ViewSheetSet`s.
-- Naming-rule editor / per-export rule overrides (today the rules are read-only from the
-  PDF export setups, by design).
 
 ## To verify (in Revit, after deploy)
 
