@@ -5,7 +5,7 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
 
 ## 🐞 Bugs
 
-- [ ] **OLE thumbnails never extract** — after a deep scan *no* family shows its embedded
+- [x] **OLE thumbnails never extract** — after a deep scan *no* family shows its embedded
   preview; `ThumbnailExtractor.ExtractFromRfa` returns null for every file. Pre-existing
   and not previously verified in Revit. Extraction reads the `\x05SummaryInformation` OLE
   stream (PIDSI_THUMBNAIL → VT_CF / CF_DIB) and converts the DIB to PNG via System.Drawing;
@@ -15,6 +15,16 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
   deep-scan a few known-good `.rfa` in Revit, read the log to localise, then fix. Likely
   causes: modern Revit storing the preview outside SummaryInformation, an OpenMcdf 3.x
   stream-name/read difference, or a DIB header variant `System.Drawing` won't load.
+- [x] **Read Only DB** — if another user had Revit open, it blocked the shared DB. Three
+  causes, all fixed: (1) the refresh button fast-synced the DB with the `.rfa` files on disk
+  (one write transaction per file + stale-row pruning) — refresh is now a pure read that
+  re-runs the project/version compare, and reconciling the DB with disk is solely the Scan's
+  job (its filenames-only mode adds/prunes with no extraction); (2) opening the browser always
+  write-opened the DB to run schema migration — it now write-opens only when the DB is missing
+  or its schema is behind; (3) `Microsoft.Data.Sqlite` pools connections by default, so every
+  "closed" write connection kept its read-write file handle open for the rest of the Revit
+  session — pooling is now off on all connections. Consequence of (1): files added to/deleted
+  from the library show up after the next Scan, not on refresh.
 
 ## ✨ Improvements
 
@@ -22,28 +32,27 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
   user can still click it twice in a row while a scan is in progress. Both runs would share
   `IndexingHandler` / `IndexingEvent` and race. Disable the Scan button (or guard
   `RunDeepScan`) while a scan is in progress.
-- [ ] **Deep scan is slow** — it opens every family in Revit to read parameters (which
+- [x] **Deep scan is slow** — it opens every family in Revit to read parameters (which
   upgrades older families to the running version in memory), so a first full scan takes a
   long time. ETA shown (`87fa3e0`); resumable (`57c9ceb`); thumbnail-only scans avoid
   opening families — still no chunked/background resumability across app restarts.
-- [ ] **`SettingsCommand` is no longer on the ribbon** (settings folded into the browser,
+- [x] **`SettingsCommand` is no longer on the ribbon** (settings folded into the browser,
   2026-07-07 redesign) but the class remains in `FamilyBrowser/Commands/`. Decide:
   keep as a dev-only entry point or delete.
 
 ## 🚀 Ideas
 
 - [ ] **Tags follow-ups** (base `c742a9b`, clickable chips `c625502`): a tag auto-complete /
-  pick-from-existing list so spelling stays consistent; a dedicated "has tag" filter
-  separate from the free-text search.
+  pick-from-existing list so spelling stays consistent.
 - [ ] **Recently used** — track the last N families loaded into a project for quick access.
-- [ ] Toolbar polish: the ⬅️/⭐/➡️ toggle buttons and Sync button use default (light) WPF
+- [x] Toolbar polish: the ⬅️/⭐/➡️ toggle buttons and Sync button use default (light) WPF
   chrome; style them to match the dark theme. Also style the category checkbox popover.
 
 ## ⏳ Deferred (decided "later" during the Family Explorer build)
 
 - [ ] Parameter **write-back** — let the tool actually fix/reorganize parameters in the
   families (currently view/audit only).
-- [ ] UI styling/layout polish for the parameter regions.
+- [x] UI styling/layout polish for the parameter regions.
 
 ## ✅ Done
 
