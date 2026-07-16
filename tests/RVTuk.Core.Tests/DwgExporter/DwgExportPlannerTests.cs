@@ -42,6 +42,15 @@ public class DwgExportPlannerTests
     }
 
     [Fact]
+    public void DwgExportRequest_Defaults_DwgOnPdfOff()
+    {
+        var request = new DwgExportRequest();
+
+        Assert.True(request.ExportDwg);
+        Assert.False(request.ExportPdf);
+    }
+
+    [Fact]
     public void SheetSetItem_Display_ShowsCount()
     {
         Assert.Equal("Publish (12 sheets)", new SheetSetItem { Name = "Publish", SheetCount = 12 }.Display);

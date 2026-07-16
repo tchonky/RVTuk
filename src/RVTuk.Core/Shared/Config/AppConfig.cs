@@ -39,6 +39,13 @@ namespace RVTuk.Core.Shared.Config
         public string DwgExportSheetSetName { get; set; } = string.Empty;
         public bool DwgExportUseCurrentWindow { get; set; }
 
+        /// <summary>Last-used format checkboxes, stored inverted/additive (false = the
+        /// out-of-box state "DWG on, PDF off"): net48's DataContractJsonSerializer skips
+        /// property initializers, so a true-default property would flip to false when
+        /// loading a config file written before this feature existed.</summary>
+        public bool DwgExportDwgOff { get; set; }
+        public bool DwgExportPdfOn { get; set; }
+
         /// <summary>Per-model output folders, most-recently-used last, capped at
         /// <see cref="DwgExportFolderCap"/> so the config file can't grow unbounded.</summary>
         public System.Collections.Generic.List<DwgExportFolderEntry> DwgExportFolders { get; set; } =

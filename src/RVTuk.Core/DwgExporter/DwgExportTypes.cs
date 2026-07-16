@@ -20,6 +20,10 @@ namespace RVTuk.Core.DwgExporter
         public string PdfSetupName { get; set; } = "";
         public string DwgSetupName { get; set; } = "";
         public string OutputFolder { get; set; } = "";
+
+        /// <summary>Formats to produce. At least one must be true (the dialog enforces it).</summary>
+        public bool ExportDwg { get; set; } = true;
+        public bool ExportPdf { get; set; }
     }
 
     /// <summary>One view/sheet the export will produce. FileName has no ".dwg" extension.</summary>

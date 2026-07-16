@@ -165,6 +165,28 @@ public class AppConfigTests : IDisposable
     }
 
     [Fact]
+    public void DwgExportFormats_OldConfigWithoutKeys_MeansDwgOnPdfOff()
+    {
+        // Uninitialized-object deserialization (net48 DCJS) must land on the same
+        // defaults, which is why the stored booleans are inverted/additive.
+        var loaded = System.Text.Json.JsonSerializer.Deserialize<AppConfig>("{}")!;
+
+        Assert.False(loaded.DwgExportDwgOff);
+        Assert.False(loaded.DwgExportPdfOn);
+    }
+
+    [Fact]
+    public void DwgExportFormats_RoundTrip()
+    {
+        var config = new AppConfig { DwgExportDwgOff = true, DwgExportPdfOn = true };
+        var json = System.Text.Json.JsonSerializer.Serialize(config);
+        var loaded = System.Text.Json.JsonSerializer.Deserialize<AppConfig>(json)!;
+
+        Assert.True(loaded.DwgExportDwgOff);
+        Assert.True(loaded.DwgExportPdfOn);
+    }
+
+    [Fact]
     public void DwgExportFolders_RoundTripThroughJson()
     {
         var config = new AppConfig();
