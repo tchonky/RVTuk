@@ -28,6 +28,12 @@ namespace RVTuk.UI.DwgExporter.ViewModels
         /// <summary>Lets the WPF dispatcher repaint during the synchronous export loop. Wired by the window.</summary>
         public Action? PumpUi { get; set; }
 
+        /// <summary>Hand-off to a native Revit dialog ("pdf" = PDF Export for naming rules and
+        /// view/sheet sets, "dwgsetups" = Modify DWG/DXF Export Setup). Wired by the command;
+        /// returns true when the command was posted (the window then closes — posted commands
+        /// run only after this modal command ends).</summary>
+        public Func<string, bool>? OpenNativeDialog { get; set; }
+
         public IReadOnlyList<PdfSetupItem> PdfSetups { get; }
         public IReadOnlyList<string> DwgSetupNames { get; }
         public IReadOnlyList<SheetSetItem> SheetSets { get; }

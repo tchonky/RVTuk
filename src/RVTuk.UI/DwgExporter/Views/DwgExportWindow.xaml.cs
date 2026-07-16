@@ -38,5 +38,22 @@ namespace RVTuk.UI.DwgExporter.Views
         }
 
         private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+        private void EditPdfDialog_Click(object sender, RoutedEventArgs e) => HandOff("pdf");
+        private void EditDwgSetups_Click(object sender, RoutedEventArgs e) => HandOff("dwgsetups");
+
+        private void HandOff(string kind)
+        {
+            if (_vm.OpenNativeDialog?.Invoke(kind) == true)
+            {
+                Close(); // the posted native dialog opens once this modal command returns
+            }
+            else
+            {
+                MessageBox.Show(this,
+                    "Couldn't open the native dialog on this Revit version.",
+                    "DWG Export", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
     }
 }

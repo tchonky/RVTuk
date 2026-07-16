@@ -108,6 +108,24 @@ namespace RVTuk.Revit.DwgExporter.Commands
                 var vm = new DwgExportViewModel(
                     pdfItems, dwgNames, sheetSets, currentViewLabel, modelKey,
                     evaluateExample, planExport, runExport);
+                vm.OpenNativeDialog = kind =>
+                {
+                    try
+                    {
+                        var postable = kind == "pdf"
+                            ? PostableCommand.ExportPDF
+                            : PostableCommand.ExportOptionsExportSetupsDWGOrDXF;
+                        var id = RevitCommandId.LookupPostableCommandId(postable);
+                        if (id == null || !commandData.Application.CanPostCommand(id)) return false;
+                        commandData.Application.PostCommand(id);
+                        return true;
+                    }
+                    catch
+                    {
+                        return false; // another command already posted, or id unavailable
+                    }
+                };
+
                 var window = new DwgExportWindow(vm);
                 new System.Windows.Interop.WindowInteropHelper(window)
                 {

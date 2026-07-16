@@ -47,6 +47,9 @@
                 <DockPanel Margin="0,4,0,0">
                     <RadioButton IsChecked="{Binding UseSheetSet}" Content="Selected views/sheets"
                                  VerticalAlignment="Center"/>
+                    <Button Content="Edit…" DockPanel.Dock="Right" Padding="8,2" Margin="6,0,0,0"
+                            Click="EditPdfDialog_Click"
+                            ToolTip="Closes this window and opens Revit's PDF Export dialog — edit view/sheet sets there (pencil button), then reopen DWG Export."/>
                     <ComboBox ItemsSource="{Binding SheetSets}"
                               SelectedItem="{Binding SelectedSheetSet}"
                               DisplayMemberPath="Display"
@@ -60,9 +63,14 @@
         <Border Style="{StaticResource Section}">
             <StackPanel>
                 <TextBlock Text="File Naming (from PDF export setup)" Style="{StaticResource SectionHeader}"/>
-                <ComboBox ItemsSource="{Binding PdfSetups}"
-                          SelectedItem="{Binding SelectedPdfSetup}"
-                          DisplayMemberPath="Name"/>
+                <DockPanel>
+                    <Button Content="Edit…" DockPanel.Dock="Right" Padding="8,2" Margin="6,0,0,0"
+                            Click="EditPdfDialog_Click"
+                            ToolTip="Closes this window and opens Revit's PDF Export dialog — edit the setup's naming rule there (pencil button), then reopen DWG Export."/>
+                    <ComboBox ItemsSource="{Binding PdfSetups}"
+                              SelectedItem="{Binding SelectedPdfSetup}"
+                              DisplayMemberPath="Name"/>
+                </DockPanel>
                 <Grid Margin="0,6,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -99,9 +107,14 @@
         <Border Style="{StaticResource Section}">
             <StackPanel>
                 <TextBlock Text="DWG Export Setup" Style="{StaticResource SectionHeader}"/>
-                <ComboBox ItemsSource="{Binding DwgSetupNames}"
-                          SelectedItem="{Binding SelectedDwgSetup}"
-                          IsEnabled="{Binding ExportDwgFormat}"/>
+                <DockPanel>
+                    <Button Content="Edit…" DockPanel.Dock="Right" Padding="8,2" Margin="6,0,0,0"
+                            Click="EditDwgSetups_Click"
+                            ToolTip="Closes this window and opens Revit's Modify DWG/DXF Export Setup dialog, then reopen DWG Export."/>
+                    <ComboBox ItemsSource="{Binding DwgSetupNames}"
+                              SelectedItem="{Binding SelectedDwgSetup}"
+                              IsEnabled="{Binding ExportDwgFormat}"/>
+                </DockPanel>
             </StackPanel>
         </Border>
 
