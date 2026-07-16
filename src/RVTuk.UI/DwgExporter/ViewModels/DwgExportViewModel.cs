@@ -66,6 +66,8 @@ namespace RVTuk.UI.DwgExporter.ViewModels
                 dwgSetupNames.FirstOrDefault(n => n == config.DwgExportDwgSetupName) ?? dwgSetupNames.FirstOrDefault();
             _selectedSheetSet =
                 sheetSets.FirstOrDefault(s => s.Name == config.DwgExportSheetSetName) ?? sheetSets.FirstOrDefault();
+            _exportDwgFormat = !config.DwgExportDwgOff;
+            _exportPdfFormat = config.DwgExportPdfOn;
 
             RefreshExample();
         }
@@ -87,6 +89,20 @@ namespace RVTuk.UI.DwgExporter.ViewModels
         {
             get => !_useCurrentWindow;
             set => UseCurrentWindow = !value;
+        }
+
+        private bool _exportDwgFormat;
+        public bool ExportDwgFormat
+        {
+            get => _exportDwgFormat;
+            set { SetProperty(ref _exportDwgFormat, value); OnPropertyChanged(nameof(CanExport)); }
+        }
+
+        private bool _exportPdfFormat;
+        public bool ExportPdfFormat
+        {
+            get => _exportPdfFormat;
+            set { SetProperty(ref _exportPdfFormat, value); OnPropertyChanged(nameof(CanExport)); }
         }
 
         private SheetSetItem? _selectedSheetSet;
@@ -152,6 +168,7 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             && !string.IsNullOrWhiteSpace(OutputFolder)
             && SelectedPdfSetup != null
             && SelectedDwgSetup != null
+            && (ExportDwgFormat || ExportPdfFormat)
             && (UseCurrentWindow || SelectedSheetSet != null);
 
         private DwgExportRequest BuildRequest() => new DwgExportRequest
@@ -161,6 +178,8 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             PdfSetupName = SelectedPdfSetup?.Name ?? "",
             DwgSetupName = SelectedDwgSetup ?? "",
             OutputFolder = OutputFolder.Trim(),
+            ExportDwg = ExportDwgFormat,
+            ExportPdf = ExportPdfFormat,
         };
 
         private void RefreshExample()
@@ -250,6 +269,8 @@ namespace RVTuk.UI.DwgExporter.ViewModels
                 config.DwgExportDwgSetupName = SelectedDwgSetup ?? "";
                 config.DwgExportSheetSetName = SelectedSheetSet?.Name ?? "";
                 config.DwgExportUseCurrentWindow = UseCurrentWindow;
+                config.DwgExportDwgOff = !ExportDwgFormat;
+                config.DwgExportPdfOn = ExportPdfFormat;
                 ConfigManager.SaveConfig(config);
             }
             catch
