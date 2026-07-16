@@ -70,24 +70,46 @@ namespace RVTuk.Revit.DwgExporter
             List<(ElementId Id, PlannedExportFile File)> files,
             Action<int, int, string> progress)
         {
-            var options = GetDwgOptions(doc, request.DwgSetupName);
+            var dwgOptions = request.ExportDwg ? GetDwgOptions(doc, request.DwgSetupName) : null;
+            var pdfOptions = request.ExportPdf ? GetPdfOptions(doc, request.PdfSetupName) : null;
+            var tag = request.ExportDwg && request.ExportPdf ? " (DWG+PDF)"
+                : request.ExportPdf ? " (PDF)" : " (DWG)";
             var result = new DwgExportResult();
 
             for (int i = 0; i < files.Count; i++)
             {
                 var (id, file) = files[i];
-                try
+                if (dwgOptions != null)
                 {
-                    var ok = doc.Export(request.OutputFolder, file.FileName,
-                        new List<ElementId> { id }, options);
-                    if (ok) result.ExportedCount++;
-                    else result.Errors.Add(file.ViewLabel + ": Revit reported the export failed.");
+                    try
+                    {
+                        var ok = doc.Export(request.OutputFolder, file.FileName,
+                            new List<ElementId> { id }, dwgOptions);
+                        if (ok) result.ExportedCount++;
+                        else result.Errors.Add(file.ViewLabel + " (DWG): Revit reported the export failed.");
+                    }
+                    catch (Exception ex)
+                    {
+                        result.Errors.Add(file.ViewLabel + " (DWG): " + ex.Message);
+                    }
                 }
-                catch (Exception ex)
+                if (pdfOptions != null)
                 {
-                    result.Errors.Add(file.ViewLabel + ": " + ex.Message);
+                    try
+                    {
+                        // Revit evaluates the setup's naming rule itself, so the .pdf
+                        // basename matches the native PDF export byte for byte.
+                        var ok = doc.Export(request.OutputFolder,
+                            new List<ElementId> { id }, pdfOptions);
+                        if (ok) result.ExportedCount++;
+                        else result.Errors.Add(file.ViewLabel + " (PDF): Revit reported the export failed.");
+                    }
+                    catch (Exception ex)
+                    {
+                        result.Errors.Add(file.ViewLabel + " (PDF): " + ex.Message);
+                    }
                 }
-                progress(i + 1, files.Count, file.ViewLabel);
+                progress(i + 1, files.Count, file.ViewLabel + tag);
             }
 
             return result;
@@ -105,6 +127,36 @@ namespace RVTuk.Revit.DwgExporter
                 ?? throw new InvalidOperationException(
                     "PDF export setup '" + pdfSetupName + "' no longer exists in this document.");
             return settings.GetOptions().GetNamingRule();
+        }
+
+        /// <summary>Options for the per-sheet PDF calls: the chosen setup's own options with
+        /// Combine forced off (one PDF per sheet, names mirror the DWGs 1:1). The fallback
+        /// pseudo-setup gets an explicit "Sheet Number - Sheet Name" rule so the pairing
+        /// holds in documents without saved PDF setups.</summary>
+        private static PDFExportOptions GetPdfOptions(Document doc, string pdfSetupName)
+        {
+            if (pdfSetupName == DwgExportDefaults.FallbackPdfSetupName)
+            {
+                var number = TableCellCombinedParameterData.Create();
+                number.ParamId = new ElementId(BuiltInParameter.SHEET_NUMBER);
+                number.Separator = " - ";
+                var name = TableCellCombinedParameterData.Create();
+                name.ParamId = new ElementId(BuiltInParameter.SHEET_NAME);
+
+                var fallback = new PDFExportOptions { Combine = false };
+                fallback.SetNamingRule(new List<TableCellCombinedParameterData> { number, name });
+                return fallback;
+            }
+
+            var settings = new FilteredElementCollector(doc)
+                .OfClass(typeof(ExportPDFSettings))
+                .Cast<ExportPDFSettings>()
+                .FirstOrDefault(s => s.Name == pdfSetupName)
+                ?? throw new InvalidOperationException(
+                    "PDF export setup '" + pdfSetupName + "' no longer exists in this document.");
+            var options = settings.GetOptions();
+            options.Combine = false;
+            return options;
         }
 
         private static DWGExportOptions GetDwgOptions(Document doc, string dwgSetupName)
@@ -132,7 +184,9 @@ namespace RVTuk.Revit.DwgExporter
         private static string Label(View view)
             => view is ViewSheet sheet ? sheet.SheetNumber + " - " + sheet.Name : view.Name;
 
-        public static bool DwgFileExists(string folder, string fileName)
-            => File.Exists(Path.Combine(folder, fileName + ".dwg"));
+        /// <summary>Whether any output of the requested formats already exists for this name.</summary>
+        public static bool OutputFileExists(string folder, string fileName, DwgExportRequest request)
+            => (request.ExportDwg && File.Exists(Path.Combine(folder, fileName + ".dwg")))
+            || (request.ExportPdf && File.Exists(Path.Combine(folder, fileName + ".pdf")));
     }
 }

@@ -92,7 +92,7 @@ namespace RVTuk.Revit.DwgExporter.Commands
                     var files = SheetDwgExporter.PlanFiles(uidoc, request, out _);
                     return DwgExportPlanner.Check(
                         files.Select(f => f.File).ToList(),
-                        name => SheetDwgExporter.DwgFileExists(request.OutputFolder, name));
+                        name => SheetDwgExporter.OutputFileExists(request.OutputFolder, name, request));
                 };
 
                 Func<DwgExportRequest, Action<int, int, string>, DwgExportResult> runExport =
