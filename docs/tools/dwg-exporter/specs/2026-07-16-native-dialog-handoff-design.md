@@ -16,9 +16,11 @@ Replace all three "editor" backlog items with **hand-off buttons**:
 
 | Button (next to) | Posts | User edits there |
 |---|---|---|
-| View/sheet set dropdown | `ExportPDF` | sets (the PDF dialog's pencil) |
-| File Naming dropdown | `ExportPDF` | naming rules (the pencil) |
+| View/sheet set dropdown | `PublishSettings`, falling back to `ExportPDF` | sets (Publish Settings is a dedicated set manager; the PDF dialog's pencil is the fallback when Revit greys it out) |
+| File Naming dropdown | `ExportPDF` | naming rules (the pencil — the only place Revit exposes the rule editor) |
 | DWG Export Setup dropdown | `ExportOptionsExportSetupsDWGOrDXF` | full "Modify DWG/DXF Export Setup" dialog |
+
+*(Amended 2026-07-16 after user feedback: the set button targets Publish Settings first.)*
 
 Mechanics: a posted command runs only after the current API context ends, so the button
 **closes our modal window first**; the native dialog opens; the user edits and closes

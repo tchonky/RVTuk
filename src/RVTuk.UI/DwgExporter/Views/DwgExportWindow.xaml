@@ -48,8 +48,8 @@
                     <RadioButton IsChecked="{Binding UseSheetSet}" Content="Selected views/sheets"
                                  VerticalAlignment="Center"/>
                     <Button Content="Edit…" DockPanel.Dock="Right" Padding="8,2" Margin="6,0,0,0"
-                            Click="EditPdfDialog_Click"
-                            ToolTip="Closes this window and opens Revit's PDF Export dialog — edit view/sheet sets there (pencil button), then reopen DWG Export."/>
+                            Click="EditSheetSets_Click"
+                            ToolTip="Closes this window and opens Revit's Publish Settings (or, if unavailable here, the PDF Export dialog) to manage view/sheet sets, then reopen DWG Export."/>
                     <ComboBox ItemsSource="{Binding SheetSets}"
                               SelectedItem="{Binding SelectedSheetSet}"
                               DisplayMemberPath="Display"

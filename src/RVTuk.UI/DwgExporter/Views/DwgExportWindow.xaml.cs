@@ -40,6 +40,7 @@ namespace RVTuk.UI.DwgExporter.Views
         private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
         private void EditPdfDialog_Click(object sender, RoutedEventArgs e) => HandOff("pdf");
+        private void EditSheetSets_Click(object sender, RoutedEventArgs e) => HandOff("sets");
         private void EditDwgSetups_Click(object sender, RoutedEventArgs e) => HandOff("dwgsetups");
 
         private void HandOff(string kind)

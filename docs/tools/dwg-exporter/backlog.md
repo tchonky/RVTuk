@@ -8,8 +8,11 @@
   the real rule editor. The window closes first (posted commands run after the modal
   command ends); reopening re-reads setups and restores selections. Custom in-tool
   editors stay off the table unless the hop proves unusable.
-- [x] **View/sheet set editor** — same hand-off, same dialog (its pencil also manages
-  `ViewSheetSet`s). "Edit…" button on the range row.
+- [x] **View/sheet set editor** — hand-off on the range row: posts **Publish Settings**
+  (`PostableCommand.PublishSettings`, a dedicated set manager) and falls back to the
+  PDF Export dialog (its pencil also manages sets) when Revit greys Publish Settings
+  out for the current model. Naming rules can't move there — the rule editor exists
+  only inside the PDF Export dialog.
 - [x] **DWG export settings editor** — shipped as a hand-off straight to the native
   "Modify DWG/DXF Export Setup" dialog (`PostableCommand.ExportOptionsExportSetupsDWGOrDXF`).
 - [x] **Export DWG + PDF together** — one command produces both file sets, same

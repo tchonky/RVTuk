@@ -110,20 +110,32 @@ namespace RVTuk.Revit.DwgExporter.Commands
                     evaluateExample, planExport, runExport);
                 vm.OpenNativeDialog = kind =>
                 {
-                    try
+                    // "sets" prefers Publish Settings (a dedicated view/sheet-set manager);
+                    // Revit greys it out for some model contexts, so the PDF Export dialog —
+                    // whose pencil also edits sets — is the fallback.
+                    var candidates = kind switch
                     {
-                        var postable = kind == "pdf"
-                            ? PostableCommand.ExportPDF
-                            : PostableCommand.ExportOptionsExportSetupsDWGOrDXF;
-                        var id = RevitCommandId.LookupPostableCommandId(postable);
-                        if (id == null || !commandData.Application.CanPostCommand(id)) return false;
-                        commandData.Application.PostCommand(id);
-                        return true;
-                    }
-                    catch
+                        "sets" => new[] { PostableCommand.PublishSettings, PostableCommand.ExportPDF },
+                        "dwgsetups" => new[] { PostableCommand.ExportOptionsExportSetupsDWGOrDXF },
+                        _ => new[] { PostableCommand.ExportPDF },
+                    };
+                    foreach (var postable in candidates)
                     {
-                        return false; // another command already posted, or id unavailable
+                        try
+                        {
+                            var id = RevitCommandId.LookupPostableCommandId(postable);
+                            if (id != null && commandData.Application.CanPostCommand(id))
+                            {
+                                commandData.Application.PostCommand(id);
+                                return true;
+                            }
+                        }
+                        catch
+                        {
+                            // another command already posted, or id unavailable — try next
+                        }
                     }
+                    return false;
                 };
 
                 var window = new DwgExportWindow(vm);
