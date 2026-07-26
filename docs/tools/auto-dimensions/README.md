@@ -1,10 +1,18 @@
 # Auto Dimensions
 
 **What it is:** draw a detail line on the dedicated "Dimensions_Line" style as a
-positional reference; the tool dimensions every wall, door and window crossing it,
-re-runnable after model changes without re-picking references. The single entry point is a
-dockable pane: tick the reference categories, and per level tick which views receive the
-dimensions (a single-view run is just that one view ticked).
+positional reference; the tool dimensions every wall, door and window crossing it — in the
+host model **and in loaded Revit links** — re-runnable after model changes without
+re-picking references. The single entry point is a dockable pane: tick the reference
+categories, and per level tick which views receive the dimensions (a single-view run is
+just that one view ticked). Levels collapse; their views are listed alphabetically.
+
+**Linked models:** a linked document can't be collected view-scoped (the view belongs to the
+host), so its elements are collected whole-document and filtered by the target view's **cut
+plane** instead — without that, every storey of the link would pile into one plan, the
+crossing test being 2D. Consequences: links are only considered in plan views, and a linked
+element hidden in the view by other means (filters, worksets, phase) is still a candidate.
+References are re-expressed through the link instance via `Reference.CreateLinkReference`.
 
 **Status:** registered on the RVTuk ribbon panel, gated by `RegisterAutoDimensions` in
 `src/RVTuk.Revit/Application.cs` (on). In-Revit verification pass still outstanding.

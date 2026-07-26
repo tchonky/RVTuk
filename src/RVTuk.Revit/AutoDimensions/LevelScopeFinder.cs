@@ -38,6 +38,8 @@ namespace RVTuk.Revit.AutoDimensions
 
                 // Ascending ElementId: arbitrary but deterministic, per the spec — a level is only
                 // expected to hold one reference view, and the first found wins if it holds more.
+                // The reference view is chosen from THIS order; the tree is sorted for display
+                // afterwards, so renaming a view can never change which one is the reference.
                 var views = group.OrderBy(v => v.Id.Value).ToList();
                 var referenceView = views.FirstOrDefault(v => viewsOwningReferenceLines.Contains(v.Id));
 
@@ -45,7 +47,7 @@ namespace RVTuk.Revit.AutoDimensions
                     level.Id.Value,
                     level.Name,
                     referenceView?.Id.Value,
-                    views.Select(v => new ScopeViewInfo(v.Id.Value, v.Name)).ToList())));
+                    ScopeViewOrder.Sort(views.Select(v => new ScopeViewInfo(v.Id.Value, v.Name))))));
             }
 
             return scopes

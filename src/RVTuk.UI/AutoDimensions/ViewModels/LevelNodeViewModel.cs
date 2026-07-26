@@ -37,6 +37,23 @@ namespace RVTuk.UI.AutoDimensions.ViewModels
         public string DisplayName => HasReferenceView ? LevelName : LevelName + "   — no reference view";
         public ObservableCollection<ViewNodeViewModel> Views { get; }
 
+        private bool _isExpanded = true;
+        public bool IsExpanded
+        {
+            get => _isExpanded;
+            set
+            {
+                SetProperty(ref _isExpanded, value);
+                OnPropertyChanged(nameof(ShowViews));
+            }
+        }
+
+        /// <summary>
+        /// A level with no reference view has no views to show at all, so it never expands —
+        /// collapsing is only about taming the length of a project with many levels.
+        /// </summary>
+        public bool ShowViews => HasReferenceView && IsExpanded;
+
         private bool _isChecked;
         public bool IsChecked
         {

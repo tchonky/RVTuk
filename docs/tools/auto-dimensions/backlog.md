@@ -19,6 +19,11 @@ Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
   `CategoryMask.FromMask` clamps them off until the resolution logic exists.
 - [ ] **Surface a level with several reference views.** Today the first by ascending `ElementId`
   silently wins; the convention is one per level, so this is only worth doing if it bites.
+- [ ] **Linked elements ignore view-level visibility.** They're filtered by the target view's cut
+  plane only (see the README) — a linked wall hidden by a view filter, workset or phase is still
+  dimensioned. Tightening this means resolving the link's visibility settings per view.
+- [ ] **Links are skipped in non-plan views.** No cut plane, so no elevation filter, so no safe
+  way to tell which storey of the link belongs in the view.
 
 ## ⏳ Release
 

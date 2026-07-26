@@ -67,18 +67,45 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Margin="0,0,0,8">
-                                <CheckBox Content="{Binding LevelName}"
-                                          IsChecked="{Binding IsChecked, Mode=TwoWay}"
-                                          FontWeight="SemiBold"
-                                          Visibility="{Binding HasReferenceView, Converter={StaticResource BoolVis}}"/>
-                                <TextBlock Text="{Binding DisplayName}"
-                                           Foreground="{StaticResource Brush.Warning}"
-                                           FontWeight="SemiBold"
-                                           TextWrapping="Wrap"
-                                           Visibility="{Binding HasNoReferenceView, Converter={StaticResource BoolVis}}"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <ToggleButton IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                                                  Focusable="False"
+                                                  VerticalAlignment="Center"
+                                                  ToolTip="Collapse or expand this level's views"
+                                                  Visibility="{Binding HasReferenceView, Converter={StaticResource BoolVis}}">
+                                        <ToggleButton.Template>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border Background="Transparent" Padding="2,0">
+                                                    <TextBlock x:Name="Glyph" Text="&#x25BE;"
+                                                               Foreground="{StaticResource Brush.TextMuted}"
+                                                               FontSize="10" Width="10"
+                                                               TextAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="False">
+                                                        <Setter TargetName="Glyph" Property="Text" Value="&#x25B8;"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Glyph" Property="Foreground"
+                                                                Value="{StaticResource Brush.Text}"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </ToggleButton.Template>
+                                    </ToggleButton>
+                                    <CheckBox Content="{Binding LevelName}"
+                                              IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                              FontWeight="SemiBold"
+                                              Visibility="{Binding HasReferenceView, Converter={StaticResource BoolVis}}"/>
+                                    <TextBlock Text="{Binding DisplayName}"
+                                               Foreground="{StaticResource Brush.Warning}"
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap"
+                                               Visibility="{Binding HasNoReferenceView, Converter={StaticResource BoolVis}}"/>
+                                </StackPanel>
                                 <ItemsControl ItemsSource="{Binding Views}"
                                               Margin="18,2,0,0"
-                                              Visibility="{Binding HasReferenceView, Converter={StaticResource BoolVis}}">
+                                              Visibility="{Binding ShowViews, Converter={StaticResource BoolVis}}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <CheckBox Content="{Binding DisplayName}"
