@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Windows;
@@ -8,7 +9,9 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using WpfColor = System.Windows.Media.Color;
 using WpfPoint = System.Windows.Point;
+using RVTuk.Core.AutoDimensions;
 using RVTuk.Revit.AutoDimensions;
+using RVTuk.Revit.AutoDimensions.ExternalEvents;
 using RVTuk.Revit.DwgExporter.Commands;
 using RVTuk.Revit.FamilyBrowser.Commands;
 using RVTuk.Revit.NeoProperties.Commands;
@@ -47,6 +50,11 @@ namespace RVTuk.Revit
         public static RVTuk.UI.RishuiZamin.Views.RishuiZaminWindow? RishuiZaminWindow { get; set; }
         public static UIApplication? CurrentUIApp { get; set; }
         public static RVTuk.UI.NeoProperties.ViewModels.NeoPropertiesViewModel NeoPropertiesViewModel { get; private set; } = null!;
+        public static LevelDiscoveryEventHandler LevelDiscoveryHandler { get; private set; } = null!;
+        public static ExternalEvent LevelDiscoveryEvent { get; private set; } = null!;
+        public static CreateDimensionsEventHandler CreateDimensionsHandler { get; private set; } = null!;
+        public static ExternalEvent CreateDimensionsEvent { get; private set; } = null!;
+        public static RVTuk.UI.AutoDimensions.ViewModels.AutoDimensionsPaneViewModel AutoDimensionsPaneViewModel { get; private set; } = null!;
 
         /// <summary>
         /// v1 launch surface: only the Family Browser, Area Calc, and DWG Export are registered. Flip to true
@@ -114,6 +122,42 @@ namespace RVTuk.Revit
                     NeoPropertiesPaneProvider.PaneId,
                     "Neo Properties",
                     new NeoPropertiesPaneProvider(neoView));
+
+                LevelDiscoveryHandler   = new LevelDiscoveryEventHandler();
+                LevelDiscoveryEvent     = ExternalEvent.Create(LevelDiscoveryHandler);
+                CreateDimensionsHandler = new CreateDimensionsEventHandler();
+                CreateDimensionsEvent   = ExternalEvent.Create(CreateDimensionsHandler);
+
+                // The pane (UI project) only ever sees these delegates — no Revit types cross over.
+                // Both block on WaitForCompletion, so the view model calls them from the pool.
+                Func<AutoDimensionsScope> discoverScope = () =>
+                {
+                    LevelDiscoveryHandler.Reset();
+                    LevelDiscoveryEvent.Raise();
+                    LevelDiscoveryHandler.WaitForCompletion();
+                    return LevelDiscoveryHandler.Result;
+                };
+
+                Func<int, IReadOnlyList<long>, string> createDimensions = (mask, viewIds) =>
+                {
+                    CreateDimensionsHandler.Prepare(mask, viewIds);
+                    CreateDimensionsEvent.Raise();
+                    CreateDimensionsHandler.WaitForCompletion();
+                    return CreateDimensionsHandler.Summary;
+                };
+
+                AutoDimensionsPaneViewModel =
+                    new RVTuk.UI.AutoDimensions.ViewModels.AutoDimensionsPaneViewModel(
+                        discoverScope, createDimensions);
+
+                var autoDimView = new RVTuk.UI.AutoDimensions.Views.AutoDimensionsPaneView
+                {
+                    DataContext = AutoDimensionsPaneViewModel
+                };
+                application.RegisterDockablePane(
+                    AutoDimensionsPaneProvider.PaneId,
+                    "Auto Dimensions",
+                    new AutoDimensionsPaneProvider(autoDimView));
             }
 
             try
@@ -205,6 +249,19 @@ namespace RVTuk.Revit
             autoDimBtn.Image      = CreateAutoDimensionsIcon(16);
 
             autoDimPanel.AddItem(autoDimBtn);
+
+            var autoDimPaneBtn = new PushButtonData(
+                "AutoDimensionsScope",
+                "Dimension\nScope",
+                assemblyPath,
+                typeof(AutoDimensionsPaneCommand).FullName!)
+            {
+                ToolTip = "Open the Auto Dimensions scope pane: pick reference categories and which views of each level get dimensions"
+            };
+            autoDimPaneBtn.LargeImage = CreateAutoDimensionsIcon(32);
+            autoDimPaneBtn.Image      = CreateAutoDimensionsIcon(16);
+
+            autoDimPanel.AddItem(autoDimPaneBtn);
 
             RibbonPanel neoPanel = app.CreateRibbonPanel("Neo Properties");
             var neoBtn = new PushButtonData(
