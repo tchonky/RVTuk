@@ -70,6 +70,7 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
             var report = new StringBuilder();
             var totalCreated = 0;
             var totalSkipped = 0;
+            var totals = new DimensionRunTally();
 
             using (var tx = new Transaction(doc, "Auto Dimensions (scope)"))
             {
@@ -100,6 +101,9 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
 
                             totalCreated += tally.Created;
                             totalSkipped += tally.Skipped;
+                            totals.ExcludedNotCut += tally.ExcludedNotCut;
+                            totals.ExcludedNoReferences += tally.ExcludedNoReferences;
+                            totals.CoincidentMerged += tally.CoincidentMerged;
                             report.AppendLine(
                                 $"{scope.LevelName} — {viewInfo.ViewName}: " +
                                 $"{tally.Created} created, {tally.Skipped} skipped");
@@ -123,7 +127,27 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
             if (levelsWithoutReferenceView > 0)
                 report.Append($" {levelsWithoutReferenceView} level(s) skipped — no reference view.");
 
+            AppendExclusions(report, totals);
             return report.ToString();
+        }
+
+        /// <summary>
+        /// Why elements a line visibly crosses may carry no mark. Without this the three causes
+        /// are indistinguishable from a bug, and every one of them is silent by nature.
+        /// </summary>
+        private static void AppendExclusions(StringBuilder report, DimensionRunTally totals)
+        {
+            if (!totals.HasExclusions) return;
+
+            report.AppendLine();
+            report.AppendLine();
+            report.AppendLine("Not marked:");
+            if (totals.ExcludedNotCut > 0)
+                report.AppendLine($"  • {totals.ExcludedNotCut} element(s) the view draws but does not cut (below the cut plane).");
+            if (totals.ExcludedNoReferences > 0)
+                report.AppendLine($"  • {totals.ExcludedNoReferences} crossing(s) with no usable faces (curtain or stacked walls report none).");
+            if (totals.CoincidentMerged > 0)
+                report.Append($"  • {totals.CoincidentMerged} reference(s) merged for sharing a position along the line (joined walls).");
         }
 
         public string GetName() => "RVTuk.AutoDimensionsCreateDimensionsEventHandler";

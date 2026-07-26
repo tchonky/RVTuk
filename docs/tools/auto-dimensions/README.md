@@ -7,12 +7,23 @@ re-picking references. The single entry point is a dockable pane: tick the refer
 categories, and per level tick which views receive the dimensions (a single-view run is
 just that one view ticked). Levels collapse; their views are listed alphabetically.
 
+**The cut plane decides what counts.** A plan view *draws* far more than it *cuts* —
+everything down to its view depth appears in projection — and the crossing test is 2D, so a
+wall on the storey below crosses a reference line just as convincingly as this storey's.
+Every candidate, host or linked, must therefore reach the view's cut plane. Skipping this for
+host elements was the cause of the "ghost marks under the floor" bug, and of real walls
+losing their marks: a ghost face within ~1mm of a real one collapses the pair, and the ghost
+sorts first.
+
 **Linked models:** a linked document can't be collected view-scoped (the view belongs to the
-host), so its elements are collected whole-document and filtered by the target view's **cut
-plane** instead — without that, every storey of the link would pile into one plan, the
-crossing test being 2D. Consequences: links are only considered in plan views, and a linked
-element hidden in the view by other means (filters, worksets, phase) is still a candidate.
-References are re-expressed through the link instance via `Reference.CreateLinkReference`.
+host), so its elements are collected whole-document and filtered by the same cut plane.
+Consequences: links are only considered in plan views, and a linked element hidden in the
+view by other means (filters, worksets, phase) is still a candidate. References are
+re-expressed through the link instance via `Reference.CreateLinkReference`.
+
+**When a crossing carries no mark,** the run summary says which of the three silent causes
+applied: not cut by the view, no usable faces (curtain and stacked walls report none), or
+references merged for sharing a position along the line.
 
 **Status:** registered on the RVTuk ribbon panel, gated by `RegisterAutoDimensions` in
 `src/RVTuk.Revit/Application.cs` (on). In-Revit verification pass still outstanding.

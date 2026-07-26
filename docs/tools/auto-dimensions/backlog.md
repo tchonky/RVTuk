@@ -4,7 +4,12 @@ Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
 
 ## 🐞 Bugs
 
-*(none tracked)*
+- [ ] **Curtain and stacked walls cross a line and mark nothing.** `HostObjectUtils.GetSideFaces`
+  reports no side faces for either, so the candidate is dropped. The run summary now counts these
+  ("no usable faces"). A stacked wall could be resolved through `GetStackedWallMemberIds`; a
+  curtain wall has no side faces to find and would need a different reference entirely.
+- [ ] **A profile-edited wall may mark at the wrong place.** Reference resolution takes
+  `GetSideFaces(...)[0]`, an arbitrary one when a wall reports several faces per side.
 
 ## ✨ Improvements
 

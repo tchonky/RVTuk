@@ -30,6 +30,13 @@ namespace RVTuk.Revit.AutoDimensions
     {
         public IReadOnlyList<DimensionCandidate> Items { get; set; } = new List<DimensionCandidate>();
         public IReadOnlyList<WallCandidate> Segments { get; set; } = new List<WallCandidate>();
+
+        /// <summary>
+        /// Elements the view draws but does not cut — walls below the cut plane, shown in
+        /// projection. Reported in the run summary because their absence is a deliberate
+        /// decision the user may need to see.
+        /// </summary>
+        public int ExcludedNotCut { get; set; }
     }
 
     /// <summary>
@@ -45,13 +52,36 @@ namespace RVTuk.Revit.AutoDimensions
 
         public static DimensionCandidateSet Collect(Document doc, View view, DimensionCategories categories)
         {
-            var items = new List<DimensionCandidate>();
-            var segments = new List<WallCandidate>();
+            // The cut plane governs BOTH host and linked elements. A plan view draws far more
+            // than it cuts — everything down to its view depth appears in projection — so a
+            // view-scoped collector alone hands back the storey below's walls, which then cross
+            // the reference line just as convincingly as this storey's (the test is 2D).
+            var cutZ = TryGetCutPlaneElevation(doc, view);
+            var accumulated = new Accumulator();
 
-            CollectHost(doc, view, categories, items, segments);
-            CollectLinks(doc, view, categories, items, segments);
+            CollectHost(doc, view, categories, cutZ, accumulated);
+            CollectLinks(doc, view, categories, cutZ, accumulated);
 
-            return new DimensionCandidateSet { Items = items, Segments = segments };
+            return new DimensionCandidateSet
+            {
+                Items = accumulated.Items,
+                Segments = accumulated.Segments,
+                ExcludedNotCut = accumulated.ExcludedNotCut,
+            };
+        }
+
+        /// <summary>Collects the two index-aligned lists plus the exclusion tally as we go.</summary>
+        private sealed class Accumulator
+        {
+            public readonly List<DimensionCandidate> Items = new List<DimensionCandidate>();
+            public readonly List<WallCandidate> Segments = new List<WallCandidate>();
+            public int ExcludedNotCut;
+
+            public void Add(DimensionCandidate candidate, WallCandidate segment)
+            {
+                Items.Add(candidate);
+                Segments.Add(segment);
+            }
         }
 
         /// <summary>
@@ -112,23 +142,23 @@ namespace RVTuk.Revit.AutoDimensions
             Document doc,
             View view,
             DimensionCategories categories,
-            List<DimensionCandidate> items,
-            List<WallCandidate> segments)
+            double? cutZ,
+            Accumulator accumulated)
         {
-            // View-scoped collector: what the view actually shows, so no elevation filtering is
-            // needed here (cutZ null) — unlike links, which have no view of their own.
+            // The view-scoped collector answers "what does this view draw", which includes
+            // everything in projection below the cut plane. cutZ narrows that to what it cuts.
             if (categories.HasFlag(DimensionCategories.Walls))
             {
                 AddWalls(
                     new FilteredElementCollector(doc, view.Id).OfClass(typeof(Wall)).Cast<Wall>(),
-                    null, Transform.Identity, null, items, segments);
+                    null, Transform.Identity, cutZ, accumulated);
             }
 
             if (categories.HasFlag(DimensionCategories.Doors))
-                AddOpenings(HostOpenings(doc, view, BuiltInCategory.OST_Doors), null, Transform.Identity, null, items, segments);
+                AddOpenings(HostOpenings(doc, view, BuiltInCategory.OST_Doors), null, Transform.Identity, cutZ, accumulated);
 
             if (categories.HasFlag(DimensionCategories.Windows))
-                AddOpenings(HostOpenings(doc, view, BuiltInCategory.OST_Windows), null, Transform.Identity, null, items, segments);
+                AddOpenings(HostOpenings(doc, view, BuiltInCategory.OST_Windows), null, Transform.Identity, cutZ, accumulated);
         }
 
         /// <summary>
@@ -143,10 +173,11 @@ namespace RVTuk.Revit.AutoDimensions
             Document doc,
             View view,
             DimensionCategories categories,
-            List<DimensionCandidate> items,
-            List<WallCandidate> segments)
+            double? cutZ,
+            Accumulator accumulated)
         {
-            var cutZ = TryGetCutPlaneElevation(doc, view);
+            // Without a cut plane there is no way to tell which storey of the link belongs here,
+            // so links are skipped entirely rather than guessed at.
             if (cutZ == null) return;
 
             foreach (var link in new FilteredElementCollector(doc, view.Id)
@@ -164,14 +195,14 @@ namespace RVTuk.Revit.AutoDimensions
                     {
                         AddWalls(
                             new FilteredElementCollector(linkDoc).OfClass(typeof(Wall)).Cast<Wall>(),
-                            link, transform, cutZ, items, segments);
+                            link, transform, cutZ, accumulated);
                     }
 
                     if (categories.HasFlag(DimensionCategories.Doors))
-                        AddOpenings(LinkOpenings(linkDoc, BuiltInCategory.OST_Doors), link, transform, cutZ, items, segments);
+                        AddOpenings(LinkOpenings(linkDoc, BuiltInCategory.OST_Doors), link, transform, cutZ, accumulated);
 
                     if (categories.HasFlag(DimensionCategories.Windows))
-                        AddOpenings(LinkOpenings(linkDoc, BuiltInCategory.OST_Windows), link, transform, cutZ, items, segments);
+                        AddOpenings(LinkOpenings(linkDoc, BuiltInCategory.OST_Windows), link, transform, cutZ, accumulated);
                 }
                 catch
                 {
@@ -197,25 +228,29 @@ namespace RVTuk.Revit.AutoDimensions
             RevitLinkInstance? link,
             Transform transform,
             double? cutZ,
-            List<DimensionCandidate> items,
-            List<WallCandidate> segments)
+            Accumulator accumulated)
         {
             // Straight walls only: Core's finder is a 2D segment intersection, and Revit can't
             // linear-dimension a curved face against a straight line anyway.
             foreach (var wall in walls)
             {
                 if ((wall.Location as LocationCurve)?.Curve is not Line centerline) continue;
-                if (!ReachesCutPlane(wall, transform, cutZ)) continue;
-
-                items.Add(new DimensionCandidate
+                if (!ReachesCutPlane(wall, transform, cutZ))
                 {
-                    Kind = DimensionCandidateKind.Wall,
-                    Wall = wall,
-                    Link = link,
-                });
-                segments.Add(new WallCandidate(
-                    ToXyPoint(transform.OfPoint(centerline.GetEndPoint(0))),
-                    ToXyPoint(transform.OfPoint(centerline.GetEndPoint(1)))));
+                    accumulated.ExcludedNotCut++;
+                    continue;
+                }
+
+                accumulated.Add(
+                    new DimensionCandidate
+                    {
+                        Kind = DimensionCandidateKind.Wall,
+                        Wall = wall,
+                        Link = link,
+                    },
+                    new WallCandidate(
+                        ToXyPoint(transform.OfPoint(centerline.GetEndPoint(0))),
+                        ToXyPoint(transform.OfPoint(centerline.GetEndPoint(1)))));
             }
         }
 
@@ -224,34 +259,42 @@ namespace RVTuk.Revit.AutoDimensions
             RevitLinkInstance? link,
             Transform transform,
             double? cutZ,
-            List<DimensionCandidate> items,
-            List<WallCandidate> segments)
+            Accumulator accumulated)
         {
             foreach (var instance in instances)
             {
-                if (!ReachesCutPlane(instance, transform, cutZ)) continue;
+                if (!ReachesCutPlane(instance, transform, cutZ))
+                {
+                    accumulated.ExcludedNotCut++;
+                    continue;
+                }
                 if (!TryBuildOpeningSegment(instance, transform, out var segment)) continue;
 
-                items.Add(new DimensionCandidate
-                {
-                    Kind = DimensionCandidateKind.Opening,
-                    Instance = instance,
-                    Link = link,
-                });
-                segments.Add(segment);
+                accumulated.Add(
+                    new DimensionCandidate
+                    {
+                        Kind = DimensionCandidateKind.Opening,
+                        Instance = instance,
+                        Link = link,
+                    },
+                    segment);
             }
         }
 
         /// <summary>
-        /// True when the view would draw this element as cut. Always true for host elements
-        /// (cutZ null) — the view-scoped collector has already decided what is visible.
+        /// True when the view cuts this element — not merely draws it. A plan view draws
+        /// everything down to its view depth in projection, and those elements cross a reference
+        /// line exactly as convincingly as cut ones, the crossing test being 2D.
+        ///
+        /// Permissive on the unknown: an element with no bounding box is kept, because a wall
+        /// wrongly dropped is a silent missing dimension, which is the harder failure to spot.
         /// </summary>
         private static bool ReachesCutPlane(Element element, Transform transform, double? cutZ)
         {
-            if (cutZ == null) return true;
+            if (cutZ == null) return true; // non-plan view: no cut plane to judge against
 
             var box = element.get_BoundingBox(null);
-            if (box == null) return false;
+            if (box == null) return true;
 
             var boxTransform = box.Transform ?? Transform.Identity;
             var min = transform.OfPoint(boxTransform.OfPoint(box.Min));

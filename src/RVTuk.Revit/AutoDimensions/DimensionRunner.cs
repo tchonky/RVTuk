@@ -11,6 +11,25 @@ namespace RVTuk.Revit.AutoDimensions
     {
         public int Created;
         public int Skipped;
+
+        /// <summary>Elements the view draws in projection but does not cut.</summary>
+        public int ExcludedNotCut;
+
+        /// <summary>
+        /// Crossings whose two faces could not be resolved — curtain walls and stacked walls
+        /// report no side faces, so they cross the line and mark nothing.
+        /// </summary>
+        public int ExcludedNoReferences;
+
+        /// <summary>
+        /// References collapsed for sitting at the same station along the line (joined walls,
+        /// a door flush with a wall face). Expected in small numbers; a large count means real
+        /// marks are being merged away.
+        /// </summary>
+        public int CoincidentMerged;
+
+        public bool HasExclusions =>
+            ExcludedNotCut > 0 || ExcludedNoReferences > 0 || CoincidentMerged > 0;
     }
 
     /// <summary>
@@ -49,6 +68,7 @@ namespace RVTuk.Revit.AutoDimensions
             DimensionRunTally tally)
         {
             var candidates = DimensionCandidateCollector.Collect(doc, targetView, categories);
+            tally.ExcludedNotCut += candidates.ExcludedNotCut;
 
             foreach (var line in referenceLines)
             {
@@ -100,6 +120,8 @@ namespace RVTuk.Revit.AutoDimensions
             {
                 if (DimensionCandidateCollector.TryAppendReferences(candidates.Items[index], referenceArray))
                     anyResolved = true;
+                else
+                    tally.ExcludedNoReferences++;
             }
 
             if (!anyResolved)
@@ -110,7 +132,7 @@ namespace RVTuk.Revit.AutoDimensions
 
             var dimensionLine = ToTargetViewPlane(geometryLine, targetView);
             var dimension = doc.Create.NewDimension(targetView, dimensionLine, referenceArray);
-            dimension = RemoveCoincidentReferences(doc, targetView, dimensionLine, dimension);
+            dimension = RemoveCoincidentReferences(doc, targetView, dimensionLine, dimension, tally);
             if (dimension == null)
             {
                 tally.Skipped++;
@@ -153,12 +175,14 @@ namespace RVTuk.Revit.AutoDimensions
         /// each station. Returns null (after deleting the dimension) when fewer than two survive.
         /// </summary>
         private static Dimension? RemoveCoincidentReferences(
-            Document doc, View view, Line dimensionLine, Dimension dimension)
+            Document doc, View view, Line dimensionLine, Dimension dimension, DimensionRunTally tally)
         {
             var segmentValues = GetSegmentValues(dimension);
             var keep = CoincidentReferenceFilter.KeepIndices(
                 segmentValues, doc.Application.ShortCurveTolerance);
             if (keep.Count == segmentValues.Count + 1) return dimension;
+
+            tally.CoincidentMerged += segmentValues.Count + 1 - keep.Count;
 
             var references = dimension.References;
             var filtered = new ReferenceArray();
