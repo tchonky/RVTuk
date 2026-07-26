@@ -57,13 +57,19 @@ namespace RVTuk.Revit
         public static RVTuk.UI.AutoDimensions.ViewModels.AutoDimensionsPaneViewModel AutoDimensionsPaneViewModel { get; private set; } = null!;
 
         /// <summary>
-        /// v1 launch surface: only the Family Browser, Area Calc, and DWG Export are registered. Flip to true
-        /// in a dev build to also register the unreleased tools — Auto Dimensions and Neo
-        /// Properties (their ribbon panels plus the Neo dockable pane and selection tracking).
+        /// Auto Dimensions ships on the RVTuk panel alongside the Family Browser, Area Calc and
+        /// DWG Export. Its single entry point is the dockable pane — the old active-view-only
+        /// ribbon command was folded into it (a one-view run is that view alone, ticked).
+        /// </summary>
+        private static readonly bool RegisterAutoDimensions = true;
+
+        /// <summary>
+        /// Neo Properties is still unreleased: no ribbon panel, no dockable pane, no selection
+        /// tracking. Flip to true in a dev build to work on it.
         /// (The Project Comparator was removed from this repo entirely — it lives on as its own
         /// separate project; recover the code from git history if ever needed.)
         /// </summary>
-        private static readonly bool RegisterUnreleasedTools = false;
+        private static readonly bool RegisterNeoProperties = false;
 
         private static string? _addinDir;
 
@@ -111,7 +117,7 @@ namespace RVTuk.Revit
             SetupUsageKeysHandler = new SetupUsageKeysEventHandler();
             SetupUsageKeysEvent   = ExternalEvent.Create(SetupUsageKeysHandler);
 
-            if (RegisterUnreleasedTools)
+            if (RegisterNeoProperties)
             {
                 NeoPropertiesViewModel = new RVTuk.UI.NeoProperties.ViewModels.NeoPropertiesViewModel();
                 NeoPropertiesSelectionHandler.ViewModel = NeoPropertiesViewModel;
@@ -122,7 +128,10 @@ namespace RVTuk.Revit
                     NeoPropertiesPaneProvider.PaneId,
                     "Neo Properties",
                     new NeoPropertiesPaneProvider(neoView));
+            }
 
+            if (RegisterAutoDimensions)
+            {
                 LevelDiscoveryHandler   = new LevelDiscoveryEventHandler();
                 LevelDiscoveryEvent     = ExternalEvent.Create(LevelDiscoveryHandler);
                 CreateDimensionsHandler = new CreateDimensionsEventHandler();
@@ -234,34 +243,23 @@ namespace RVTuk.Revit
 
             panel.AddItem(dwgBtn);
 
-            if (!RegisterUnreleasedTools) return;
-
-            RibbonPanel autoDimPanel = app.CreateRibbonPanel("Auto Dimensions");
-            var autoDimBtn = new PushButtonData(
-                "AutoDimensions",
-                "Auto\nDimensions",
-                assemblyPath,
-                typeof(AutoDimensionsCommand).FullName!)
+            if (RegisterAutoDimensions)
             {
-                ToolTip = "Dimension every wall crossing a Dimensions_Line detail line in the active view"
-            };
-            autoDimBtn.LargeImage = CreateAutoDimensionsIcon(32);
-            autoDimBtn.Image      = CreateAutoDimensionsIcon(16);
+                var autoDimBtn = new PushButtonData(
+                    "AutoDimensions",
+                    "Auto\nDimensions",
+                    assemblyPath,
+                    typeof(AutoDimensionsPaneCommand).FullName!)
+                {
+                    ToolTip = "Open the Auto Dimensions pane: pick the reference categories and which views of each level get dimensions"
+                };
+                autoDimBtn.LargeImage = CreateAutoDimensionsIcon(32);
+                autoDimBtn.Image      = CreateAutoDimensionsIcon(16);
 
-            autoDimPanel.AddItem(autoDimBtn);
+                panel.AddItem(autoDimBtn);
+            }
 
-            var autoDimPaneBtn = new PushButtonData(
-                "AutoDimensionsScope",
-                "Dimension\nScope",
-                assemblyPath,
-                typeof(AutoDimensionsPaneCommand).FullName!)
-            {
-                ToolTip = "Open the Auto Dimensions scope pane: pick reference categories and which views of each level get dimensions"
-            };
-            autoDimPaneBtn.LargeImage = CreateAutoDimensionsIcon(32);
-            autoDimPaneBtn.Image      = CreateAutoDimensionsIcon(16);
-
-            autoDimPanel.AddItem(autoDimPaneBtn);
+            if (!RegisterNeoProperties) return;
 
             RibbonPanel neoPanel = app.CreateRibbonPanel("Neo Properties");
             var neoBtn = new PushButtonData(

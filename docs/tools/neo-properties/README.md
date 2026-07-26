@@ -4,7 +4,7 @@
 native Properties palette, but with pinned parameters shown first and remaining groups
 in a fixed custom order. Read-only, single-element only.
 
-**Status:** code-complete, **hidden for v1** behind the `RegisterUnreleasedTools` flag
+**Status:** code-complete, **hidden for v1** behind the `RegisterNeoProperties` flag
 in `src/RVTuk.Revit/Application.cs`.
 
 **Names:** code `NeoProperties`; ribbon button "Neo Properties" (when registered).

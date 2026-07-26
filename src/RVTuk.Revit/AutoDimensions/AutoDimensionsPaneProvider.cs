@@ -1,13 +1,16 @@
 using System;
 using Autodesk.Revit.UI;
-using RVTuk.Revit.NeoProperties;
 using RVTuk.UI.AutoDimensions.Views;
 
 namespace RVTuk.Revit.AutoDimensions
 {
     /// <summary>
-    /// Registers the scope pane tabbed alongside Neo Properties — both are utility panes, and
-    /// tabbing avoids adding a second permanent dock slot.
+    /// Registers the Auto Dimensions pane docked to the right.
+    ///
+    /// Deliberately NOT tabbed behind another custom pane: Revit only creates a registered
+    /// custom pane the first time it is shown, so tabbing behind one that has never been shown
+    /// leaves the pane with nowhere to go and Show() silently does nothing. TabBehind is only
+    /// dependable against DockablePanes.BuiltInDockablePanes, which always exist.
     /// </summary>
     public class AutoDimensionsPaneProvider : IDockablePaneProvider
     {
@@ -26,8 +29,7 @@ namespace RVTuk.Revit.AutoDimensions
             data.FrameworkElement = _view;
             data.InitialState = new DockablePaneState
             {
-                DockPosition = DockPosition.Tabbed,
-                TabBehind = NeoPropertiesPaneProvider.PaneId,
+                DockPosition = DockPosition.Right,
             };
         }
     }

@@ -22,5 +22,9 @@ Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
 
 ## ⏳ Release
 
-- [ ] In-Revit verification pass, then flip `RegisterUnreleasedTools` (or promote this
-  tool to the always-registered set) to ship it.
+- [x] Registered on the RVTuk ribbon panel (`RegisterAutoDimensions` in
+  `src/RVTuk.Revit/Application.cs`, on).
+- [ ] **In-Revit verification pass still outstanding.** The 10 checks are in
+  [plans/2026-07-26-auto-dimensions-scope-pane.md](plans/2026-07-26-auto-dimensions-scope-pane.md)
+  (Task 12, Step 7). The one with no test behind it is fanning out to a *second* view of the
+  same level — that exercises `DimensionRunner.ToTargetViewPlane`.

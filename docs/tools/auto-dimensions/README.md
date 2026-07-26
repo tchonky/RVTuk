@@ -1,17 +1,20 @@
 # Auto Dimensions
 
 **What it is:** draw a detail line on the dedicated "Dimensions_Line" style as a
-positional reference; a ribbon command dimensions every wall crossing it, re-runnable
-after model changes without re-picking references. A dockable **scope pane** fans the same
-per-line logic out across every selected view of every level, and adds doors and windows as
-reference categories alongside walls.
+positional reference; the tool dimensions every wall, door and window crossing it,
+re-runnable after model changes without re-picking references. The single entry point is a
+dockable pane: tick the reference categories, and per level tick which views receive the
+dimensions (a single-view run is just that one view ticked).
 
-**Status:** code-complete, **hidden for v1** behind the `RegisterUnreleasedTools` flag
-in `src/RVTuk.Revit/Application.cs`.
+**Status:** registered on the RVTuk ribbon panel, gated by `RegisterAutoDimensions` in
+`src/RVTuk.Revit/Application.cs` (on). In-Revit verification pass still outstanding.
 
-**Names:** code `AutoDimensions`; ribbon buttons "Auto Dimensions" (single view, walls only)
-and "Dimension Scope" (the pane). Supersedes the old separate `KKimensions` /
-DimensionPropagator project.
+**Names:** code `AutoDimensions`; ribbon button "Auto Dimensions". Supersedes the old
+separate `KKimensions` / DimensionPropagator project.
+
+**History:** v1 was an active-view-only, walls-only ribbon command. v1.1 folded that command
+into the pane — same per-line pipeline (`DimensionRunner`), now fanned out across views and
+categories. The v1 command class was deleted; recover it from git history if ever needed.
 
 ## Code
 

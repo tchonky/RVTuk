@@ -16,9 +16,10 @@ Check off with `[x]` and the commit hash when shipped.
 ## ▶ Status (read me first)
 
 - Branch: **`master`** (the old `family-explorer` branch work is merged and shipped).
-- **v1 launch surface:** Family Browser + Rishui Zamin (Area Calc) are registered;
-  Auto Dimensions and Neo Properties are code-complete but hidden behind
-  `RegisterUnreleasedTools` in `src/RVTuk.Revit/Application.cs`.
+- **v1 launch surface:** Family Browser, Rishui Zamin (Area Calc), DWG Export and Auto
+  Dimensions are registered on the one "RVTuk" ribbon panel; Neo Properties is
+  code-complete but hidden behind `RegisterNeoProperties` in
+  `src/RVTuk.Revit/Application.cs`.
 - Working style: replies terse; **minimal code comments**; run git for the user
   (git novice) and explain simply; move items to the right backlog's Done section
   with the commit hash as they ship.

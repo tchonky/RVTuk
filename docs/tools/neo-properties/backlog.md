@@ -16,5 +16,5 @@ Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
 
 ## ⏳ Release
 
-- [ ] In-Revit verification pass, then flip `RegisterUnreleasedTools` (or promote this
-  tool to the always-registered set) to ship it.
+- [ ] In-Revit verification pass, then flip `RegisterNeoProperties` in
+  `src/RVTuk.Revit/Application.cs` to ship it.
