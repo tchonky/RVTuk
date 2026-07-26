@@ -18,12 +18,12 @@ namespace RVTuk.UI.AutoDimensions.ViewModels
     public class AutoDimensionsPaneViewModel : ViewModelBase
     {
         private readonly Func<AutoDimensionsScope> _discover;
-        private readonly Func<int, IReadOnlyList<long>, string> _createDimensions;
+        private readonly Func<int, IReadOnlyList<long>, int, string> _createDimensions;
         private readonly Dispatcher _dispatcher;
 
         public AutoDimensionsPaneViewModel(
             Func<AutoDimensionsScope> discover,
-            Func<int, IReadOnlyList<long>, string> createDimensions)
+            Func<int, IReadOnlyList<long>, int, string> createDimensions)
         {
             _discover = discover;
             _createDimensions = createDimensions;
@@ -57,6 +57,21 @@ namespace RVTuk.UI.AutoDimensions.ViewModels
         {
             get => _isBusy;
             private set => SetProperty(ref _isBusy, value);
+        }
+
+        private int _openingReachMillimetres = ScopeDefaults.OpeningReachMillimetres;
+
+        /// <summary>
+        /// How far from the reference line a door's or window's wall may sit and still be
+        /// dimensioned by it. Openings are measured across their width, so they only qualify on
+        /// walls running ALONG the line — and a line never touches such a wall, so this distance
+        /// is what stands in for "crossing". Drafting convention, hence the user's to set:
+        /// exterior dimension strings commonly sit further out than the 1000 mm default.
+        /// </summary>
+        public int OpeningReachMillimetres
+        {
+            get => _openingReachMillimetres;
+            set => SetProperty(ref _openingReachMillimetres, value < 0 ? 0 : value);
         }
 
         /// <summary>Re-reads levels, views and the persisted selection. Returns immediately.</summary>
@@ -101,6 +116,9 @@ namespace RVTuk.UI.AutoDimensions.ViewModels
             foreach (var option in Categories)
                 option.IsChecked = option.IsEnabled && categories.HasFlag(option.Category);
 
+            OpeningReachMillimetres = scope.Selection?.OpeningReachMillimetres
+                ?? ScopeDefaults.OpeningReachMillimetres;
+
             var persisted = scope.Selection == null
                 ? null
                 : new HashSet<long>(scope.Selection.CheckedViewIds);
@@ -141,6 +159,7 @@ namespace RVTuk.UI.AutoDimensions.ViewModels
         {
             var mask = SelectedCategoryMask;
             var viewIds = CheckedViewIds;
+            var reach = OpeningReachMillimetres;
 
             IsBusy = true;
             StatusMessage = "Creating dimensions…";
@@ -150,7 +169,7 @@ namespace RVTuk.UI.AutoDimensions.ViewModels
                 string summary;
                 try
                 {
-                    summary = _createDimensions(mask, viewIds);
+                    summary = _createDimensions(mask, viewIds, reach);
                 }
                 catch (Exception ex)
                 {

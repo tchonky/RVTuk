@@ -52,6 +52,19 @@
             </StackPanel>
         </Border>
 
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10,0,10,10"
+                    ToolTip="Doors and windows are measured across their width, so they only count on walls running along the reference line — never on walls it crosses. This is how far away such a wall may sit.">
+            <TextBlock Text="Openings within"
+                       Foreground="{StaticResource Brush.TextMuted}"
+                       FontSize="11" VerticalAlignment="Center"/>
+            <TextBox Text="{Binding OpeningReachMillimetres, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, FallbackValue=1000}"
+                     Width="56" Margin="6,0,6,0" Padding="3,1"
+                     VerticalAlignment="Center" TextAlignment="Right"/>
+            <TextBlock Text="mm of the line"
+                       Foreground="{StaticResource Brush.TextMuted}"
+                       FontSize="11" VerticalAlignment="Center"/>
+        </StackPanel>
+
         <TextBlock DockPanel.Dock="Top"
                    Text="LEVELS AND TARGET VIEWS"
                    Foreground="{StaticResource Brush.TextMuted}"

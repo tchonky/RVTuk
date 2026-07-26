@@ -147,9 +147,9 @@ namespace RVTuk.Revit
                     return LevelDiscoveryHandler.Result;
                 };
 
-                Func<int, IReadOnlyList<long>, string> createDimensions = (mask, viewIds) =>
+                Func<int, IReadOnlyList<long>, int, string> createDimensions = (mask, viewIds, reachMm) =>
                 {
-                    CreateDimensionsHandler.Prepare(mask, viewIds);
+                    CreateDimensionsHandler.Prepare(mask, viewIds, reachMm);
                     CreateDimensionsEvent.Raise();
                     CreateDimensionsHandler.WaitForCompletion();
                     return CreateDimensionsHandler.Summary;

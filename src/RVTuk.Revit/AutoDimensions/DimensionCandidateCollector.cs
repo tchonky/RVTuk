@@ -32,6 +32,12 @@ namespace RVTuk.Revit.AutoDimensions
         public IReadOnlyList<WallCandidate> Segments { get; set; } = new List<WallCandidate>();
 
         /// <summary>
+        /// How each candidate earns its place on a line — walls by being crossed, openings by
+        /// lying alongside. Index-aligned with the other two.
+        /// </summary>
+        public IReadOnlyList<CandidateMatch> MatchModes { get; set; } = new List<CandidateMatch>();
+
+        /// <summary>
         /// Elements the view draws but does not cut — walls below the cut plane, shown in
         /// projection. Reported in the run summary because their absence is a deliberate
         /// decision the user may need to see.
@@ -74,22 +80,25 @@ namespace RVTuk.Revit.AutoDimensions
             {
                 Items = accumulated.Items,
                 Segments = accumulated.Segments,
+                MatchModes = accumulated.MatchModes,
                 ExcludedNotCut = accumulated.ExcludedNotCut,
                 CutPlaneElevation = cutZ,
             };
         }
 
-        /// <summary>Collects the two index-aligned lists plus the exclusion tally as we go.</summary>
+        /// <summary>Collects the index-aligned lists plus the exclusion tally as we go.</summary>
         private sealed class Accumulator
         {
             public readonly List<DimensionCandidate> Items = new List<DimensionCandidate>();
             public readonly List<WallCandidate> Segments = new List<WallCandidate>();
+            public readonly List<CandidateMatch> MatchModes = new List<CandidateMatch>();
             public int ExcludedNotCut;
 
-            public void Add(DimensionCandidate candidate, WallCandidate segment)
+            public void Add(DimensionCandidate candidate, WallCandidate segment, CandidateMatch match)
             {
                 Items.Add(candidate);
                 Segments.Add(segment);
+                MatchModes.Add(match);
             }
         }
 
@@ -341,7 +350,8 @@ namespace RVTuk.Revit.AutoDimensions
                     },
                     new WallCandidate(
                         ToXyPoint(transform.OfPoint(centerline.GetEndPoint(0))),
-                        ToXyPoint(transform.OfPoint(centerline.GetEndPoint(1)))));
+                        ToXyPoint(transform.OfPoint(centerline.GetEndPoint(1)))),
+                    CandidateMatch.Crossing);
             }
         }
 
@@ -368,7 +378,8 @@ namespace RVTuk.Revit.AutoDimensions
                         Instance = instance,
                         Link = link,
                     },
-                    segment);
+                    segment,
+                    CandidateMatch.Alongside);
             }
         }
 

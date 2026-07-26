@@ -65,6 +65,7 @@ namespace RVTuk.Revit.AutoDimensions
             IReadOnlyList<DetailLine> referenceLines,
             View targetView,
             DimensionCategories categories,
+            double openingReach,
             DimensionRunTally tally)
         {
             var candidates = DimensionCandidateCollector.Collect(doc, targetView, categories);
@@ -74,7 +75,7 @@ namespace RVTuk.Revit.AutoDimensions
             {
                 try
                 {
-                    RunLine(doc, line, targetView, candidates, tally);
+                    RunLine(doc, line, targetView, candidates, openingReach, tally);
                 }
                 catch
                 {
@@ -90,6 +91,7 @@ namespace RVTuk.Revit.AutoDimensions
             DetailLine line,
             View targetView,
             DimensionCandidateSet candidates,
+            double openingReach,
             DimensionRunTally tally)
         {
             // Always first, and independent of whether this line still has crossings: a line whose
@@ -106,8 +108,10 @@ namespace RVTuk.Revit.AutoDimensions
             var lineStart = ToXyPoint(geometryLine.GetEndPoint(0));
             var lineEnd = ToXyPoint(geometryLine.GetEndPoint(1));
 
-            var crossingIndices = WallCrossingFinder.FindCrossingIndices(
-                lineStart, lineEnd, candidates.Segments);
+            // Walls by being crossed, openings by lying alongside — interleaved in one order
+            // along the line, so the dimension string reads correctly.
+            var crossingIndices = CandidateMatcher.FindMatchIndices(
+                lineStart, lineEnd, candidates.Segments, candidates.MatchModes, openingReach);
 
             if (crossingIndices.Count == 0)
             {

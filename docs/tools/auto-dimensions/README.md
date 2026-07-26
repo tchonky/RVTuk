@@ -21,8 +21,19 @@ Consequences: links are only considered in plan views, and a linked element hidd
 view by other means (filters, worksets, phase) is still a candidate. References are
 re-expressed through the link instance via `Reference.CreateLinkReference`.
 
-**When a crossing carries no mark,** the run summary says which of the three silent causes
-applied: not cut by the view, no usable faces (curtain and stacked walls report none), or
+**Walls and openings are matched by opposite tests,** because their references face opposite
+ways. A wall is measured across its thickness, so the line must **cross** it. A door or window
+is measured across its width, so the line must run **along** its host wall — a line crossing
+that wall lies parallel to the jambs and cannot measure them at all. Running alongside has no
+intersection to key on, so an opening qualifies when its wall is near-parallel to the line, its
+centre falls within the line's span, and it sits within the pane's **"openings within N mm of
+the line"** distance (default 1000). That distance is drafting convention rather than geometry,
+which is why it's the user's to set — exterior dimension strings often sit further out.
+Both kinds come back interleaved in one order along the line, so a string reads
+cross-wall, jamb, jamb, cross-wall.
+
+**When a crossing carries no mark,** the run summary says which of the silent causes applied:
+not cut by the view, no usable reference (curtain and stacked walls report no side faces), or
 references merged for sharing a position along the line.
 
 **Status:** registered on the RVTuk ribbon panel, gated by `RegisterAutoDimensions` in

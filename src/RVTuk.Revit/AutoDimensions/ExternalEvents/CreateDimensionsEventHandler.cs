@@ -20,13 +20,15 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
         private readonly ManualResetEventSlim _done = new(false);
         private int _categoryMask;
         private IReadOnlyList<long> _checkedViewIds = Array.Empty<long>();
+        private int _openingReachMillimetres = ScopeDefaults.OpeningReachMillimetres;
 
         public string Summary { get; private set; } = string.Empty;
 
-        public void Prepare(int categoryMask, IReadOnlyList<long> checkedViewIds)
+        public void Prepare(int categoryMask, IReadOnlyList<long> checkedViewIds, int openingReachMillimetres)
         {
             _categoryMask = categoryMask;
             _checkedViewIds = checkedViewIds;
+            _openingReachMillimetres = openingReachMillimetres;
             _done.Reset();
         }
 
@@ -61,6 +63,9 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
         {
             var categories = CategoryMask.FromMask(_categoryMask);
             var selectedViewIds = new HashSet<long>(_checkedViewIds);
+            // The pane speaks millimetres; everything past here is Revit's internal feet.
+            var openingReach = UnitUtils.ConvertToInternalUnits(
+                _openingReachMillimetres, UnitTypeId.Millimeters);
 
             // Re-discovered here rather than trusting the pane's snapshot: the model may have
             // changed since the tree was populated.
@@ -97,7 +102,8 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
                             if (doc.GetElement(new ElementId(viewInfo.ViewId)) is not View targetView) continue;
 
                             var tally = new DimensionRunTally();
-                            DimensionRunner.RunPair(doc, referenceLines, targetView, categories, tally);
+                            DimensionRunner.RunPair(
+                                doc, referenceLines, targetView, categories, openingReach, tally);
 
                             totalCreated += tally.Created;
                             totalSkipped += tally.Skipped;
@@ -110,7 +116,8 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
                         }
                     }
 
-                    ScopeSelectionStore.Write(doc, _categoryMask, _checkedViewIds);
+                    ScopeSelectionStore.Write(
+                        doc, _categoryMask, _checkedViewIds, _openingReachMillimetres);
                 }
                 catch
                 {
