@@ -37,6 +37,14 @@ namespace RVTuk.Revit.AutoDimensions
         /// decision the user may need to see.
         /// </summary>
         public int ExcludedNotCut { get; set; }
+
+        /// <summary>
+        /// The view's cut plane, in host coordinates; null in a non-plan view. Kept so face
+        /// resolution can pick the face that actually straddles it — a wall joined to the floor
+        /// below and the roof above reports its side as several stacked faces, and the lowest
+        /// one is no more "the" face than any other.
+        /// </summary>
+        public double? CutPlaneElevation { get; set; }
     }
 
     /// <summary>
@@ -67,6 +75,7 @@ namespace RVTuk.Revit.AutoDimensions
                 Items = accumulated.Items,
                 Segments = accumulated.Segments,
                 ExcludedNotCut = accumulated.ExcludedNotCut,
+                CutPlaneElevation = cutZ,
             };
         }
 
@@ -89,27 +98,43 @@ namespace RVTuk.Revit.AutoDimensions
         /// to the array. Returns false — leaving the array untouched — when either side can't be
         /// resolved, so one unreadable element doesn't cost the whole line its dimension.
         /// </summary>
-        public static bool TryAppendReferences(DimensionCandidate candidate, ReferenceArray target)
+        public static bool TryAppendReferences(
+            DimensionCandidateSet candidates,
+            int index,
+            XyPoint lineStart,
+            XyPoint lineEnd,
+            ReferenceArray target)
         {
             try
             {
-                Reference first;
-                Reference second;
+                var candidate = candidates.Items[index];
+                var segment = candidates.Segments[index];
+
+                Reference? first;
+                Reference? second;
 
                 if (candidate.Kind == DimensionCandidateKind.Wall)
                 {
                     if (candidate.Wall == null) return false;
+                    if (!ReferenceAlignment.CanDimension(
+                            lineStart, lineEnd, segment, ReferenceNormal.AcrossSegment))
+                        return false;
 
-                    var exterior = HostObjectUtils.GetSideFaces(candidate.Wall, ShellLayerType.Exterior);
-                    var interior = HostObjectUtils.GetSideFaces(candidate.Wall, ShellLayerType.Interior);
-                    if (exterior.Count == 0 || interior.Count == 0) return false;
-
-                    first = exterior[0];
-                    second = interior[0];
+                    var cutZ = LocalCutPlane(candidates.CutPlaneElevation, candidate.Link);
+                    first = PickSideFace(candidate.Wall, ShellLayerType.Exterior, cutZ);
+                    second = PickSideFace(candidate.Wall, ShellLayerType.Interior, cutZ);
+                    if (first == null || second == null) return false;
                 }
                 else
                 {
                     if (candidate.Instance == null) return false;
+
+                    // Jamb planes face along the host wall, so a line crossing that wall lies
+                    // parallel to them. Revit rejects the whole dimension when handed one, which
+                    // is why a line through a doorway used to produce nothing at all.
+                    if (!ReferenceAlignment.CanDimension(
+                            lineStart, lineEnd, segment, ReferenceNormal.AlongSegment))
+                        return false;
 
                     var left = candidate.Instance.GetReferences(FamilyInstanceReferenceType.Left);
                     var right = candidate.Instance.GetReferences(FamilyInstanceReferenceType.Right);
@@ -135,6 +160,72 @@ namespace RVTuk.Revit.AutoDimensions
             catch
             {
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// The wall's side face at the cut plane.
+        ///
+        /// A wall joined to the floor below and the roof above reports its side as several
+        /// stacked faces, one per join region. Taking the first was arbitrary and frequently
+        /// picked one wholly below or above the cut plane — a reference that reads, correctly,
+        /// as a mark on the floor or the roof rather than on the wall. Falls back to the first
+        /// face when none straddles the plane, so a wall is never lost to this.
+        /// </summary>
+        private static Reference? PickSideFace(Wall wall, ShellLayerType side, double? cutZ)
+        {
+            var faces = HostObjectUtils.GetSideFaces(wall, side);
+            if (faces.Count == 0) return null;
+            if (faces.Count == 1 || cutZ == null) return faces[0];
+
+            foreach (var reference in faces)
+            {
+                if (SpansCutPlane(wall, reference, cutZ.Value)) return reference;
+            }
+            return faces[0];
+        }
+
+        private static bool SpansCutPlane(Wall wall, Reference reference, double cutZ)
+        {
+            try
+            {
+                if (wall.GetGeometryObjectFromReference(reference) is not Face face) return false;
+
+                var uv = face.GetBoundingBox();
+                var corners = new[]
+                {
+                    face.Evaluate(uv.Min),
+                    face.Evaluate(new UV(uv.Min.U, uv.Max.V)),
+                    face.Evaluate(new UV(uv.Max.U, uv.Min.V)),
+                    face.Evaluate(uv.Max),
+                };
+
+                var minZ = corners.Min(p => p.Z);
+                var maxZ = corners.Max(p => p.Z);
+                return ElevationRange.CrossesCutPlane(minZ, maxZ, cutZ, CutPlaneTolerance);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// The cut plane expressed in the element's own document. Links are placed with a
+        /// rotation about Z at most, so the elevation shifts by the transform's origin alone.
+        /// </summary>
+        private static double? LocalCutPlane(double? cutZ, RevitLinkInstance? link)
+        {
+            if (cutZ == null) return null;
+            if (link == null) return cutZ;
+
+            try
+            {
+                return cutZ.Value - link.GetTotalTransform().Origin.Z;
+            }
+            catch
+            {
+                return cutZ;
             }
         }
 

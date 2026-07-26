@@ -103,10 +103,11 @@ namespace RVTuk.Revit.AutoDimensions
                 return;
             }
 
+            var lineStart = ToXyPoint(geometryLine.GetEndPoint(0));
+            var lineEnd = ToXyPoint(geometryLine.GetEndPoint(1));
+
             var crossingIndices = WallCrossingFinder.FindCrossingIndices(
-                ToXyPoint(geometryLine.GetEndPoint(0)),
-                ToXyPoint(geometryLine.GetEndPoint(1)),
-                candidates.Segments);
+                lineStart, lineEnd, candidates.Segments);
 
             if (crossingIndices.Count == 0)
             {
@@ -118,7 +119,8 @@ namespace RVTuk.Revit.AutoDimensions
             var anyResolved = false;
             foreach (var index in crossingIndices)
             {
-                if (DimensionCandidateCollector.TryAppendReferences(candidates.Items[index], referenceArray))
+                if (DimensionCandidateCollector.TryAppendReferences(
+                        candidates, index, lineStart, lineEnd, referenceArray))
                     anyResolved = true;
                 else
                     tally.ExcludedNoReferences++;

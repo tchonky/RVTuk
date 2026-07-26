@@ -29,7 +29,7 @@ namespace RVTuk.Core.AutoDimensions
                 var d2Y = wall.End.Y - wall.Start.Y;
 
                 var wallAngle = Math.Atan2(d2Y, d2X);
-                if (AngleFromParallelDegrees(lineAngle, wallAngle) < ParallelToleranceDegrees)
+                if (Angle2D.FromParallelDegrees(lineAngle, wallAngle) < ParallelToleranceDegrees)
                     continue;
 
                 var denom = d1X * d2Y - d1Y * d2X;
@@ -48,15 +48,6 @@ namespace RVTuk.Core.AutoDimensions
             }
 
             return crossings.OrderBy(c => c.T).Select(c => c.Index).ToList();
-        }
-
-        /// <summary>0 = the two directions are parallel/collinear, 90 = perpendicular.</summary>
-        private static double AngleFromParallelDegrees(double angleA, double angleB)
-        {
-            var diffDegrees = Math.Abs(angleA - angleB) * 180.0 / Math.PI;
-            diffDegrees %= 180.0;
-            if (diffDegrees > 90.0) diffDegrees = 180.0 - diffDegrees;
-            return diffDegrees;
         }
     }
 }

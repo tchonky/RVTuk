@@ -145,7 +145,7 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
             if (totals.ExcludedNotCut > 0)
                 report.AppendLine($"  • {totals.ExcludedNotCut} element(s) the view draws but does not cut (below the cut plane).");
             if (totals.ExcludedNoReferences > 0)
-                report.AppendLine($"  • {totals.ExcludedNoReferences} crossing(s) with no usable faces (curtain or stacked walls report none).");
+                report.AppendLine($"  • {totals.ExcludedNoReferences} crossing(s) with no usable reference — a curtain or stacked wall (which report no side faces), or a door/window whose jambs lie parallel to the line (a line crossing a wall cannot measure the openings in it).");
             if (totals.CoincidentMerged > 0)
                 report.Append($"  • {totals.CoincidentMerged} reference(s) merged for sharing a position along the line (joined walls).");
         }

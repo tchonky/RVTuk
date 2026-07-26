@@ -8,8 +8,15 @@ Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
   reports no side faces for either, so the candidate is dropped. The run summary now counts these
   ("no usable faces"). A stacked wall could be resolved through `GetStackedWallMemberIds`; a
   curtain wall has no side faces to find and would need a different reference entirely.
-- [ ] **A profile-edited wall may mark at the wrong place.** Reference resolution takes
-  `GetSideFaces(...)[0]`, an arbitrary one when a wall reports several faces per side.
+- [ ] **Doors and windows are selected in the one configuration where they cannot be measured.**
+  `WallCrossingFinder` only admits an opening when the line crosses its host wall, and a jamb
+  plane faces along that wall — parallel to the line, so `ReferenceAlignment` rejects it and the
+  opening contributes nothing. Openings are only dimensionable by a line running *along* their
+  wall, which the crossing rule can never select (such a wall is excluded as parallel). Making
+  them work needs a different matching rule for openings — nearly-parallel host wall, opening
+  centre projecting onto the line's span, and some bound on perpendicular distance. That last
+  one is a product decision: how far from a wall may a reference line sit and still be "its"
+  dimension line? Until then Doors/Windows are effectively inert.
 
 ## ✨ Improvements
 
