@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using RVTuk.Core.FamilyBrowser.Database;
 using RVTuk.Core.FamilyBrowser.Extraction;
+using RVTuk.Core.FamilyBrowser.Util;
 
 using RVTuk.UI.Shared.ViewModels;
 
@@ -74,7 +75,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             _repo = repo;
             _familyId = familyId;
             _rfaFullPath = rfaFullPath;
-            FamilyDisplayName = Path.GetFileNameWithoutExtension(familyFileName);
+            FamilyDisplayName = FamilyFileName.WithoutRfaExtension(familyFileName);
             _instructionsXaml = currentXaml;
             _tagsText = repo.GetTags(familyId) ?? string.Empty;
 

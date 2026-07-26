@@ -8,8 +8,8 @@ using Xunit;
 namespace RVTuk.Core.Tests.FamilyBrowser;
 
 // The deep scan writes the _Version value through IndexRepository; the Family Browser reads
-// (and fast-Syncs) the same DB file through BrowserRepository. These tests exercise that
-// cross-repository handshake on one database file, like production.
+// the same DB file through BrowserRepository. These tests exercise that cross-repository
+// handshake on one database file, like production.
 public class BrowserRepositoryVersionTests : IDisposable
 {
     private readonly string _root;
@@ -39,55 +39,35 @@ public class BrowserRepositoryVersionTests : IDisposable
         using var repo = new BrowserRepository(_dbPath);
         var item = Assert.Single(repo.GetAllFamilies());
         Assert.Equal("2", item.Version);
+        // The seeded family has no parameters at all — nothing to flag.
+        Assert.False(item.VersionIsInstance);
     }
 
-    [Fact]
-    public void UpsertFamily_UnchangedFile_KeepsVersion()
+    // The office standard wants _Version as a *type* parameter: an instance parameter can't
+    // be read off the loaded family's symbols in a project, so the browser paints the version
+    // red to say "fix this family". The flag derives from the Parameters rows the deep scan
+    // already stores; the extractor matches the name case-insensitively, so the flag must too.
+    [Theory]
+    [InlineData("_Version", true, true)]
+    [InlineData("_version", true, true)] // name match is case-insensitive, like the extractor's
+    [InlineData("_Version", false, false)] // type parameter — the standard, nothing to flag
+    [InlineData("Width", true, false)] // some other instance parameter is irrelevant
+    public void GetAllFamilies_FlagsInstanceVersionParameter(string paramName, bool isInstance, bool expected)
     {
+        using (var index = new IndexRepository(_dbPath))
+        {
+            long id = index.InsertFamily("Doors/B.rfa", "B.rfa");
+            index.UpdateFamilyMetadata(id, "Doors",
+                new List<ParameterModel>
+                {
+                    new() { ParameterName = paramName, DataType = "Text", IsInstance = isInstance },
+                },
+                null, revitYear: 0, modifiedDate: _modified, fileSize: 10, familyVersion: "3");
+        }
+
         using var repo = new BrowserRepository(_dbPath);
-        repo.UpsertFamily("Doors/A.rfa", "A.rfa", _modified, 10);
-
-        Assert.Equal("2", Assert.Single(repo.GetAllFamilies()).Version);
-    }
-
-    [Fact]
-    public void UpsertFamily_ChangedFile_ClearsStaleVersion()
-    {
-        using var repo = new BrowserRepository(_dbPath);
-        repo.UpsertFamily("Doors/A.rfa", "A.rfa", _modified.AddMinutes(5), 10);
-
-        Assert.Null(Assert.Single(repo.GetAllFamilies()).Version);
-    }
-
-    [Fact]
-    public void UpsertFamily_ChangedFile_MarksParametersStale_SoDeepScanReExtracts()
-    {
-        using (var repo = new BrowserRepository(_dbPath))
-            repo.UpsertFamily("Doors/A.rfa", "A.rfa", _modified.AddMinutes(5), 10);
-
-        using var index = new IndexRepository(_dbPath);
-        Assert.Empty(index.GetFamilyIdsWithParametersExtracted());
-    }
-
-    [Fact]
-    public void UpsertFamily_UnchangedFile_KeepsParametersExtracted()
-    {
-        using (var repo = new BrowserRepository(_dbPath))
-            repo.UpsertFamily("Doors/A.rfa", "A.rfa", _modified, 10);
-
-        using var index = new IndexRepository(_dbPath);
-        Assert.Single(index.GetFamilyIdsWithParametersExtracted());
-    }
-
-    [Fact]
-    public void UpsertFamily_NewFamily_HasNoVersion()
-    {
-        using var repo = new BrowserRepository(_dbPath);
-        repo.UpsertFamily("Doors/B.rfa", "B.rfa", _modified, 20);
-
-        var b = repo.GetAllFamilies().Find(f => f.FileName == "B.rfa");
-        Assert.NotNull(b);
-        Assert.Null(b!.Version);
+        var item = Assert.Single(repo.GetAllFamilies(), i => i.FileName == "B.rfa");
+        Assert.Equal(expected, item.VersionIsInstance);
     }
 
     // The browser's schema migration is best-effort by design (read-only share, DB locked by
@@ -129,6 +109,9 @@ public class BrowserRepositoryVersionTests : IDisposable
             var item = Assert.Single(repo.GetAllFamilies());
             Assert.Equal("Old.rfa", item.FileName);
             Assert.Null(item.Version);
+            // This schema predates the Parameters table too — the instance-version flag
+            // must degrade to false, not crash the query with "no such table".
+            Assert.False(item.VersionIsInstance);
         }
         finally
         {

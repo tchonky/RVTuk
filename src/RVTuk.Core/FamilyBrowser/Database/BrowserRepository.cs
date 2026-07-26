@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using RVTuk.Core.FamilyBrowser.Models;
+using RVTuk.Core.FamilyBrowser.Util;
 using Microsoft.Data.Sqlite;
 using SQLiteConnection = Microsoft.Data.Sqlite.SqliteConnection;
 using SQLiteCommand   = Microsoft.Data.Sqlite.SqliteCommand;
@@ -16,9 +17,14 @@ namespace RVTuk.Core.FamilyBrowser.Database
 
         // False when the DB predates the Version/ParametersExtracted columns AND the best-effort
         // migration below couldn't run (read-only share, DB locked). Reads then surface a null
-        // Version and writes skip the new clauses — the version check is simply off until a
-        // writable open (here or a deep scan) migrates the schema.
+        // Version — the version check is simply off until a writable open (here or a deep scan)
+        // migrates the schema.
         private readonly bool _hasVersionColumns;
+
+        // Same degradation story for the Parameters table (it has carried IsInstance since the
+        // base schema, but a foreign pre-RVTuk DB may lack the table entirely): without it the
+        // instance-version flag simply stays false.
+        private readonly bool _hasParameterInfo;
 
         // Serialises use of the shared read connection: the browser reads from several
         // ThreadPool threads at once (Sync, per-selection detail loads, rescan thumbnail
@@ -30,23 +36,57 @@ namespace RVTuk.Core.FamilyBrowser.Database
             SqliteNative.EnsureLoaded();
             _databasePath = databasePath;
 
-            // One-time: ensure the file + schema exist and the journal is migrated off WAL.
-            // Best-effort — if the share is read-only for this user, assume the admin already
-            // created/migrated the DB and fall through to the read-only connection.
-            try
+            // Fresh install (no scan has run yet): create the DB + schema so the browser can
+            // open, empty. Best-effort — if the share is read-only for this user and there is
+            // truly no DB, OpenRead below throws and the browser surfaces that.
+            if (!File.Exists(databasePath))
             {
-                using var init = OpenWrite();
-                EnsureSchema(init);
+                try
+                {
+                    using var init = OpenWrite();
+                    EnsureSchema(init);
+                }
+                catch { /* read-only share or locked */ }
             }
-            catch { /* read-only share or locked; admin DB assumed ready */ }
 
             _connection = OpenRead();
             ExecuteOn(_connection, "PRAGMA busy_timeout=5000;");
             ExecuteOn(_connection, "PRAGMA foreign_keys=ON;");
 
+            // Migrate only when the schema is actually behind. The everyday open of a current
+            // DB must never take a write handle on the shared file — one user's Revit holding
+            // write locks is what blocked the whole office (backlog "Read Only DB").
+            if (!SchemaIsCurrent(_connection))
+            {
+                try
+                {
+                    using var init = OpenWrite();
+                    EnsureSchema(init);
+                }
+                catch { /* read-only share or locked; reads degrade via _hasVersionColumns */ }
+            }
+
             _hasVersionColumns = ColumnExists(_connection, "Families", "Version")
                               && ColumnExists(_connection, "Families", "ParametersExtracted");
+            _hasParameterInfo  = ColumnExists(_connection, "Parameters", "IsInstance");
         }
+
+        // One probe per table (its newest migrated column), so a DB that predates any of the
+        // ALTERs — or lacks a table outright — reports "behind" and triggers the write-open
+        // migration above. Mirrors what EnsureSchema creates; keep the two in sync.
+        private static bool SchemaIsCurrent(SQLiteConnection c) =>
+            ColumnExists(c, "Families", "ParametersExtracted")
+            && ColumnExists(c, "Families", "Version")
+            && ColumnExists(c, "Families", "IsFavorite")
+            && ColumnExists(c, "Families", "Tags")
+            && ColumnExists(c, "Families", "RevitYear")
+            && ColumnExists(c, "Families", "InstructionsXaml")
+            && ColumnExists(c, "Parameters", "Formula")
+            && ColumnExists(c, "Parameters", "Guid")
+            && ColumnExists(c, "Parameters", "Kind")
+            && ColumnExists(c, "Parameters", "ParamGroup")
+            && ColumnExists(c, "Thumbnail", "PngData")
+            && ColumnExists(c, "CustomThumbnail", "OleSynced");
 
         private static bool ColumnExists(SQLiteConnection c, string table, string column)
         {
@@ -55,25 +95,30 @@ namespace RVTuk.Core.FamilyBrowser.Database
             return (long)(cmd.ExecuteScalar() ?? 0L) > 0;
         }
 
-        // Persistent read-only connection for all Get* methods.
+        // Persistent read-only connection for all Get* methods. Pooling off: pooled
+        // connections keep the file handle open after Dispose, and a handle lingering for a
+        // whole Revit session is exactly what blocked other users on the shared DB.
         private SQLiteConnection OpenRead()
         {
             var c = new SQLiteConnection(new SqliteConnectionStringBuilder
             {
                 DataSource = _databasePath,
-                Mode = SqliteOpenMode.ReadOnly
+                Mode = SqliteOpenMode.ReadOnly,
+                Pooling = false
             }.ToString());
             c.Open();
             return c;
         }
 
-        // Short-lived read-write connection for the occasional admin/edit write.
+        // Short-lived read-write connection for the occasional admin/edit write. Pooling off
+        // so Dispose really releases the write handle (see OpenRead).
         private SQLiteConnection OpenWrite()
         {
             var c = new SQLiteConnection(new SqliteConnectionStringBuilder
             {
                 DataSource = _databasePath,
-                Mode = SqliteOpenMode.ReadWriteCreate
+                Mode = SqliteOpenMode.ReadWriteCreate,
+                Pooling = false
             }.ToString());
             c.Open();
             ExecuteOn(c, "PRAGMA busy_timeout=5000;");
@@ -171,8 +216,8 @@ namespace RVTuk.Core.FamilyBrowser.Database
             if ((long)(versionCheck.ExecuteScalar() ?? 0L) == 0)
                 ExecuteOn(c, "ALTER TABLE Families ADD COLUMN Version TEXT");
 
-            // Owned by the deep scan (IndexRepository) but referenced by UpsertFamily's staleness
-            // CASE, so the browser must be able to create it on a DB no deep scan has touched yet.
+            // Owned by the deep scan (IndexRepository) but probed by _hasVersionColumns, so the
+            // browser must be able to create it on a DB no deep scan has touched yet.
             using var paramsExtractedCheck = c.CreateCommand();
             paramsExtractedCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='ParametersExtracted'";
             if ((long)(paramsExtractedCheck.ExecuteScalar() ?? 0L) == 0)
@@ -192,7 +237,10 @@ namespace RVTuk.Core.FamilyBrowser.Database
                        f.RevitYear,
                        f.Tags,
                        f.IsFavorite,
-                       {(_hasVersionColumns ? "f.Version" : "NULL")}
+                       {(_hasVersionColumns ? "f.Version" : "NULL")},
+                       {(_hasParameterInfo
+                           ? $"EXISTS(SELECT 1 FROM Parameters p WHERE p.FamilyId = f.Id AND p.ParameterName = '{FamilyVersionCheck.ParameterName}' COLLATE NOCASE AND p.IsInstance = 1)"
+                           : "0")}
                 FROM Families f
                 LEFT JOIN Thumbnail t ON t.FamilyId = f.Id
                 LEFT JOIN CustomThumbnail ct ON ct.FamilyId = f.Id
@@ -215,6 +263,7 @@ namespace RVTuk.Core.FamilyBrowser.Database
                     Tags             = reader.IsDBNull(9) ? null : reader.GetString(9),
                     IsFavorite       = !reader.IsDBNull(10) && reader.GetInt32(10) == 1,
                     Version          = reader.IsDBNull(11) ? null : reader.GetString(11),
+                    VersionIsInstance = !reader.IsDBNull(12) && reader.GetInt32(12) == 1,
                 });
             }
             return result;
@@ -288,17 +337,6 @@ namespace RVTuk.Core.FamilyBrowser.Database
         public byte[]? GetResolvedThumbnail(long familyId)
             => GetCustomThumbnail(familyId).Png ?? GetOleThumbnail(familyId);
 
-        public List<string> GetAllRelativePaths() => WithRead(() =>
-        {
-            var result = new List<string>();
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "SELECT RelativePath FROM Families";
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
-                result.Add(reader.GetString(0));
-            return result;
-        });
-
         public string? GetTags(long familyId) => WithRead(() =>
         {
             using var cmd = _connection.CreateCommand();
@@ -359,120 +397,6 @@ namespace RVTuk.Core.FamilyBrowser.Database
             });
         }
 
-        // The fast Sync path writes the file's real size/date with no extracted metadata. So the
-        // deep scan can still tell "this file changed since its parameters were extracted", a
-        // CHANGED file's write below also clears Version and drops ParametersExtracted — otherwise
-        // the new size/date would make the family "look up to date" to the deep scan and its
-        // parameters/category/_Version would silently stay stale forever (the old form of this
-        // gap was tracked in docs/BACKLOG.md). A NEW row still gets no extracted data; the deep
-        // scan picks it up via its missing-facet checks (no thumbnail row, ParametersExtracted=0).
-        public void UpsertFamily(string relativePath, string fileName, DateTime modifiedDateUtc, long fileSize)
-        {
-            WithWrite(c =>
-            {
-                // Resolve the row case-insensitively (preferring an exact-case match): Windows
-                // paths are case-insensitive but the RelativePath key is not, so a case-only
-                // rename on disk must update the existing row — a case-sensitive upsert would
-                // insert a duplicate that then lingers next to the old row forever. Updating by
-                // Id also re-keys the row to the current on-disk casing.
-                long id = 0;
-                using (var lookup = c.CreateCommand())
-                {
-                    lookup.CommandText =
-                        "SELECT Id FROM Families WHERE RelativePath = @rel COLLATE NOCASE " +
-                        "ORDER BY (CASE WHEN RelativePath = @rel THEN 0 ELSE 1 END) LIMIT 1";
-                    AddParam(lookup, "@rel", relativePath);
-                    var scalar = lookup.ExecuteScalar();
-                    if (scalar != null && scalar != DBNull.Value)
-                        id = (long)scalar;
-                }
-
-                // A changed file invalidates the stored _Version value (it was read from the old
-                // file contents by the deep scan) — clear it rather than let a stale value feed
-                // the update check, and drop ParametersExtracted so the next deep scan re-extracts.
-                // Both dates are written by DateTime.ToString("o"), so plain string equality
-                // detects "unchanged".
-                // The staleness clauses reference columns a not-yet-migrated DB lacks; skip them
-                // there (see _hasVersionColumns) so the fast Sync still works.
-                using var cmd = c.CreateCommand();
-                if (id != 0)
-                {
-                    string staleClauses = _hasVersionColumns ? @"
-                            Version = CASE WHEN ModifiedDate = @modified AND FileSize = @size
-                                      THEN Version ELSE NULL END,
-                            ParametersExtracted = CASE WHEN ModifiedDate = @modified AND FileSize = @size
-                                                  THEN ParametersExtracted ELSE 0 END," : "";
-                    cmd.CommandText = $@"
-                        UPDATE Families SET
-                            RelativePath = @rel,
-                            FileName = @name,{staleClauses}
-                            ModifiedDate = @modified,
-                            FileSize = @size
-                        WHERE Id = @id";
-                    AddParam(cmd, "@id", id);
-                }
-                else
-                {
-                    string staleClauses = _hasVersionColumns ? @"
-                            Version = CASE WHEN Families.ModifiedDate = excluded.ModifiedDate
-                                            AND Families.FileSize = excluded.FileSize
-                                      THEN Families.Version ELSE NULL END,
-                            ParametersExtracted = CASE WHEN Families.ModifiedDate = excluded.ModifiedDate
-                                                        AND Families.FileSize = excluded.FileSize
-                                                  THEN Families.ParametersExtracted ELSE 0 END," : "";
-                    // ON CONFLICT kept for safety under concurrent writers on the shared DB.
-                    cmd.CommandText = $@"
-                        INSERT INTO Families (RelativePath, FileName, ModifiedDate, FileSize)
-                        VALUES (@rel, @name, @modified, @size)
-                        ON CONFLICT(RelativePath) DO UPDATE SET
-                            FileName = excluded.FileName,{staleClauses}
-                            ModifiedDate = excluded.ModifiedDate,
-                            FileSize = excluded.FileSize";
-                }
-                AddParam(cmd, "@rel", relativePath);
-                AddParam(cmd, "@name", fileName);
-                AddParam(cmd, "@modified", modifiedDateUtc.ToString("o"));
-                AddParam(cmd, "@size", fileSize);
-                cmd.ExecuteNonQuery();
-            });
-        }
-
-        public void DeleteStaleEntries(IEnumerable<string> staleRelativePaths)
-        {
-            foreach (var path in staleRelativePaths)
-            {
-                // Look up the family Id (RO connection) before deleting the row so we can
-                // remove its gallery folder even after the row is gone.
-                long id = WithRead(() =>
-                {
-                    using var lookup = _connection.CreateCommand();
-                    lookup.CommandText = "SELECT Id FROM Families WHERE RelativePath = @path";
-                    AddParam(lookup, "@path", path);
-                    var scalar = lookup.ExecuteScalar();
-                    return scalar != null && scalar != DBNull.Value ? (long)scalar : 0L;
-                });
-
-                WithWrite(c =>
-                {
-                    using var cmd = c.CreateCommand();
-                    cmd.CommandText = "DELETE FROM Families WHERE RelativePath = @path";
-                    AddParam(cmd, "@path", path);
-                    cmd.ExecuteNonQuery();
-                });
-
-                if (id != 0)
-                {
-                    try
-                    {
-                        var folder = GalleryRoot(id);
-                        if (Directory.Exists(folder))
-                            Directory.Delete(folder, true);
-                    }
-                    catch { /* best-effort; never let a file-delete failure propagate */ }
-                }
-            }
-        }
-
         public void DeleteCustomThumbnail(long familyId)
         {
             WithWrite(c =>
@@ -502,16 +426,6 @@ namespace RVTuk.Core.FamilyBrowser.Database
             p.ParameterName = name;
             p.Value = value ?? DBNull.Value;
             cmd.Parameters.Add(p);
-        }
-
-        // Gallery images (per-family picture gallery) were removed as a feature — images now
-        // live inline in the rich-text Instructions body. This helper is kept only so
-        // DeleteStaleEntries can clean up a deleted family's leftover on-disk gallery folder
-        // (orphan cleanup of pre-existing data, not a new gallery feature).
-        private string GalleryRoot(long familyId)
-        {
-            var dbDir = System.IO.Path.GetDirectoryName(_databasePath)!; // the .DB folder
-            return System.IO.Path.Combine(dbDir, "Gallery", familyId.ToString());
         }
 
         public void Dispose() => _connection.Dispose();

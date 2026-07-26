@@ -190,4 +190,51 @@ public class IndexRepositoryTests : IDisposable
 
         Assert.DoesNotContain(id, repo.GetFamilyIdsWithParametersExtracted());
     }
+
+    // SQLite silently degrades a read-write open to read-only when the file denies write
+    // access (e.g. Desktop Connector flags a cloud-synced DB ReadOnly while another user
+    // holds it). Every IndexRepository caller is a writer (scan/rescan), and the silent
+    // degradation used to surface only as a raw "attempt to write a readonly database"
+    // from whichever statement wrote first — swallowed into "Could not rescan this family".
+    [Fact]
+    public void Ctor_ReadOnlyDbFile_ThrowsClearReadOnlyError()
+    {
+        using (var seed = new IndexRepository(_dbPath)) { }
+        File.SetAttributes(_dbPath, FileAttributes.ReadOnly);
+        try
+        {
+            var ex = Assert.Throws<IOException>(() => new IndexRepository(_dbPath));
+            Assert.Contains("read-only", ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(_dbPath, ex.Message);
+        }
+        finally
+        {
+            File.SetAttributes(_dbPath, FileAttributes.Normal);
+        }
+    }
+
+    // A schema-behind DB on a read-only file must produce the same clear error (the auto
+    // migration is what used to throw the raw SqliteException mid-ctor).
+    [Fact]
+    public void Ctor_ReadOnlyDbFile_SchemaBehind_ThrowsClearReadOnlyError()
+    {
+        using (var seed = new IndexRepository(_dbPath)) { }
+        using (var c = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_dbPath};Pooling=False"))
+        {
+            c.Open();
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = "ALTER TABLE Families DROP COLUMN Version";
+            cmd.ExecuteNonQuery();
+        }
+        File.SetAttributes(_dbPath, FileAttributes.ReadOnly);
+        try
+        {
+            var ex = Assert.Throws<IOException>(() => new IndexRepository(_dbPath));
+            Assert.Contains("read-only", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            File.SetAttributes(_dbPath, FileAttributes.Normal);
+        }
+    }
 }

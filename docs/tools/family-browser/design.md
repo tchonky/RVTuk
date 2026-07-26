@@ -59,21 +59,31 @@ closes it manually.
   list immediately, and any combination of categories can be shown at once.
 - **Toggle buttons (⬅️ / ⭐ / ➡️)** — three always-visible toolbar toggles, all **off by default**
   (unfiltered — nothing hidden):
-  - ⬅️ — families currently loaded in the project.
+  - ⬅️ — families loaded in the model (model-only rows **and** families that are also in the
+    library).
   - ⭐ — favourites.
-  - ➡️ — library-only families (not loaded in the project).
-  Pressing one or more **narrows the list to the union (OR) of what's pressed**. With none
-  pressed the list is unfiltered. Pressing only ⭐ shows every favourite regardless of
-  project/library status; pressing ⬅️ + ⭐ shows families that are either in the project or a
-  favourite (or both). This is deliberately OR, not AND: ⬅️ and ➡️ are a complementary,
-  exhaustive pair (every family is exactly one or the other), so an exclusion/AND model can't
-  express "favourites only" — turning both off to try to isolate ⭐ would exclude everything,
-  since there'd be no OR path back in. See *Deviations* for the shipped-then-corrected history.
+  - ➡️ — families present in the library (library-only **and** families that are also loaded
+    in the model).
+  Each pressed toggle **narrows the list (AND)**; with none pressed the list is unfiltered.
+  ⬅️ and ➡️ are *inclusive* membership filters that overlap on the in-both statuses, so
+  pressing both shows exactly the families that exist in both the model and the library —
+  the four source views are: nothing pressed (everything), ⬅️ (all in the model), ➡️ (all in
+  the library), ⬅️+➡️ (in both). Pressing only ⭐ still shows every favourite regardless of
+  model/library status; ⭐ combined with an arrow intersects (e.g. ⭐+⬅️ = favourites loaded
+  in the model). Semantics live in `RVTuk.Core.FamilyBrowser.Util.SourceToggleFilter` with a
+  truth-table test. See *Deviations* for the exclusion→OR→AND history.
 - **Sync button (⟳)** — a plain button, not a popover menu. Clicking it directly re-runs the
   project/version check (§3); there is no menu of checkboxes hanging off it anymore.
 - **Family list** — each row shows a small thumbnail, family name, and sub-category; selection
-  highlights with a left accent bar. Version badges (after the check runs): `✓` green (in
-  project, up to date), `↑ Update` orange pill (newer in library), no badge (not loaded).
+  highlights with a left accent bar. Long names wrap to at most **two lines**, then trim with
+  an ellipsis (the full name is in the row tooltip). Version badges (after the check runs):
+  `✓` green (in project, up to date), `↑ Update` orange pill (newer in library), `⚠️` (loaded
+  in the project but not found in the library — a "model only" row), no badge (not loaded).
+  When a family carries the `_Version` parameter, its value renders as muted text just before
+  the badge (list rows and grid cards alike) — in **red** when `_Version` is an *instance*
+  parameter in the family (library `.rfa` per the deep scan, or the loaded copy per the sync's
+  instance fallback, §3): off the office standard, which wants a type parameter, so the red
+  marks families whose parameter needs changing. The tooltip says so.
 - **Footer row** (new, under the family list) — two icon buttons:
   - ℹ️ — toggles the right panel to the Help/About page (§4a) instead of the family detail.
   - ⚙️ — toggles the right panel to the embedded Settings page (§4b) instead of the family
@@ -102,6 +112,14 @@ is now a **single button**. It reads:
 The old orange/red "↑ Newer version available in library" banner is gone entirely — the orange
 Update button now carries that signal on its own, so there's no redundant banner + button pair.
 
+For **model-only rows** (in the project, not in the library) the Load/Update button is replaced
+by **"Save to Library"**: `Document.EditFamily` + `SaveAs` (via `EditProjectFamilyEventHandler`)
+writes the family's `.rfa` into the folder where most same-category families already live —
+else a folder named after the category (created on demand), else the library root
+(`SaveToLibraryPlanner` in Core picks the path). The DB isn't touched; the next Scan indexes
+the new file (refresh stays read-only, §6). Family names containing characters Windows forbids
+in file names are rejected with a message (`FamilyFileName.IsSafeFileName`).
+
 ### 1b. Action icon column (relocated + Open added)
 
 Previously **Edit Info** and **Rescan** were text buttons in a row below the thumbnail. They now
@@ -119,6 +137,17 @@ live in a stacked, icon-only column in the top-right corner of the family detail
    delegate in `BrowseLibraryCommand.cs`, exposed to the view as
    `FamilyBrowserViewModel.OpenFamilyEditorCommand`.
 
+For **model-only rows**, Rescan and Edit Info are hidden (no `.rfa` / DB row to act on), while
+**Open** stays available: it edits the family from the model — `Document.EditFamily`, `SaveAs`
+to a temp `.rfa` named exactly after the family (so "Load into Project" round-trips onto the
+same family), then `OpenAndActivateDocument` (an in-memory `EditFamily` document has no UI
+window and can't be activated directly). Same `EditProjectFamilyEventHandler` as Save to
+Library (§1a), just without a library target path.
+
+Model-only rows get their **thumbnail** from the loaded family symbol
+(`ElementType.GetPreviewImage`, 96 px) rather than an OLE stream — Sync fetches previews
+lazily for just the model-only names via `GetFamilyPreviewsEventHandler`, best-effort.
+
 ---
 
 ## 2. Thumbnail display priority
@@ -135,12 +164,21 @@ The indexer updates the system `Thumbnail` on every scan and never touches `Cust
 ## 3. Version check
 
 Triggered by the plain Sync button (§1, no longer a popover); runs on a background thread and
-updates the list live. The underlying check is unchanged:
+updates the list live:
 
-1. Get families currently loaded in the open project (`Document.LoadedFamilies`, read on
-   Revit's main thread via `ExternalEvent`).
+1. Get families currently loaded in the open project, each with its `_Version` value, on
+   Revit's main thread via `ExternalEvent` (`GetProjectFamiliesEventHandler`). The value is
+   read off the family's symbols (type parameter — the office standard); when that finds
+   nothing, a fallback reads it off the first placed `FamilyInstance`, which is where an
+   *instance* `_Version` lives (one collector pass covers all unresolved families; a
+   formula-locked value makes any instance authoritative). A family whose `_Version` is
+   instance-level **and** has no placed instances stays version-less — the value exists
+   nowhere in the project short of `EditFamily`, which is far too slow per-family. The
+   fallback also reports `VersionIsInstance`, feeding the red version display (§1).
 2. Match by file name (without extension) against the index DB.
-3. Compare the DB `ModifiedDate` against the file's `ModifiedDate` on disk.
+3. Compare the project value against the index's `_Version` captured by the deep scan
+   (`FamilyVersionCheck`: numeric compare when both parse, only library-ahead counts;
+   missing value on either side → no verdict).
 4. Unmatched families get no badge; matched ones get `VersionStatus = UpToDate | UpdateAvailable`.
 
 **Update (single):** `Document.LoadFamily(path, overwriteExistingFamily: true)` inside a
@@ -222,8 +260,20 @@ The DB may live on `\\server\share\…`, browsed by many users, written only by 
 - Do **not** use WAL on a network file (host-local shared memory isn't safe across machines);
   use a rollback journal.
 - `PRAGMA busy_timeout` so brief admin writes don't error concurrent readers.
+- Writers fail fast with a clear error: SQLite silently degrades a read-write open to
+  read-only when the file denies writes (e.g. a cloud-sync client like Desktop Connector
+  flags the DB ReadOnly), so `IndexRepository`'s ctor probes `sqlite3_db_readonly` and throws
+  a plain-language `IOException` instead of letting a later write die mid-scan.
 - Browse connections open **read-only**; scan/edit writes go through a short-lived read-write
-  connection per commit.
+  connection per commit. Connection **pooling is disabled** on every connection —
+  `Microsoft.Data.Sqlite` pools by default, and a pooled handle outlives `Dispose`, keeping
+  the shared file open (and blockable) for the whole Revit session.
+- The browser write-opens the DB only to **create it on first run** or to **migrate an
+  outdated schema**; an everyday open of a current DB is read-only from the first byte.
+- The **Sync/refresh button never writes**: it re-reads the index and re-runs the
+  project/version compare. Reconciling the DB with the `.rfa` files on disk (add new, prune
+  deleted, flag changed) is solely the Scan's job — its filenames-only mode (both checkboxes
+  off) does exactly that with no extraction.
 
 > **Note:** the per-family image gallery that previously lived in this section of the doc was
 > removed on 2026-07-07 — pictures now live only as images embedded inline in the rich-text
@@ -327,6 +377,14 @@ composed as `FamilyBrowserViewModel.Settings`.
   no data migration touches existing production databases.
 - **New Help/About panel (2026-07-07):** a markdown-rendered help page (§4a), fetched from a
   URL that is still a placeholder and must be pointed at the real docs repo before shipping.
+- **Read-only refresh (2026-07-16):** Sync previously also fast-synced the DB with the `.rfa`
+  files on disk (one write transaction per file + stale-row pruning) — a write burst that
+  locked the shared DB for every other user (backlog "Read Only DB"). Refresh now only
+  re-reads the index and re-runs the project/version compare (§3); disk reconciliation moved
+  entirely to the Scan. In the same fix, the browser stopped write-opening the DB on every
+  open (only first-run create / schema migration), and connection pooling was disabled on all
+  connections (§6). Trade-off: library files added/deleted on disk appear/disappear after the
+  next Scan, not on refresh.
 - **Filter semantics replaced, then corrected (2026-07-07):** the old Sync-popover source/status
   filters (in-project / outdated checkboxes), the separate favourites-only toggle, and the
   Revit-year Versions multi-select were all replaced by the three toggle buttons in §1. The
@@ -338,3 +396,12 @@ composed as `FamilyBrowserViewModel.Settings`.
   now correctly shows every favourite regardless of project/library status. Either way, nothing
   is hidden by default — the old app's post-sync default of hiding library-only families no
   longer applies.
+- **Filter semantics corrected again — OR → inclusive AND (2026-07-19):** once model-only rows
+  (`VersionStatus.ModelOnly`) joined the list, ⬅️ and ➡️ stopped being a complementary pair, and
+  the OR/union model had two holes: ➡️ ("library-only", `== None`) hid the families that exist
+  in both places, and pressing ⬅️+➡️ unioned to "everything" — the in-both view was
+  inexpressible. Redefined both arrows as *inclusive* membership filters ("in the model" /
+  "in the library") combined by AND, giving all four source views (§1) including in-both.
+  ⭐ became an AND constraint too (⭐+⬅️ = favourites in the model, an intersection, no longer a
+  union). The predicate moved to Core (`SourceToggleFilter`) under a truth-table test;
+  `ShowLibraryOnlyFamilies` was renamed `ShowLibraryFamilies`.

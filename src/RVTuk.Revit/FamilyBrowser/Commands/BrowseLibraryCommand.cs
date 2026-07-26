@@ -76,6 +76,33 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
                 Application.OpenFamilyEditorHandler.WaitForCompletion();
             };
 
+            // Both wrap the same EditProjectFamilyEventHandler singleton; the VM serializes
+            // the two call sites with a lock, same as loads.
+            Func<string, (bool Success, string? Error)> openModelFamilyInEditor = familyName =>
+            {
+                Application.EditProjectFamilyHandler.Prepare(familyName, null);
+                Application.EditProjectFamilyEvent.Raise();
+                Application.EditProjectFamilyHandler.WaitForCompletion();
+                return (Application.EditProjectFamilyHandler.Success, Application.EditProjectFamilyHandler.ErrorMessage);
+            };
+
+            Func<string, string, (bool Success, string? Error)> saveFamilyToLibrary = (familyName, targetPath) =>
+            {
+                Application.EditProjectFamilyHandler.Prepare(familyName, targetPath);
+                Application.EditProjectFamilyEvent.Raise();
+                Application.EditProjectFamilyHandler.WaitForCompletion();
+                return (Application.EditProjectFamilyHandler.Success, Application.EditProjectFamilyHandler.ErrorMessage);
+            };
+
+            // Type-preview images for model-only rows (no .rfa on disk to extract from).
+            Func<IReadOnlyList<string>, IReadOnlyDictionary<string, byte[]>> getFamilyPreviews = familyNames =>
+            {
+                Application.GetFamilyPreviewsHandler.Prepare(familyNames);
+                Application.GetFamilyPreviewsEvent.Raise();
+                Application.GetFamilyPreviewsHandler.WaitForCompletion();
+                return Application.GetFamilyPreviewsHandler.Result;
+            };
+
             Application.CurrentUIApp = commandData.Application;
             var capturedUIApp = commandData.Application;
 
@@ -87,7 +114,9 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
             // Re-extract metadata for ONE family (selected in the browser), reusing the same
             // indexing ExternalEvent ping-pong. Called from a background thread by the VM, so
             // WaitForCompletion blocks that thread (not Revit's main thread) while Execute runs.
-            Func<long, string, bool> rescanFamily = (familyId, fullPath) =>
+            // Returns the failure reason — a read-only/locked shared DB is an expected state
+            // (cloud-sync clients flag it), and the user needs to see why, not a generic "no".
+            Func<long, string, (bool Success, string? Error)> rescanFamily = (familyId, fullPath) =>
             {
                 try
                 {
@@ -116,9 +145,9 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
                         Application.IndexingEvent.Raise();
                         Application.IndexingHandler.WaitForCompletion();
                     }
-                    return true;
+                    return (true, null);
                 }
-                catch { return false; }
+                catch (Exception ex) { return (false, ex.Message); }
             };
 
             // Crash log lives under %LOCALAPPDATA% — writing to C:\ root fails without elevation
@@ -171,7 +200,8 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
             try
             {
                 System.Windows.Application.Current.DispatcherUnhandledException += dispatcherHandler;
-                var window = new FamilyBrowserWindow(config, getProjectFamilies, loadFamily, rescanFamily, scan, openInFamilyEditor);
+                var window = new FamilyBrowserWindow(config, getProjectFamilies, loadFamily, rescanFamily,
+                    scan, openInFamilyEditor, openModelFamilyInEditor, saveFamilyToLibrary, getFamilyPreviews);
                 window.Closed += (s, e) =>
                     System.Windows.Application.Current.DispatcherUnhandledException -= dispatcherHandler;
                 Application.BrowserWindow = window; // set before Show() so handler can close it if layout throws

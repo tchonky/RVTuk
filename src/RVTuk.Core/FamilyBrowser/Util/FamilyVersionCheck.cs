@@ -6,8 +6,9 @@ namespace RVTuk.Core.FamilyBrowser.Util
     /// <summary>
     /// Compares the office's "_Version" shared-parameter value between a library .rfa
     /// (captured into the index by the deep scan) and the copy loaded in the active project
-    /// (read off the family's symbols). The check is deliberately skipped — never
-    /// "update available" — when either side lacks the parameter or has an empty value.
+    /// (read off the family's symbols, or off a placed instance when the parameter is
+    /// instance-level). The check is deliberately skipped — never "update available" — when
+    /// either side lacks the parameter or has an empty value.
     /// </summary>
     public static class FamilyVersionCheck
     {

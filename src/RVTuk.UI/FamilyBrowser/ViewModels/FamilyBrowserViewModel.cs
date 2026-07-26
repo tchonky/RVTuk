@@ -29,8 +29,11 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         private readonly BrowserRepository _repo;
         private readonly Func<IReadOnlyList<ProjectFamilyInfo>> _getProjectFamilies;
         private readonly Func<string, (bool Success, string? Error)> _loadFamily;
-        private readonly Func<long, string, bool> _rescanFamily;
+        private readonly Func<long, string, (bool Success, string? Error)> _rescanFamily;
         private readonly Action<string> _openInFamilyEditor;
+        private readonly Func<string, (bool Success, string? Error)> _openModelFamilyInEditor;
+        private readonly Func<string, string, (bool Success, string? Error)> _saveFamilyToLibrary;
+        private readonly Func<IReadOnlyList<string>, IReadOnlyDictionary<string, byte[]>> _getFamilyPreviews;
         private readonly Dispatcher _dispatcher;
         private readonly object _loadLock = new object();
         private static readonly HttpClient _http = new HttpClient();
@@ -40,7 +43,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         private FamilyBrowserItemViewModel? _selectedItem;
         private bool _showInProjectFamilies;
         private bool _showFavoriteFamilies;
-        private bool _showLibraryOnlyFamilies;
+        private bool _showLibraryFamilies;
         private bool _isGridView;
         private bool? _isAllCategoriesSelected = true;
         private bool _isSyncing;
@@ -64,11 +67,11 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             set { SetProperty(ref _searchText, value); ApplyFilter(); }
         }
 
-        // All default off (unfiltered — nothing hidden). Pressing one or more filters the list
-        // to families matching ANY pressed toggle (OR/union), not all of them — otherwise
-        // pressing just Favourites while Project/Library-only were exclusion toggles would AND
-        // against that complementary, exhaustive pair and always yield nothing. With no toggle
-        // pressed, the list is unfiltered by source/status.
+        // All default off (unfiltered — nothing hidden). Each pressed toggle is an independent
+        // AND constraint, and the model/library pair are *inclusive* membership filters
+        // ("loaded in the model" / "present in the library") that overlap on the in-both
+        // statuses — so pressing both shows exactly the families that exist in both places.
+        // Semantics live in Core's SourceToggleFilter (tested there).
         public bool ShowInProjectFamilies
         {
             get => _showInProjectFamilies;
@@ -81,10 +84,10 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             set { SetProperty(ref _showFavoriteFamilies, value); ApplyFilter(); }
         }
 
-        public bool ShowLibraryOnlyFamilies
+        public bool ShowLibraryFamilies
         {
-            get => _showLibraryOnlyFamilies;
-            set { SetProperty(ref _showLibraryOnlyFamilies, value); ApplyFilter(); }
+            get => _showLibraryFamilies;
+            set { SetProperty(ref _showLibraryFamilies, value); ApplyFilter(); }
         }
 
         // Toggles the family list between the compact row list and the 2-column large-thumbnail
@@ -167,6 +170,13 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         {
             get => _isRescanning;
             set => SetProperty(ref _isRescanning, value);
+        }
+
+        private bool _isSavingToLibrary;
+        public bool IsSavingToLibrary
+        {
+            get => _isSavingToLibrary;
+            set => SetProperty(ref _isSavingToLibrary, value);
         }
 
         public int OutdatedCount
@@ -282,6 +292,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         public ICommand EditInfoCommand { get; }
         public ICommand RescanFamilyCommand { get; }
         public ICommand OpenFamilyEditorCommand { get; }
+        public ICommand SaveToLibraryCommand { get; }
         public ICommand FilterByTagCommand { get; }
         public ICommand ToggleFavoriteCommand { get; }
         public ICommand ToggleSettingsCommand { get; }
@@ -295,9 +306,12 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             BrowserRepository repo,
             Func<IReadOnlyList<ProjectFamilyInfo>> getProjectFamilies,
             Func<string, (bool Success, string? Error)> loadFamily,
-            Func<long, string, bool> rescanFamily,
+            Func<long, string, (bool Success, string? Error)> rescanFamily,
             Action<bool, bool> scan,
             Action<string> openInFamilyEditor,
+            Func<string, (bool Success, string? Error)> openModelFamilyInEditor,
+            Func<string, string, (bool Success, string? Error)> saveFamilyToLibrary,
+            Func<IReadOnlyList<string>, IReadOnlyDictionary<string, byte[]>> getFamilyPreviews,
             Action? onLibraryFolderChanged = null)
         {
             _config = config;
@@ -306,19 +320,26 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             _loadFamily = loadFamily;
             _rescanFamily = rescanFamily;
             _openInFamilyEditor = openInFamilyEditor;
+            _openModelFamilyInEditor = openModelFamilyInEditor;
+            _saveFamilyToLibrary = saveFamilyToLibrary;
+            _getFamilyPreviews = getFamilyPreviews;
             _dispatcher = Dispatcher.CurrentDispatcher;
 
             Settings = new ConfigViewModel(config, scan, onLibraryFolderChanged);
 
             SyncCommand            = new RelayCommand(Sync, () => !IsSyncing);
             UpdateAllCommand       = new RelayCommand(UpdateAll,     () => OutdatedCount > 0);
-            // Model-only rows have no .rfa and no DB row behind them, so every library-backed
-            // action stays disabled for them.
+            // Model-only rows have no .rfa and no DB row behind them, so library-backed
+            // actions stay disabled for them; their own actions are open-from-model
+            // (OpenFamilyEditorCommand) and Save to Library (below).
             LoadFamilyCommand      = new RelayCommand(LoadSelected,  () => SelectedItem != null && !SelectedItem.IsModelOnly);
             UpdateInProjectCommand = new RelayCommand(UpdateSelected,() => ShowUpdateInProject);
             EditInfoCommand        = new RelayCommand(RequestEditInfo, () => SelectedItem != null && !SelectedItem.IsModelOnly);
             RescanFamilyCommand    = new RelayCommand(RescanSelected, () => SelectedItem != null && !SelectedItem.IsModelOnly && !IsRescanning);
-            OpenFamilyEditorCommand= new RelayCommand(OpenInFamilyEditor, () => SelectedItem != null && !SelectedItem.IsModelOnly);
+            // Open-in-editor works for model-only rows too (via EditFamily on the loaded family).
+            OpenFamilyEditorCommand= new RelayCommand(OpenInFamilyEditor, () => SelectedItem != null);
+            SaveToLibraryCommand   = new RelayCommand(SaveToLibrary,
+                () => SelectedItem != null && SelectedItem.IsModelOnly && !IsSavingToLibrary);
             FilterByTagCommand     = new RelayCommand<string>(t => { if (!string.IsNullOrWhiteSpace(t)) SearchText = t.Trim(); });
             ToggleFavoriteCommand  = new RelayCommand<FamilyBrowserItemViewModel>(ToggleFavorite);
             ToggleSettingsCommand  = new RelayCommand(() => RightView = RightView == FamilyBrowserRightView.Settings
@@ -373,16 +394,12 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                     filtered = filtered.Where(i => i.Category != null && selectedCats.Contains(i.Category));
             }
 
-            // Source/status toggles: OR, not AND. With none pressed, unfiltered. Pressing any
-            // combination shows the union of what they represent — pressing only Favourites
-            // must show every favourite regardless of project/library status, which an
-            // exclusion/AND model can't express here since in-project and library-only are a
-            // complementary, exhaustive pair (excluding both always yields nothing).
-            if (_showInProjectFamilies || _showFavoriteFamilies || _showLibraryOnlyFamilies)
-                filtered = filtered.Where(i =>
-                    (_showInProjectFamilies && i.VersionStatus != VersionStatus.None) ||
-                    (_showLibraryOnlyFamilies && i.VersionStatus == VersionStatus.None) ||
-                    (_showFavoriteFamilies && i.IsFavorite));
+            // Source/status toggles: each pressed toggle narrows the list (AND); the
+            // model/library pair are inclusive, so pressing both shows the families that
+            // exist in both places. Full truth table in Core's SourceToggleFilterTests.
+            filtered = filtered.Where(i => SourceToggleFilter.Matches(
+                i.VersionStatus, i.IsFavorite,
+                _showInProjectFamilies, _showLibraryFamilies, _showFavoriteFamilies));
 
             // Hide families under an ignored subfolder (kept in the DB, just not shown).
             if (_config.IgnoredSubfolders != null && _config.IgnoredSubfolders.Count > 0)
@@ -455,42 +472,19 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 int outdated = 0;
                 try
                 {
-                    var root = _config.LibraryFolderPath;
-                    var foundRelPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    var ignoredFiles = new IgnoredFileMatcher(_config.IgnoredFilePatterns);
-
-                    foreach (var fullPath in PathUtil.SafeEnumerateFiles(root, "*.rfa"))
-                    {
-                        if (fullPath.Length >= 260) continue; // unusable on .NET Framework; skip
-                        var relativePath = PathUtil.GetRelativePath(root, fullPath);
-
-                        if (PathUtil.IsUnderIgnoredFolder(relativePath, _config.IgnoredSubfolders)
-                            || ignoredFiles.IsIgnored(Path.GetFileName(fullPath)))
-                        {
-                            // Ignored: skip upsert but add to foundRelPaths so existing DB rows
-                            // for this family are not treated as stale and deleted.
-                            foundRelPaths.Add(relativePath);
-                            continue;
-                        }
-
-                        var fi = new FileInfo(fullPath);
-                        foundRelPaths.Add(relativePath);
-                        _repo.UpsertFamily(relativePath, fi.Name, fi.LastWriteTimeUtc, fi.Length);
-                    }
-
-                    var stale = _repo.GetAllRelativePaths()
-                        .Where(p => !foundRelPaths.Contains(p)).ToList();
-                    if (stale.Count > 0)
-                        _repo.DeleteStaleEntries(stale);
-
+                    // Read-only refresh: reload the index and compare it against the open
+                    // project. Reconciling the DB with the .rfa files on disk (add new, prune
+                    // deleted, flag changed) is the Scan button's job — refresh must never
+                    // take write locks on the shared DB (backlog "Read Only DB").
                     newAllItems = _repo.GetAllFamilies()
                         .Select(f => new FamilyBrowserItemViewModel(f))
                         .ToList();
 
                     // Version check compares the _Version shared parameter: the library value is
                     // captured into the index by the deep scan, the project value is read off the
-                    // loaded family's symbols. A family missing the parameter on either side is
-                    // simply "in project" with no update verdict (FamilyVersionCheck returns false).
+                    // loaded family's symbols (or a placed instance when the parameter is
+                    // instance-level). A family missing the parameter on either side is simply
+                    // "in project" with no update verdict (FamilyVersionCheck returns false).
                     // (Families can share a name across categories; first occurrence wins.)
                     var projectFamilies = new Dictionary<string, ProjectFamilyInfo>(StringComparer.OrdinalIgnoreCase);
                     foreach (var pf in _getProjectFamilies())
@@ -500,11 +494,15 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                     var libraryNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     foreach (var item in newAllItems)
                     {
-                        var nameNoExt = Path.GetFileNameWithoutExtension(item.FileName);
+                        var nameNoExt = FamilyFileName.WithoutRfaExtension(item.FileName);
                         libraryNames.Add(nameNoExt);
                         if (!projectFamilies.TryGetValue(nameNoExt, out var pf)) continue;
                         bool isNewer = FamilyVersionCheck.IsUpdateAvailable(item.Model.Version, pf.Version);
                         item.VersionStatus = isNewer ? VersionStatus.UpdateAvailable : VersionStatus.UpToDate;
+                        // Red flag if *either* copy still carries _Version at instance level —
+                        // the library flag comes from the index (deep scan), the loaded copy's
+                        // from the sync's instance fallback.
+                        if (pf.VersionIsInstance) item.VersionIsInstance = true;
                         if (isNewer) outdated++;
                     }
 
@@ -512,8 +510,16 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                     // row so the browser shows the whole picture, not just the library. The
                     // ".rfa" suffix keeps DisplayName's extension-stripping from eating part of
                     // a family name that contains a dot.
-                    foreach (var pf in projectFamilies.Values)
-                        if (!libraryNames.Contains(pf.Name))
+                    var modelOnly = projectFamilies.Values
+                        .Where(pf => !libraryNames.Contains(pf.Name)).ToList();
+                    if (modelOnly.Count > 0)
+                    {
+                        // No .rfa on disk to read a thumbnail from — render the loaded type's
+                        // preview instead. Best-effort: rows without one just stay imageless.
+                        IReadOnlyDictionary<string, byte[]> previews;
+                        try { previews = _getFamilyPreviews(modelOnly.Select(pf => pf.Name).ToList()); }
+                        catch { previews = new Dictionary<string, byte[]>(); }
+                        foreach (var pf in modelOnly)
                             newAllItems.Add(new FamilyBrowserItemViewModel(new FamilyBrowserItem
                             {
                                 Id = 0,
@@ -521,8 +527,11 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                                 RelativePath = string.Empty,
                                 Category = pf.Category,
                                 Version = pf.Version,
+                                VersionIsInstance = pf.VersionIsInstance,
                                 VersionStatus = VersionStatus.ModelOnly,
+                                ThumbnailPng = previews.TryGetValue(pf.Name, out var png) ? png : null,
                             }));
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -534,15 +543,30 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 {
                     var finalItems = newAllItems;
                     int finalOutdated = outdated;
-                    _dispatcher.Invoke(() =>
+                    // Dispatcher.Invoke rethrows delegate exceptions on THIS pool thread, where
+                    // anything unhandled kills the whole Revit process — degrade to the same
+                    // warning the sync-failure path shows instead.
+                    try
                     {
-                        _allItems = finalItems;
-                        LoadCategories();
-                        OutdatedCount = finalOutdated;
-                        OnPropertyChanged(nameof(ShowUpdateInProject));
-                        IsSyncing = false;
-                        ApplyFilter();
-                    });
+                        _dispatcher.Invoke(() =>
+                        {
+                            _allItems = finalItems;
+                            LoadCategories();
+                            OutdatedCount = finalOutdated;
+                            OnPropertyChanged(nameof(ShowUpdateInProject));
+                            IsSyncing = false;
+                            ApplyFilter();
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        _dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            IsSyncing = false;
+                            MessageBox.Show($"Sync failed: {ex.Message}", "RVTuk",
+                                MessageBoxButton.OK, MessageBoxImage.Warning);
+                        }));
+                    }
                 }
             });
         }
@@ -625,24 +649,37 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 bool ok;
-                try { ok = _rescanFamily(item.Id, fullPath); }
-                catch { ok = false; }
+                string? error;
+                try { (ok, error) = _rescanFamily(item.Id, fullPath); }
+                catch (Exception ex) { ok = false; error = ex.Message; }
                 byte[]? freshThumb = null;
                 if (ok)
                 {
                     try { freshThumb = _repo.GetResolvedThumbnail(item.Id); }
                     catch { /* thumbnail refresh is best-effort */ }
                 }
-                _dispatcher.Invoke(() =>
+                // Same guard as Sync: an exception rethrown by Invoke on this pool thread
+                // would take down Revit.
+                try
                 {
-                    IsRescanning = false;
-                    if (ok)
+                    _dispatcher.Invoke(() =>
                     {
-                        item.UpdateThumbnail(freshThumb);
-                        LoadDetailAsync(item);
-                    }
-                    else MessageBox.Show("Could not rescan this family.", "RVTuk");
-                });
+                        IsRescanning = false;
+                        if (ok)
+                        {
+                            item.UpdateThumbnail(freshThumb);
+                            LoadDetailAsync(item);
+                        }
+                        else MessageBox.Show(
+                            "Could not rescan this family." +
+                            (string.IsNullOrEmpty(error) ? "" : "\n\n" + error),
+                            "RVTuk", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    });
+                }
+                catch
+                {
+                    _dispatcher.BeginInvoke(new Action(() => IsRescanning = false));
+                }
             });
         }
 
@@ -652,6 +689,40 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         {
             var item = SelectedItem;
             if (item == null) return;
+            if (item.IsModelOnly)
+            {
+                // No .rfa behind this row: edit the family loaded in the model. The handler
+                // detours through a temp file named exactly after the family, which requires
+                // a path-legal name.
+                var name = item.DisplayName;
+                if (!FamilyFileName.IsSafeFileName(name))
+                {
+                    MessageBox.Show(
+                        $"'{name}' can't be opened for editing from here because its name contains " +
+                        "characters Windows doesn't allow in file names. Rename the family in the " +
+                        "project first.", "RVTuk", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+                ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    string? error = null;
+                    try
+                    {
+                        // _loadLock: EditProjectFamilyHandler is a shared singleton (also used
+                        // by Save to Library) and ExternalEvent.Raise() coalesces — serialize.
+                        lock (_loadLock)
+                        {
+                            var (ok, err) = _openModelFamilyInEditor(name);
+                            if (!ok) error = err ?? "Unknown error.";
+                        }
+                    }
+                    catch (Exception ex) { error = ex.Message; }
+                    if (error != null)
+                        _dispatcher.Invoke(() =>
+                            MessageBox.Show($"Could not open family editor: {error}", "RVTuk"));
+                });
+                return;
+            }
             var fullPath = Path.Combine(_config.LibraryFolderPath, item.RelativePath);
             ThreadPool.QueueUserWorkItem(_ =>
             {
@@ -661,6 +732,70 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 if (error != null)
                     _dispatcher.Invoke(() =>
                         MessageBox.Show($"Could not open family editor: {error}", "RVTuk"));
+            });
+        }
+
+        // Saves a model-only family's .rfa into the library folder (most common folder of its
+        // category, else a folder named after the category, else the root). The DB is not
+        // touched — reconciling disk with the index is the Scan's job, so the row stays
+        // "model only" until the next Scan picks the new file up.
+        private void SaveToLibrary()
+        {
+            var item = SelectedItem;
+            if (item == null || !item.IsModelOnly) return;
+
+            var libraryItems = _allItems.Where(i => !i.IsModelOnly)
+                .Select(i => (i.Category, i.RelativePath));
+            var (relativePath, error) = SaveToLibraryPlanner.Plan(item.DisplayName, item.Category, libraryItems);
+            if (error != null)
+            {
+                MessageBox.Show(error, "RVTuk", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var fullPath = Path.Combine(_config.LibraryFolderPath, relativePath!);
+            if (File.Exists(fullPath))
+            {
+                var answer = MessageBox.Show(
+                    $"{fullPath} already exists (not indexed yet). Overwrite it?",
+                    "RVTuk — Save to Library", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (answer != MessageBoxResult.Yes) return;
+            }
+
+            var name = item.DisplayName;
+            IsSavingToLibrary = true;
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                bool ok;
+                string? err;
+                try
+                {
+                    lock (_loadLock) // shared handler with the model-only editor path — serialize
+                    {
+                        (ok, err) = _saveFamilyToLibrary(name, fullPath);
+                    }
+                }
+                catch (Exception ex) { ok = false; err = ex.Message; }
+                // Same guard as Sync: Invoke rethrows delegate exceptions on this pool thread,
+                // where anything unhandled kills the whole Revit process.
+                try
+                {
+                    _dispatcher.Invoke(() =>
+                    {
+                        IsSavingToLibrary = false;
+                        if (ok)
+                            MessageBox.Show(
+                                $"Saved to:\n{fullPath}\n\nIt will appear in the library after the next Scan.",
+                                "RVTuk — Save to Library", MessageBoxButton.OK, MessageBoxImage.Information);
+                        else
+                            MessageBox.Show($"Could not save to library: {err}", "RVTuk",
+                                MessageBoxButton.OK, MessageBoxImage.Warning);
+                    });
+                }
+                catch
+                {
+                    _dispatcher.BeginInvoke(new Action(() => IsSavingToLibrary = false));
+                }
             });
         }
 

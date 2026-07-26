@@ -1,7 +1,7 @@
 ﻿// RVTuk.UI/ViewModels/FamilyBrowserItemViewModel.cs
-using System.IO;
 using System.Windows.Media.Imaging;
 using RVTuk.Core.FamilyBrowser.Models;
+using RVTuk.Core.FamilyBrowser.Util;
 
 using RVTuk.UI.Shared.ViewModels;
 
@@ -15,11 +15,33 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         public long Id => Model.Id;
         public string FileName => Model.FileName;
-        public string DisplayName => Path.GetFileNameWithoutExtension(Model.FileName);
+        // Never System.IO.Path here: model-only rows carry in-project family names, which
+        // may contain characters that are illegal in paths (") — net48 Path APIs throw on them.
+        public string DisplayName => FamilyFileName.WithoutRfaExtension(Model.FileName);
         public string? Category => Model.Category;
         public string RelativePath => Model.RelativePath;
         public int RevitYear => Model.RevitYear;
         public string? Tags => Model.Tags;
+
+        // Value of the _Version shared parameter — from the library index for indexed rows,
+        // from the loaded family (symbols, else a placed instance) for model-only rows.
+        // Shown next to the row flags.
+        public string? Version => Model.Version;
+        public bool HasVersion => !string.IsNullOrWhiteSpace(Model.Version);
+
+        // True when _Version is an instance parameter — in the library .rfa (deep scan) or in
+        // the loaded copy (sync's instance fallback). Off-standard: the version renders red so
+        // the user knows the family needs its parameter changed to a type parameter.
+        public bool VersionIsInstance
+        {
+            get => Model.VersionIsInstance;
+            set
+            {
+                if (Model.VersionIsInstance == value) return;
+                Model.VersionIsInstance = value;
+                OnPropertyChanged();
+            }
+        }
 
         public bool IsFavorite
         {

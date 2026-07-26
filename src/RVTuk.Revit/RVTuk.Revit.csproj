@@ -55,6 +55,13 @@
     <ProjectReference Include="..\RVTuk.UI\RVTuk.UI.csproj" />
   </ItemGroup>
 
+  <!-- net48: System.Drawing from the GAC (same rationale as RVTuk.Core) — needed for
+       ElementType.GetPreviewImage's Bitmap in GetFamilyPreviewsEventHandler. On net8 the
+       System.Drawing.Common types flow transitively from RVTuk.Core's package reference. -->
+  <ItemGroup Condition="'$(TargetFramework)'=='net48'">
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+
   <!-- Shared-parameter definition file used by SetupRishuiZaminParamsCommand. Must land flat in
        bin\ next to RVTuk.Revit.dll (resolved at runtime via the executing assembly's folder), and
        Deploy.ps1 copies *.txt from bin\ into the deployed add-in folder alongside it. -->

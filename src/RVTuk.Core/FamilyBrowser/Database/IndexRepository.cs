@@ -29,10 +29,15 @@ namespace RVTuk.Core.FamilyBrowser.Database
             if (!string.IsNullOrEmpty(dir))
                 System.IO.Directory.CreateDirectory(dir);
 
+            // Pooling off: a pooled connection keeps its file handle open after Dispose, so the
+            // scan's read-write handle would linger on the shared DB for the rest of the Revit
+            // session and block other users (backlog "Read Only DB"). The scan holding the DB
+            // *while it runs* is intended; holding it afterwards is not.
             var connectionString = new SqliteConnectionStringBuilder
             {
                 DataSource = databasePath,
-                Mode = SqliteOpenMode.ReadWriteCreate
+                Mode = SqliteOpenMode.ReadWriteCreate,
+                Pooling = false
             }.ToString();
             _connection = new SQLiteConnection(connectionString);
             _connection.Open();
@@ -41,11 +46,29 @@ namespace RVTuk.Core.FamilyBrowser.Database
             // shared memory). Use a rollback journal so the DB can live on \\server\share.
             // busy_timeout lets brief writes wait for a lock instead of failing immediately.
             Execute("PRAGMA busy_timeout=5000;");
+            ProbeWritable();
             Execute("PRAGMA journal_mode=DELETE;");
             Execute("PRAGMA synchronous=NORMAL;");
             Execute("PRAGMA foreign_keys=ON;");
             CreateSchemaIfNeeded();
             MigrateSchema();
+        }
+
+        // SQLite silently degrades a ReadWriteCreate open to read-only when the file denies
+        // write access — e.g. Autodesk Desktop Connector / OneDrive flag a cloud-synced DB
+        // ReadOnly while another user holds it. Every IndexRepository caller is a writer
+        // (scan/rescan), so surface that state as one clear error up front instead of an
+        // "attempt to write a readonly database" from whichever later statement writes first.
+        // sqlite3_db_readonly is SQLite's own report of the access it actually got.
+        private void ProbeWritable()
+        {
+            if (SQLitePCL.raw.sqlite3_db_readonly(_connection.Handle, "main") == 1)
+                throw new System.IO.IOException(
+                    $"The library database is read-only: \"{_databasePath}\". Scans and rescans " +
+                    "need write access. If the library lives in a cloud-synced folder (Autodesk " +
+                    "Desktop Connector, OneDrive), the sync client may have flagged the file " +
+                    "read-only while someone else has it open — try again later, or clear the " +
+                    "file's read-only attribute.");
         }
 
         private void CreateSchemaIfNeeded()

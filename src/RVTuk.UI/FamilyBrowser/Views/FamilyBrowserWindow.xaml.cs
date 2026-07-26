@@ -14,9 +14,12 @@ namespace RVTuk.UI.FamilyBrowser.Views
         private AppConfig _config = null!;
         private readonly Func<IReadOnlyList<ProjectFamilyInfo>> _getProjectFamilies;
         private readonly Func<string, (bool Success, string? Error)> _loadFamily;
-        private readonly Func<long, string, bool> _rescanFamily;
+        private readonly Func<long, string, (bool Success, string? Error)> _rescanFamily;
         private readonly Action<bool, bool> _scan;
         private readonly Action<string> _openInFamilyEditor;
+        private readonly Func<string, (bool Success, string? Error)> _openModelFamilyInEditor;
+        private readonly Func<string, string, (bool Success, string? Error)> _saveFamilyToLibrary;
+        private readonly Func<IReadOnlyList<string>, IReadOnlyDictionary<string, byte[]>> _getFamilyPreviews;
 
         // The single Edit-Info editor currently on screen, if any. Edit Info is only ever triggered
         // from within this FamilyBrowserWindow, so a per-window field (not an app-wide singleton) is
@@ -31,9 +34,12 @@ namespace RVTuk.UI.FamilyBrowser.Views
             AppConfig config,
             Func<IReadOnlyList<ProjectFamilyInfo>> getProjectFamilies,
             Func<string, (bool Success, string? Error)> loadFamily,
-            Func<long, string, bool> rescanFamily,
+            Func<long, string, (bool Success, string? Error)> rescanFamily,
             Action<bool, bool> scan,
-            Action<string> openInFamilyEditor)
+            Action<string> openInFamilyEditor,
+            Func<string, (bool Success, string? Error)> openModelFamilyInEditor,
+            Func<string, string, (bool Success, string? Error)> saveFamilyToLibrary,
+            Func<IReadOnlyList<string>, IReadOnlyDictionary<string, byte[]>> getFamilyPreviews)
         {
             InitializeComponent();
             _getProjectFamilies = getProjectFamilies;
@@ -41,6 +47,9 @@ namespace RVTuk.UI.FamilyBrowser.Views
             _rescanFamily = rescanFamily;
             _scan = scan;
             _openInFamilyEditor = openInFamilyEditor;
+            _openModelFamilyInEditor = openModelFamilyInEditor;
+            _saveFamilyToLibrary = saveFamilyToLibrary;
+            _getFamilyPreviews = getFamilyPreviews;
             LoadWithConfig(config);
         }
 
@@ -60,7 +69,8 @@ namespace RVTuk.UI.FamilyBrowser.Views
             var repo = new BrowserRepository(config.DatabasePath);
             var vm = new FamilyBrowserViewModel(
                 config, repo, _getProjectFamilies, _loadFamily, _rescanFamily,
-                _scan, _openInFamilyEditor, onLibraryFolderChanged: ReloadConfig);
+                _scan, _openInFamilyEditor, _openModelFamilyInEditor, _saveFamilyToLibrary,
+                _getFamilyPreviews, onLibraryFolderChanged: ReloadConfig);
             vm.EditInfoRequested += OnEditInfoRequested;
 
             if (ViewModel != null)

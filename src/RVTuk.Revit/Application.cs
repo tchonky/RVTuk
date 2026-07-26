@@ -33,6 +33,10 @@ namespace RVTuk.Revit
         public static ExternalEvent LoadFamilyEvent { get; private set; } = null!;
         public static OpenFamilyEditorEventHandler OpenFamilyEditorHandler { get; private set; } = null!;
         public static ExternalEvent OpenFamilyEditorEvent { get; private set; } = null!;
+        public static EditProjectFamilyEventHandler EditProjectFamilyHandler { get; private set; } = null!;
+        public static ExternalEvent EditProjectFamilyEvent { get; private set; } = null!;
+        public static GetFamilyPreviewsEventHandler GetFamilyPreviewsHandler { get; private set; } = null!;
+        public static ExternalEvent GetFamilyPreviewsEvent { get; private set; } = null!;
         public static AreaExtractEventHandler AreaExtractHandler { get; private set; } = null!;
         public static ExternalEvent AreaExtractEvent { get; private set; } = null!;
         public static SelectAreaEventHandler SelectAreaHandler { get; private set; } = null!;
@@ -88,6 +92,10 @@ namespace RVTuk.Revit
             LoadFamilyEvent    = ExternalEvent.Create(LoadFamilyHandler);
             OpenFamilyEditorHandler = new OpenFamilyEditorEventHandler();
             OpenFamilyEditorEvent   = ExternalEvent.Create(OpenFamilyEditorHandler);
+            EditProjectFamilyHandler = new EditProjectFamilyEventHandler();
+            EditProjectFamilyEvent   = ExternalEvent.Create(EditProjectFamilyHandler);
+            GetFamilyPreviewsHandler = new GetFamilyPreviewsEventHandler();
+            GetFamilyPreviewsEvent   = ExternalEvent.Create(GetFamilyPreviewsHandler);
             AreaExtractHandler = new AreaExtractEventHandler();
             AreaExtractEvent   = ExternalEvent.Create(AreaExtractHandler);
             SelectAreaHandler  = new SelectAreaEventHandler();

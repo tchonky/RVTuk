@@ -72,17 +72,17 @@
                     </Popup>
                 </Grid>
 
-                <!-- Source toggles: in the project (⬅), favourites (⭐), library-only (➡) — all
-                     off by default (unfiltered). Pressing one or more narrows the list to the
-                     union of what's pressed, e.g. pressing only ⭐ shows every favourite
-                     regardless of project/library status. -->
+                <!-- Source toggles: in the model (⬅), favourites (⭐), in the library (⬅ mirrored
+                     as ➡) — all off by default (unfiltered). Each pressed toggle narrows the
+                     list (AND); ⬅ and ➡ are inclusive, so pressing both shows only the families
+                     that exist in both the model and the library (Core's SourceToggleFilter). -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <!-- ⬅️/➡️ used to be two different emoji code points (U+2B05 / U+27A1),
                          which don't render as a true mirror pair in every font. One Path,
                          flipped via RenderTransform, guarantees they match. -->
                     <ToggleButton Width="30" Height="28" Margin="0,0,2,0"
                                   IsChecked="{Binding ShowInProjectFamilies, Mode=TwoWay}"
-                                  ToolTip="Show families loaded in the project">
+                                  ToolTip="Show families loaded in the model (press both arrows for families in the model and the library)">
                         <Viewbox Width="14" Height="14" RenderTransformOrigin="0.5,0.5">
                             <Viewbox.RenderTransform>
                                 <ScaleTransform ScaleX="-1"/>
@@ -99,8 +99,8 @@
                                   ToolTip="Show favourite families"
                                   Content="⭐"/>
                     <ToggleButton Width="30" Height="28"
-                                  IsChecked="{Binding ShowLibraryOnlyFamilies, Mode=TwoWay}"
-                                  ToolTip="Show families only in the library">
+                                  IsChecked="{Binding ShowLibraryFamilies, Mode=TwoWay}"
+                                  ToolTip="Show families in the library (press both arrows for families in the model and the library)">
                         <Viewbox Width="14" Height="14">
                             <Canvas Width="24" Height="24">
                                 <Path Stroke="{StaticResource Brush.Text}" StrokeThickness="2"
@@ -211,29 +211,48 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <Image Grid.Column="0" Source="{Binding Thumbnail}" Width="48" Height="48" Stretch="Uniform"/>
                             <StackPanel Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Center">
+                                <!-- Two lines max, then ellipsis; the tooltip carries the full name. -->
                                 <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
-                                           TextWrapping="Wrap" MaxHeight="48"/>
+                                           TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="32"
+                                           ToolTip="{Binding DisplayName}"/>
                                 <TextBlock Text="{Binding Category}"
                                            Foreground="{StaticResource Brush.TextMuted}" FontSize="10"/>
                             </StackPanel>
-                            <TextBlock Grid.Column="2" Text="&#x2713;" Foreground="{StaticResource Brush.Success}"
+                            <!-- Red version = _Version is an instance parameter (off-standard;
+                                 the family needs it changed to a type parameter). -->
+                            <TextBlock Grid.Column="2" Text="{Binding Version}" FontSize="10"
+                                       VerticalAlignment="Center" Margin="4,0,0,0"
+                                       Visibility="{Binding HasVersion, Converter={StaticResource BoolVis}}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource Brush.TextMuted}"/>
+                                        <Setter Property="ToolTip" Value="Family version (_Version parameter)"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding VersionIsInstance}" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource Brush.Warning}"/>
+                                                <Setter Property="ToolTip" Value="_Version is an instance parameter — change it to a type parameter (office standard)"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <TextBlock Grid.Column="3" Text="&#x2713;" Foreground="{StaticResource Brush.Success}"
                                        VerticalAlignment="Center" Margin="4,0,2,0"
                                        Visibility="{Binding ShowUpToDate, Converter={StaticResource BoolVis}}"/>
-                            <Border Grid.Column="2" Background="{StaticResource Brush.Accent}" CornerRadius="3"
+                            <Border Grid.Column="3" Background="{StaticResource Brush.Accent}" CornerRadius="3"
                                     Padding="4,1" Margin="4,0,2,0"
                                     Visibility="{Binding ShowUpdateAvailable, Converter={StaticResource BoolVis}}">
                                 <TextBlock Text="&#x2191; Update" Foreground="White" FontSize="10"/>
                             </Border>
-                            <Border Grid.Column="2" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1"
-                                    CornerRadius="3" Padding="4,1" Margin="4,0,2,0"
-                                    ToolTip="Loaded in the project but not found in the library"
-                                    Visibility="{Binding IsModelOnly, Converter={StaticResource BoolVis}}">
-                                <TextBlock Text="Model only" Foreground="{StaticResource Brush.TextMuted}" FontSize="10"/>
-                            </Border>
-                            <Button Grid.Column="3" Margin="2,0,0,0" Padding="3,0" BorderThickness="0"
+                            <TextBlock Grid.Column="3" Text="&#x26A0;&#xFE0F;" FontSize="12"
+                                       VerticalAlignment="Center" Margin="4,0,2,0"
+                                       ToolTip="Loaded in the project but not found in the library"
+                                       Visibility="{Binding IsModelOnly, Converter={StaticResource BoolVis}}"/>
+                            <Button Grid.Column="4" Margin="2,0,0,0" Padding="3,0" BorderThickness="0"
                                     Background="Transparent" ToolTip="Toggle favourite"
                                     Command="{Binding DataContext.ToggleFavoriteCommand,
                                               RelativeSource={RelativeSource AncestorType=ListBox}}"
@@ -305,6 +324,34 @@
                                 <!-- Status flags floating at the top-right -->
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                                             VerticalAlignment="Top" Margin="4">
+                                    <!-- Red version = _Version is an instance parameter (see the
+                                         matching row-list note). -->
+                                    <Border Background="#66000000" CornerRadius="3" Padding="4,1" Margin="0,0,2,0"
+                                            VerticalAlignment="Center"
+                                            Visibility="{Binding HasVersion, Converter={StaticResource BoolVis}}">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="ToolTip" Value="Family version (_Version parameter)"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding VersionIsInstance}" Value="True">
+                                                        <Setter Property="ToolTip" Value="_Version is an instance parameter — change it to a type parameter (office standard)"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock Text="{Binding Version}" FontSize="10">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource Brush.TextMuted}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding VersionIsInstance}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource Brush.Warning}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
                                     <TextBlock Text="&#x2713;" Foreground="{StaticResource Brush.Success}"
                                                FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,2,0"
                                                Visibility="{Binding ShowUpToDate, Converter={StaticResource BoolVis}}"/>
@@ -313,12 +360,11 @@
                                             Visibility="{Binding ShowUpdateAvailable, Converter={StaticResource BoolVis}}">
                                         <TextBlock Text="&#x2191; Update" Foreground="White" FontSize="10"/>
                                     </Border>
-                                    <Border Background="#66000000" BorderBrush="{StaticResource Brush.Border}"
-                                            BorderThickness="1" CornerRadius="3"
-                                            Padding="4,1" Margin="0,0,2,0" VerticalAlignment="Center"
+                                    <Border Background="#66000000" CornerRadius="3" Padding="4,1" Margin="0,0,2,0"
+                                            VerticalAlignment="Center"
                                             ToolTip="Loaded in the project but not found in the library"
                                             Visibility="{Binding IsModelOnly, Converter={StaticResource BoolVis}}">
-                                        <TextBlock Text="Model only" Foreground="{StaticResource Brush.TextMuted}" FontSize="10"/>
+                                        <TextBlock Text="&#x26A0;&#xFE0F;" FontSize="11"/>
                                     </Border>
                                     <Button Padding="3,0" BorderThickness="0"
                                             Background="#66000000" ToolTip="Toggle favourite"
@@ -467,7 +513,7 @@
                         </DockPanel>
                         <TextBlock Text="{Binding SelectedItem.Category}"
                                    Foreground="{StaticResource Brush.TextMuted}" FontSize="11" Margin="0,2,0,0"/>
-                        <TextBlock Text="Loaded in the project but not found in the library"
+                        <TextBlock Text="&#x26A0;&#xFE0F; Loaded in the project but not found in the library"
                                    Foreground="{StaticResource Brush.TextMuted}" FontSize="11"
                                    FontStyle="Italic" Margin="0,2,0,0"
                                    Visibility="{Binding SelectedItem.IsModelOnly,
@@ -517,12 +563,31 @@
                         </Button.Style>
                     </Button>
 
+                    <!-- Save to Library — the model-only counterpart of Load: writes the family
+                         from the model into the library folder so the library can be grown from
+                         the project. -->
+                    <Button Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0"
+                            Padding="16,7" FontWeight="SemiBold" Content="Save to Library"
+                            Command="{Binding SaveToLibraryCommand}"
+                            ToolTip="Save this family from the model into the library folder"
+                            Visibility="{Binding SelectedItem.IsModelOnly, Converter={StaticResource BoolVis}, FallbackValue=Collapsed}"/>
+
                     <!-- Rescan / Edit Info / Open — top-right corner of the panel, stacked -->
                     <StackPanel Grid.Column="4" VerticalAlignment="Top">
                         <Button Width="30" Height="28" Margin="0,0,0,4" Padding="0"
                                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                 Command="{Binding RescanFamilyCommand}"
                                 ToolTip="Re-read this family's parameters and thumbnail from disk">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                    <Style.Triggers>
+                                        <!-- No .rfa / DB row behind a model-only family: nothing to rescan. -->
+                                        <DataTrigger Binding="{Binding SelectedItem.IsModelOnly}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
                             <Viewbox Width="13" Height="13">
                                 <Canvas Width="24" Height="24">
                                     <Path Fill="{StaticResource Brush.Text}"
@@ -534,6 +599,16 @@
                                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                 Command="{Binding EditInfoCommand}"
                                 ToolTip="Edit Info">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                    <Style.Triggers>
+                                        <!-- No DB row behind a model-only family: no info to edit. -->
+                                        <DataTrigger Binding="{Binding SelectedItem.IsModelOnly}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
                             <Viewbox Width="13" Height="13">
                                 <Canvas Width="24" Height="24">
                                     <Rectangle Canvas.Left="4" Canvas.Top="3" Width="13" Height="18"
@@ -548,7 +623,7 @@
                         <Button Width="30" Height="28" Padding="0"
                                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                 Command="{Binding OpenFamilyEditorCommand}"
-                                ToolTip="Open in Family Editor">
+                                ToolTip="Open in Family Editor (model-only families open from the model)">
                             <Viewbox Width="13" Height="13">
                                 <Canvas Width="24" Height="24">
                                     <Path Stroke="{StaticResource Brush.Text}" StrokeThickness="1.6"

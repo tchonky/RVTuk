@@ -16,6 +16,10 @@ namespace RVTuk.Core.FamilyBrowser.Models
         // Value of the "_Version" shared parameter, captured by the deep scan (null when the
         // family doesn't carry it or hasn't been deep-scanned since it last changed on disk).
         public string? Version { get; set; }
+        // True when _Version is an *instance* parameter in the family (from the deep-scanned
+        // Parameters rows, or detected off a placed instance for the loaded copy). The office
+        // standard wants a type parameter — the browser paints the version red to flag it.
+        public bool VersionIsInstance { get; set; }
         public int RevitYear { get; set; }
         public string? Tags { get; set; }
         public bool IsFavorite { get; set; }
