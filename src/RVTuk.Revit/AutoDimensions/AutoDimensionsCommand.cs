@@ -139,7 +139,7 @@ namespace RVTuk.Revit.AutoDimensions
                     continue;
                 }
 
-                AutoDimensionTracker.SetTrackedDimension(line, dimension.Id);
+                AutoDimensionTracker.SetTrackedDimension(line, view.Id, dimension.Id);
                 created++;
             }
         }
