@@ -8,11 +8,11 @@ Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
   reports no side faces for either, so the candidate is dropped. The run summary now counts these
   ("no usable faces"). A stacked wall could be resolved through `GetStackedWallMemberIds`; a
   curtain wall has no side faces to find and would need a different reference entirely.
-- [ ] **An opening's nearest parallel wall isn't preferred.** Every opening within reach of the
-  line qualifies, so a generous reach on a line running along a facade can also pull in openings
-  from a parallel interior wall behind it. Preferring the nearest qualifying wall (or ignoring
-  openings with another parallel wall between them and the line) would settle it without the
-  user having to tune the distance.
+- [ ] **An opening's nearest parallel wall isn't preferred.** Openings are deduplicated across
+  *lines* (nearest qualifying line owns each one), but not across *walls*: a generous reach on a
+  line running along a facade still pulls in openings from a parallel interior wall behind it,
+  because both walls' openings qualify for the same line. Ignoring openings with another parallel
+  wall between them and the line would settle it.
 
 ## ✨ Improvements
 

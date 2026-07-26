@@ -71,11 +71,37 @@ namespace RVTuk.Revit.AutoDimensions
             var candidates = DimensionCandidateCollector.Collect(doc, targetView, categories);
             tally.ExcludedNotCut += candidates.ExcludedNotCut;
 
-            foreach (var line in referenceLines)
+            // Matching happens for all the level's lines at once, not line by line: an opening
+            // belongs to the nearest line that qualifies, which can only be known by comparing
+            // them. A facade with three stacked strings dimensions each door once, innermost.
+            var geometry = referenceLines.Select(l => l.GeometryCurve as Line).ToList();
+
+            var straightIndices = new List<int>();
+            var lines = new List<ReferenceLine>();
+            for (int i = 0; i < geometry.Count; i++)
+            {
+                if (geometry[i] == null) continue;
+
+                straightIndices.Add(i);
+                lines.Add(new ReferenceLine(
+                    ToXyPoint(geometry[i]!.GetEndPoint(0)),
+                    ToXyPoint(geometry[i]!.GetEndPoint(1))));
+            }
+
+            var matches = CandidateMatcher.FindMatchIndicesForLines(
+                lines, candidates.Segments, candidates.MatchModes, openingReach);
+
+            var byLine = new IReadOnlyList<int>?[referenceLines.Count];
+            for (int k = 0; k < straightIndices.Count; k++) byLine[straightIndices[k]] = matches[k];
+
+            // Every line goes through the loop, including any whose geometry isn't a Line: the
+            // stale-dimension delete must stay unconditional.
+            for (int i = 0; i < referenceLines.Count; i++)
             {
                 try
                 {
-                    RunLine(doc, line, targetView, candidates, openingReach, tally);
+                    RunLine(doc, referenceLines[i], geometry[i], targetView, candidates,
+                        byLine[i] ?? Array.Empty<int>(), tally);
                 }
                 catch
                 {
@@ -89,17 +115,24 @@ namespace RVTuk.Revit.AutoDimensions
         private static void RunLine(
             Document doc,
             DetailLine line,
+            Line? geometryLine,
             View targetView,
             DimensionCandidateSet candidates,
-            double openingReach,
+            IReadOnlyList<int> matchIndices,
             DimensionRunTally tally)
         {
-            // Always first, and independent of whether this line still has crossings: a line whose
+            // Always first, and independent of whether this line still has matches: a line whose
             // walls were deleted or moved away must still lose its stale dimension.
             var tracked = AutoDimensionTracker.TryGetTrackedDimension(line, targetView.Id);
             if (tracked != null) doc.Delete(tracked.Id);
 
-            if (line.GeometryCurve is not Line geometryLine)
+            if (geometryLine == null)
+            {
+                tally.Skipped++;
+                return;
+            }
+
+            if (matchIndices.Count == 0)
             {
                 tally.Skipped++;
                 return;
@@ -108,20 +141,9 @@ namespace RVTuk.Revit.AutoDimensions
             var lineStart = ToXyPoint(geometryLine.GetEndPoint(0));
             var lineEnd = ToXyPoint(geometryLine.GetEndPoint(1));
 
-            // Walls by being crossed, openings by lying alongside — interleaved in one order
-            // along the line, so the dimension string reads correctly.
-            var crossingIndices = CandidateMatcher.FindMatchIndices(
-                lineStart, lineEnd, candidates.Segments, candidates.MatchModes, openingReach);
-
-            if (crossingIndices.Count == 0)
-            {
-                tally.Skipped++;
-                return;
-            }
-
             var referenceArray = new ReferenceArray();
             var anyResolved = false;
-            foreach (var index in crossingIndices)
+            foreach (var index in matchIndices)
             {
                 if (DimensionCandidateCollector.TryAppendReferences(
                         candidates, index, lineStart, lineEnd, referenceArray))

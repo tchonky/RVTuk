@@ -17,6 +17,9 @@ namespace RVTuk.Core.AutoDimensions
         Alongside,
     }
 
+    /// <summary>One reference line, as plain 2D endpoints.</summary>
+    public record ReferenceLine(XyPoint Start, XyPoint End);
+
     /// <summary>
     /// Which candidates a reference line dimensions, in order along it.
     ///
@@ -40,6 +43,7 @@ namespace RVTuk.Core.AutoDimensions
     {
         private const double BoundaryEpsilon = 1e-6;
 
+        /// <summary>Matches for a single line. A thin wrapper — one line owns everything.</summary>
         public static IReadOnlyList<int> FindMatchIndices(
             XyPoint lineStart,
             XyPoint lineEnd,
@@ -47,34 +51,86 @@ namespace RVTuk.Core.AutoDimensions
             IReadOnlyList<CandidateMatch> matchModes,
             double alongsideReach)
         {
-            var matches = new List<(int Index, double T)>();
+            var lines = new[] { new ReferenceLine(lineStart, lineEnd) };
+            return FindMatchIndicesForLines(lines, segments, matchModes, alongsideReach)[0];
+        }
 
-            for (int i = 0; i < segments.Count; i++)
+        /// <summary>
+        /// Matches for every reference line at once. Walls go to each line that crosses them; an
+        /// opening goes to the single nearest line that qualifies, so a facade with three stacked
+        /// dimension strings dimensions each door once, from the innermost.
+        ///
+        /// Only openings are owned. A wall crossed by three strings is measured by all three —
+        /// that is what a chained string is.
+        ///
+        /// Ownership is decided among the lines an opening actually qualifies for (parallel host
+        /// wall, centre within the line's span, within reach), not merely the nearest line:
+        /// a door the nearest line cannot reach must still fall to one that can.
+        /// </summary>
+        public static IReadOnlyList<IReadOnlyList<int>> FindMatchIndicesForLines(
+            IReadOnlyList<ReferenceLine> lines,
+            IReadOnlyList<WallCandidate> segments,
+            IReadOnlyList<CandidateMatch> matchModes,
+            double alongsideReach)
+        {
+            var perLine = new List<List<(int Index, double T)>>();
+            for (int i = 0; i < lines.Count; i++) perLine.Add(new List<(int, double)>());
+
+            for (int c = 0; c < segments.Count; c++)
             {
-                var mode = i < matchModes.Count ? matchModes[i] : CandidateMatch.Crossing;
+                var mode = c < matchModes.Count ? matchModes[c] : CandidateMatch.Crossing;
 
                 if (mode == CandidateMatch.Crossing)
                 {
-                    if (WallCrossingFinder.TryGetCrossingParameter(lineStart, lineEnd, segments[i], out var crossingT))
-                        matches.Add((i, crossingT));
+                    for (int l = 0; l < lines.Count; l++)
+                    {
+                        if (WallCrossingFinder.TryGetCrossingParameter(
+                                lines[l].Start, lines[l].End, segments[c], out var t))
+                            perLine[l].Add((c, t));
+                    }
+                    continue;
                 }
-                else if (TryGetAlongsideParameter(lineStart, lineEnd, segments[i], alongsideReach, out var alongsideT))
+
+                var owner = -1;
+                var ownerT = 0.0;
+                var ownerDistance = double.MaxValue;
+                for (int l = 0; l < lines.Count; l++)
                 {
-                    matches.Add((i, alongsideT));
+                    if (!TryGetAlongside(lines[l].Start, lines[l].End, segments[c],
+                            alongsideReach, out var t, out var distance)) continue;
+
+                    // Strict: a tie keeps the earlier line, so a door exactly between two
+                    // strings lands the same way on every re-run rather than shuffling.
+                    if (distance >= ownerDistance) continue;
+
+                    owner = l;
+                    ownerT = t;
+                    ownerDistance = distance;
                 }
+
+                if (owner >= 0) perLine[owner].Add((c, ownerT));
             }
 
-            return matches.OrderBy(m => m.T).Select(m => m.Index).ToList();
+            return perLine
+                .Select(m => (IReadOnlyList<int>)m.OrderBy(x => x.T).Select(x => x.Index).ToList())
+                .ToList();
         }
 
         /// <summary>
         /// Where the opening's centre projects along the line, if its wall runs parallel to the
-        /// line, the centre falls inside the line's span, and it lies within reach.
+        /// line, the centre falls inside the line's span, and it lies within reach. Also hands
+        /// back the perpendicular distance, which is what decides ownership between lines.
         /// </summary>
-        private static bool TryGetAlongsideParameter(
-            XyPoint lineStart, XyPoint lineEnd, WallCandidate segment, double reach, out double t)
+        private static bool TryGetAlongside(
+            XyPoint lineStart,
+            XyPoint lineEnd,
+            WallCandidate segment,
+            double reach,
+            out double t,
+            out double distance)
         {
             t = 0;
+            distance = 0;
 
             var lineX = lineEnd.X - lineStart.X;
             var lineY = lineEnd.Y - lineStart.Y;
@@ -101,10 +157,11 @@ namespace RVTuk.Core.AutoDimensions
 
             // Perpendicular distance, either side of the line.
             var lineLength = Math.Sqrt(lineLengthSquared);
-            var distance = Math.Abs(dx * lineY - dy * lineX) / lineLength;
-            if (distance > reach) return false;
+            var perpendicular = Math.Abs(dx * lineY - dy * lineX) / lineLength;
+            if (perpendicular > reach) return false;
 
             t = candidateT;
+            distance = perpendicular;
             return true;
         }
     }

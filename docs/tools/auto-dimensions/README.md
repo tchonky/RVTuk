@@ -32,6 +32,15 @@ which is why it's the user's to set — exterior dimension strings often sit fur
 Both kinds come back interleaved in one order along the line, so a string reads
 cross-wall, jamb, jamb, cross-wall.
 
+**An opening is dimensioned once, by the nearest line that qualifies.** A facade usually
+carries several stacked dimension strings, and every one of them can reach the same door;
+measuring it from all of them is noise. Ownership is settled across all of a level's lines at
+once — which is why matching happens in `DimensionRunner.RunPair` rather than per line — and
+among the lines that actually qualify, not merely the nearest, so a door the closest string
+can't reach or doesn't span still falls to one that does. Ties go to the earlier line, so
+re-running never shuffles a door between strings. **Walls are not deduplicated:** a wall
+crossed by three strings is measured by all three, which is what a chained string is.
+
 **When a crossing carries no mark,** the run summary says which of the silent causes applied:
 not cut by the view, no usable reference (curtain and stacked walls report no side faces), or
 references merged for sharing a position along the line.
