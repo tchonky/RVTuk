@@ -130,9 +130,14 @@ This is already what `TryAppendReferences` does. The change is to state it as an
 enforces and a test can defend, rather than a property it happens to have. Where either list comes
 back empty the opening is skipped and counted in `ExcludedNoReferences`, unchanged.
 
-Where a family exposes several `Left` (or `Right`) references, the first is used, as today.
-Choosing between them would need each reference's position, which family-instance references do
-not readily give up; it is recorded as a backlog limitation rather than guessed at here.
+`Left` and `Right` here are the reference plane's **Is Reference** property, not its name: a plane
+named "Left" but flagged *Not a Reference* contributes nothing, and a plane named "Jamb A" flagged
+`Left` does.
+
+Should a family expose several `Left` (or `Right`) references — `GetReferences` returns a list, and
+nested families are the likely source — the first is used, as today. Expected to be a list of one
+in practice; choosing between several would need each reference's position, which family-instance
+references do not readily give up, so it is left alone rather than guessed at.
 
 ### The unverified part
 
