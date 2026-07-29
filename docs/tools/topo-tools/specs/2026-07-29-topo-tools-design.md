@@ -141,6 +141,11 @@ Each curve is tessellated (`Curve.Tessellate()`) into an XY polyline; the detail
 the view plane and is discarded. A line with no elevation is collected and flagged, not dropped —
 the pane's job is to say why nothing happened.
 
+**Plan views only.** A detail curve's geometry comes back in world coordinates on the view's sketch
+plane, so dropping Z recovers the drawn shape only where that plane is horizontal. In a section or
+elevation the same projection collapses the line to a streak across the site. The pane therefore
+requires a `ViewPlan` and says so plainly in anything else, rather than producing nonsense.
+
 The run's single elevation conversion:
 
 ```
@@ -154,12 +159,22 @@ is the shared elevation of the internal origin; rotation and true north do not e
 
 Walk the polyline and emit points:
 
-- **every tessellation vertex survives**, so arcs and corners stay true;
-- any segment longer than the spacing is divided evenly, so no gap exceeds the spacing;
-- an interior sample landing within **a tenth of the spacing** of a point already kept is dropped —
-  near-duplicate points make slivers, not detail. Vertices always win this contest.
+- **every tessellation vertex is a candidate**, so arcs and corners stay true;
+- any segment longer than the spacing is divided evenly (`n = ceil(length / spacing)`, interior
+  candidates at `i · length / n`), so no gap exceeds the spacing;
+- candidates are emitted in order, and one is dropped when it lies within **a tenth of the spacing**
+  of the previously emitted point **or of the very first emitted point**. Near-duplicate points make
+  slivers, not detail.
 
 Every point of one line gets that line's single Z.
+
+The second half of the drop test is not decoration. `Curve.Tessellate()` on a closed loop returns
+the start point again as the last point, so testing only against the previous point stacks two
+coincident vertices on every closed contour. Nor can vertices be exempted from the test, which an
+earlier draft of this design proposed: a tessellated tight arc emits vertices millimetres apart, and
+exempting them puts that sliver straight onto the toposolid. Even division already guarantees
+interior candidates sit more than half a spacing apart, so the test only ever fires on genuine
+near-duplicates.
 
 ### 3. Route — pure test, Revit data
 
