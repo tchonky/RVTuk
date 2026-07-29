@@ -20,15 +20,15 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
         private readonly ManualResetEventSlim _done = new(false);
         private int _categoryMask;
         private IReadOnlyList<long> _checkedViewIds = Array.Empty<long>();
-        private int _openingReachMillimetres = ScopeDefaults.OpeningReachMillimetres;
+        private long _dimensionTypeId;
 
         public string Summary { get; private set; } = string.Empty;
 
-        public void Prepare(int categoryMask, IReadOnlyList<long> checkedViewIds, int openingReachMillimetres)
+        public void Prepare(int categoryMask, IReadOnlyList<long> checkedViewIds, long dimensionTypeId)
         {
             _categoryMask = categoryMask;
             _checkedViewIds = checkedViewIds;
-            _openingReachMillimetres = openingReachMillimetres;
+            _dimensionTypeId = dimensionTypeId;
             _done.Reset();
         }
 
@@ -63,9 +63,11 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
         {
             var categories = CategoryMask.FromMask(_categoryMask);
             var selectedViewIds = new HashSet<long>(_checkedViewIds);
-            // The pane speaks millimetres; everything past here is Revit's internal feet.
-            var openingReach = UnitUtils.ConvertToInternalUnits(
-                _openingReachMillimetres, UnitTypeId.Millimeters);
+            // Resolved once for the whole fan-out. Null when nothing was chosen or the chosen
+            // type has since been deleted — the runner then falls back to each view's default.
+            var dimensionType = _dimensionTypeId > 0
+                ? doc.GetElement(new ElementId(_dimensionTypeId)) as DimensionType
+                : null;
 
             // Re-discovered here rather than trusting the pane's snapshot: the model may have
             // changed since the tree was populated.
@@ -103,7 +105,7 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
 
                             var tally = new DimensionRunTally();
                             DimensionRunner.RunPair(
-                                doc, referenceLines, targetView, categories, openingReach, tally);
+                                doc, referenceLines, targetView, categories, dimensionType, tally);
 
                             totalCreated += tally.Created;
                             totalSkipped += tally.Skipped;
@@ -117,7 +119,7 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
                     }
 
                     ScopeSelectionStore.Write(
-                        doc, _categoryMask, _checkedViewIds, _openingReachMillimetres);
+                        doc, _categoryMask, _checkedViewIds, _dimensionTypeId);
                 }
                 catch
                 {

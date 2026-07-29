@@ -6,19 +6,19 @@ namespace RVTuk.Core.AutoDimensions
     public record ScopeSelection(
         int CategoryMask,
         IReadOnlyList<long> CheckedViewIds,
-        int OpeningReachMillimetres);
+        long DimensionTypeId);
+
+    /// <summary>
+    /// One of the project's dimension types, as the pane's dropdown sees it. Which type a run
+    /// uses is the user's choice because it carries their office's appearance — and because
+    /// Revit's "Show Opening Height", which prints a door's height under its width, lives on the
+    /// type rather than on the dimension.
+    /// </summary>
+    public record DimensionTypeInfo(long Id, string Name);
 
     /// <summary>Everything one discovery pass tells the pane about the open project.</summary>
-    public record AutoDimensionsScope(IReadOnlyList<LevelScope> Levels, ScopeSelection? Selection);
-
-    /// <summary>What a project with nothing persisted yet starts with.</summary>
-    public static class ScopeDefaults
-    {
-        /// <summary>
-        /// How far from a reference line an opening's wall may sit and still be dimensioned by
-        /// it. Drafting convention, not geometry — exterior dimension strings often sit further
-        /// out than this, which is exactly why the pane lets the user change it.
-        /// </summary>
-        public const int OpeningReachMillimetres = 1000;
-    }
+    public record AutoDimensionsScope(
+        IReadOnlyList<LevelScope> Levels,
+        ScopeSelection? Selection,
+        IReadOnlyList<DimensionTypeInfo> DimensionTypes);
 }

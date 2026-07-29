@@ -52,17 +52,15 @@
             </StackPanel>
         </Border>
 
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10,0,10,10"
-                    ToolTip="Doors and windows are measured across their width, so they only count on walls running along the reference line — never on walls it crosses. This is how far away such a wall may sit.">
-            <TextBlock Text="Openings within"
+        <StackPanel DockPanel.Dock="Top" Margin="10,0,10,10"
+                    ToolTip="The type given to every dimension this tool creates. Tick 'Show Opening Height' on it in Revit and doors and windows print their height under their width.">
+            <TextBlock Text="DIMENSION TYPE"
                        Foreground="{StaticResource Brush.TextMuted}"
-                       FontSize="11" VerticalAlignment="Center"/>
-            <TextBox Text="{Binding OpeningReachMillimetres, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, FallbackValue=1000}"
-                     Width="56" Margin="6,0,6,0" Padding="3,1"
-                     VerticalAlignment="Center" TextAlignment="Right"/>
-            <TextBlock Text="mm of the line"
-                       Foreground="{StaticResource Brush.TextMuted}"
-                       FontSize="11" VerticalAlignment="Center"/>
+                       FontSize="10" FontWeight="SemiBold"
+                       Margin="0,0,0,4"/>
+            <ComboBox ItemsSource="{Binding DimensionTypes}"
+                      SelectedItem="{Binding SelectedDimensionType, Mode=TwoWay}"
+                      DisplayMemberPath="Name"/>
         </StackPanel>
 
         <TextBlock DockPanel.Dock="Top"

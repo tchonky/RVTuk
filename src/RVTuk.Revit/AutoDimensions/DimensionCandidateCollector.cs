@@ -38,6 +38,14 @@ namespace RVTuk.Revit.AutoDimensions
         public IReadOnlyList<CandidateMatch> MatchModes { get; set; } = new List<CandidateMatch>();
 
         /// <summary>
+        /// Every straight wall the view cuts, host and linked, in host coordinates — whether or
+        /// not walls are being dimensioned. An opening is only dimensioned by a line with nothing
+        /// parallel between them, and unticking Walls means "do not dimension walls", not
+        /// "pretend walls are not there".
+        /// </summary>
+        public IReadOnlyList<WallCandidate> Occluders { get; set; } = new List<WallCandidate>();
+
+        /// <summary>
         /// Elements the view draws but does not cut — walls below the cut plane, shown in
         /// projection. Reported in the run summary because their absence is a deliberate
         /// decision the user may need to see.
@@ -81,6 +89,7 @@ namespace RVTuk.Revit.AutoDimensions
                 Items = accumulated.Items,
                 Segments = accumulated.Segments,
                 MatchModes = accumulated.MatchModes,
+                Occluders = accumulated.Occluders,
                 ExcludedNotCut = accumulated.ExcludedNotCut,
                 CutPlaneElevation = cutZ,
             };
@@ -92,6 +101,7 @@ namespace RVTuk.Revit.AutoDimensions
             public readonly List<DimensionCandidate> Items = new List<DimensionCandidate>();
             public readonly List<WallCandidate> Segments = new List<WallCandidate>();
             public readonly List<CandidateMatch> MatchModes = new List<CandidateMatch>();
+            public readonly List<WallCandidate> Occluders = new List<WallCandidate>();
             public int ExcludedNotCut;
 
             public void Add(DimensionCandidate candidate, WallCandidate segment, CandidateMatch match)
@@ -145,10 +155,18 @@ namespace RVTuk.Revit.AutoDimensions
                             lineStart, lineEnd, segment, ReferenceNormal.AlongSegment))
                         return false;
 
+                    // Left and Right ONLY — never CenterLeftRight, Front/Back or Strong/Weak.
+                    // Exactly two references, both belonging to this instance, is what makes the
+                    // segment a jamb-to-jamb measure of one opening; that is the shape Revit's
+                    // "Show Opening Height" recognises, and a stray centre reference would split
+                    // it into two meaningless halves. These are the reference planes' "Is
+                    // Reference" property inside the family, not their names.
                     var left = candidate.Instance.GetReferences(FamilyInstanceReferenceType.Left);
                     var right = candidate.Instance.GetReferences(FamilyInstanceReferenceType.Right);
                     if (left.Count == 0 || right.Count == 0) return false;
 
+                    // Expected to be one apiece; a family exposing several (nested families being
+                    // the likely source) is served by the first, which at least stays stable.
                     first = left[0];
                     second = right[0];
                 }
@@ -247,12 +265,10 @@ namespace RVTuk.Revit.AutoDimensions
         {
             // The view-scoped collector answers "what does this view draw", which includes
             // everything in projection below the cut plane. cutZ narrows that to what it cuts.
-            if (categories.HasFlag(DimensionCategories.Walls))
-            {
-                AddWalls(
-                    new FilteredElementCollector(doc, view.Id).OfClass(typeof(Wall)).Cast<Wall>(),
-                    null, Transform.Identity, cutZ, accumulated);
-            }
+            AddWalls(
+                new FilteredElementCollector(doc, view.Id).OfClass(typeof(Wall)).Cast<Wall>(),
+                null, Transform.Identity, cutZ,
+                categories.HasFlag(DimensionCategories.Walls), accumulated);
 
             if (categories.HasFlag(DimensionCategories.Doors))
                 AddOpenings(HostOpenings(doc, view, BuiltInCategory.OST_Doors), null, Transform.Identity, cutZ, accumulated);
@@ -291,12 +307,10 @@ namespace RVTuk.Revit.AutoDimensions
 
                     var transform = link.GetTotalTransform();
 
-                    if (categories.HasFlag(DimensionCategories.Walls))
-                    {
-                        AddWalls(
-                            new FilteredElementCollector(linkDoc).OfClass(typeof(Wall)).Cast<Wall>(),
-                            link, transform, cutZ, accumulated);
-                    }
+                    AddWalls(
+                        new FilteredElementCollector(linkDoc).OfClass(typeof(Wall)).Cast<Wall>(),
+                        link, transform, cutZ,
+                        categories.HasFlag(DimensionCategories.Walls), accumulated);
 
                     if (categories.HasFlag(DimensionCategories.Doors))
                         AddOpenings(LinkOpenings(linkDoc, BuiltInCategory.OST_Doors), link, transform, cutZ, accumulated);
@@ -328,6 +342,7 @@ namespace RVTuk.Revit.AutoDimensions
             RevitLinkInstance? link,
             Transform transform,
             double? cutZ,
+            bool dimensionThem,
             Accumulator accumulated)
         {
             // Straight walls only: Core's finder is a 2D segment intersection, and Revit can't
@@ -337,9 +352,20 @@ namespace RVTuk.Revit.AutoDimensions
                 if ((wall.Location as LocationCurve)?.Curve is not Line centerline) continue;
                 if (!ReachesCutPlane(wall, transform, cutZ))
                 {
-                    accumulated.ExcludedNotCut++;
+                    // Only counted when walls were asked for: the tally reports what the user
+                    // wanted and did not get, and a wall collected purely to occlude was never
+                    // wanted. Counting them would bury the real exclusions under hundreds.
+                    if (dimensionThem) accumulated.ExcludedNotCut++;
                     continue;
                 }
+
+                var segment = new WallCandidate(
+                    ToXyPoint(transform.OfPoint(centerline.GetEndPoint(0))),
+                    ToXyPoint(transform.OfPoint(centerline.GetEndPoint(1))));
+
+                // Every wall stands in the way of the openings behind it, dimensioned or not.
+                accumulated.Occluders.Add(segment);
+                if (!dimensionThem) continue;
 
                 accumulated.Add(
                     new DimensionCandidate
@@ -348,9 +374,7 @@ namespace RVTuk.Revit.AutoDimensions
                         Wall = wall,
                         Link = link,
                     },
-                    new WallCandidate(
-                        ToXyPoint(transform.OfPoint(centerline.GetEndPoint(0))),
-                        ToXyPoint(transform.OfPoint(centerline.GetEndPoint(1)))),
+                    segment,
                     CandidateMatch.Crossing);
             }
         }

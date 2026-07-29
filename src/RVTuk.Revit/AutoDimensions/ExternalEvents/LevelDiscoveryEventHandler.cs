@@ -13,7 +13,8 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
     public class LevelDiscoveryEventHandler : IExternalEventHandler
     {
         private static readonly AutoDimensionsScope Empty =
-            new AutoDimensionsScope(Array.Empty<LevelScope>(), null);
+            new AutoDimensionsScope(
+                Array.Empty<LevelScope>(), null, Array.Empty<DimensionTypeInfo>());
 
         private readonly ManualResetEventSlim _done = new(false);
 
@@ -31,7 +32,8 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
 
                 Result = new AutoDimensionsScope(
                     LevelScopeFinder.Find(doc),
-                    ScopeSelectionStore.Read(doc));
+                    ScopeSelectionStore.Read(doc),
+                    DimensionTypeFinder.Find(doc));
             }
             catch
             {

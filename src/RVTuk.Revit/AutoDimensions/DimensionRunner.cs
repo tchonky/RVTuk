@@ -65,7 +65,7 @@ namespace RVTuk.Revit.AutoDimensions
             IReadOnlyList<DetailLine> referenceLines,
             View targetView,
             DimensionCategories categories,
-            double openingReach,
+            DimensionType? dimensionType,
             DimensionRunTally tally)
         {
             var candidates = DimensionCandidateCollector.Collect(doc, targetView, categories);
@@ -89,7 +89,7 @@ namespace RVTuk.Revit.AutoDimensions
             }
 
             var matches = CandidateMatcher.FindMatchIndicesForLines(
-                lines, candidates.Segments, candidates.MatchModes, openingReach);
+                lines, candidates.Segments, candidates.MatchModes, candidates.Occluders);
 
             var byLine = new IReadOnlyList<int>?[referenceLines.Count];
             for (int k = 0; k < straightIndices.Count; k++) byLine[straightIndices[k]] = matches[k];
@@ -101,7 +101,7 @@ namespace RVTuk.Revit.AutoDimensions
                 try
                 {
                     RunLine(doc, referenceLines[i], geometry[i], targetView, candidates,
-                        byLine[i] ?? Array.Empty<int>(), tally);
+                        byLine[i] ?? Array.Empty<int>(), dimensionType, tally);
                 }
                 catch
                 {
@@ -119,6 +119,7 @@ namespace RVTuk.Revit.AutoDimensions
             View targetView,
             DimensionCandidateSet candidates,
             IReadOnlyList<int> matchIndices,
+            DimensionType? dimensionType,
             DimensionRunTally tally)
         {
             // Always first, and independent of whether this line still has matches: a line whose
@@ -159,8 +160,10 @@ namespace RVTuk.Revit.AutoDimensions
             }
 
             var dimensionLine = ToTargetViewPlane(geometryLine, targetView);
-            var dimension = doc.Create.NewDimension(targetView, dimensionLine, referenceArray);
-            dimension = RemoveCoincidentReferences(doc, targetView, dimensionLine, dimension, tally);
+            var dimension = CreateDimension(
+                doc, targetView, dimensionLine, referenceArray, dimensionType);
+            dimension = RemoveCoincidentReferences(
+                doc, targetView, dimensionLine, dimension, dimensionType, tally);
             if (dimension == null)
             {
                 tally.Skipped++;
@@ -203,7 +206,12 @@ namespace RVTuk.Revit.AutoDimensions
         /// each station. Returns null (after deleting the dimension) when fewer than two survive.
         /// </summary>
         private static Dimension? RemoveCoincidentReferences(
-            Document doc, View view, Line dimensionLine, Dimension dimension, DimensionRunTally tally)
+            Document doc,
+            View view,
+            Line dimensionLine,
+            Dimension dimension,
+            DimensionType? dimensionType,
+            DimensionRunTally tally)
         {
             var segmentValues = GetSegmentValues(dimension);
             var keep = CoincidentReferenceFilter.KeepIndices(
@@ -221,7 +229,25 @@ namespace RVTuk.Revit.AutoDimensions
 
             doc.Delete(dimension.Id);
             if (filtered.Size < 2) return null;
-            return doc.Create.NewDimension(view, dimensionLine, filtered);
+            return CreateDimension(doc, view, dimensionLine, filtered, dimensionType);
+        }
+
+        /// <summary>
+        /// One place both creation paths go through, so the recreated (de-duplicated) dimension
+        /// cannot quietly fall back to the view's default type while the original carried the
+        /// chosen one. Null means no type was chosen, or the chosen one no longer exists — the
+        /// view's default is then the only sensible answer.
+        /// </summary>
+        private static Dimension CreateDimension(
+            Document doc,
+            View view,
+            Line dimensionLine,
+            ReferenceArray references,
+            DimensionType? dimensionType)
+        {
+            return dimensionType == null
+                ? doc.Create.NewDimension(view, dimensionLine, references)
+                : doc.Create.NewDimension(view, dimensionLine, references, dimensionType);
         }
 
         /// <summary>
