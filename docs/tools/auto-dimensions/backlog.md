@@ -8,11 +8,6 @@ Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
   reports no side faces for either, so the candidate is dropped. The run summary now counts these
   ("no usable faces"). A stacked wall could be resolved through `GetStackedWallMemberIds`; a
   curtain wall has no side faces to find and would need a different reference entirely.
-- [ ] **An opening's nearest parallel wall isn't preferred.** Openings are deduplicated across
-  *lines* (nearest qualifying line owns each one), but not across *walls*: a generous reach on a
-  line running along a facade still pulls in openings from a parallel interior wall behind it,
-  because both walls' openings qualify for the same line. Ignoring openings with another parallel
-  wall between them and the line would settle it.
 
 ## ✨ Improvements
 
@@ -27,6 +22,10 @@ Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
   `CategoryMask.FromMask` clamps them off until the resolution logic exists.
 - [ ] **Surface a level with several reference views.** Today the first by ascending `ElementId`
   silently wins; the convention is one per level, so this is only worth doing if it bites.
+- [ ] **A family exposing several Left/Right references.** `GetReferences` returns a list and the
+  first is used. Expected to be a list of one — Revit's *Is Reference* flag is set per reference
+  plane, and nested families are the plausible source of duplicates. Choosing between them would
+  need each reference's position, which family-instance references do not readily give up.
 - [ ] **Linked elements ignore view-level visibility.** They're filtered by the target view's cut
   plane only (see the README) — a linked wall hidden by a view filter, workset or phase is still
   dimensioned. Tightening this means resolving the link's visibility settings per view.
@@ -41,3 +40,12 @@ Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
   [plans/2026-07-26-auto-dimensions-scope-pane.md](plans/2026-07-26-auto-dimensions-scope-pane.md)
   (Task 12, Step 7). The one with no test behind it is fanning out to a *second* view of the
   same level — that exercises `DimensionRunner.ToTargetViewPlane`.
+- [ ] **Verify *Show Opening Height* actually fires.** Tick it on a dimension type, pick that type
+  in the pane, run over a plan with doors and windows, and confirm the height prints under the
+  width — in the host model *and* through a Revit link, which is the documented sore spot. If it
+  does not fire on `GetReferences(Left/Right)` references, the reference strategy needs revisiting,
+  not the type.
+- [ ] **Verify occlusion on a real plan.** Draw a reference line outside a facade and confirm the
+  string dimensions the facade's openings and none from the interior walls behind it; then untick
+  Walls and confirm the same openings are matched (walls still occlude) and that the run summary's
+  "does not cut" count does not balloon.
