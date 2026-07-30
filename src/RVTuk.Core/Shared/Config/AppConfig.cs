@@ -39,6 +39,13 @@ namespace RVTuk.Core.Shared.Config
         public string DwgExportSheetSetName { get; set; } = string.Empty;
         public bool DwgExportUseCurrentWindow { get; set; }
 
+        /// <summary>Topo Tools: distance between generated toposolid points, in millimetres.
+        /// Reads back as 0 from any config file written before this property existed — net48's
+        /// DataContractJsonSerializer skips property initializers (same trap the DWG format
+        /// checkboxes below dodge by inverting their meaning). A spacing has no usable zero, so
+        /// the pane treats anything &lt;= 0 as "use the default" instead.</summary>
+        public double TopoPointSpacingMillimetres { get; set; } = 1000;
+
         /// <summary>Last-used format checkboxes, stored inverted/additive (false = the
         /// out-of-box state "DWG on, PDF off"): net48's DataContractJsonSerializer skips
         /// property initializers, so a true-default property would flip to false when
