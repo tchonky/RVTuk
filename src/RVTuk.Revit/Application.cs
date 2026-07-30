@@ -66,8 +66,8 @@ namespace RVTuk.Revit
         public static ExternalEvent TopoApplyEvent { get; private set; } = null!;
         public static TopoSetElevationEventHandler TopoSetElevationHandler { get; private set; } = null!;
         public static ExternalEvent TopoSetElevationEvent { get; private set; } = null!;
-        public static TopoSelectLineEventHandler TopoSelectLineHandler { get; private set; } = null!;
-        public static ExternalEvent TopoSelectLineEvent { get; private set; } = null!;
+        public static TopoSelectLinesEventHandler TopoSelectLinesHandler { get; private set; } = null!;
+        public static ExternalEvent TopoSelectLinesEvent { get; private set; } = null!;
         public static RVTuk.UI.TopoTools.ViewModels.TopoToolsPaneViewModel TopoToolsPaneViewModel { get; private set; } = null!;
 
         /// <summary>
@@ -200,8 +200,8 @@ namespace RVTuk.Revit
                 TopoApplyEvent       = ExternalEvent.Create(TopoApplyHandler);
                 TopoSetElevationHandler = new TopoSetElevationEventHandler();
                 TopoSetElevationEvent   = ExternalEvent.Create(TopoSetElevationHandler);
-                TopoSelectLineHandler   = new TopoSelectLineEventHandler();
-                TopoSelectLineEvent     = ExternalEvent.Create(TopoSelectLineHandler);
+                TopoSelectLinesHandler  = new TopoSelectLinesEventHandler();
+                TopoSelectLinesEvent    = ExternalEvent.Create(TopoSelectLinesHandler);
 
                 // The pane (UI project) only ever sees these delegates — no Revit types cross over.
                 // All three block on WaitForCompletion, so the view model calls them from the pool.
@@ -231,26 +231,26 @@ namespace RVTuk.Revit
                     return TopoSetupHandler.Summary;
                 };
 
-                Func<long, string, string> setTopoElevation = (lineId, text) =>
+                Func<IReadOnlyList<long>, string, string> setTopoElevation = (lineIds, text) =>
                 {
                     TopoSetElevationHandler.Reset();
-                    TopoSetElevationHandler.Prepare(lineId, text);
+                    TopoSetElevationHandler.Prepare(lineIds, text);
                     TopoSetElevationEvent.Raise();
                     TopoSetElevationHandler.WaitForCompletion();
                     return TopoSetElevationHandler.Summary;
                 };
 
-                Action<long> selectTopoLine = lineId =>
+                Action<IReadOnlyList<long>> selectTopoLines = lineIds =>
                 {
-                    TopoSelectLineHandler.Reset();
-                    TopoSelectLineHandler.Prepare(lineId);
-                    TopoSelectLineEvent.Raise();
-                    TopoSelectLineHandler.WaitForCompletion();
+                    TopoSelectLinesHandler.Reset();
+                    TopoSelectLinesHandler.Prepare(lineIds);
+                    TopoSelectLinesEvent.Raise();
+                    TopoSelectLinesHandler.WaitForCompletion();
                 };
 
                 TopoToolsPaneViewModel =
                     new RVTuk.UI.TopoTools.ViewModels.TopoToolsPaneViewModel(
-                        discoverTopo, applyTopo, setUpTopoProject, setTopoElevation, selectTopoLine);
+                        discoverTopo, applyTopo, setUpTopoProject, setTopoElevation, selectTopoLines);
 
                 // Selecting a topo line in the view highlights its row. Not a nicety: the height
                 // lives in storage rather than Properties, so a row labelled "Line 418732" would

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Threading;
 using RVTuk.Core.Shared.Config;
@@ -22,16 +23,16 @@ namespace RVTuk.UI.TopoTools.ViewModels
         private readonly Func<double, TopoScope> _discover;
         private readonly Func<double, string> _apply;
         private readonly Func<string> _setUpProject;
-        private readonly Func<long, string, string> _setElevation;
-        private readonly Action<long> _selectInView;
+        private readonly Func<IReadOnlyList<long>, string, string> _setElevation;
+        private readonly Action<IReadOnlyList<long>> _selectInView;
         private readonly Dispatcher _dispatcher;
 
         public TopoToolsPaneViewModel(
             Func<double, TopoScope> discover,
             Func<double, string> apply,
             Func<string> setUpProject,
-            Func<long, string, string> setElevation,
-            Action<long> selectInView)
+            Func<IReadOnlyList<long>, string, string> setElevation,
+            Action<IReadOnlyList<long>> selectInView)
         {
             _discover = discover;
             _apply = apply;
@@ -156,7 +157,7 @@ namespace RVTuk.UI.TopoTools.ViewModels
 
             Lines.Clear();
             foreach (var line in scope.Lines)
-                Lines.Add(new TopoLineRowViewModel(line, CommitElevation, RunSelectInView));
+                Lines.Add(new TopoLineRowViewModel(line, CommitElevation, OnRowSelectionChanged));
 
             // A refresh rebuilds every row, so re-apply whatever Revit currently has selected —
             // otherwise editing one height silently drops the highlight off all of them.
@@ -166,6 +167,13 @@ namespace RVTuk.UI.TopoTools.ViewModels
         }
 
         private IReadOnlyCollection<long> _selectedLineIds = Array.Empty<long>();
+
+        /// <summary>
+        /// Guards the selection round trip. Highlighting rows selects lines in Revit, and Revit's
+        /// selection highlights rows — without this flag the first would trigger the second, which
+        /// would trigger the first.
+        /// </summary>
+        private bool _syncingSelection;
 
         /// <summary>
         /// Revit's selection changed. Called on Revit's main thread, which is also this pane's
@@ -178,25 +186,71 @@ namespace RVTuk.UI.TopoTools.ViewModels
             ApplySelection();
         }
 
+        /// <summary>Revit's selection → the rows. Never travels back out; that is what the flag is for.</summary>
         private void ApplySelection()
         {
             var selected = new HashSet<long>(_selectedLineIds);
-            foreach (var row in Lines) row.IsSelected = selected.Contains(row.LineId);
+
+            _syncingSelection = true;
+            try
+            {
+                foreach (var row in Lines) row.IsSelected = selected.Contains(row.LineId);
+            }
+            finally
+            {
+                _syncingSelection = false;
+            }
         }
+
+        /// <summary>The rows → Revit's selection, when the change came from the user rather than
+        /// from <see cref="ApplySelection"/>.</summary>
+        private void OnRowSelectionChanged()
+        {
+            if (_syncingSelection) return;
+
+            var ids = SelectedLineIds();
+            _selectedLineIds = ids;
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    _selectInView(ids);
+                }
+                catch (Exception ex)
+                {
+                    _dispatcher.Invoke(() => StatusMessage = "Could not select those lines: " + ex.Message);
+                }
+            });
+        }
+
+        private List<long> SelectedLineIds() =>
+            Lines.Where(row => row.IsSelected).Select(row => row.LineId).ToList();
 
         /// <summary>
         /// Takes a row's typed height to Revit off the UI thread — the delegate blocks on an
-        /// ExternalEvent, and Revit's main thread cannot wait for its own event. Refreshes
-        /// afterwards so the row's status catches up with the new height.
+        /// ExternalEvent, and Revit's main thread cannot wait for its own event.
+        ///
+        /// **A height typed into one of several selected rows sets all of them.** Editing one row
+        /// of a highlighted group and having only that row change would be the surprising
+        /// behaviour, and setting a run of contours to one level is the case that asked for this.
+        /// A row edited while it is not part of the selection stands alone.
+        ///
+        /// Refreshes afterwards so every affected row's height and status catch up.
         /// </summary>
         private void CommitElevation(long lineId, string text)
         {
+            var selected = SelectedLineIds();
+            IReadOnlyList<long> targets = selected.Count > 1 && selected.Contains(lineId)
+                ? selected
+                : new List<long> { lineId };
+
             Task.Run(() =>
             {
                 string summary;
                 try
                 {
-                    summary = _setElevation(lineId, text);
+                    summary = _setElevation(targets, text);
                 }
                 catch (Exception ex)
                 {
@@ -208,21 +262,6 @@ namespace RVTuk.UI.TopoTools.ViewModels
                     StatusMessage = summary;
                     Refresh();
                 });
-            });
-        }
-
-        private void RunSelectInView(long lineId)
-        {
-            Task.Run(() =>
-            {
-                try
-                {
-                    _selectInView(lineId);
-                }
-                catch (Exception ex)
-                {
-                    _dispatcher.Invoke(() => StatusMessage = "Could not select that line: " + ex.Message);
-                }
             });
         }
 

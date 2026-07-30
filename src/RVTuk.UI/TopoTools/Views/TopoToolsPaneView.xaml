@@ -29,43 +29,53 @@
             </StackPanel>
         </Border>
 
-        <StackPanel DockPanel.Dock="Top" Margin="10,10,10,8">
-            <TextBlock Text="ACTIVE VIEW"
-                       Foreground="{StaticResource Brush.TextMuted}"
-                       FontSize="10" FontWeight="SemiBold"
-                       Margin="0,0,0,2"/>
-            <TextBlock Text="{Binding ViewName}"
-                       Foreground="{StaticResource Brush.Text}"
-                       TextWrapping="Wrap"/>
-        </StackPanel>
+        <!-- Settings on the left, the two verbs on the right: the run button sits beside what it
+             will use rather than at the far end of the pane. -->
+        <Grid DockPanel.Dock="Top" Margin="10,10,10,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
 
-        <StackPanel DockPanel.Dock="Top" Margin="10,0,10,8"
-                    ToolTip="Distance between generated points along each line, in millimetres.">
-            <TextBlock Text="POINT SPACING (MM)"
-                       Foreground="{StaticResource Brush.TextMuted}"
-                       FontSize="10" FontWeight="SemiBold"
-                       Margin="0,0,0,4"/>
-            <TextBox Text="{Binding SpacingMillimetres, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
-        </StackPanel>
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="ACTIVE VIEW"
+                           Foreground="{StaticResource Brush.TextMuted}"
+                           FontSize="10" FontWeight="SemiBold"
+                           Margin="0,0,0,2"/>
+                <TextBlock Text="{Binding ViewName}"
+                           Foreground="{StaticResource Brush.Text}"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,8"/>
+
+                <TextBlock Text="POINT SPACING (MM)"
+                           Foreground="{StaticResource Brush.TextMuted}"
+                           FontSize="10" FontWeight="SemiBold"
+                           Margin="0,0,0,4"/>
+                <TextBox Text="{Binding SpacingMillimetres, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         HorizontalAlignment="Left" Width="90"
+                         ToolTip="Distance between generated points along each line, in millimetres."/>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal"
+                        VerticalAlignment="Center" Margin="10,0,0,0">
+                <Button Command="{Binding ApplyCommand}"
+                        Width="40" Height="40" FontSize="17"
+                        Content="&#x25B6;"
+                        ToolTip="Apply Points — put points at each line's height on the toposolid below it"/>
+                <Button Command="{Binding RefreshCommand}"
+                        Width="40" Height="40" FontSize="17"
+                        Content="&#x27F3;" Margin="6,0,0,0"
+                        ToolTip="Refresh — re-read this view's topo lines"/>
+            </StackPanel>
+        </Grid>
 
         <Border DockPanel.Dock="Bottom"
                 Background="{StaticResource Brush.Panel}"
                 BorderBrush="{StaticResource Brush.Border}" BorderThickness="0,1,0,0"
                 Padding="10,8">
-            <StackPanel>
-                <Button Content="Apply Points"
-                        Command="{Binding ApplyCommand}"
-                        Padding="10,5"
-                        HorizontalAlignment="Stretch"/>
-                <Button Content="Refresh"
-                        Command="{Binding RefreshCommand}"
-                        Padding="10,3" Margin="0,4,0,0"
-                        HorizontalAlignment="Stretch"/>
-                <TextBlock Text="{Binding StatusMessage}"
-                           Foreground="{StaticResource Brush.TextMuted}"
-                           FontSize="11" TextWrapping="Wrap"
-                           Margin="0,6,0,0"/>
-            </StackPanel>
+            <TextBlock Text="{Binding StatusMessage}"
+                       Foreground="{StaticResource Brush.TextMuted}"
+                       FontSize="11" TextWrapping="Wrap"/>
         </Border>
 
         <TextBlock DockPanel.Dock="Top"
@@ -74,48 +84,41 @@
                    FontSize="10" FontWeight="SemiBold"
                    Margin="10,0,10,4"/>
 
-        <Border Background="{StaticResource Brush.Input}"
-                BorderBrush="{StaticResource Brush.Border}" BorderThickness="1"
-                Margin="10,0,10,8">
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
-                          HorizontalScrollBarVisibility="Disabled">
-                <ItemsControl ItemsSource="{Binding Lines}" Margin="6">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border x:Name="Row" Background="Transparent"
-                                    Padding="4,3" Margin="0,0,0,3" CornerRadius="2">
-                                <StackPanel>
-                                    <DockPanel LastChildFill="True">
-                                        <Button DockPanel.Dock="Right"
-                                                Content="Select"
-                                                Command="{Binding SelectInViewCommand}"
-                                                Padding="6,1" Margin="6,0,0,0"
-                                                FontSize="10"
-                                                ToolTip="Select this line in the view"/>
-                                        <TextBox Text="{Binding ElevationText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                                                 Width="90" DockPanel.Dock="Right"
-                                                 ToolTip="This line's height, in the project's units. Clear it to un-set the height."/>
-                                        <TextBlock Text="{Binding DisplayName}"
-                                                   Foreground="{StaticResource Brush.Text}"
-                                                   FontWeight="SemiBold"
-                                                   VerticalAlignment="Center"/>
-                                    </DockPanel>
-                                    <TextBlock Text="{Binding StatusText}"
-                                               Foreground="{StaticResource Brush.TextMuted}"
-                                               FontSize="11" TextWrapping="Wrap"
-                                               Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </Border>
-                            <DataTemplate.Triggers>
-                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                    <Setter TargetName="Row" Property="Background"
-                                            Value="{StaticResource Brush.Selection}"/>
-                                </DataTrigger>
-                            </DataTemplate.Triggers>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
-        </Border>
+        <!-- Highlighting a row IS selecting the line: the ListBox's own selection is bound straight
+             to each row, and the pane mirrors it into Revit and back. Extended mode so Ctrl and
+             Shift pick several, which is also what makes one typed height set them all. -->
+        <ListBox ItemsSource="{Binding Lines}"
+                 SelectionMode="Extended"
+                 Background="{StaticResource Brush.Input}"
+                 Margin="10,0,10,8"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ToolTip="Click a row to select its line in the view. Ctrl-click for several — then a height typed into any one of them sets them all.">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                    <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Margin="0,1">
+                        <DockPanel LastChildFill="True">
+                            <TextBox Text="{Binding ElevationText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                     DockPanel.Dock="Right"
+                                     Width="86" TextAlignment="Right"
+                                     ToolTip="This line's height, in the project's units. Clear it to un-set the height."/>
+                            <TextBlock Text="{Binding DisplayName}"
+                                       Foreground="{StaticResource Brush.Text}"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,6,0"/>
+                        </DockPanel>
+                        <TextBlock Text="{Binding StatusText}"
+                                   Foreground="{StaticResource Brush.TextMuted}"
+                                   FontSize="11" TextWrapping="Wrap"
+                                   Margin="0,2,0,0"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
     </DockPanel>
 </UserControl>

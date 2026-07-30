@@ -151,10 +151,10 @@ namespace RVTuk.Revit.TopoTools
         }
 
         private static string FormatLength(Document doc, double feet) =>
-            UnitFormatUtils.Format(doc.GetUnits(), SpecTypeId.Length, feet, false);
+            TopoLengthFormatter.Format(doc, feet, forEditing: false);
 
         private static string FormatLengthForEditing(Document doc, double feet) =>
-            UnitFormatUtils.Format(doc.GetUnits(), SpecTypeId.Length, feet, true);
+            TopoLengthFormatter.Format(doc, feet, forEditing: true);
 
         private static string Describe(IReadOnlyList<TopoLineInfo> lines, int toposolidCount)
         {

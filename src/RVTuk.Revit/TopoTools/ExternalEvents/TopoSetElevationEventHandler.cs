@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
@@ -6,7 +7,9 @@ using Autodesk.Revit.UI;
 namespace RVTuk.Revit.TopoTools.ExternalEvents
 {
     /// <summary>
-    /// Writes one line's shared elevation from the text typed in the pane.
+    /// Writes a shared elevation from the text typed in the pane, onto every line the edit applies
+    /// to — one row on its own, or the whole selection when several lines are selected. One
+    /// transaction covers the lot, so a bulk change is a single undo.
     ///
     /// The text is parsed by <c>UnitFormatUtils.TryParse</c> against <c>SpecTypeId.Length</c>, so the
     /// document's own units decide what "42.750" means — this tool never assumes millimetres, and a
@@ -16,14 +19,14 @@ namespace RVTuk.Revit.TopoTools.ExternalEvents
     public class TopoSetElevationEventHandler : IExternalEventHandler
     {
         private readonly ManualResetEventSlim _done = new(false);
-        private long _lineId;
+        private IReadOnlyList<long> _lineIds = Array.Empty<long>();
         private string _text = "";
 
         public string Summary { get; private set; } = "";
 
-        public void Prepare(long lineId, string text)
+        public void Prepare(IReadOnlyList<long> lineIds, string text)
         {
-            _lineId = lineId;
+            _lineIds = lineIds ?? Array.Empty<long>();
             _text = text ?? "";
         }
 
@@ -40,11 +43,9 @@ namespace RVTuk.Revit.TopoTools.ExternalEvents
                     Summary = "No document is open.";
                     return;
                 }
-
-                var line = doc.GetElement(new ElementId(_lineId));
-                if (line == null)
+                if (_lineIds.Count == 0)
                 {
-                    Summary = "That line no longer exists.";
+                    Summary = "";
                     return;
                 }
 
@@ -63,14 +64,32 @@ namespace RVTuk.Revit.TopoTools.ExternalEvents
                     tx.Start();
                     try
                     {
-                        if (clearing) TopoElevationStore.Clear(line);
-                        else TopoElevationStore.Set(line, elevationFeet);
+                        int changed = 0;
+                        foreach (var lineId in _lineIds)
+                        {
+                            var line = doc.GetElement(new ElementId(lineId));
+                            if (line == null) continue;
+
+                            if (clearing) TopoElevationStore.Clear(line);
+                            else TopoElevationStore.Set(line, elevationFeet);
+                            changed++;
+                        }
+
+                        if (changed == 0)
+                        {
+                            tx.RollBack();
+                            Summary = "Those lines no longer exist.";
+                            return;
+                        }
 
                         tx.Commit();
+
+                        string where = changed == 1 ? "" : $" on {changed} lines";
                         Summary = clearing
-                            ? "Height cleared."
+                            ? $"Height cleared{where}."
                             : "Height set to " +
-                              UnitFormatUtils.Format(doc.GetUnits(), SpecTypeId.Length, elevationFeet, false) + ".";
+                              TopoLengthFormatter.Format(doc, elevationFeet, forEditing: false) +
+                              where + ".";
                     }
                     catch (Exception ex)
                     {
