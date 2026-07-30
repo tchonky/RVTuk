@@ -19,6 +19,9 @@ using RVTuk.Revit.RishuiZamin.Commands;
 using RVTuk.Revit.FamilyBrowser.ExternalEvents;
 using RVTuk.Revit.RishuiZamin.ExternalEvents;
 using RVTuk.Revit.NeoProperties;
+using RVTuk.Core.TopoTools;
+using RVTuk.Revit.TopoTools;
+using RVTuk.Revit.TopoTools.ExternalEvents;
 
 namespace RVTuk.Revit
 {
@@ -55,6 +58,13 @@ namespace RVTuk.Revit
         public static CreateDimensionsEventHandler CreateDimensionsHandler { get; private set; } = null!;
         public static ExternalEvent CreateDimensionsEvent { get; private set; } = null!;
         public static RVTuk.UI.AutoDimensions.ViewModels.AutoDimensionsPaneViewModel AutoDimensionsPaneViewModel { get; private set; } = null!;
+        public static TopoSetupEventHandler TopoSetupHandler { get; private set; } = null!;
+        public static ExternalEvent TopoSetupEvent { get; private set; } = null!;
+        public static TopoDiscoveryEventHandler TopoDiscoveryHandler { get; private set; } = null!;
+        public static ExternalEvent TopoDiscoveryEvent { get; private set; } = null!;
+        public static TopoApplyEventHandler TopoApplyHandler { get; private set; } = null!;
+        public static ExternalEvent TopoApplyEvent { get; private set; } = null!;
+        public static RVTuk.UI.TopoTools.ViewModels.TopoToolsPaneViewModel TopoToolsPaneViewModel { get; private set; } = null!;
 
         /// <summary>
         /// Auto Dimensions ships on the RVTuk panel alongside the Family Browser, Area Calc and
@@ -62,6 +72,13 @@ namespace RVTuk.Revit
         /// ribbon command was folded into it (a one-view run is that view alone, ticked).
         /// </summary>
         private static readonly bool RegisterAutoDimensions = true;
+
+        /// <summary>
+        /// Topo Tools ships on its own panel on Revit's Massing &amp; Site tab, not on the RVTuk
+        /// Add-Ins panel — it belongs with the site tools it works alongside. Its single entry
+        /// point is the dockable pane.
+        /// </summary>
+        private static readonly bool RegisterTopoTools = true;
 
         /// <summary>
         /// Neo Properties is still unreleased: no ribbon panel, no dockable pane, no selection
@@ -169,6 +186,57 @@ namespace RVTuk.Revit
                     new AutoDimensionsPaneProvider(autoDimView));
             }
 
+            if (RegisterTopoTools)
+            {
+                TopoSetupHandler     = new TopoSetupEventHandler();
+                TopoSetupEvent       = ExternalEvent.Create(TopoSetupHandler);
+                TopoDiscoveryHandler = new TopoDiscoveryEventHandler();
+                TopoDiscoveryEvent   = ExternalEvent.Create(TopoDiscoveryHandler);
+                TopoApplyHandler     = new TopoApplyEventHandler();
+                TopoApplyEvent       = ExternalEvent.Create(TopoApplyHandler);
+
+                // The pane (UI project) only ever sees these delegates — no Revit types cross over.
+                // All three block on WaitForCompletion, so the view model calls them from the pool.
+                Func<double, TopoScope> discoverTopo = spacingMillimetres =>
+                {
+                    TopoDiscoveryHandler.Reset();
+                    TopoDiscoveryHandler.Prepare(spacingMillimetres);
+                    TopoDiscoveryEvent.Raise();
+                    TopoDiscoveryHandler.WaitForCompletion();
+                    return TopoDiscoveryHandler.Result;
+                };
+
+                Func<double, string> applyTopo = spacingMillimetres =>
+                {
+                    TopoApplyHandler.Reset();
+                    TopoApplyHandler.Prepare(spacingMillimetres);
+                    TopoApplyEvent.Raise();
+                    TopoApplyHandler.WaitForCompletion();
+                    return TopoApplyHandler.Summary;
+                };
+
+                Func<string> setUpTopoProject = () =>
+                {
+                    TopoSetupHandler.Reset();
+                    TopoSetupEvent.Raise();
+                    TopoSetupHandler.WaitForCompletion();
+                    return TopoSetupHandler.Summary;
+                };
+
+                TopoToolsPaneViewModel =
+                    new RVTuk.UI.TopoTools.ViewModels.TopoToolsPaneViewModel(
+                        discoverTopo, applyTopo, setUpTopoProject);
+
+                var topoView = new RVTuk.UI.TopoTools.Views.TopoToolsPaneView
+                {
+                    DataContext = TopoToolsPaneViewModel
+                };
+                application.RegisterDockablePane(
+                    TopoToolsPaneProvider.PaneId,
+                    "Topo Tools",
+                    new TopoToolsPaneProvider(topoView));
+            }
+
             try
             {
                 CreateRibbon(application);
@@ -259,6 +327,36 @@ namespace RVTuk.Revit
                 panel.AddItem(autoDimBtn);
             }
 
+            if (RegisterTopoTools)
+            {
+                // Autodesk.Revit.UI.Tab offers only AddIns and Analyze, so the built-in tab can
+                // only be named through the string overload — and whether Revit resolves built-in
+                // tabs that way is not guaranteed. Falling back to the RVTuk panel keeps the tool
+                // reachable either way rather than losing the button to an exception.
+                RibbonPanel topoPanel;
+                try
+                {
+                    topoPanel = app.CreateRibbonPanel("Massing & Site", "RVTuk");
+                }
+                catch (Exception)
+                {
+                    topoPanel = panel;
+                }
+
+                var topoBtn = new PushButtonData(
+                    "TopoTools",
+                    "Topo\nTools",
+                    assemblyPath,
+                    typeof(TopoToolsPaneCommand).FullName!)
+                {
+                    ToolTip = "Open the Topo Tools pane: turn topo lines into points on the toposolid below"
+                };
+                topoBtn.LargeImage = CreateTopoToolsIcon(32);
+                topoBtn.Image      = CreateTopoToolsIcon(16);
+
+                topoPanel.AddItem(topoBtn);
+            }
+
             if (!RegisterNeoProperties) return;
 
             RibbonPanel neoPanel = app.CreateRibbonPanel("Neo Properties");
@@ -274,6 +372,33 @@ namespace RVTuk.Revit
             neoBtn.Image      = CreateNeoPropertiesIcon(16);
 
             neoPanel.AddItem(neoBtn);
+        }
+
+        private static BitmapSource CreateTopoToolsIcon(int size)
+        {
+            var dv = new DrawingVisual();
+            using (var ctx = dv.RenderOpen())
+            {
+                double s = size;
+                ctx.DrawRectangle(new SolidColorBrush(WpfColor.FromRgb(0x25, 0x25, 0x26)), null,
+                    new Rect(0, 0, s, s));
+
+                // Three nested contour lines, with a point sitting on the middle one.
+                var pen = new Pen(new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00)),
+                    Math.Max(1, s * 0.06));
+                pen.Freeze();
+
+                ctx.DrawEllipse(null, pen, new WpfPoint(s * 0.5, s * 0.55), s * 0.36, s * 0.24);
+                ctx.DrawEllipse(null, pen, new WpfPoint(s * 0.5, s * 0.55), s * 0.23, s * 0.15);
+                ctx.DrawEllipse(null, pen, new WpfPoint(s * 0.5, s * 0.55), s * 0.10, s * 0.07);
+
+                ctx.DrawEllipse(new SolidColorBrush(Colors.White), null,
+                    new WpfPoint(s * 0.5, s * 0.31), s * 0.07, s * 0.07);
+            }
+            var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            bmp.Freeze();
+            return bmp;
         }
 
         private static BitmapSource CreateAutoDimensionsIcon(int size)
