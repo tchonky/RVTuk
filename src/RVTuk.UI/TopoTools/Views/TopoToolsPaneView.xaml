@@ -19,7 +19,7 @@
                 Padding="10,8"
                 Visibility="{Binding NeedsSetup, Converter={StaticResource BoolVis}}">
             <StackPanel>
-                <TextBlock Text="This project has no Topo_Line style or TOPO_Elevation parameter yet."
+                <TextBlock Text="This project has no Topo_Line style yet."
                            Foreground="{StaticResource Brush.Warning}"
                            TextWrapping="Wrap" FontSize="11"/>
                 <Button Content="Set up this project"
@@ -69,7 +69,7 @@
         </Border>
 
         <TextBlock DockPanel.Dock="Top"
-                   Text="TOPO LINES IN THIS VIEW"
+                   Text="TOPO LINES IN THIS VIEW — SET EACH HEIGHT HERE"
                    Foreground="{StaticResource Brush.TextMuted}"
                    FontSize="10" FontWeight="SemiBold"
                    Margin="10,0,10,4"/>
@@ -82,14 +82,36 @@
                 <ItemsControl ItemsSource="{Binding Lines}" Margin="6">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Margin="0,0,0,6">
-                                <TextBlock Text="{Binding DisplayName}"
-                                           Foreground="{StaticResource Brush.Text}"
-                                           FontWeight="SemiBold"/>
-                                <TextBlock Text="{Binding StatusText}"
-                                           Foreground="{StaticResource Brush.TextMuted}"
-                                           FontSize="11" TextWrapping="Wrap"/>
-                            </StackPanel>
+                            <Border x:Name="Row" Background="Transparent"
+                                    Padding="4,3" Margin="0,0,0,3" CornerRadius="2">
+                                <StackPanel>
+                                    <DockPanel LastChildFill="True">
+                                        <Button DockPanel.Dock="Right"
+                                                Content="Select"
+                                                Command="{Binding SelectInViewCommand}"
+                                                Padding="6,1" Margin="6,0,0,0"
+                                                FontSize="10"
+                                                ToolTip="Select this line in the view"/>
+                                        <TextBox Text="{Binding ElevationText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                 Width="90" DockPanel.Dock="Right"
+                                                 ToolTip="This line's height, in the project's units. Clear it to un-set the height."/>
+                                        <TextBlock Text="{Binding DisplayName}"
+                                                   Foreground="{StaticResource Brush.Text}"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                    <TextBlock Text="{Binding StatusText}"
+                                               Foreground="{StaticResource Brush.TextMuted}"
+                                               FontSize="11" TextWrapping="Wrap"
+                                               Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                    <Setter TargetName="Row" Property="Background"
+                                            Value="{StaticResource Brush.Selection}"/>
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

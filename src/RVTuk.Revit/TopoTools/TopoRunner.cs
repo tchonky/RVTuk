@@ -25,7 +25,7 @@ namespace RVTuk.Revit.TopoTools
         {
             string viewName = activeView?.Name ?? "";
 
-            if (!TopoLineStyle.Exists(doc) || !TopoElevationParameter.IsBound(doc))
+            if (!TopoLineStyle.Exists(doc))
                 return TopoScope.NotSetUp(viewName);
 
             if (activeView is not ViewPlan plan)
@@ -45,8 +45,8 @@ namespace RVTuk.Revit.TopoTools
 
         public static string Apply(Document doc, View? activeView, double spacingFeet)
         {
-            if (!TopoLineStyle.Exists(doc) || !TopoElevationParameter.IsBound(doc))
-                return "This project has no Topo_Line style or TOPO_Elevation parameter yet.";
+            if (!TopoLineStyle.Exists(doc))
+                return "This project has no Topo_Line style yet.";
 
             if (activeView is not ViewPlan plan)
                 return "Topo lines are read from plan views only — open a floor or site plan.";
@@ -123,12 +123,14 @@ namespace RVTuk.Revit.TopoTools
                 if (candidate.ElevationFeet == null)
                 {
                     line.Status = TopoLineStatus.NoElevation;
-                    line.ElevationText = "—";
+                    line.ElevationText = "";
                     planned.Add(line);
                     continue;
                 }
 
-                line.ElevationText = FormatLength(doc, candidate.ElevationFeet.Value);
+                // forEditing: the pane's box is an editor, and its text comes back here to be
+                // parsed — a display-rounded figure would quietly move the height on every edit.
+                line.ElevationText = FormatLengthForEditing(doc, candidate.ElevationFeet.Value);
                 double z = candidate.ElevationFeet.Value - sharedElevationOfInternalZero;
 
                 foreach (var xy in TopoLineSampler.Sample(candidate.Polyline, spacingFeet))
@@ -150,6 +152,9 @@ namespace RVTuk.Revit.TopoTools
 
         private static string FormatLength(Document doc, double feet) =>
             UnitFormatUtils.Format(doc.GetUnits(), SpecTypeId.Length, feet, false);
+
+        private static string FormatLengthForEditing(Document doc, double feet) =>
+            UnitFormatUtils.Format(doc.GetUnits(), SpecTypeId.Length, feet, true);
 
         private static string Describe(IReadOnlyList<TopoLineInfo> lines, int toposolidCount)
         {

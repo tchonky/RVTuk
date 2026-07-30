@@ -1,9 +1,13 @@
 namespace RVTuk.Core.TopoTools
 {
     /// <summary>
-    /// One row of the pane's list: what this line is about to do, before anything is pressed.
-    /// The two texts are pre-formatted by the Revit layer through <c>UnitFormatUtils</c>, because
-    /// only it knows the document's display units — Core never guesses at millimetres.
+    /// One row of the pane's list: what this line is about to do, before anything is pressed — and,
+    /// since the height lives in storage rather than in Properties, the only place to set one.
+    ///
+    /// <see cref="ElevationText"/> is round-trippable text produced by the Revit layer through
+    /// <c>UnitFormatUtils</c> (empty when no height is set), because only that layer knows the
+    /// document's units; the same layer parses whatever comes back. Core never guesses at
+    /// millimetres in either direction.
     /// </summary>
     public sealed record TopoLineInfo(
         long LineId,
@@ -16,10 +20,10 @@ namespace RVTuk.Core.TopoTools
 
         public string StatusText => Status switch
         {
-            TopoLineStatus.Ready => $"{ElevationText} · {LengthText} · {PointCount} point(s)",
-            TopoLineStatus.NoElevation => $"{LengthText} · no elevation set",
-            TopoLineStatus.OutsideToposolid => $"{ElevationText} · outside every toposolid",
-            _ => ElevationText,
+            TopoLineStatus.Ready => $"{LengthText} · {PointCount} point(s)",
+            TopoLineStatus.NoElevation => $"{LengthText} · no height set",
+            TopoLineStatus.OutsideToposolid => $"{LengthText} · outside every toposolid",
+            _ => LengthText,
         };
 
         public bool IsReady => Status == TopoLineStatus.Ready;

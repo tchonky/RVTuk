@@ -1,9 +1,22 @@
 # Topo Tools
 
 **What it is:** draw detail lines on the dedicated "Topo_Line" style in a plan view, give each a
-`TOPO_Elevation` (a shared/survey elevation), and the tool puts points at that height along each
-line on the toposolids beneath them. Re-runnable: move a line, change its height or delete it, run
-again, and the result is what you would have got by drawing it that way to begin with.
+height (a shared/survey elevation) in the tool's pane, and the tool puts points at that height along
+each line on the toposolids beneath them. Re-runnable: move a line, change its height or delete it,
+run again, and the result is what you would have got by drawing it that way to begin with.
+
+**The height is set in the pane, not in Properties — and that was forced, not chosen.** The design
+called for a `TOPO_Elevation` shared parameter on the line. That is impossible: `OST_Lines` has
+`Category.AllowsBoundParameters == false`, so `BindingMap.Insert` refuses any *visible* parameter on
+it and returns false, which is the same limit Revit's own Parameter Properties dialog shows by
+listing "Lines" with no checkbox. No view-specific curve of arbitrary shape accepts a bound
+parameter, so the height moved into the tool's own Extensible Storage on each line
+(`TopoElevationStore`), with the pane as its editor. You type in the project's units and
+`UnitFormatUtils.TryParse` reads it, so this tool never assumes millimetres.
+
+**Selection is linked both ways** — selecting topo lines in the view highlights their rows, and each
+row can select its line. With the height invisible in Properties, a row reading "Line 418732" would
+otherwise be impossible to place in the drawing.
 
 **Heights are shared (survey) elevations,** absolute as a surveyor quotes them. The conversion is
 one subtraction — `ProjectPosition.Elevation` at the internal origin — which does mean the tool
@@ -40,8 +53,8 @@ does not exist in 2023, so KKarea never ships it. **In-Revit verification pass s
 (see [backlog.md](backlog.md)), including whether the Massing & Site panel resolves or the
 Add-Ins fallback runs.
 
-**Names:** code `TopoTools`; ribbon button "Topo Tools"; line style `Topo_Line`; parameter
-`TOPO_Elevation`.
+**Names:** code `TopoTools`; ribbon button "Topo Tools"; line style `Topo_Line`. There is no shared
+parameter — see above.
 
 ## Code
 
@@ -49,7 +62,7 @@ Add-Ins fallback runs.
 |-------|--------|
 | Core  | `src/RVTuk.Core/TopoTools/` (sampler, containment, ledger codec, scope models) |
 | UI    | `src/RVTuk.UI/TopoTools/` (pane view + view model) |
-| Revit | `src/RVTuk.Revit/TopoTools/` (line style, parameter, collectors, router, applier, ledger store, runner, pane, external events) |
+| Revit | `src/RVTuk.Revit/TopoTools/` (line style, elevation store, collectors, router, applier, ledger store, runner, pane, selection handler, external events) |
 | Tests | `tests/RVTuk.Core.Tests/TopoTools/` |
 
 `XyPoint` moved to `src/RVTuk.Core/Shared/Geometry/` when this tool was built — Auto Dimensions and

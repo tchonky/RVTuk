@@ -65,7 +65,7 @@ ones it asked for.
 
 | Question | Decision |
 |---|---|
-| What carries the height | A shared parameter, `TOPO_Elevation`, on the line |
+| What carries the height | The tool's own Extensible Storage on the line, typed in the pane (**revised 2026-07-30** — see below) |
 | What kind of line | **Detail** lines — view-specific, so site scribbles never appear in other plans, sections or 3D |
 | What the number means | **Shared (survey) elevation** — absolute, as a surveyor's contour drawing quotes it |
 | Which lines count | Detail lines on the dedicated `Topo_Line` style **and** carrying an elevation |
@@ -86,8 +86,9 @@ is the truth and a re-run corrects the model — but it is a real dependency, no
 **Detail lines, not model lines.** A model line at the right elevation would be self-describing and
 visible in 3D, which is genuinely attractive. It also puts working lines into every view that sees
 that region, forever. View-specific lines keep the mess where it was made; the price is that the
-height lives in a parameter rather than in the geometry, and that lines in a view the tool is not
-scanning are invisible to it (handled below, under deletion).
+height lives beside the geometry rather than in it, and that lines in a view the tool is not
+scanning are invisible to it (handled below, under deletion). That price turned out to be steeper
+than this section first assumed — see the revision under "The height".
 
 ## Data model
 
@@ -97,18 +98,43 @@ A subcategory of Lines named `Topo_Line`, exactly parallel to Auto Dimensions'
 `Dimensions_Line`. It is the opt-in: it makes topo lines identifiable at a glance, gives them their
 own colour and weight, and makes them filterable in Visibility/Graphics.
 
-### `TOPO_Elevation` — the height
+### The height — revised 2026-07-30
 
-A shared parameter bound to the Lines category, **instance**, of type **Length**, so the value is
-typed and displayed in the project's own units and Revit does the formatting. It holds the point's
-shared elevation.
+**The original design put the height in a shared parameter, `TOPO_Elevation`, bound to the Lines
+category. That is impossible, and the tool had to change.**
 
-Unset is judged by `Parameter.HasValue`, never by the value. An explicit **0.000 is a legitimate
-shared elevation**; a forgotten one is flagged in the pane and skipped, not silently treated as
-zero.
+`Category.AllowsBoundParameters` is false for `OST_Lines`: `BindingMap.Insert` refuses *visible*
+shared or project parameters on it and returns false. Revit's own Parameter Properties dialog shows
+the same limit from the other side — "Lines" appears in the category list with **no checkbox**, and
+only sub-categories such as Path of Travel Lines can be ticked. Model and detail lines cannot carry
+a project parameter at all. Only a non-user-visible parameter will bind, which is worthless here:
+the entire purpose was typing the height in Properties.
 
-Both the style and the parameter are created by the pane's setup action (below), using the
-temp-shared-parameter-file technique already proven in `UsageKeyScheduleBuilder`.
+Nor can the design be rescued by changing the element. No view-specific curve of arbitrary shape
+accepts a bound parameter: line-based Detail Items are a single straight segment, Filled Regions
+must close, Path of Travel is generated between two picked points.
+
+**So the height lives in the tool's own Extensible Storage on each line, and the pane is its
+editor.** One double field carrying the shared elevation, its `SetSpec(SpecTypeId.Length)` declaring
+what the number means. The pane already lists every topo line in the view; each row now carries an
+editable height, and the text is parsed by `UnitFormatUtils.TryParse` against `SpecTypeId.Length` —
+so you type in the project's own units, and Revit's own parser decides what "42.750" means rather
+than this tool guessing at millimetres.
+
+Unset is the absence of the storage entity, never a value. An explicit **0.000 is a legitimate
+shared elevation**; a forgotten one is flagged in the pane and skipped. Clearing a row's text
+deletes the entity, which is how a height is un-set.
+
+What this costs, stated plainly: the height is invisible outside our pane — no Properties palette,
+no schedule, no tag. Lines could never be scheduled or tagged anyway, so the loss is the Properties
+palette alone. What it buys is that the height is no longer at the mercy of a category limit, takes
+any precision, and needs no shared-parameter file.
+
+**Because the height cannot be seen by selecting a line, the pane must close that loop:** selecting
+a topo line in the view highlights its row, and each row can select its line in the view. Without
+that, a list of "Line 418732" is unusable in a drawing with twenty contours.
+
+The line style remains the opt-in and is all the pane's setup action now creates.
 
 ### The ledger — Extensible Storage on each toposolid
 
@@ -136,10 +162,10 @@ Four stages, each with one job. Only the two middle ones need to think, and neit
 
 ### 1. Collect — Revit
 
-Every `CurveElement` in the active view whose line style is `Topo_Line`, with its `TOPO_Elevation`.
-Each curve is tessellated (`Curve.Tessellate()`) into an XY polyline; the detail curve's own Z is
-the view plane and is discarded. A line with no elevation is collected and flagged, not dropped —
-the pane's job is to say why nothing happened.
+Every `CurveElement` in the active view whose line style is `Topo_Line`, with the shared elevation
+from its storage entity. Each curve is tessellated (`Curve.Tessellate()`) into an XY polyline; the
+detail curve's own Z is the view plane and is discarded. A line with no elevation is collected and
+flagged, not dropped — the pane's job is to say why nothing happened.
 
 **Plan views only.** A detail curve's geometry comes back in world coordinates on the view's sketch
 plane, so dropping Z recovers the drawn shape only where that plane is horizontal. In a section or
@@ -223,14 +249,20 @@ pane and driven the same way — the view model calls `Func<>`/`Action` delegate
 `RVTuk.Revit`, each a `ExternalEvent.Raise()` + `WaitForCompletion()` ping-pong off the pool. Two
 events: discover (read the view's topo lines) and apply (run).
 
-- **Setup banner.** In a project missing the style or the parameter, the pane shows *Set up this
-  project* and nothing else works. It cannot be a side effect of the first run: you cannot draw a
-  topo line before the style exists. One click, then it never returns.
+- **Setup banner.** In a project missing the `Topo_Line` style, the pane shows *Set up this project*
+  and nothing else works. It cannot be a side effect of the first run: you cannot draw a topo line
+  before the style exists. One click, then it never returns.
 - **Target** — the active view's name, refreshed when the view changes.
-- **Spacing** in millimetres, remembered in `AppConfig` between sessions.
-- **The lines found**, each with its elevation, its length, how many points it will make, and a
-  status: *ready*, *no elevation set*, or *outside every toposolid*. This list is the answer to
-  "what will this do", available before anything is pressed.
+- **Spacing** in millimetres, remembered in `AppConfig` between sessions. (Deliberately a different
+  unit convention from the heights, which follow the document: spacing is a tool setting, a height
+  is model data the surveyor already quoted in the project's units.)
+- **The lines found**, each with an **editable height**, its length, how many points it will make,
+  and a status: *ready*, *no elevation set*, or *outside every toposolid*. This list is the answer
+  to "what will this do", available before anything is pressed — and, since the height lives
+  nowhere else, it is also the only place to set one.
+- **Selection, both ways.** Selecting topo lines in the view highlights their rows; each row selects
+  its line in the view. This is not a convenience: with the height invisible in Properties, a row
+  labelled "Line 418732" would otherwise be unidentifiable.
 - **Run**, and then a summary: points added per toposolid, lines skipped and why, points landing
   outside every footprint, and ledger points that had been moved by hand and were left alone.
 
@@ -295,5 +327,12 @@ Carried into the implementation plan, not resolvable from the reference assembli
 3. Whether Revit merges or rejects an added point that coincides with an existing vertex, and what
    `AddPoints` then returns for it — the ledger records whatever comes back, but the summary should
    report the difference.
-4. That a `Length` shared parameter binds to the Lines category and appears on a detail line's
-   Properties palette.
+4. ~~That a `Length` shared parameter binds to the Lines category and appears on a detail line's
+   Properties palette.~~ **Answered 2026-07-30: it does not, and cannot.** `OST_Lines` has
+   `AllowsBoundParameters == false`, so `Insert` returned false and the tool reported success while
+   binding nothing. The height moved to Extensible Storage — see "The height".
+5. That an Extensible Storage double field with `SetSpec(SpecTypeId.Length)` round-trips through
+   `Get<double>(field, UnitTypeId.Feet)` on a detail line, and that the entity survives copying the
+   line.
+6. That `UnitFormatUtils.TryParse` against `SpecTypeId.Length` accepts what a user types for a
+   survey elevation in this office's unit setup.

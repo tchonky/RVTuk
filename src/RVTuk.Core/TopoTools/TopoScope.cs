@@ -13,7 +13,7 @@ namespace RVTuk.Core.TopoTools
     {
         public static TopoScope NotSetUp(string viewName) =>
             new TopoScope(false, viewName, Array.Empty<TopoLineInfo>(), 0,
-                "This project has no Topo_Line style or TOPO_Elevation parameter yet.");
+                "This project has no Topo_Line style yet.");
 
         public static TopoScope Unavailable(string viewName, string message) =>
             new TopoScope(true, viewName, Array.Empty<TopoLineInfo>(), 0, message);

@@ -42,7 +42,7 @@ namespace RVTuk.Revit.TopoTools
                     .ToList();
                 if (polyline.Count < 2) continue;
 
-                double? elevation = TopoElevationParameter.TryGetElevation(line, out var feet)
+                double? elevation = TopoElevationStore.TryGet(line, out var feet)
                     ? feet
                     : (double?)null;
 

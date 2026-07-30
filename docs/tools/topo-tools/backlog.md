@@ -11,9 +11,21 @@ this list; record what each answers.
       could not answer: `Autodesk.Revit.UI.Tab` names only `AddIns` and `Analyze`, so the panel is
       created through `CreateRibbonPanel("Massing & Site", "RVTuk")` with a fallback. If it fell
       back, leave the fallback in place and note it here.
-- [ ] **Setup** — the pane shows its banner; *Set up this project* creates the `Topo_Line` line
-      style (Manage → Object Styles → Lines) and puts **TOPO_Elevation** on a detail line's
-      Properties palette as a Length.
+- [x] **Setup** — **failed 2026-07-30, root cause found and fixed.** *Set up this project* reported
+      success while the banner stayed, because `TOPO_Elevation` can never bind: `OST_Lines` has
+      `AllowsBoundParameters == false`, so `ParameterBindings.Insert` returned false — and
+      `EnsureBound` was discarding that return value, so a total failure was reported as "Ready".
+      Heights moved to Extensible Storage edited in the pane (`TopoElevationStore`), and the
+      parameter binder is gone. **Re-check:** *Set up this project* creates the `Topo_Line` style
+      (Manage → Object Styles → Lines) and the banner then disappears.
+- [ ] **Setting a height** — type into a row's height box; the status line confirms it, and the row
+      changes from *no height set* to a point count. Clearing the box un-sets it. Check that a value
+      typed the way this office writes survey elevations is accepted by `UnitFormatUtils.TryParse`.
+- [ ] **Selection, both ways** — selecting one or more topo lines in the view highlights exactly
+      their rows; a row's *Select* button selects that line in the view without moving the camera.
+      Check the highlight survives editing a height (which rebuilds the rows).
+- [ ] **The height survives** — set a height, close and reopen the project: it is still there. Copy
+      a topo line: the copy carries the same height.
 - [ ] **A first run** — two detail lines on `Topo_Line` over a toposolid in a floor plan, each with
       a different `TOPO_Elevation`; Refresh lists both as *ready* with a point count; *Apply Points*
       deforms the toposolid, with points at the elevations given.
@@ -32,9 +44,16 @@ this list; record what each answers.
       mean Revit merged the point and the ledger recorded something that is not there.
 
 Also unverified by anything automated: `SlabShapeEditor.Enable()` on a toposolid that already has
-points, and whether a `SlabShapeVertex` wrapper stays usable after a sibling vertex is deleted
+points; whether a `SlabShapeVertex` wrapper stays usable after a sibling vertex is deleted
 (`TopoPointApplier` snapshots the vertex list once and guards each `DeletePoint` with
-`IsValidObject`).
+`IsValidObject`); and whether an Extensible Storage double field with `SetSpec(SpecTypeId.Length)`
+round-trips through `Get<double>(field, UnitTypeId.Feet)` on a detail line.
+
+## Deferred deliberately
+
+- **Bulk height setting** — "type one height, apply it to every line currently selected". The
+  per-row editor covers the normal case, since each contour has its own height; this would only pay
+  off for a pad drawn as several lines at one level. Add it if that turns out to be common.
 
 ## Ideas (deliberately out of v1)
 

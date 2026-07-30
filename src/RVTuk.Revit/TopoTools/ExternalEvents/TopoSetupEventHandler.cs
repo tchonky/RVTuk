@@ -6,9 +6,12 @@ using Autodesk.Revit.UI;
 namespace RVTuk.Revit.TopoTools.ExternalEvents
 {
     /// <summary>
-    /// Creates the Topo_Line style and binds TOPO_Elevation, on Revit's main thread and inside one
-    /// transaction. Follows the LevelDiscoveryEventHandler ping-pong pattern: the pane raises this
-    /// from the pool and blocks on WaitForCompletion.
+    /// Creates the Topo_Line style, on Revit's main thread and inside one transaction. Follows the
+    /// LevelDiscoveryEventHandler ping-pong pattern: the pane raises this from the pool and blocks
+    /// on WaitForCompletion.
+    ///
+    /// The style is now all setup does. It also bound a TOPO_Elevation shared parameter until that
+    /// turned out to be impossible on the Lines category — see TopoElevationStore.
     /// </summary>
     public class TopoSetupEventHandler : IExternalEventHandler
     {
@@ -36,10 +39,9 @@ namespace RVTuk.Revit.TopoTools.ExternalEvents
                     try
                     {
                         TopoLineStyle.EnsureExists(doc);
-                        TopoElevationParameter.EnsureBound(doc);
                         tx.Commit();
-                        Summary = "Ready: draw detail lines on the Topo_Line style and give each a " +
-                                  "TOPO_Elevation.";
+                        Summary = "Ready: draw detail lines on the Topo_Line style, then set each " +
+                                  "one's height in the list below.";
                     }
                     catch (Exception ex)
                     {

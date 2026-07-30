@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using System.Windows.Threading;
@@ -21,19 +22,25 @@ namespace RVTuk.UI.TopoTools.ViewModels
         private readonly Func<double, TopoScope> _discover;
         private readonly Func<double, string> _apply;
         private readonly Func<string> _setUpProject;
+        private readonly Func<long, string, string> _setElevation;
+        private readonly Action<long> _selectInView;
         private readonly Dispatcher _dispatcher;
 
         public TopoToolsPaneViewModel(
             Func<double, TopoScope> discover,
             Func<double, string> apply,
-            Func<string> setUpProject)
+            Func<string> setUpProject,
+            Func<long, string, string> setElevation,
+            Action<long> selectInView)
         {
             _discover = discover;
             _apply = apply;
             _setUpProject = setUpProject;
+            _setElevation = setElevation;
+            _selectInView = selectInView;
             _dispatcher = Dispatcher.CurrentDispatcher;
 
-            Lines = new ObservableCollection<TopoLineInfo>();
+            Lines = new ObservableCollection<TopoLineRowViewModel>();
             SetUpCommand = new RelayCommand(RunSetUp, () => !IsBusy);
             RefreshCommand = new RelayCommand(Refresh, () => !IsBusy);
             ApplyCommand = new RelayCommand(RunApply, () => !IsBusy && IsProjectSetUp);
@@ -52,7 +59,7 @@ namespace RVTuk.UI.TopoTools.ViewModels
             if (_spacingMillimetres <= 0) _spacingMillimetres = DefaultSpacingMillimetres;
         }
 
-        public ObservableCollection<TopoLineInfo> Lines { get; }
+        public ObservableCollection<TopoLineRowViewModel> Lines { get; }
         public RelayCommand SetUpCommand { get; }
         public RelayCommand RefreshCommand { get; }
         public RelayCommand ApplyCommand { get; }
@@ -148,9 +155,75 @@ namespace RVTuk.UI.TopoTools.ViewModels
             ViewName = scope.ViewName;
 
             Lines.Clear();
-            foreach (var line in scope.Lines) Lines.Add(line);
+            foreach (var line in scope.Lines)
+                Lines.Add(new TopoLineRowViewModel(line, CommitElevation, RunSelectInView));
+
+            // A refresh rebuilds every row, so re-apply whatever Revit currently has selected —
+            // otherwise editing one height silently drops the highlight off all of them.
+            ApplySelection();
 
             StatusMessage = scope.Message;
+        }
+
+        private IReadOnlyCollection<long> _selectedLineIds = Array.Empty<long>();
+
+        /// <summary>
+        /// Revit's selection changed. Called on Revit's main thread, which is also this pane's
+        /// dispatcher thread, so the rows are updated directly — the same arrangement Neo Properties
+        /// uses.
+        /// </summary>
+        public void SetSelectedLineIds(IReadOnlyCollection<long> lineIds)
+        {
+            _selectedLineIds = lineIds ?? Array.Empty<long>();
+            ApplySelection();
+        }
+
+        private void ApplySelection()
+        {
+            var selected = new HashSet<long>(_selectedLineIds);
+            foreach (var row in Lines) row.IsSelected = selected.Contains(row.LineId);
+        }
+
+        /// <summary>
+        /// Takes a row's typed height to Revit off the UI thread — the delegate blocks on an
+        /// ExternalEvent, and Revit's main thread cannot wait for its own event. Refreshes
+        /// afterwards so the row's status catches up with the new height.
+        /// </summary>
+        private void CommitElevation(long lineId, string text)
+        {
+            Task.Run(() =>
+            {
+                string summary;
+                try
+                {
+                    summary = _setElevation(lineId, text);
+                }
+                catch (Exception ex)
+                {
+                    summary = "Could not set that height: " + ex.Message;
+                }
+
+                _dispatcher.Invoke(() =>
+                {
+                    StatusMessage = summary;
+                    Refresh();
+                });
+            });
+        }
+
+        private void RunSelectInView(long lineId)
+        {
+            Task.Run(() =>
+            {
+                try
+                {
+                    _selectInView(lineId);
+                }
+                catch (Exception ex)
+                {
+                    _dispatcher.Invoke(() => StatusMessage = "Could not select that line: " + ex.Message);
+                }
+            });
         }
 
         private void RunSetUp()
