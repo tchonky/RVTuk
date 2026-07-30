@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
 using RVTuk.Core.AutoDimensions;
+using RVTuk.Core.Shared.Geometry;
 
 namespace RVTuk.Revit.AutoDimensions
 {

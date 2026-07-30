@@ -1,4 +1,5 @@
 using System;
+using RVTuk.Core.Shared.Geometry;
 
 namespace RVTuk.Core.AutoDimensions
 {

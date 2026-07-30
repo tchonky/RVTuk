@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using RVTuk.Core.Shared.Geometry;
 
 namespace RVTuk.Core.AutoDimensions
 {

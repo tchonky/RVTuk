@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using RVTuk.Core.AutoDimensions;
+using RVTuk.Core.Shared.Geometry;
 using Xunit;
 
 namespace RVTuk.Core.Tests.AutoDimensions;
