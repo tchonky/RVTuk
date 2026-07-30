@@ -266,15 +266,28 @@ events: discover (read the view's topo lines) and apply (run).
 - **Run**, and then a summary: points added per toposolid, lines skipped and why, points landing
   outside every footprint, and ledger points that had been moved by hand and were left alone.
 
-## Ribbon
+## Ribbon — revised 2026-07-30
 
-A panel on the **Massing & Site** tab, holding one button, "Topo Tools".
+**Intended for the Massing & Site tab. That is not possible, and the button sits on the RVTuk
+panel with the other tools.**
 
-`Autodesk.Revit.UI.Tab` offers only `AddIns` and `Analyze`, so the enum overload cannot name that
-tab. The string overload `CreateRibbonPanel("Massing & Site", panel)` is the route for a built-in
-tab; whether Revit resolves built-in tabs by name there is **not confirmed**, so the code attempts
-it and **falls back to the Add-Ins panel** on `ArgumentException`. The tool ships either way, and
-the implementation plan carries an explicit in-Revit check of which path was taken.
+The API places a custom panel on the **Add-Ins** tab, on the **Analyze** tab, or on a tab the add-in
+creates itself. Nothing else. `Autodesk.Revit.UI.Tab` naming only `AddIns` and `Analyze` is the same
+limit seen from the enum, and the string overload does not resolve built-in tabs — verified in
+Revit 2024, where it threw and the fallback ran.
+
+The real ribbon can be reached through the undocumented `Autodesk.Windows` API, which is how other
+add-ins put panels on built-in tabs. Autodesk states it is unsupported and may break at any time,
+and adding a new panel that way frequently does nothing at all — the variant that works is to let
+Revit create the panel and then move it. **Rejected:** a button that silently disappears on a Revit
+update is a bad trade for placement, in a toolkit installed across a firm.
+
+Two supported alternatives were considered and declined: the Analyze tab (reachable, but a
+site-shaping tool under structural and energy analysis is more confusing than Add-Ins), and a
+top-level `CreateRibbonTab("RVTuk")` holding all five tools (defensible, but it moves every button
+in the toolkit — a decision about RVTuk as a whole, not about this tool).
+
+The attempt-and-fall-back code is gone. It implied a placement that can never succeed.
 
 ## Layering
 
@@ -321,7 +334,9 @@ hand in Revit, as everywhere else in this repo.
 
 Carried into the implementation plan, not resolvable from the reference assemblies:
 
-1. Whether `CreateRibbonPanel("Massing & Site", …)` resolves the built-in tab, or the fallback runs.
+1. ~~Whether `CreateRibbonPanel("Massing & Site", …)` resolves the built-in tab, or the fallback
+   runs.~~ **Answered 2026-07-30: it does not.** The fallback ran; the button is on the RVTuk
+   panel. See "Ribbon" above — no supported API can reach that tab.
 2. That `SlabShapeEditor.AddPoints` accepts points on a toposolid whose shape editor was never
    enabled, and what `Enable()` does to one that already has points.
 3. Whether Revit merges or rejects an added point that coincides with an existing vertex, and what

@@ -6,11 +6,13 @@ The code is complete and all three configurations build, but **nothing has been 
 Revit yet**. Deploy (`.\Deploy.ps1 2024` from an elevated shell, Revit closed) and work through
 this list; record what each answers.
 
-- [ ] **Ribbon placement** — is the "Topo Tools" button on the **Massing & Site** tab, or did it
-      fall back to the RVTuk panel on Add-Ins? This is the one question the reference assemblies
-      could not answer: `Autodesk.Revit.UI.Tab` names only `AddIns` and `Analyze`, so the panel is
-      created through `CreateRibbonPanel("Massing & Site", "RVTuk")` with a fallback. If it fell
-      back, leave the fallback in place and note it here.
+- [x] **Ribbon placement** — **answered 2026-07-30: Massing & Site is unreachable.** The button
+      appeared on the RVTuk panel on Add-Ins, i.e. the fallback ran. The API only places custom
+      panels on Add-Ins, on Analyze, or on a tab the add-in creates itself; the `Autodesk.Windows`
+      route that could reach the real tab is unsupported and may break on any Revit update, so it
+      was declined. The dead attempt-and-fall-back code has been removed. **Do not retry this** —
+      if the placement ever matters enough, the supported move is a top-level `RVTuk` tab for the
+      whole toolkit, not a hack for one button.
 - [x] **Setup** — **failed 2026-07-30, root cause found and fixed.** *Set up this project* reported
       success while the banner stayed, because `TOPO_Elevation` can never bind: `OST_Lines` has
       `AllowsBoundParameters == false`, so `ParameterBindings.Insert` returned false — and

@@ -78,9 +78,9 @@ namespace RVTuk.Revit
         private static readonly bool RegisterAutoDimensions = true;
 
         /// <summary>
-        /// Topo Tools ships on its own panel on Revit's Massing &amp; Site tab, not on the RVTuk
-        /// Add-Ins panel — it belongs with the site tools it works alongside. Its single entry
-        /// point is the dockable pane.
+        /// Topo Tools ships on the RVTuk panel alongside the other tools. It was intended for
+        /// Revit's Massing &amp; Site tab, which the API cannot reach — see CreateRibbon. Its single
+        /// entry point is the dockable pane.
         /// </summary>
         private static readonly bool RegisterTopoTools = true;
 
@@ -360,20 +360,12 @@ namespace RVTuk.Revit
 
             if (RegisterTopoTools)
             {
-                // Autodesk.Revit.UI.Tab offers only AddIns and Analyze, so the built-in tab can
-                // only be named through the string overload — and whether Revit resolves built-in
-                // tabs that way is not guaranteed. Falling back to the RVTuk panel keeps the tool
-                // reachable either way rather than losing the button to an exception.
-                RibbonPanel topoPanel;
-                try
-                {
-                    topoPanel = app.CreateRibbonPanel("Massing & Site", "RVTuk");
-                }
-                catch (Exception)
-                {
-                    topoPanel = panel;
-                }
-
+                // Topo Tools was meant for Revit's Massing & Site tab. It cannot go there: the API
+                // places custom panels on Add-Ins, on Analyze, or on a tab the add-in creates
+                // itself — nothing else. Autodesk.Revit.UI.Tab naming only AddIns and Analyze is
+                // that same limit seen from the enum. Reaching the real tab needs the unsupported
+                // Autodesk.Windows ribbon, which Autodesk warns may break at any time; not worth a
+                // silently vanishing button in a firm-wide toolkit, so it sits with its siblings.
                 var topoBtn = new PushButtonData(
                     "TopoTools",
                     "Topo\nTools",
@@ -385,7 +377,7 @@ namespace RVTuk.Revit
                 topoBtn.LargeImage = CreateTopoToolsIcon(32);
                 topoBtn.Image      = CreateTopoToolsIcon(16);
 
-                topoPanel.AddItem(topoBtn);
+                panel.AddItem(topoBtn);
             }
 
             if (!RegisterNeoProperties) return;
