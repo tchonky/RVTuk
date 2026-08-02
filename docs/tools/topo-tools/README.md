@@ -14,9 +14,11 @@ parameter, so the height moved into the tool's own Extensible Storage on each li
 (`TopoElevationStore`), with the pane as its editor. You type in the project's units and
 `UnitFormatUtils.TryParse` reads it, so this tool never assumes millimetres.
 
-**Selection is linked both ways** — selecting topo lines in the view highlights their rows, and each
-row can select its line. With the height invisible in Properties, a row reading "Line 418732" would
-otherwise be impossible to place in the drawing.
+**The row highlight is Revit's selection, both ways** — highlighting rows selects those lines in the
+view, and picking lines in the view highlights those rows. With the height invisible in Properties,
+a row reading "Line 418732" would otherwise be impossible to place in the drawing. Ctrl and Shift
+pick several, and **a height typed into any one of several selected rows sets all of them** in a
+single transaction.
 
 **Heights are shared (survey) elevations,** absolute as a surveyor quotes them. The conversion is
 one subtraction — `ProjectPosition.Elevation` at the internal origin — which does mean the tool

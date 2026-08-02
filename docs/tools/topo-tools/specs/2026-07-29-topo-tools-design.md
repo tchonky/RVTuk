@@ -253,18 +253,33 @@ events: discover (read the view's topo lines) and apply (run).
   and nothing else works. It cannot be a side effect of the first run: you cannot draw a topo line
   before the style exists. One click, then it never returns.
 - **Target** — the active view's name, refreshed when the view changes.
-- **Spacing** in millimetres, remembered in `AppConfig` between sessions. (Deliberately a different
-  unit convention from the heights, which follow the document: spacing is a tool setting, a height
-  is model data the surveyor already quoted in the project's units.)
+- **Target** — the active view's name, green when it holds topo lines and red when it holds none.
+  Being in the wrong view is the commonest mistake and the cheapest one to show.
+- **Spacing** in centimetres, remembered in `AppConfig` between sessions. (Deliberately a fixed unit
+  rather than the document's, unlike the heights: spacing is a tool setting, while a height is model
+  data the surveyor already quoted in the project's units.)
 - **The lines found**, each with an **editable height**, its length, how many points it will make,
-  and a status: *ready*, *no elevation set*, or *outside every toposolid*. This list is the answer
+  and a status: *ready*, *no height set*, or *outside every toposolid*. This list is the answer
   to "what will this do", available before anything is pressed — and, since the height lives
-  nowhere else, it is also the only place to set one.
-- **Selection, both ways.** Selecting topo lines in the view highlights their rows; each row selects
-  its line in the view. This is not a convenience: with the height invisible in Properties, a row
-  labelled "Line 418732" would otherwise be unidentifiable.
-- **Run**, and then a summary: points added per toposolid, lines skipped and why, points landing
-  outside every footprint, and ledger points that had been moved by hand and were left alone.
+  nowhere else, it is also the only place to set one. **Enter commits a height**; the boxes write on
+  losing focus, since committing per keystroke would open a transaction per character.
+- **Selection is the highlight, both ways.** The list is a `ListBox` in `Extended` mode with each
+  row's `IsSelected` bound through, so highlighting rows selects those lines and picking lines
+  highlights those rows — one fact with two places to change it, which needs a guard flag or each
+  direction re-triggers the other. There is no separate select button. With the height invisible in
+  Properties, a row labelled "Line 418732" would otherwise be unidentifiable.
+- **A height typed into one of several selected rows sets all of them**, in one transaction, so a
+  bulk change is a single undo. A row edited while it is not part of the selection stands alone.
+- **Run and Refresh** sit at the top as glyph buttons beside the settings they consume, their words
+  in tooltips, leaving the list the vertical room. The run's summary follows at the bottom: points
+  added per toposolid, lines skipped and why, points landing outside every footprint, and ledger
+  points that had been moved by hand and were left alone.
+
+**Lengths are written as plain numbers in the document's display unit** — "42750", not "42750.0".
+Revit's own `FormatOptions.SuppressTrailingZeros` had no effect in practice and its failure was
+silent; the two candidate reasons (`forEditing` ignoring format options, or
+`CanSuppressTrailingZeros` returning false for the unit setup) cannot be told apart without a Revit
+session, so the tool converts and formats the number itself and depends on neither.
 
 ## Ribbon — revised 2026-07-30
 
