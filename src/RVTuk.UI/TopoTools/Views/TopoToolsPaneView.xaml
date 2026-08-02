@@ -42,18 +42,31 @@
                            Foreground="{StaticResource Brush.TextMuted}"
                            FontSize="10" FontWeight="SemiBold"
                            Margin="0,0,0,2"/>
+                <!-- Green when this view has topo lines, red when it has none: which view you are
+                     in is the first thing to get wrong, and the fastest thing to show. -->
                 <TextBlock Text="{Binding ViewName}"
-                           Foreground="{StaticResource Brush.Text}"
                            TextWrapping="Wrap"
-                           Margin="0,0,0,8"/>
+                           Margin="0,0,0,8">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                            <Setter Property="Foreground" Value="{StaticResource Brush.Warning}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasLines}" Value="True">
+                                    <Setter Property="Foreground" Value="{StaticResource Brush.Success}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
 
-                <TextBlock Text="POINT SPACING (MM)"
+                <TextBlock Text="POINT SPACING (CM)"
                            Foreground="{StaticResource Brush.TextMuted}"
                            FontSize="10" FontWeight="SemiBold"
                            Margin="0,0,0,4"/>
-                <TextBox Text="{Binding SpacingMillimetres, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                <TextBox Text="{Binding SpacingCentimetres, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         KeyDown="OnEditorKeyDown"
                          HorizontalAlignment="Left" Width="90"
-                         ToolTip="Distance between generated points along each line, in millimetres."/>
+                         ToolTip="Distance between generated points along each line, in centimetres."/>
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal"
@@ -103,9 +116,10 @@
                     <StackPanel Margin="0,1">
                         <DockPanel LastChildFill="True">
                             <TextBox Text="{Binding ElevationText, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                     KeyDown="OnEditorKeyDown"
                                      DockPanel.Dock="Right"
                                      Width="86" TextAlignment="Right"
-                                     ToolTip="This line's height, in the project's units. Clear it to un-set the height."/>
+                                     ToolTip="This line's height, in the project's units. Press Enter to apply. Clear it to un-set the height."/>
                             <TextBlock Text="{Binding DisplayName}"
                                        Foreground="{StaticResource Brush.Text}"
                                        FontWeight="SemiBold"

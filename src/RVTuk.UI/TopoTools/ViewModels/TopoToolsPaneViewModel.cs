@@ -18,7 +18,7 @@ namespace RVTuk.UI.TopoTools.ViewModels
     /// </summary>
     public class TopoToolsPaneViewModel : ViewModelBase
     {
-        private const double DefaultSpacingMillimetres = 1000;
+        private const double DefaultSpacingCentimetres = 100;
 
         private readonly Func<double, TopoScope> _discover;
         private readonly Func<double, string> _apply;
@@ -48,16 +48,16 @@ namespace RVTuk.UI.TopoTools.ViewModels
 
             try
             {
-                _spacingMillimetres = ConfigManager.LoadConfig().TopoPointSpacingMillimetres;
+                _spacingCentimetres = ConfigManager.LoadConfig().TopoPointSpacingCentimetres;
             }
             catch
             {
-                _spacingMillimetres = DefaultSpacingMillimetres;
+                _spacingCentimetres = DefaultSpacingCentimetres;
             }
 
             // Reads back as 0 from a config file written before the property existed — net48's
             // DataContractJsonSerializer skips property initializers. See AppConfig.
-            if (_spacingMillimetres <= 0) _spacingMillimetres = DefaultSpacingMillimetres;
+            if (_spacingCentimetres <= 0) _spacingCentimetres = DefaultSpacingCentimetres;
         }
 
         public ObservableCollection<TopoLineRowViewModel> Lines { get; }
@@ -65,18 +65,18 @@ namespace RVTuk.UI.TopoTools.ViewModels
         public RelayCommand RefreshCommand { get; }
         public RelayCommand ApplyCommand { get; }
 
-        private double _spacingMillimetres;
+        private double _spacingCentimetres;
 
-        /// <summary>Millimetres, because the UI layer has no access to the document's units.</summary>
-        public double SpacingMillimetres
+        /// <summary>Centimetres, a fixed unit — the UI layer has no access to the document's.</summary>
+        public double SpacingCentimetres
         {
-            get => _spacingMillimetres;
+            get => _spacingCentimetres;
             set
             {
                 if (value <= 0) return;
-                if (Math.Abs(_spacingMillimetres - value) < 0.0001) return;
+                if (Math.Abs(_spacingCentimetres - value) < 0.0001) return;
 
-                SetProperty(ref _spacingMillimetres, value);
+                SetProperty(ref _spacingCentimetres, value);
                 SaveSpacing(value);
             }
         }
@@ -87,6 +87,14 @@ namespace RVTuk.UI.TopoTools.ViewModels
             get => _viewName;
             private set => SetProperty(ref _viewName, value);
         }
+
+        /// <summary>
+        /// Whether this view has any topo lines at all — the view's name is coloured by it, so
+        /// "am I in the right view?" is answered before reading a word. Deliberately about lines
+        /// rather than about ready lines: a view with four lines that all need heights is the right
+        /// view, and its rows already say what is missing.
+        /// </summary>
+        public bool HasLines => Lines.Count > 0;
 
         private bool _isProjectSetUp = true;
         public bool IsProjectSetUp
@@ -123,7 +131,7 @@ namespace RVTuk.UI.TopoTools.ViewModels
 
             IsBusy = true;
             StatusMessage = "Reading this view's topo lines…";
-            double spacing = _spacingMillimetres;
+            double spacing = _spacingCentimetres;
 
             Task.Run(() =>
             {
@@ -158,6 +166,8 @@ namespace RVTuk.UI.TopoTools.ViewModels
             Lines.Clear();
             foreach (var line in scope.Lines)
                 Lines.Add(new TopoLineRowViewModel(line, CommitElevation, OnRowSelectionChanged));
+
+            OnPropertyChanged(nameof(HasLines));
 
             // A refresh rebuilds every row, so re-apply whatever Revit currently has selected —
             // otherwise editing one height silently drops the highlight off all of them.
@@ -295,7 +305,7 @@ namespace RVTuk.UI.TopoTools.ViewModels
         {
             IsBusy = true;
             StatusMessage = "Applying points…";
-            double spacing = _spacingMillimetres;
+            double spacing = _spacingCentimetres;
 
             Task.Run(() =>
             {
@@ -318,12 +328,12 @@ namespace RVTuk.UI.TopoTools.ViewModels
             });
         }
 
-        private static void SaveSpacing(double millimetres)
+        private static void SaveSpacing(double centimetres)
         {
             try
             {
                 var config = ConfigManager.LoadConfig();
-                config.TopoPointSpacingMillimetres = millimetres;
+                config.TopoPointSpacingCentimetres = centimetres;
                 ConfigManager.SaveConfig(config);
             }
             catch

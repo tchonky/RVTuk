@@ -128,9 +128,7 @@ namespace RVTuk.Revit.TopoTools
                     continue;
                 }
 
-                // forEditing: the pane's box is an editor, and its text comes back here to be
-                // parsed — a display-rounded figure would quietly move the height on every edit.
-                line.ElevationText = FormatLengthForEditing(doc, candidate.ElevationFeet.Value);
+                line.ElevationText = FormatLength(doc, candidate.ElevationFeet.Value);
                 double z = candidate.ElevationFeet.Value - sharedElevationOfInternalZero;
 
                 foreach (var xy in TopoLineSampler.Sample(candidate.Polyline, spacingFeet))
@@ -151,10 +149,7 @@ namespace RVTuk.Revit.TopoTools
         }
 
         private static string FormatLength(Document doc, double feet) =>
-            TopoLengthFormatter.Format(doc, feet, forEditing: false);
-
-        private static string FormatLengthForEditing(Document doc, double feet) =>
-            TopoLengthFormatter.Format(doc, feet, forEditing: true);
+            TopoLengthFormatter.Format(doc, feet);
 
         private static string Describe(IReadOnlyList<TopoLineInfo> lines, int toposolidCount)
         {

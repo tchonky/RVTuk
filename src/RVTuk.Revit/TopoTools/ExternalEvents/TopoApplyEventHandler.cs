@@ -13,11 +13,11 @@ namespace RVTuk.Revit.TopoTools.ExternalEvents
     public class TopoApplyEventHandler : IExternalEventHandler
     {
         private readonly ManualResetEventSlim _done = new(false);
-        private double _spacingMillimetres = 1000;
+        private double _spacingCentimetres = 100;
 
         public string Summary { get; private set; } = "";
 
-        public void Prepare(double spacingMillimetres) => _spacingMillimetres = spacingMillimetres;
+        public void Prepare(double spacingCentimetres) => _spacingCentimetres = spacingCentimetres;
         public void Reset() => _done.Reset();
         public void WaitForCompletion() => _done.Wait();
 
@@ -34,7 +34,7 @@ namespace RVTuk.Revit.TopoTools.ExternalEvents
                 }
 
                 double spacingFeet = UnitUtils.ConvertToInternalUnits(
-                    _spacingMillimetres, UnitTypeId.Millimeters);
+                    _spacingCentimetres, UnitTypeId.Centimeters);
 
                 Summary = TopoRunner.Apply(doc, uiDoc!.ActiveView, spacingFeet);
             }

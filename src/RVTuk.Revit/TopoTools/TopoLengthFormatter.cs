@@ -1,47 +1,43 @@
+using System;
+using System.Globalization;
 using Autodesk.Revit.DB;
 
 namespace RVTuk.Revit.TopoTools
 {
     /// <summary>
-    /// Lengths written the way the document would write them, minus the trailing zeros — "42750"
-    /// rather than "42750.0". Survey elevations come in round, and a column of them is easier to
-    /// scan without a decimal point that never carries anything.
+    /// Lengths as plain numbers in the document's display unit — "42750", never "42750.0". Survey
+    /// elevations come in round, and a column of them is easier to scan without a decimal point
+    /// that never carries anything.
     ///
-    /// Done through Revit's own <c>FormatOptions.SuppressTrailingZeros</c> rather than by trimming
-    /// the string: the separator, digit grouping and unit symbol are all locale-dependent, and
-    /// chopping characters off the end of "1 234,50" is how that goes wrong.
+    /// This first went through Revit's own <c>FormatOptions.SuppressTrailingZeros</c>, which did
+    /// nothing in practice. Two candidate reasons, indistinguishable without a Revit session:
+    /// <c>forEditing: true</c> asks for a round-trippable string and may ignore format options
+    /// altogether, and <c>CanSuppressTrailingZeros()</c> can simply return false for a given unit
+    /// setup, in which case the flag was never set. Converting and formatting the number here
+    /// depends on neither.
     ///
-    /// <c>UseDefault</c> must be cleared on the copy — while it is set, Revit ignores every other
-    /// setting on the object and formats with the document's defaults instead.
+    /// The trade: no digit grouping and no unit symbol. For a box that must parse back that is what
+    /// you want anyway, and one format for both display and editing means the two can never drift.
+    ///
+    /// Rounded before formatting because feet are the internal unit: a height typed as 42750 mm
+    /// comes back as 42750.000000000004, and twelve decimal places of float residue is not a
+    /// number anyone asked to see.
     /// </summary>
     public static class TopoLengthFormatter
     {
-        /// <param name="forEditing">
-        /// True for text destined for an editable box, which must parse back exactly; false for
-        /// display.
-        /// </param>
-        public static string Format(Document doc, double feet, bool forEditing)
+        /// <summary>Well below any surveyed precision, well above float residue.</summary>
+        private const int Decimals = 6;
+
+        public static string Format(Document doc, double feet)
         {
-            var units = doc.GetUnits();
+            double value = UnitUtils.ConvertFromInternalUnits(feet, DisplayUnit(doc));
 
-            try
-            {
-                var format = new FormatOptions(units.GetFormatOptions(SpecTypeId.Length))
-                {
-                    UseDefault = false,
-                };
-                if (format.CanSuppressTrailingZeros()) format.SuppressTrailingZeros = true;
-
-                var options = new FormatValueOptions();
-                options.SetFormatOptions(format);
-
-                return UnitFormatUtils.Format(units, SpecTypeId.Length, feet, forEditing, options);
-            }
-            catch
-            {
-                // A unit setup that will not take the override still deserves a number.
-                return UnitFormatUtils.Format(units, SpecTypeId.Length, feet, forEditing);
-            }
+            // CurrentCulture, not invariant: the number goes into a box the user reads and edits,
+            // and comes back through UnitFormatUtils.TryParse, which is locale-aware too.
+            return Math.Round(value, Decimals).ToString("0.######", CultureInfo.CurrentCulture);
         }
+
+        private static ForgeTypeId DisplayUnit(Document doc) =>
+            doc.GetUnits().GetFormatOptions(SpecTypeId.Length).GetUnitTypeId();
     }
 }

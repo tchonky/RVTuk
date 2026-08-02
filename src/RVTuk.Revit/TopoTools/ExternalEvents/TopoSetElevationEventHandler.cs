@@ -88,7 +88,7 @@ namespace RVTuk.Revit.TopoTools.ExternalEvents
                         Summary = clearing
                             ? $"Height cleared{where}."
                             : "Height set to " +
-                              TopoLengthFormatter.Format(doc, elevationFeet, forEditing: false) +
+                              TopoLengthFormatter.Format(doc, elevationFeet) +
                               where + ".";
                     }
                     catch (Exception ex)
