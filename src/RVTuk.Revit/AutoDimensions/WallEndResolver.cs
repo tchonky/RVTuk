@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Autodesk.Revit.DB;
 using RVTuk.Core.AutoDimensions;
 using RVTuk.Core.Shared.Geometry;
@@ -19,6 +20,9 @@ namespace RVTuk.Revit.AutoDimensions
     /// </summary>
     public static class WallEndResolver
     {
+        /// <summary>One candidate wall end: which collected wall, where, and how far off.</summary>
+        private readonly record struct WallEnd(int Index, XyPoint Point, double Distance);
+
         /// <summary>
         /// Feet. Generous on purpose: the user may snap to the wall's face corner rather than its
         /// location-curve end, and the two differ by half the wall's thickness — 1 ft covers
@@ -33,10 +37,19 @@ namespace RVTuk.Revit.AutoDimensions
         private const double VerticalTolerance = 0.001;
 
         /// <summary>
-        /// Null when there is no wall end within tolerance of the target point, when the wall
-        /// runs too far off parallel to the string for its end face to be measurable, or when the
-        /// end face itself cannot be resolved — a wall joined into another at that end has its
-        /// end face clipped or consumed by Revit, and there may be no planar face there at all.
+        /// Feet. How far along the wall a face may sit from the end we were pointed at. A join
+        /// extends a wall's geometry past its location-curve end by the thickness of the wall it
+        /// meets, so this cannot be zero.
+        /// </summary>
+        private const double EndFaceOffsetTolerance = 1.0;
+
+        /// <summary>
+        /// Null when there is no wall end within tolerance of the target point, when every wall
+        /// end within tolerance runs too far off parallel to the string for its end face to be
+        /// measurable, or when none of their end faces can be resolved — a wall joined into
+        /// another at that end has its end face clipped or consumed by Revit, and there may be no
+        /// planar face there at all. Tries every candidate end, nearest first, rather than
+        /// betting everything on the single nearest one.
         /// </summary>
         public static Reference? TryResolve(
             DimensionCandidateSet candidates,
@@ -44,55 +57,59 @@ namespace RVTuk.Revit.AutoDimensions
             XyPoint stringStart,
             XyPoint stringEnd)
         {
-            var index = NearestWallEnd(candidates, targetEnd, out var endPoint);
-            if (index < 0) return null;
+            foreach (var wallEnd in WallEndsNear(candidates, targetEnd))
+            {
+                // An end face faces along its wall, so this is the AlongSegment case — the same
+                // test an opening's jambs pass, and for the same geometric reason.
+                if (!ReferenceAlignment.CanDimension(
+                        stringStart, stringEnd, candidates.Occluders[wallEnd.Index],
+                        ReferenceNormal.AlongSegment))
+                    continue;
 
-            // An end face faces along its wall, so this is the AlongSegment case — the same test
-            // an opening's jambs pass, and for the same geometric reason.
-            if (!ReferenceAlignment.CanDimension(
-                    stringStart, stringEnd, candidates.Occluders[index], ReferenceNormal.AlongSegment))
-                return null;
+                var candidate = candidates.OccluderItems[wallEnd.Index];
+                if (candidate.Wall == null) continue;
 
-            var candidate = candidates.OccluderItems[index];
-            if (candidate.Wall == null) return null;
+                var reference = TryEndFace(candidate.Wall, wallEnd.Point, candidate.Link);
+                if (reference != null) return reference;
+            }
 
-            return TryEndFace(candidate.Wall, endPoint, candidate.Link);
+            return null;
         }
 
         /// <summary>
-        /// The nearest end of any collected wall to the target point, within
-        /// <see cref="WallEndTolerance"/>. Returns its index into Occluders/OccluderItems, and
-        /// hands back the end point itself so the face search knows which end to look at.
+        /// Every collected wall end within <see cref="WallEndTolerance"/> of the target point,
+        /// nearest first.
+        ///
+        /// All of them, not just the nearest: a parallel wall's end is usually at a corner, and
+        /// joined walls' location curves meet at the same point — so the nearest end is as likely
+        /// to belong to the perpendicular wall, whose end face no string running along it can
+        /// measure. Returning one candidate made that a coin flip.
         /// </summary>
-        private static int NearestWallEnd(
-            DimensionCandidateSet candidates, XyPoint target, out XyPoint endPoint)
+        private static IReadOnlyList<WallEnd> WallEndsNear(
+            DimensionCandidateSet candidates, XyPoint target)
         {
-            endPoint = default;
+            var found = new List<WallEnd>();
 
-            var best = -1;
-            var bestDistance = WallEndTolerance;
+            // OccluderItems is index-aligned with Occluders; clamp rather than trust it, so a
+            // mismatch cannot throw deep inside a run.
+            var count = Math.Min(candidates.Occluders.Count, candidates.OccluderItems.Count);
 
-            for (int i = 0; i < candidates.Occluders.Count; i++)
+            for (int i = 0; i < count; i++)
             {
-                // OccluderItems is index-aligned with Occluders, but be defensive: a mismatch
-                // would otherwise throw deep inside a run.
-                if (i >= candidates.OccluderItems.Count) break;
-
                 var segment = candidates.Occluders[i];
                 foreach (var end in new[] { segment.Start, segment.End })
                 {
                     var dx = end.X - target.X;
                     var dy = end.Y - target.Y;
                     var distance = Math.Sqrt(dx * dx + dy * dy);
-                    if (distance >= bestDistance) continue;
+                    if (distance > WallEndTolerance) continue;
 
-                    best = i;
-                    bestDistance = distance;
-                    endPoint = end;
+                    found.Add(new WallEnd(i, end, distance));
                 }
             }
 
-            return best;
+            found.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+            return found;
         }
 
         /// <summary>
@@ -141,10 +158,18 @@ namespace RVTuk.Revit.AutoDimensions
                         if (Angle2D.FromParallelDegrees(wallAngle, normalAngle) > NormalToleranceDegrees)
                             continue;
 
+                        // How far the face's plane sits from the wall end we were pointed at,
+                        // measured ALONG the wall. The far end lands a whole wall length away and
+                        // a door's jamb lands at the door — both are vertical faces whose normal
+                        // runs along the wall, so they qualify exactly as well as the end we want.
+                        // Without this bound the search silently returns one of them instead of
+                        // reporting that it found nothing.
                         var origin = planar.Origin;
-                        var dx = origin.X - localTarget.X;
-                        var dy = origin.Y - localTarget.Y;
-                        var distance = Math.Sqrt(dx * dx + dy * dy);
+                        var distance = Math.Abs(
+                            (origin.X - localTarget.X) * direction.X
+                            + (origin.Y - localTarget.Y) * direction.Y);
+
+                        if (distance > EndFaceOffsetTolerance) continue;
                         if (distance >= bestDistance) continue;
 
                         best = planar.Reference;
