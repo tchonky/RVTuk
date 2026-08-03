@@ -100,12 +100,16 @@ namespace RVTuk.Revit.AutoDimensions
         }
 
         /// <summary>
-        /// Runs every reference line against one target view. The lines may be owned by a
+        /// Runs every dimension string against one target view. The lines may be owned by a
         /// different view of the same level — that is exactly the fan-out the scope pane performs.
+        ///
+        /// <paramref name="stringLines"/> are the strings that receive dimensions;
+        /// <paramref name="refLines"/> are the pointers that mark a wall end on one, and are never
+        /// dimensioned themselves. Deliberately not both called "reference lines".
         /// </summary>
         public static void RunPair(
             Document doc,
-            IReadOnlyList<RingLine> referenceLines,
+            IReadOnlyList<RingLine> stringLines,
             IReadOnlyList<DetailLine> refLines,
             View targetView,
             DimensionCategories categories,
@@ -117,7 +121,7 @@ namespace RVTuk.Revit.AutoDimensions
 
             // Matching happens for all the level's lines at once, not line by line: an opening
             // belongs to the line that owns it, which can only be known by comparing them.
-            var geometry = referenceLines.Select(l => l.Line.GeometryCurve as Line).ToList();
+            var geometry = stringLines.Select(l => l.Line.GeometryCurve as Line).ToList();
 
             var straightIndices = new List<int>();
             var lines = new List<ReferenceLine>();
@@ -129,25 +133,25 @@ namespace RVTuk.Revit.AutoDimensions
                 lines.Add(new ReferenceLine(
                     ToXyPoint(geometry[i]!.GetEndPoint(0)),
                     ToXyPoint(geometry[i]!.GetEndPoint(1)),
-                    referenceLines[i].Ring));
+                    stringLines[i].Ring));
             }
 
             var matches = CandidateMatcher.FindMatchesForLines(
                 lines, candidates.Segments, candidates.MatchModes, candidates.Occluders);
 
-            var byLine = new IReadOnlyList<CandidateMatchResult>?[referenceLines.Count];
+            var byLine = new IReadOnlyList<CandidateMatchResult>?[stringLines.Count];
             for (int k = 0; k < straightIndices.Count; k++) byLine[straightIndices[k]] = matches[k];
 
             var refByLine = ResolveRefLines(refLines, lines, straightIndices, candidates,
-                referenceLines.Count, tally);
+                stringLines.Count, tally);
 
             // Every line goes through the loop, including any whose geometry isn't a Line: the
             // stale-dimension delete must stay unconditional.
-            for (int i = 0; i < referenceLines.Count; i++)
+            for (int i = 0; i < stringLines.Count; i++)
             {
                 try
                 {
-                    RunLine(doc, referenceLines[i].Line, geometry[i], targetView, candidates,
+                    RunLine(doc, stringLines[i].Line, geometry[i], targetView, candidates,
                         byLine[i] ?? Array.Empty<CandidateMatchResult>(),
                         refByLine[i], dimensionType, tally);
                 }
@@ -161,19 +165,19 @@ namespace RVTuk.Revit.AutoDimensions
         }
 
         /// <summary>
-        /// Each ref line's marks, bucketed by the reference line they join. A ref line joins
-        /// EVERY string it meets, so one line can contribute a mark to several — how far it is
-        /// drawn is the control.
+        /// Each ref line's marks, bucketed by the string they join. A ref line joins EVERY string
+        /// it meets, so one line can contribute a mark to several — how far it is drawn is the
+        /// control.
         /// </summary>
         private static List<(double T, Reference Reference)>?[] ResolveRefLines(
             IReadOnlyList<DetailLine> refLines,
             IReadOnlyList<ReferenceLine> lines,
             IReadOnlyList<int> straightIndices,
             DimensionCandidateSet candidates,
-            int referenceLineCount,
+            int stringLineCount,
             DimensionRunTally tally)
         {
-            var byLine = new List<(double T, Reference Reference)>?[referenceLineCount];
+            var byLine = new List<(double T, Reference Reference)>?[stringLineCount];
 
             foreach (var refLine in refLines)
             {

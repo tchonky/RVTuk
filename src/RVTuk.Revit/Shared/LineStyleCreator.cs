@@ -31,11 +31,18 @@ namespace RVTuk.Revit.Shared
         /// document modified. Returns false rather than throwing when the document cannot take a
         /// transaction: a read-only model must still refresh, it simply refreshes without the
         /// styles, which reads the same as a project nobody has drawn in yet.
+        ///
+        /// Never touches a family document. The panes refresh on visibility changes, so a user
+        /// who merely tabs back to one while editing a family would otherwise have these
+        /// subcategories written into the family itself — and a family's subcategories are baked
+        /// into every project it is later loaded into, so that spreads.
         /// </summary>
         public static bool TryEnsureInOwnTransaction(Document doc, params string[] names)
         {
             try
             {
+                if (doc.IsFamilyDocument) return false;
+
                 var linesCategory = doc.Settings.Categories.get_Item(BuiltInCategory.OST_Lines);
 
                 var missing = new List<string>();

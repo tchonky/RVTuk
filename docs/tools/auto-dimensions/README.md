@@ -38,22 +38,21 @@ summary's exclusions.
 Both kinds come back interleaved in one order along the line, so a string reads
 cross-wall, jamb, jamb, cross-wall.
 
-**An opening is dimensioned once, by the nearest line that qualifies.** A facade usually
+**An opening is dimensioned once, by the line that owns it.** A facade usually
 carries several stacked dimension strings, and every one of them can reach the same door;
 measuring it from all of them is noise. Ownership is settled across all of a level's lines at
 once — which is why matching happens in `DimensionRunner.RunPair` rather than per line — and
-among the lines that actually qualify, not merely the nearest, so a door the closest string
-can't see or doesn't span still falls to one that does. Ties go to the earlier line, so
-re-running never shuffles a door between strings. **Walls are not deduplicated:** a wall
-crossed by three strings is measured by all three, which is what a chained string is.
+among the lines that actually qualify, so a door the closest string can't see or doesn't span
+still falls to one that does. **Walls are not deduplicated:** a wall crossed by three strings
+is measured by all three, which is what a chained string is.
 
-**Outer strings outrank inner ones.** Ownership of an opening is settled by ring first,
-then distance, then line order. An outer line that qualifies beats every inner line
-outright, however much closer the inner one stands — a facade window belongs on the facade
-string, not on the interior string that happens to sit nearer it. Only what no outer string
-can see falls through to the inner strings, settled among themselves the same way. Walls
-are untouched by this: a wall crossed by three strings is measured by all three, inner and
-outer alike.
+**Which line owns it: ring first, then distance, then line order.** An outer line that
+qualifies beats every inner line outright, however much closer the inner one stands — a facade
+window belongs on the facade string, not on the interior string that happens to sit nearer it.
+Only what no outer string can see falls through to the inner strings, settled among themselves
+the same way. Within a ring the nearest wins, and a tie goes to the earlier line, so re-running
+never shuffles a door between strings. The ring decides who owns an opening and nothing else:
+walls are measured by every string that crosses them, inner and outer alike.
 
 **A `_DP-Dim Ref` line points at what the pass cannot see.** Draw it from a wall's end to a
 string and that wall end gets a mark on that string — the case being a wall running parallel
@@ -68,7 +67,9 @@ that end has its end face clipped away by Revit and cannot be marked; the run su
 
 **When a crossing carries no mark,** the run summary says which of the silent causes applied:
 not cut by the view, no usable reference (curtain and stacked walls report no side faces), or
-references merged for sharing a position along the line.
+references merged for sharing a position along the line. Reference lines are accounted for the
+same way, and for the same reason — every one of these fails quietly: a ref line that touched
+no dimension string at all, and one that reached a string but found no wall end to mark.
 
 **Status:** registered on the RVTuk ribbon panel, gated by `RegisterAutoDimensions` in
 `src/RVTuk.Revit/Application.cs` (on). All three line styles are created on the pane's first

@@ -97,7 +97,7 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
                         if (doc.GetElement(new ElementId(scope.ReferenceViewId!.Value)) is not View referenceView)
                             continue;
 
-                        var referenceLines = DimensionRunner.CollectReferenceLines(doc, referenceView);
+                        var stringLines = DimensionRunner.CollectReferenceLines(doc, referenceView);
                         var refLines = DimensionRunner.CollectRefLines(doc, referenceView);
 
                         foreach (var viewInfo in selected)
@@ -106,7 +106,7 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
 
                             var tally = new DimensionRunTally();
                             DimensionRunner.RunPair(
-                                doc, referenceLines, refLines, targetView, categories,
+                                doc, stringLines, refLines, targetView, categories,
                                 dimensionType, tally);
 
                             totalCreated += tally.Created;
