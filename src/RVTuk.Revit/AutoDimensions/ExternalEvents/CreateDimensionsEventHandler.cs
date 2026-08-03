@@ -98,6 +98,7 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
                             continue;
 
                         var referenceLines = DimensionRunner.CollectReferenceLines(doc, referenceView);
+                        var refLines = DimensionRunner.CollectRefLines(doc, referenceView);
 
                         foreach (var viewInfo in selected)
                         {
@@ -105,13 +106,16 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
 
                             var tally = new DimensionRunTally();
                             DimensionRunner.RunPair(
-                                doc, referenceLines, targetView, categories, dimensionType, tally);
+                                doc, referenceLines, refLines, targetView, categories,
+                                dimensionType, tally);
 
                             totalCreated += tally.Created;
                             totalSkipped += tally.Skipped;
                             totals.ExcludedNotCut += tally.ExcludedNotCut;
                             totals.ExcludedNoReferences += tally.ExcludedNoReferences;
                             totals.CoincidentMerged += tally.CoincidentMerged;
+                            totals.RefLinesUnattached += tally.RefLinesUnattached;
+                            totals.RefLinesUnresolved += tally.RefLinesUnresolved;
                             report.AppendLine(
                                 $"{scope.LevelName} — {viewInfo.ViewName}: " +
                                 $"{tally.Created} created, {tally.Skipped} skipped");
@@ -156,7 +160,11 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
             if (totals.ExcludedNoReferences > 0)
                 report.AppendLine($"  • {totals.ExcludedNoReferences} crossing(s) with no usable reference — a curtain or stacked wall (which report no side faces), or a door/window whose jambs lie parallel to the line (a line crossing a wall cannot measure the openings in it).");
             if (totals.CoincidentMerged > 0)
-                report.Append($"  • {totals.CoincidentMerged} reference(s) merged for sharing a position along the line (joined walls).");
+                report.AppendLine($"  • {totals.CoincidentMerged} reference(s) merged for sharing a position along the line (joined walls).");
+            if (totals.RefLinesUnattached > 0)
+                report.AppendLine($"  • {totals.RefLinesUnattached} reference line(s) touching no dimension string — draw one from a wall end to the string it should mark.");
+            if (totals.RefLinesUnresolved > 0)
+                report.Append($"  • {totals.RefLinesUnresolved} reference line(s) with no wall end to mark — nothing within reach of the far end, the wall too far off parallel to the string, or its end face consumed by a join with another wall.");
         }
 
         public string GetName() => "RVTuk.AutoDimensionsCreateDimensionsEventHandler";
