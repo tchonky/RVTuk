@@ -8,15 +8,38 @@ Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
   reports no side faces for either, so the candidate is dropped. The run summary now counts these
   ("no usable faces"). A stacked wall could be resolved through `GetStackedWallMemberIds`; a
   curtain wall has no side faces to find and would need a different reference entirely.
-- [ ] **A ref line can mark a door jamb instead of the wall end, silently.** It takes two things
-  at once: the wall's true end face missing or off-angle (a mitered corner join leaves a 45° face
-  the 5° parallel filter rejects), *and* another qualifying face within 1 ft along the wall — a
-  jamb being, by definition, a vertical face whose normal runs along the host wall, which is
-  exactly what `WallEndResolver.TryEndFace` admits. The error is bounded to ≤305 mm, so it reads
-  as a correct dimension. Known closure: also require the face normal to point *away* from the
-  wall body — the near jamb's outward normal points back along the wall, so a sign test excludes
-  it. Distinct from the joined-end case in the README, which fails *loudly* (counted and
+  A curtain Wall can be measured by the mullion.
+- [ ] **A ref line can mark a door jamb instead of the wall end, silently — parallel walls only.**
+  It takes two things at once: the wall's true end face missing or off-angle (a mitered corner
+  join leaves a 45° face the 5° filter rejects), *and* another qualifying face within 1 ft along
+  the string — a jamb being a vertical face whose normal runs along its host wall, which on a
+  wall parallel to the string is also along the string, exactly what
+  `WallEndResolver.TryFaceAlongString` admits. The error is bounded to ≤305 mm, so it reads as a
+  correct dimension. Known closure: also require the face normal to point *away* from the wall
+  body — the near jamb's outward normal points back along the wall, so a sign test excludes it.
+  Does not apply to a perpendicular wall: there the jambs face across the string and are already
+  rejected. Distinct from the joined-end case in the README, which fails *loudly* (counted and
   reported); this one fails quietly.
+- [x] Outer strings are not getting any measurement, even if ref lines are used.
+  - Ok, I found the problem. We create two layers of walls sometimes on the facade. A concrete wall
+  and a architectural wall, and the windows and doors are hosted in the concrete wall. Even with the
+  windows and doors cutting the architectural wall, probably the `wall in between` is blocking the
+  measure of the concrete wall. The solution now is to hide the architectural wall. But maybe the is
+  a prettier solution for this?
+  - **Confirmed, and it is narrower than "two layers".** `CandidateMatcher.IsBlocked` blocks on any
+  parallel wall that is *strictly nearer* the string than the opening's centre, by more than
+  `BlockingEpsilon` (1e-6). An opening's own host escapes only because the opening sits exactly ON
+  the host's location curve — "strictly nearer" then fails by rounding alone. So the moment the
+  opening's centre is even slightly inboard of a parallel wall, that wall blocks it. Reproduced in
+  Core with a single facade wall at y=10, an outer string at y=0 and a window centred at y=10.05:
+  the window is dropped, and its blocker is its own host. Two-layer construction is the common way
+  to hit it, but so is any family whose origin is offset from the wall centre.
+  - Fixing it properly means asking "does this wall stand between them" of the *opening*, not of a
+  point: the host (and anything the opening's own cut passes through) should never block it. Candidate
+  approaches: exclude the opening's host wall by id rather than by distance; or require a blocker to
+  clear the opening's near face by more than half the opening's own host thickness. The first needs
+  the host id carried into `Occluders`, which today is geometry-only.
+  
 
 ## ✨ Improvements
 
@@ -35,8 +58,10 @@ Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
 - [ ] **`RefLineMatcher.TryIntersect` rejects only exact-parallel** (`|det| < 1e-12`) where
   `WallCrossingFinder` uses a 5° angle test, so a ref line drawn *nearly* along a string registers
   a numerically valid but meaningless station.
-- [ ] **"Too far off parallel to the string" overstates the gate,** which actually admits up to
-  85°. The wording sends the user looking for a problem that isn't there.
+- [x] **"Too far off parallel to the string" overstated the gate,** which admitted up to 85°.
+  Closed by the orientation fix: the `ReferenceAlignment.CanDimension` pre-gate is gone and the
+  real 5° test is applied to each candidate face's own normal against the string, so the summary's
+  wording now matches what the code does. (2026-08-03)
 - [ ] **`DimensionLineStyle.AllStyleNames` is a mutable `public static readonly string[]`** — a
   caller could reassign an element and break creation and detection at once.
 - [ ] **The line-intersection algebra is duplicated** between `RefLineMatcher` and
@@ -96,6 +121,11 @@ Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
      string, re-run: the inner takes it.
   4. **Ref line, reference view.** Draw one from a free-ending parallel wall out to a string; the
      wall end gets a mark at the station where the ref line meets the string.
+  4b. **Ref line onto a perpendicular wall.** Point one at the corner of a wall running *across*
+     the string — the case that used to land a wall-thickness off. The mark must sit on the face
+     pointed at, not on the wall's other face and not on a neighbouring wall's end. Check both
+     faces of the same wall by pointing at each in turn, and check a wall at a diagonal reports
+     as unresolved rather than marking something arbitrary.
   5. **Ref line across the fan-out — the load-bearing check.** Tick a second view of the same
      level and run. The mark must appear there too. If it appears only in the reference view,
      something is referencing the detail line instead of the wall's end face.

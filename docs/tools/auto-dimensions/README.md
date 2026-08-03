@@ -55,15 +55,24 @@ never shuffles a door between strings. The ring decides who owns an opening and 
 walls are measured by every string that crosses them, inner and outer alike.
 
 **A `_DP-Dim Ref` line points at what the pass cannot see.** Draw it from a wall's end to a
-string and that wall end gets a mark on that string — the case being a wall running parallel
-to the string, which the automatic pass structurally cannot measure. The line is a pointer,
-never itself a reference: detail lines are view-specific, so dimensioning one would work in
-the reference view and produce nothing in the fanned-out ones, and the mark would sit where
-the line is rather than where the wall is. The tool resolves the wall's **end face** instead,
-which is the one face on a parallel wall a string is geometrically entitled to measure — its
-side faces face across the string, its end face along it. A ref line joins **every** string it
-touches, so how far you draw it is the control. Known limit: a wall joined into another at
-that end has its end face clipped away by Revit and cannot be marked; the run summary says so.
+string and that wall end gets a mark on that string — the case being a wall the automatic pass
+structurally cannot reach, because the string neither crosses it nor runs alongside an opening
+in it. The line is a pointer, never itself a reference: detail lines are view-specific, so
+dimensioning one would work in the reference view and produce nothing in the fanned-out ones,
+and the mark would sit where the line is rather than where the wall is. The tool resolves a
+**face of the wall** instead — whichever one has its normal running along the string, that
+being Revit's only requirement of a reference.
+
+**Which face that is flips with the wall's orientation,** and getting this wrong is what made
+ref lines land a wall-thickness away from where they were pointed. A wall **parallel** to the
+string is measured on its **end** faces (normal along the wall, hence along the string); a wall
+**perpendicular** to it on its **side** faces (normal across the wall, hence along the string).
+Testing each face's own normal against the *string* rather than against the wall is what serves
+both without either being a special case — testing against the wall found end faces only, so a
+perpendicular wall was skipped in silence and the mark fell through to a neighbour's end. A ref
+line joins **every** string it touches, so how far you draw it is the control. Known limits: a
+wall joined into another at that end may have no planar face left there, and a wall lying at a
+diagonal to the string has no face it can honestly measure; the run summary reports both.
 
 **When a crossing carries no mark,** the run summary says which of the silent causes applied:
 not cut by the view, no usable reference (curtain and stacked walls report no side faces), or

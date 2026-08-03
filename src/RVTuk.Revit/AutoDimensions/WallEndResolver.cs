@@ -7,14 +7,23 @@ using RVTuk.Core.Shared.Geometry;
 namespace RVTuk.Revit.AutoDimensions
 {
     /// <summary>
-    /// Turns a _DP-Dim Ref line's target end into a dimension reference on a wall's END face.
+    /// Turns a _DP-Dim Ref line's target end into a dimension reference on a wall face the string
+    /// can actually measure.
     ///
-    /// The end face, not a side face, is the whole point. ReferenceAlignment requires a
-    /// reference's normal to run along the dimension direction: a wall parallel to a string has
-    /// side faces facing ACROSS it — which is exactly why parallel walls are invisible to the
-    /// automatic pass — and an end face facing ALONG it, which a string can measure. So this
-    /// reaches the one reference on a parallel wall a string is entitled to, rather than
-    /// bolting on an exception.
+    /// Revit's one requirement is that a reference's plane not lie parallel to the dimension line —
+    /// the normal must run ALONG the string. Which of a wall's faces satisfy that depends on how
+    /// the wall sits relative to the string, and the two cases are exact opposites:
+    ///
+    ///   • wall PARALLEL to the string — its END faces face along the wall, hence along the
+    ///     string. Its side faces face across it, which is precisely why a parallel wall is
+    ///     invisible to the automatic pass and why this tool exists.
+    ///   • wall PERPENDICULAR to the string — its SIDE faces face across the wall, hence along
+    ///     the string. Now the end faces are the unusable ones.
+    ///
+    /// So the test is on each face's own normal against the STRING, never against the wall.
+    /// Testing against the wall found end faces and nothing else: a perpendicular wall was
+    /// skipped in silence and the search fell through to whatever else lay within a foot, so the
+    /// mark landed on a neighbouring wall's end rather than the face pointed at.
     ///
     /// Resolved view-independently so one answer serves every fanned-out view.
     /// </summary>
@@ -37,18 +46,22 @@ namespace RVTuk.Revit.AutoDimensions
         private const double VerticalTolerance = 0.001;
 
         /// <summary>
-        /// Feet. How far along the wall a face may sit from the end we were pointed at. A join
-        /// extends a wall's geometry past its location-curve end by the thickness of the wall it
-        /// meets, so this cannot be zero.
+        /// Feet. How far from the point pointed at, measured along the string, a face may sit.
+        /// Cannot be zero: a join extends a wall's geometry past its location-curve end by the
+        /// thickness of the wall it meets, and a face corner sits half a thickness off the
+        /// location curve. It is what keeps a parallel wall's far end, and the jambs of any door
+        /// in it, from standing in for the end that was pointed at.
         /// </summary>
-        private const double EndFaceOffsetTolerance = 1.0;
+        private const double FaceOffsetTolerance = 1.0;
+
+        private const double MinimumLength = 1e-12;
 
         /// <summary>
-        /// Null when there is no wall end within tolerance of the target point, when every wall
-        /// end within tolerance runs too far off parallel to the string for its end face to be
-        /// measurable, or when none of their end faces can be resolved — a wall joined into
-        /// another at that end has its end face clipped or consumed by Revit, and there may be no
-        /// planar face there at all. Tries every candidate end, nearest first, rather than
+        /// Null when there is no wall end within tolerance of the target point, or when none of
+        /// the walls that own those ends offers a face whose normal runs along the string — a
+        /// wall joined into another at that end has its end face clipped or consumed by Revit and
+        /// may have no planar face there at all, and a wall lying at a diagonal to the string has
+        /// no usable face in either family. Tries every candidate end, nearest first, rather than
         /// betting everything on the single nearest one.
         /// </summary>
         public static Reference? TryResolve(
@@ -57,19 +70,24 @@ namespace RVTuk.Revit.AutoDimensions
             XyPoint stringStart,
             XyPoint stringEnd)
         {
+            var stringX = stringEnd.X - stringStart.X;
+            var stringY = stringEnd.Y - stringStart.Y;
+            var stringLength = Math.Sqrt(stringX * stringX + stringY * stringY);
+            if (stringLength < MinimumLength) return null;
+
+            var stringDirection = new XyPoint(stringX / stringLength, stringY / stringLength);
+
+            // No cheap pre-gate on the wall's own orientation. The old one tested the location
+            // curve with ReferenceNormal.AlongSegment, which is the parallel case only and threw
+            // away every perpendicular wall before its geometry was ever read. The face normal
+            // below is the real requirement, so it is the only test.
             foreach (var wallEnd in WallEndsNear(candidates, targetEnd))
             {
-                // An end face faces along its wall, so this is the AlongSegment case — the same
-                // test an opening's jambs pass, and for the same geometric reason.
-                if (!ReferenceAlignment.CanDimension(
-                        stringStart, stringEnd, candidates.Occluders[wallEnd.Index],
-                        ReferenceNormal.AlongSegment))
-                    continue;
-
                 var candidate = candidates.OccluderItems[wallEnd.Index];
                 if (candidate.Wall == null) continue;
 
-                var reference = TryEndFace(candidate.Wall, wallEnd.Point, candidate.Link);
+                var reference = TryFaceAlongString(
+                    candidate.Wall, wallEnd.Point, stringDirection, candidate.Link);
                 if (reference != null) return reference;
             }
 
@@ -80,10 +98,10 @@ namespace RVTuk.Revit.AutoDimensions
         /// Every collected wall end within <see cref="WallEndTolerance"/> of the target point,
         /// nearest first.
         ///
-        /// All of them, not just the nearest: a parallel wall's end is usually at a corner, and
-        /// joined walls' location curves meet at the same point — so the nearest end is as likely
-        /// to belong to the perpendicular wall, whose end face no string running along it can
-        /// measure. Returning one candidate made that a coin flip.
+        /// All of them, not just the nearest: the end a ref line points at is usually a corner,
+        /// where joined walls' location curves meet at the same point, so the nearest end is as
+        /// likely to belong to the neighbour as to the wall meant. Returning one candidate made
+        /// that a coin flip.
         /// </summary>
         private static IReadOnlyList<WallEnd> WallEndsNear(
             DimensionCandidateSet candidates, XyPoint target)
@@ -113,22 +131,21 @@ namespace RVTuk.Revit.AutoDimensions
         }
 
         /// <summary>
-        /// The wall's end face nearest the target point: a vertical planar face whose normal runs
-        /// along the wall (its ends) rather than across it (its sides).
+        /// The wall's vertical planar face whose normal runs along the string and whose plane sits
+        /// nearest the point pointed at, measured along that same string.
         ///
         /// ComputeReferences is required or the face's Reference comes back null, and the options
         /// carry no View on purpose — a view-specific resolution would have to be redone for every
         /// fanned-out view, and could differ between them.
         /// </summary>
-        private static Reference? TryEndFace(Wall wall, XyPoint target, RevitLinkInstance? link)
+        private static Reference? TryFaceAlongString(
+            Wall wall, XyPoint target, XyPoint stringDirection, RevitLinkInstance? link)
         {
             try
             {
-                if ((wall.Location as LocationCurve)?.Curve is not Line centerline) return null;
-
-                var localTarget = ToLocal(target, link);
-                var direction = centerline.Direction;
-                var wallAngle = Math.Atan2(direction.Y, direction.X);
+                var localTarget = ToLocalPoint(target, link);
+                var localDirection = ToLocalDirection(stringDirection, link);
+                var stringAngle = Math.Atan2(localDirection.Y, localDirection.X);
 
                 var options = new Options
                 {
@@ -150,26 +167,28 @@ namespace RVTuk.Revit.AutoDimensions
                         if (planar.Reference == null) continue;
 
                         // Vertical check FIRST: a top or bottom face has no horizontal normal, and
-                        // Atan2(0, 0) is 0, which would read as perfectly parallel to the wall.
+                        // Atan2(0, 0) is 0, which would read as perfectly aligned with anything.
                         var normal = planar.FaceNormal;
                         if (Math.Abs(normal.Z) > VerticalTolerance) continue;
 
+                        // Against the STRING, not the wall — see the class summary. This one test
+                        // picks end faces on a parallel wall and side faces on a perpendicular
+                        // one, with neither being a special case, and rejects a wall lying at a
+                        // diagonal, which has no face a string can honestly measure.
                         var normalAngle = Math.Atan2(normal.Y, normal.X);
-                        if (Angle2D.FromParallelDegrees(wallAngle, normalAngle) > NormalToleranceDegrees)
+                        if (Angle2D.FromParallelDegrees(stringAngle, normalAngle) > NormalToleranceDegrees)
                             continue;
 
-                        // How far the face's plane sits from the wall end we were pointed at,
-                        // measured ALONG the wall. The far end lands a whole wall length away and
-                        // a door's jamb lands at the door — both are vertical faces whose normal
-                        // runs along the wall, so they qualify exactly as well as the end we want.
-                        // Without this bound the search silently returns one of them instead of
-                        // reporting that it found nothing.
+                        // Distance along the string — the axis the dimension actually measures on.
+                        // It is what tells a perpendicular wall's two side faces apart (they lie
+                        // one wall thickness apart on this axis) and what keeps a parallel wall's
+                        // far end and its doors' jambs from standing in for the end pointed at.
                         var origin = planar.Origin;
                         var distance = Math.Abs(
-                            (origin.X - localTarget.X) * direction.X
-                            + (origin.Y - localTarget.Y) * direction.Y);
+                            (origin.X - localTarget.X) * localDirection.X
+                            + (origin.Y - localTarget.Y) * localDirection.Y);
 
-                        if (distance > EndFaceOffsetTolerance) continue;
+                        if (distance > FaceOffsetTolerance) continue;
                         if (distance >= bestDistance) continue;
 
                         best = planar.Reference;
@@ -193,7 +212,7 @@ namespace RVTuk.Revit.AutoDimensions
         /// The target point in the wall's own document. Occluder segments are in host
         /// coordinates, but a linked wall's geometry is in the link's.
         /// </summary>
-        private static XyPoint ToLocal(XyPoint host, RevitLinkInstance? link)
+        private static XyPoint ToLocalPoint(XyPoint host, RevitLinkInstance? link)
         {
             if (link == null) return host;
 
@@ -201,6 +220,25 @@ namespace RVTuk.Revit.AutoDimensions
             {
                 var point = link.GetTotalTransform().Inverse.OfPoint(new XYZ(host.X, host.Y, 0));
                 return new XyPoint(point.X, point.Y);
+            }
+            catch
+            {
+                return host;
+            }
+        }
+
+        /// <summary>
+        /// The string's direction in the wall's own document. A direction, so OfVector rather than
+        /// OfPoint — it rotates with the link but must not be translated by it.
+        /// </summary>
+        private static XyPoint ToLocalDirection(XyPoint host, RevitLinkInstance? link)
+        {
+            if (link == null) return host;
+
+            try
+            {
+                var vector = link.GetTotalTransform().Inverse.OfVector(new XYZ(host.X, host.Y, 0));
+                return new XyPoint(vector.X, vector.Y);
             }
             catch
             {
