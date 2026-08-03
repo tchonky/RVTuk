@@ -97,4 +97,27 @@ public class RefLineMatcherTests
         Assert.Null(RefLineMatcher.Match(
             new XyPoint(5, 3), new XyPoint(5, 3), TwoStrings, Tolerance));
     }
+
+    [Fact]
+    public void ALineStoppingJustShortOfAStringStillTouchesIt()
+    {
+        // Ends 0.002 above the inner string, inside the 0.01 tolerance. This is the case the
+        // slack exists for: a line drawn by eye rather than snapped lands near, not on.
+        var match = RefLineMatcher.Match(
+            new XyPoint(5, 6), new XyPoint(5, 3.002), TwoStrings, Tolerance);
+
+        Assert.NotNull(match);
+        Assert.Equal(new[] { 1 }, match!.Hits.Select(h => h.LineIndex));
+        Assert.Equal(0.5, match.Hits[0].T, 6);
+        Assert.Equal(new XyPoint(5, 6), match.TargetEnd);
+    }
+
+    [Fact]
+    public void ALineStoppingWellShortOfAStringDoesNotTouchIt()
+    {
+        // Ends 0.05 above the inner string, outside the 0.01 tolerance — the other side of the
+        // same boundary, so the two tests together pin the slack down rather than just widening it.
+        Assert.Null(RefLineMatcher.Match(
+            new XyPoint(5, 6), new XyPoint(5, 3.05), TwoStrings, Tolerance));
+    }
 }
