@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using Autodesk.Revit.UI;
 using RVTuk.Core.AutoDimensions;
+using RVTuk.Revit.Shared;
 
 namespace RVTuk.Revit.AutoDimensions.ExternalEvents
 {
@@ -29,6 +30,11 @@ namespace RVTuk.Revit.AutoDimensions.ExternalEvents
             {
                 var doc = app.ActiveUIDocument?.Document;
                 if (doc == null) { Result = Empty; return; }
+
+                // First run in this project creates the styles. Without this you could not draw
+                // a reference line before pressing Create Dimensions once, which necessarily did
+                // nothing — there was no style to have drawn on.
+                LineStyleCreator.TryEnsureInOwnTransaction(doc, DimensionLineStyle.AllStyleNames);
 
                 Result = new AutoDimensionsScope(
                     LevelScopeFinder.Find(doc),

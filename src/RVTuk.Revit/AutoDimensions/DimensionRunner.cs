@@ -33,6 +33,9 @@ namespace RVTuk.Revit.AutoDimensions
             ExcludedNotCut > 0 || ExcludedNoReferences > 0 || CoincidentMerged > 0;
     }
 
+    /// <summary>One reference line, with the ring its line style puts it in.</summary>
+    public sealed record RingLine(DetailLine Line, DimensionRing Ring);
+
     /// <summary>
     /// The per-reference-line pipeline, shared by the single-view ribbon command and the scope
     /// pane's fan-out so the two entry points can't drift: delete the stale dimension, find the
@@ -43,18 +46,26 @@ namespace RVTuk.Revit.AutoDimensions
     public static class DimensionRunner
     {
         /// <summary>
-        /// Reference lines owned by a view. Document-wide collector filtered by OwnerViewId, not a
-        /// view-scoped collector: a view-scoped collector only returns elements currently visible,
-        /// and lines hidden by the view template must still produce dimensions.
+        /// Reference lines owned by a view, each tagged with its ring. Document-wide collector
+        /// filtered by OwnerViewId, not a view-scoped collector: a view-scoped collector only
+        /// returns elements currently visible, and lines hidden by the view template must still
+        /// produce dimensions.
         /// </summary>
-        public static IReadOnlyList<DetailLine> CollectReferenceLines(Document doc, View referenceView)
+        public static IReadOnlyList<RingLine> CollectReferenceLines(Document doc, View referenceView)
         {
-            return new FilteredElementCollector(doc)
-                .OfClass(typeof(CurveElement))
-                .Cast<CurveElement>()
-                .OfType<DetailLine>()
-                .Where(l => l.OwnerViewId == referenceView.Id && DimensionLineStyle.IsDimensionsLine(l))
-                .ToList();
+            var result = new List<RingLine>();
+
+            foreach (var line in new FilteredElementCollector(doc)
+                         .OfClass(typeof(CurveElement))
+                         .Cast<CurveElement>()
+                         .OfType<DetailLine>()
+                         .Where(l => l.OwnerViewId == referenceView.Id))
+            {
+                if (DimensionLineStyle.TryGetRing(line, out var ring))
+                    result.Add(new RingLine(line, ring));
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -63,7 +74,7 @@ namespace RVTuk.Revit.AutoDimensions
         /// </summary>
         public static void RunPair(
             Document doc,
-            IReadOnlyList<DetailLine> referenceLines,
+            IReadOnlyList<RingLine> referenceLines,
             View targetView,
             DimensionCategories categories,
             DimensionType? dimensionType,
@@ -75,7 +86,7 @@ namespace RVTuk.Revit.AutoDimensions
             // Matching happens for all the level's lines at once, not line by line: an opening
             // belongs to the nearest line that qualifies, which can only be known by comparing
             // them. A facade with three stacked strings dimensions each door once, innermost.
-            var geometry = referenceLines.Select(l => l.GeometryCurve as Line).ToList();
+            var geometry = referenceLines.Select(l => l.Line.GeometryCurve as Line).ToList();
 
             var straightIndices = new List<int>();
             var lines = new List<ReferenceLine>();
@@ -86,7 +97,8 @@ namespace RVTuk.Revit.AutoDimensions
                 straightIndices.Add(i);
                 lines.Add(new ReferenceLine(
                     ToXyPoint(geometry[i]!.GetEndPoint(0)),
-                    ToXyPoint(geometry[i]!.GetEndPoint(1))));
+                    ToXyPoint(geometry[i]!.GetEndPoint(1)),
+                    referenceLines[i].Ring));
             }
 
             var matches = CandidateMatcher.FindMatchIndicesForLines(
@@ -101,7 +113,7 @@ namespace RVTuk.Revit.AutoDimensions
             {
                 try
                 {
-                    RunLine(doc, referenceLines[i], geometry[i], targetView, candidates,
+                    RunLine(doc, referenceLines[i].Line, geometry[i], targetView, candidates,
                         byLine[i] ?? Array.Empty<int>(), dimensionType, tally);
                 }
                 catch
