@@ -9,7 +9,8 @@ namespace RVTuk.Revit.AutoDimensions
     /// Discovers, per level, which of its plan views can act as the reference view (owns at least
     /// one _DP-Dim Outer or _DP-Dim Inner detail line) and which views can receive the fanned-out
     /// dimensions. A view holding only ref lines is not a reference view: ref lines with no
-    /// string to join produce nothing.
+    /// string to join produce nothing. Views with no level — 3D, sections, drafting views,
+    /// schedules, sheets — are never candidates for either role.
     /// </summary>
     public static class LevelScopeFinder
     {

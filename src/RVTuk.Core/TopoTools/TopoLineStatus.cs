@@ -6,7 +6,7 @@ namespace RVTuk.Core.TopoTools
         /// <summary>Has an elevation, and its points land on a toposolid.</summary>
         Ready,
 
-        /// <summary>On the Topo_Line style but its TOPO_Elevation was never filled in.</summary>
+        /// <summary>On the _DP-Topo Line style but its TOPO_Elevation was never filled in.</summary>
         NoElevation,
 
         /// <summary>Has an elevation, but no sampled point falls inside any toposolid's footprint.</summary>

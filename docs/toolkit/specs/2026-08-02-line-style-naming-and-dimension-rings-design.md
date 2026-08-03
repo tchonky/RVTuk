@@ -1,6 +1,6 @@
 # Design: line style naming, first-run creation, dimension rings, and reference lines
 
-**Status:** approved design — not yet implemented.
+**Status:** implemented — see [the plan](../plans/2026-08-03-line-styles-rings-and-ref-lines.md). In-Revit verification pass outstanding.
 
 Two tools drive their work off a dedicated line subcategory the user draws detail lines
 on: Auto Dimensions (`Dimensions_Line`) and Topo Tools (`Topo_Line`). This design renames

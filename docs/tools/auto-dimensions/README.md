@@ -1,9 +1,9 @@
 # Auto Dimensions
 
-**What it is:** draw a detail line on the dedicated "Dimensions_Line" style as a
-positional reference; the tool dimensions every wall, door and window crossing it — in the
-host model **and in loaded Revit links** — re-runnable after model changes without
-re-picking references. The single entry point is a dockable pane: tick the reference
+**What it is:** draw a detail line on one of the two dedicated string styles, "_DP-Dim Outer"
+or "_DP-Dim Inner", as a positional reference; the tool dimensions every wall, door and window
+crossing it — in the host model **and in loaded Revit links** — re-runnable after model
+changes without re-picking references. The single entry point is a dockable pane: tick the reference
 categories, and per level tick which views receive the dimensions (a single-view run is
 just that one view ticked). Levels collapse; their views are listed alphabetically. The pane also
 picks the **dimension type** every created dimension is given — the only way to reach Revit's
@@ -47,12 +47,32 @@ can't see or doesn't span still falls to one that does. Ties go to the earlier l
 re-running never shuffles a door between strings. **Walls are not deduplicated:** a wall
 crossed by three strings is measured by all three, which is what a chained string is.
 
+**Outer strings outrank inner ones.** Ownership of an opening is settled by ring first,
+then distance, then line order. An outer line that qualifies beats every inner line
+outright, however much closer the inner one stands — a facade window belongs on the facade
+string, not on the interior string that happens to sit nearer it. Only what no outer string
+can see falls through to the inner strings, settled among themselves the same way. Walls
+are untouched by this: a wall crossed by three strings is measured by all three, inner and
+outer alike.
+
+**A `_DP-Dim Ref` line points at what the pass cannot see.** Draw it from a wall's end to a
+string and that wall end gets a mark on that string — the case being a wall running parallel
+to the string, which the automatic pass structurally cannot measure. The line is a pointer,
+never itself a reference: detail lines are view-specific, so dimensioning one would work in
+the reference view and produce nothing in the fanned-out ones, and the mark would sit where
+the line is rather than where the wall is. The tool resolves the wall's **end face** instead,
+which is the one face on a parallel wall a string is geometrically entitled to measure — its
+side faces face across the string, its end face along it. A ref line joins **every** string it
+touches, so how far you draw it is the control. Known limit: a wall joined into another at
+that end has its end face clipped away by Revit and cannot be marked; the run summary says so.
+
 **When a crossing carries no mark,** the run summary says which of the silent causes applied:
 not cut by the view, no usable reference (curtain and stacked walls report no side faces), or
 references merged for sharing a position along the line.
 
 **Status:** registered on the RVTuk ribbon panel, gated by `RegisterAutoDimensions` in
-`src/RVTuk.Revit/Application.cs` (on). In-Revit verification pass still outstanding.
+`src/RVTuk.Revit/Application.cs` (on). All three line styles are created on the pane's first
+refresh — there is no setup step. In-Revit verification pass still outstanding.
 
 **Names:** code `AutoDimensions`; ribbon button "Auto Dimensions". Supersedes the old
 separate `KKimensions` / DimensionPropagator project.

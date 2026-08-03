@@ -13,7 +13,7 @@ namespace RVTuk.Revit.TopoTools
         double LengthFeet);
 
     /// <summary>
-    /// Reads the view's topo lines. Detail curves only: a model line given the Topo_Line style
+    /// Reads the view's topo lines. Detail curves only: a model line given the _DP-Topo Line style
     /// would appear in every plan at once, which is exactly the confusion view-specific lines were
     /// chosen to avoid, so it is ignored rather than half-supported.
     ///

@@ -22,6 +22,9 @@ Deploy with `.\Deploy.ps1 2024` from an elevated shell, Revit closed.
       Heights moved to Extensible Storage edited in the pane (`TopoElevationStore`), and the
       parameter binder is gone. **Re-check:** *Set up this project* creates the `Topo_Line` style
       (Manage → Object Styles → Lines) and the banner then disappears.
+- [x] **Setup button removed; the style creates itself.** `_DP-Topo Line` is made on the pane's
+      first refresh. The helper only opens a transaction when the style is actually missing, so
+      later refreshes stay read-only and don't mark the document modified. (2026-08-03)
 - [x] **Setting a height** — type into a row's height box; the status line confirms it, and the row
       changes from *no height set* to a point count. Clearing the box un-sets it. Check that a value
       typed the way this office writes survey elevations is accepted by `UnitFormatUtils.TryParse`.

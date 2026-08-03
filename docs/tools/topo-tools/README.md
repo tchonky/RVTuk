@@ -1,6 +1,6 @@
 # Topo Tools
 
-**What it is:** draw detail lines on the dedicated "Topo_Line" style in a plan view, give each a
+**What it is:** draw detail lines on the dedicated "_DP-Topo Line" style in a plan view, give each a
 height (a shared/survey elevation) in the tool's pane, and the tool puts points at that height along
 each line on the toposolids beneath them. Re-runnable: move a line, change its height or delete it,
 run again, and the result is what you would have got by drawing it that way to begin with.
@@ -30,7 +30,7 @@ model.
 other view and out of 3D. A detail curve's geometry comes back on the view's sketch plane, so
 dropping Z only recovers the drawn shape where that plane is horizontal — in a section the same
 projection would collapse the line to a streak, and the pane refuses. A *model* line given the
-Topo_Line style is ignored rather than half-supported: it would appear in every plan at once, which
+_DP-Topo Line style is ignored rather than half-supported: it would appear in every plan at once, which
 is the confusion view-specific lines were chosen to avoid.
 
 **A point has no identity.** There is no `Toposolid.AddPoints`; points go through
@@ -49,6 +49,10 @@ only those producing points — otherwise clearing a line's height would leave t
 And it looks *across every toposolid holding that line's points*, not only the ones receiving points
 now — otherwise dragging a line onto its neighbour leaves a copy behind on the first.
 
+The `_DP-Topo Line` style is created on the pane's first refresh — there is no setup step
+and no setup button. You cannot draw a line on a style that does not exist, so waiting for
+an explicit action was the wrong shape.
+
 **Status:** registered on the RVTuk panel on the Add-Ins tab, gated by `RegisterTopoTools` in
 `src/RVTuk.Revit/Application.cs` (on). It was intended for the Massing & Site tab — impossible, and
 verified so in Revit 2024: the API places custom panels only on Add-Ins, on Analyze, or on a tab the
@@ -57,7 +61,7 @@ ships it. **In-Revit verification of the run itself is still outstanding** (see
 [backlog.md](backlog.md)); so far only setup and ribbon placement have been exercised, and both
 found design faults.
 
-**Names:** code `TopoTools`; ribbon button "Topo Tools"; line style `Topo_Line`. There is no shared
+**Names:** code `TopoTools`; ribbon button "Topo Tools"; line style `_DP-Topo Line`. There is no shared
 parameter — see above.
 
 ## Code

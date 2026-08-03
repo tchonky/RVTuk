@@ -36,6 +36,15 @@ Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
 
 - [x] Registered on the RVTuk ribbon panel (`RegisterAutoDimensions` in
   `src/RVTuk.Revit/Application.cs`, on).
+- [x] **Outer/inner rings.** `_DP-Dim Outer` and `_DP-Dim Inner` replace `Dimensions_Line`.
+  Ownership of an opening is settled by (ring, distance, line order), so a facade window
+  lands on the facade string rather than on a nearer interior one. (2026-08-03)
+- [x] **`_DP-Dim Ref` lines.** Draw from a wall end to a string to mark that wall end on it.
+  Resolves the wall's end face, not the detail line, so it survives the fan-out and follows
+  the wall. Wall ends only for now; joined ends can't be marked and are reported. (2026-08-03)
+- [x] **Styles create themselves on the pane's first refresh.** Previously the style was created
+  only by a Create Dimensions run, so the first press necessarily did nothing — there had
+  been no style to draw a reference line on. (2026-08-03)
 - [ ] **In-Revit verification pass still outstanding.** The 10 checks are in
   [plans/2026-07-26-auto-dimensions-scope-pane.md](plans/2026-07-26-auto-dimensions-scope-pane.md)
   (Task 12, Step 7). The one with no test behind it is fanning out to a *second* view of the

@@ -1,5 +1,4 @@
 using Autodesk.Revit.DB;
-using RVTuk.Revit.Shared;
 
 namespace RVTuk.Revit.TopoTools
 {
@@ -11,12 +10,6 @@ namespace RVTuk.Revit.TopoTools
     public static class TopoLineStyle
     {
         public const string LineStyleName = "_DP-Topo Line";
-
-        public static bool Exists(Document doc) => LineStyleCreator.Exists(doc, LineStyleName);
-
-        /// <summary>Must be called inside an open transaction.</summary>
-        public static void EnsureExists(Document doc) =>
-            LineStyleCreator.EnsureExists(doc, LineStyleName);
 
         public static bool IsTopoLine(CurveElement curveElement)
         {
