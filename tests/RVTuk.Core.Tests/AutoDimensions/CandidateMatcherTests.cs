@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using RVTuk.Core.AutoDimensions;
 using RVTuk.Core.Shared.Geometry;
 using Xunit;
@@ -338,5 +339,118 @@ public class CandidateMatcherTests
 
         Assert.Empty(CandidateMatcher.FindMatchIndicesForLines(
             new ReferenceLine[0], segments, modes, NoOccluders));
+    }
+
+    [Fact]
+    public void AnOpeningVisibleToBothRingsGoesToTheOuterLine()
+    {
+        // A facade window at y=10. The inner string stands 2 away and the outer 10 away, and
+        // the outer takes it anyway — that is the whole point of the ring. The inner line is
+        // listed first so this cannot pass merely by preferring the earlier line.
+        var segments = new List<WallCandidate> { new(new XyPoint(4, 10), new XyPoint(5, 10)) };
+        var modes = new[] { CandidateMatch.Alongside };
+        var lines = new[]
+        {
+            new ReferenceLine(new XyPoint(0, 8), new XyPoint(10, 8), DimensionRing.Inner),
+            new ReferenceLine(new XyPoint(0, 0), new XyPoint(10, 0), DimensionRing.Outer),
+        };
+
+        var result = CandidateMatcher.FindMatchIndicesForLines(lines, segments, modes, NoOccluders);
+
+        Assert.Empty(result[0]);
+        Assert.Equal(new[] { 0 }, result[1]);
+    }
+
+    [Fact]
+    public void AnOpeningWalledOffFromEveryOuterLineFallsToTheInner()
+    {
+        // The wall at y=5 stands between the opening and the outer string, but not between it
+        // and the inner one — so the outer cannot claim it and the inner does.
+        var segments = new List<WallCandidate> { new(new XyPoint(4, 10), new XyPoint(5, 10)) };
+        var modes = new[] { CandidateMatch.Alongside };
+        var occluders = new List<WallCandidate> { new(new XyPoint(0, 5), new XyPoint(10, 5)) };
+        var lines = new[]
+        {
+            new ReferenceLine(new XyPoint(0, 0), new XyPoint(10, 0), DimensionRing.Outer),
+            new ReferenceLine(new XyPoint(0, 8), new XyPoint(10, 8), DimensionRing.Inner),
+        };
+
+        var result = CandidateMatcher.FindMatchIndicesForLines(lines, segments, modes, occluders);
+
+        Assert.Empty(result[0]);
+        Assert.Equal(new[] { 0 }, result[1]);
+    }
+
+    [Fact]
+    public void NearestStillWinsWithinARing()
+    {
+        var segments = new List<WallCandidate> { new(new XyPoint(4, 10), new XyPoint(5, 10)) };
+        var modes = new[] { CandidateMatch.Alongside };
+        var lines = new[]
+        {
+            new ReferenceLine(new XyPoint(0, 0), new XyPoint(10, 0), DimensionRing.Outer),
+            new ReferenceLine(new XyPoint(0, 6), new XyPoint(10, 6), DimensionRing.Outer),
+        };
+
+        var result = CandidateMatcher.FindMatchIndicesForLines(lines, segments, modes, NoOccluders);
+
+        Assert.Empty(result[0]);
+        Assert.Equal(new[] { 0 }, result[1]);
+    }
+
+    [Fact]
+    public void ATieWithinARingKeepsTheEarlierLine()
+    {
+        // Equidistant on either side, so re-running must not shuffle the opening between them.
+        var segments = new List<WallCandidate> { new(new XyPoint(4, 0), new XyPoint(5, 0)) };
+        var modes = new[] { CandidateMatch.Alongside };
+        var lines = new[]
+        {
+            new ReferenceLine(new XyPoint(0, -3), new XyPoint(10, -3), DimensionRing.Outer),
+            new ReferenceLine(new XyPoint(0, 3), new XyPoint(10, 3), DimensionRing.Outer),
+        };
+
+        var result = CandidateMatcher.FindMatchIndicesForLines(lines, segments, modes, NoOccluders);
+
+        Assert.Equal(new[] { 0 }, result[0]);
+        Assert.Empty(result[1]);
+    }
+
+    [Fact]
+    public void AWallCrossedByBothRingsIsMeasuredByBoth()
+    {
+        // Only openings are owned. A wall crossed by two strings is measured by both, which is
+        // what a chained string is — the ring must not change that.
+        var segments = new List<WallCandidate> { new(new XyPoint(5, -20), new XyPoint(5, 20)) };
+        var modes = new[] { CandidateMatch.Crossing };
+        var lines = new[]
+        {
+            new ReferenceLine(new XyPoint(0, 0), new XyPoint(10, 0), DimensionRing.Outer),
+            new ReferenceLine(new XyPoint(0, 8), new XyPoint(10, 8), DimensionRing.Inner),
+        };
+
+        var result = CandidateMatcher.FindMatchIndicesForLines(lines, segments, modes, NoOccluders);
+
+        Assert.Equal(new[] { 0 }, result[0]);
+        Assert.Equal(new[] { 0 }, result[1]);
+    }
+
+    [Fact]
+    public void FindMatchesForLinesReportsTheStationAlongTheLine()
+    {
+        // The runner needs T to slot ref-line marks into the right place in the string.
+        var segments = new List<WallCandidate>
+        {
+            new(new XyPoint(8, -5), new XyPoint(8, 5)),
+            new(new XyPoint(2, -5), new XyPoint(2, 5)),
+        };
+        var modes = new[] { CandidateMatch.Crossing, CandidateMatch.Crossing };
+        var lines = new[] { new ReferenceLine(LineStart, LineEnd) };
+
+        var result = CandidateMatcher.FindMatchesForLines(lines, segments, modes, NoOccluders);
+
+        Assert.Equal(new[] { 1, 0 }, result[0].Select(m => m.Index));
+        Assert.Equal(0.2, result[0][0].T, 6);
+        Assert.Equal(0.8, result[0][1].T, 6);
     }
 }

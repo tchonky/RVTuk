@@ -18,8 +18,16 @@ namespace RVTuk.Core.AutoDimensions
         Alongside,
     }
 
-    /// <summary>One reference line, as plain 2D endpoints.</summary>
-    public record ReferenceLine(XyPoint Start, XyPoint End);
+    /// <summary>
+    /// One reference line, as plain 2D endpoints, plus the ring its style puts it in. The ring
+    /// defaults to Outer so the single-line <see cref="CandidateMatcher.FindMatchIndices"/>
+    /// wrapper stays meaningful — one line's ring cannot matter.
+    /// </summary>
+    public record ReferenceLine(XyPoint Start, XyPoint End,
+                                DimensionRing Ring = DimensionRing.Outer);
+
+    /// <summary>One matched candidate: its index, and where along the line it sits.</summary>
+    public readonly record struct CandidateMatchResult(int Index, double T);
 
     /// <summary>
     /// Which candidates a reference line dimensions, in order along it.
@@ -65,8 +73,15 @@ namespace RVTuk.Core.AutoDimensions
 
         /// <summary>
         /// Matches for every reference line at once. Walls go to each line that crosses them; an
-        /// opening goes to the single nearest line that qualifies, so a facade with three stacked
-        /// dimension strings dimensions each door once, from the innermost.
+        /// opening goes to the single line that owns it, so a facade with three stacked
+        /// dimension strings dimensions each door once.
+        ///
+        /// Ownership is settled by (ring, then distance, then line order). An OUTER line that
+        /// qualifies beats every inner line outright, however much closer the inner one stands:
+        /// a facade window belongs on the facade string, not on the interior string that happens
+        /// to sit nearer it. Only what no outer line can see falls through to the inner lines,
+        /// settled among themselves the same way. Within a ring the nearest wins, and a tie keeps
+        /// the earlier line so re-running never shuffles an opening between strings.
         ///
         /// Only openings are owned. A wall crossed by three strings is measured by all three —
         /// that is what a chained string is.
@@ -79,14 +94,14 @@ namespace RVTuk.Core.AutoDimensions
         /// the same list as the walls being dimensioned — a wall still blocks when the user has
         /// unticked Walls.
         /// </summary>
-        public static IReadOnlyList<IReadOnlyList<int>> FindMatchIndicesForLines(
+        public static IReadOnlyList<IReadOnlyList<CandidateMatchResult>> FindMatchesForLines(
             IReadOnlyList<ReferenceLine> lines,
             IReadOnlyList<WallCandidate> segments,
             IReadOnlyList<CandidateMatch> matchModes,
             IReadOnlyList<WallCandidate> occluders)
         {
-            var perLine = new List<List<(int Index, double T)>>();
-            for (int i = 0; i < lines.Count; i++) perLine.Add(new List<(int, double)>());
+            var perLine = new List<List<CandidateMatchResult>>();
+            for (int i = 0; i < lines.Count; i++) perLine.Add(new List<CandidateMatchResult>());
 
             for (int c = 0; c < segments.Count; c++)
             {
@@ -98,13 +113,14 @@ namespace RVTuk.Core.AutoDimensions
                     {
                         if (WallCrossingFinder.TryGetCrossingParameter(
                                 lines[l].Start, lines[l].End, segments[c], out var t))
-                            perLine[l].Add((c, t));
+                            perLine[l].Add(new CandidateMatchResult(c, t));
                     }
                     continue;
                 }
 
                 var owner = -1;
                 var ownerT = 0.0;
+                var ownerRing = DimensionRing.Outer;
                 var ownerDistance = double.MaxValue;
                 for (int l = 0; l < lines.Count; l++)
                 {
@@ -112,21 +128,44 @@ namespace RVTuk.Core.AutoDimensions
                             out var t, out var offset)) continue;
                     if (IsBlocked(lines[l].Start, lines[l].End, occluders, t, offset)) continue;
 
-                    // Strict: a tie keeps the earlier line, so a door exactly between two
-                    // strings lands the same way on every re-run rather than shuffling.
+                    var ring = lines[l].Ring;
                     var distance = Math.Abs(offset);
-                    if (distance >= ownerDistance) continue;
+
+                    // Ring first, then distance. Both strict, so a tie on both keeps the earlier
+                    // line. The seeded ownerRing is never read — the guard skips the comparison
+                    // until there is an owner to compare against.
+                    if (owner >= 0)
+                    {
+                        if (ring > ownerRing) continue;
+                        if (ring == ownerRing && distance >= ownerDistance) continue;
+                    }
 
                     owner = l;
                     ownerT = t;
+                    ownerRing = ring;
                     ownerDistance = distance;
                 }
 
-                if (owner >= 0) perLine[owner].Add((c, ownerT));
+                if (owner >= 0) perLine[owner].Add(new CandidateMatchResult(c, ownerT));
             }
 
             return perLine
-                .Select(m => (IReadOnlyList<int>)m.OrderBy(x => x.T).Select(x => x.Index).ToList())
+                .Select(m => (IReadOnlyList<CandidateMatchResult>)m.OrderBy(x => x.T).ToList())
+                .ToList();
+        }
+
+        /// <summary>
+        /// The indices alone, in order along each line. A thin wrapper over
+        /// <see cref="FindMatchesForLines"/> for callers that do not need the station.
+        /// </summary>
+        public static IReadOnlyList<IReadOnlyList<int>> FindMatchIndicesForLines(
+            IReadOnlyList<ReferenceLine> lines,
+            IReadOnlyList<WallCandidate> segments,
+            IReadOnlyList<CandidateMatch> matchModes,
+            IReadOnlyList<WallCandidate> occluders)
+        {
+            return FindMatchesForLines(lines, segments, matchModes, occluders)
+                .Select(m => (IReadOnlyList<int>)m.Select(x => x.Index).ToList())
                 .ToList();
         }
 
