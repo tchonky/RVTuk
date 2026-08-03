@@ -58,8 +58,6 @@ namespace RVTuk.Revit
         public static CreateDimensionsEventHandler CreateDimensionsHandler { get; private set; } = null!;
         public static ExternalEvent CreateDimensionsEvent { get; private set; } = null!;
         public static RVTuk.UI.AutoDimensions.ViewModels.AutoDimensionsPaneViewModel AutoDimensionsPaneViewModel { get; private set; } = null!;
-        public static TopoSetupEventHandler TopoSetupHandler { get; private set; } = null!;
-        public static ExternalEvent TopoSetupEvent { get; private set; } = null!;
         public static TopoDiscoveryEventHandler TopoDiscoveryHandler { get; private set; } = null!;
         public static ExternalEvent TopoDiscoveryEvent { get; private set; } = null!;
         public static TopoApplyEventHandler TopoApplyHandler { get; private set; } = null!;
@@ -192,8 +190,6 @@ namespace RVTuk.Revit
 
             if (RegisterTopoTools)
             {
-                TopoSetupHandler     = new TopoSetupEventHandler();
-                TopoSetupEvent       = ExternalEvent.Create(TopoSetupHandler);
                 TopoDiscoveryHandler = new TopoDiscoveryEventHandler();
                 TopoDiscoveryEvent   = ExternalEvent.Create(TopoDiscoveryHandler);
                 TopoApplyHandler     = new TopoApplyEventHandler();
@@ -223,14 +219,6 @@ namespace RVTuk.Revit
                     return TopoApplyHandler.Summary;
                 };
 
-                Func<string> setUpTopoProject = () =>
-                {
-                    TopoSetupHandler.Reset();
-                    TopoSetupEvent.Raise();
-                    TopoSetupHandler.WaitForCompletion();
-                    return TopoSetupHandler.Summary;
-                };
-
                 Func<IReadOnlyList<long>, string, string> setTopoElevation = (lineIds, text) =>
                 {
                     TopoSetElevationHandler.Reset();
@@ -250,7 +238,7 @@ namespace RVTuk.Revit
 
                 TopoToolsPaneViewModel =
                     new RVTuk.UI.TopoTools.ViewModels.TopoToolsPaneViewModel(
-                        discoverTopo, applyTopo, setUpTopoProject, setTopoElevation, selectTopoLines);
+                        discoverTopo, applyTopo, setTopoElevation, selectTopoLines);
 
                 // Selecting a topo line in the view highlights its row. Not a nicety: the height
                 // lives in storage rather than Properties, so a row labelled "Line 418732" would

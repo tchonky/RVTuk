@@ -22,7 +22,6 @@ namespace RVTuk.UI.TopoTools.ViewModels
 
         private readonly Func<double, TopoScope> _discover;
         private readonly Func<double, string> _apply;
-        private readonly Func<string> _setUpProject;
         private readonly Func<IReadOnlyList<long>, string, string> _setElevation;
         private readonly Action<IReadOnlyList<long>> _selectInView;
         private readonly Dispatcher _dispatcher;
@@ -30,21 +29,18 @@ namespace RVTuk.UI.TopoTools.ViewModels
         public TopoToolsPaneViewModel(
             Func<double, TopoScope> discover,
             Func<double, string> apply,
-            Func<string> setUpProject,
             Func<IReadOnlyList<long>, string, string> setElevation,
             Action<IReadOnlyList<long>> selectInView)
         {
             _discover = discover;
             _apply = apply;
-            _setUpProject = setUpProject;
             _setElevation = setElevation;
             _selectInView = selectInView;
             _dispatcher = Dispatcher.CurrentDispatcher;
 
             Lines = new ObservableCollection<TopoLineRowViewModel>();
-            SetUpCommand = new RelayCommand(RunSetUp, () => !IsBusy);
             RefreshCommand = new RelayCommand(Refresh, () => !IsBusy);
-            ApplyCommand = new RelayCommand(RunApply, () => !IsBusy && IsProjectSetUp);
+            ApplyCommand = new RelayCommand(RunApply, () => !IsBusy);
 
             try
             {
@@ -61,7 +57,6 @@ namespace RVTuk.UI.TopoTools.ViewModels
         }
 
         public ObservableCollection<TopoLineRowViewModel> Lines { get; }
-        public RelayCommand SetUpCommand { get; }
         public RelayCommand RefreshCommand { get; }
         public RelayCommand ApplyCommand { get; }
 
@@ -95,20 +90,6 @@ namespace RVTuk.UI.TopoTools.ViewModels
         /// view, and its rows already say what is missing.
         /// </summary>
         public bool HasLines => Lines.Count > 0;
-
-        private bool _isProjectSetUp = true;
-        public bool IsProjectSetUp
-        {
-            get => _isProjectSetUp;
-            private set
-            {
-                SetProperty(ref _isProjectSetUp, value);
-                OnPropertyChanged(nameof(NeedsSetup));
-            }
-        }
-
-        /// <summary>The inverse, so the setup banner can bind with the built-in converter.</summary>
-        public bool NeedsSetup => !_isProjectSetUp;
 
         private string _statusMessage = "Open a plan view and press Refresh.";
         public string StatusMessage
@@ -160,7 +141,6 @@ namespace RVTuk.UI.TopoTools.ViewModels
 
         private void Populate(TopoScope scope)
         {
-            IsProjectSetUp = scope.IsProjectSetUp;
             ViewName = scope.ViewName;
 
             Lines.Clear();
@@ -270,32 +250,6 @@ namespace RVTuk.UI.TopoTools.ViewModels
                 _dispatcher.Invoke(() =>
                 {
                     StatusMessage = summary;
-                    Refresh();
-                });
-            });
-        }
-
-        private void RunSetUp()
-        {
-            IsBusy = true;
-            StatusMessage = "Setting this project up…";
-
-            Task.Run(() =>
-            {
-                string summary;
-                try
-                {
-                    summary = _setUpProject();
-                }
-                catch (Exception ex)
-                {
-                    summary = "Setup failed: " + ex.Message;
-                }
-
-                _dispatcher.Invoke(() =>
-                {
-                    StatusMessage = summary;
-                    IsBusy = false;
                     Refresh();
                 });
             });

@@ -25,9 +25,6 @@ namespace RVTuk.Revit.TopoTools
         {
             string viewName = activeView?.Name ?? "";
 
-            if (!TopoLineStyle.Exists(doc))
-                return TopoScope.NotSetUp(viewName);
-
             if (activeView is not ViewPlan plan)
                 return TopoScope.Unavailable(viewName,
                     "Topo lines are read from plan views only — open a floor or site plan.");
@@ -40,14 +37,11 @@ namespace RVTuk.Revit.TopoTools
                     line.LineId, line.ElevationText, line.LengthText, line.Points.Count, line.Status))
                 .ToList();
 
-            return new TopoScope(true, plan.Name, lines, targets.Count, Describe(lines, targets.Count));
+            return new TopoScope(plan.Name, lines, targets.Count, Describe(lines, targets.Count));
         }
 
         public static string Apply(Document doc, View? activeView, double spacingFeet)
         {
-            if (!TopoLineStyle.Exists(doc))
-                return "This project has no Topo_Line style yet.";
-
             if (activeView is not ViewPlan plan)
                 return "Topo lines are read from plan views only — open a floor or site plan.";
 
@@ -156,7 +150,7 @@ namespace RVTuk.Revit.TopoTools
             if (toposolidCount == 0)
                 return "No toposolid is visible in this view.";
             if (lines.Count == 0)
-                return "No topo lines in this view — draw detail lines on the Topo_Line style.";
+                return "No topo lines in this view — draw detail lines on the _DP-Topo Line style.";
 
             int ready = lines.Count(line => line.Status == TopoLineStatus.Ready);
             int points = lines.Sum(line => line.PointCount);

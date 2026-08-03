@@ -3,13 +3,14 @@ using System.Threading;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RVTuk.Core.TopoTools;
+using RVTuk.Revit.Shared;
 
 namespace RVTuk.Revit.TopoTools.ExternalEvents
 {
     /// <summary>
     /// Marshals one discovery pass onto Revit's main thread for the pane, which triggers it from a
-    /// background thread (raise + WaitForCompletion on the UI thread would deadlock). Read-only —
-    /// no transaction.
+    /// background thread (raise + WaitForCompletion on the UI thread would deadlock).
+    /// Read-only, apart from creating the line style on a project that has none yet.
     /// </summary>
     public class TopoDiscoveryEventHandler : IExternalEventHandler
     {
@@ -36,6 +37,10 @@ namespace RVTuk.Revit.TopoTools.ExternalEvents
 
                 double spacingFeet = UnitUtils.ConvertToInternalUnits(
                     _spacingCentimetres, UnitTypeId.Centimeters);
+
+                // First run in this project creates the style. Cheap after that: the helper only
+                // opens a transaction when the style is actually absent.
+                LineStyleCreator.TryEnsureInOwnTransaction(doc, TopoLineStyle.LineStyleName);
 
                 Result = TopoRunner.Discover(doc, uiDoc!.ActiveView, spacingFeet);
             }

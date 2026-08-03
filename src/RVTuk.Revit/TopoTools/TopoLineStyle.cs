@@ -1,27 +1,22 @@
 using Autodesk.Revit.DB;
+using RVTuk.Revit.Shared;
 
 namespace RVTuk.Revit.TopoTools
 {
     /// <summary>
-    /// The dedicated line subcategory ("Topo_Line") that marks a detail line as a topo contour —
-    /// the same arrangement Auto Dimensions uses for "Dimensions_Line". Unlike that one this is not
-    /// auto-created on first use: you cannot draw the line before the style exists, so creating it
-    /// is the pane's explicit setup action.
+    /// The dedicated line subcategory ("_DP-Topo Line") that marks a detail line as a topo
+    /// contour — the same arrangement Auto Dimensions uses for its own styles. Created on the
+    /// pane's first refresh, because you cannot draw the line before the style exists.
     /// </summary>
     public static class TopoLineStyle
     {
-        public const string LineStyleName = "Topo_Line";
+        public const string LineStyleName = "_DP-Topo Line";
 
-        public static bool Exists(Document doc) =>
-            doc.Settings.Categories.get_Item(BuiltInCategory.OST_Lines)
-                .SubCategories.Contains(LineStyleName);
+        public static bool Exists(Document doc) => LineStyleCreator.Exists(doc, LineStyleName);
 
-        public static void EnsureExists(Document doc)
-        {
-            var linesCategory = doc.Settings.Categories.get_Item(BuiltInCategory.OST_Lines);
-            if (linesCategory.SubCategories.Contains(LineStyleName)) return;
-            doc.Settings.Categories.NewSubcategory(linesCategory, LineStyleName);
-        }
+        /// <summary>Must be called inside an open transaction.</summary>
+        public static void EnsureExists(Document doc) =>
+            LineStyleCreator.EnsureExists(doc, LineStyleName);
 
         public static bool IsTopoLine(CurveElement curveElement)
         {

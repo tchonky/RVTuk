@@ -7,27 +7,10 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="/RVTuk.UI;component/Shared/Themes/DarkTheme.xaml"/>
             </ResourceDictionary.MergedDictionaries>
-            <BooleanToVisibilityConverter x:Key="BoolVis"/>
         </ResourceDictionary>
     </UserControl.Resources>
 
     <DockPanel Background="{StaticResource Brush.Bg}" LastChildFill="True">
-
-        <Border DockPanel.Dock="Top"
-                Background="{StaticResource Brush.Panel}"
-                BorderBrush="{StaticResource Brush.Border}" BorderThickness="0,0,0,1"
-                Padding="10,8"
-                Visibility="{Binding NeedsSetup, Converter={StaticResource BoolVis}}">
-            <StackPanel>
-                <TextBlock Text="This project has no Topo_Line style yet."
-                           Foreground="{StaticResource Brush.Warning}"
-                           TextWrapping="Wrap" FontSize="11"/>
-                <Button Content="Set up this project"
-                        Command="{Binding SetUpCommand}"
-                        Padding="10,5" Margin="0,6,0,0"
-                        HorizontalAlignment="Stretch"/>
-            </StackPanel>
-        </Border>
 
         <!-- Settings on the left, the two verbs on the right: the run button sits beside what it
              will use rather than at the far end of the pane. -->
