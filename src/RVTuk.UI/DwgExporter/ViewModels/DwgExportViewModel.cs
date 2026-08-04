@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using RVTuk.Core.DwgExporter;
 using RVTuk.Core.Shared.Config;
@@ -17,9 +18,9 @@ namespace RVTuk.UI.DwgExporter.ViewModels
         private readonly Func<DwgExportRequest, string> _evaluateExample;
         private readonly Func<DwgExportRequest, DwgExportPlan> _planExport;
         private readonly Func<DwgExportRequest, Action<int, int, string>, DwgExportResult> _runExport;
-        /// <summary>Identifies the open model (document path, or title while unsaved) so the
-        /// output folder can be remembered per model.</summary>
-        private readonly string _modelKey;
+        /// <summary>Identifies the active model (document path, or title while unsaved) so the
+        /// output folders can be remembered per model.</summary>
+        private readonly string _activeModelKey;
 
         /// <summary>Asks the user to confirm overwriting N existing files. Wired by the window.</summary>
         public Func<string, bool>? ConfirmOverwrite { get; set; }
@@ -36,9 +37,15 @@ namespace RVTuk.UI.DwgExporter.ViewModels
         public Func<string, bool>? OpenNativeDialog { get; set; }
 
         public IReadOnlyList<PdfSetupItem> PdfSetups { get; }
+        /// <summary>The sheets list plus a "&lt;View Name&gt;" entry at the top.</summary>
+        public IReadOnlyList<PdfSetupItem> ViewNamingOptions { get; }
         public IReadOnlyList<string> DwgSetupNames { get; }
         public IReadOnlyList<SheetSetItem> SheetSets { get; }
         public string CurrentViewLabel { get; }
+        public ObservableCollection<ModelSelectionItem> Models { get; }
+
+        /// <summary>Only meaningful when more than one model is open.</summary>
+        public bool HasOtherModels => Models.Count > 1;
 
         public RelayCommand ExportCommand { get; }
 
@@ -47,16 +54,29 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             IReadOnlyList<string> dwgSetupNames,
             IReadOnlyList<SheetSetItem> sheetSets,
             string currentViewLabel,
-            string modelKey,
+            IReadOnlyList<ModelSetupInventory> models,
+            string activeModelKey,
             Func<DwgExportRequest, string> evaluateExample,
             Func<DwgExportRequest, DwgExportPlan> planExport,
             Func<DwgExportRequest, Action<int, int, string>, DwgExportResult> runExport)
         {
             PdfSetups = pdfSetups;
+            ViewNamingOptions = new[]
+                {
+                    new PdfSetupItem
+                    {
+                        Name = DwgExportDefaults.ViewNameNamingName,
+                        Pattern = DwgExportDefaults.ViewNameNamingName,
+                    },
+                }
+                .Concat(pdfSetups)
+                .ToList();
             DwgSetupNames = dwgSetupNames;
             SheetSets = sheetSets;
             CurrentViewLabel = currentViewLabel;
-            _modelKey = modelKey;
+            Models = new ObservableCollection<ModelSelectionItem>(
+                models.Select(m => new ModelSelectionItem(m, isActive: m.Key == activeModelKey)));
+            _activeModelKey = activeModelKey;
             _evaluateExample = evaluateExample;
             _planExport = planExport;
             _runExport = runExport;
@@ -64,17 +84,23 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             ExportCommand = new RelayCommand(Export, () => CanExport);
 
             // Restore last-used choices; unknown names fall back to the first entry.
-            var config = ConfigManager.LoadConfig();
-            _outputFolder = config.GetDwgExportFolder(modelKey);
-            _useCurrentWindow = config.DwgExportUseCurrentWindow || sheetSets.Count == 0;
-            _selectedPdfSetup =
-                pdfSetups.FirstOrDefault(s => s.Name == config.DwgExportPdfSetupName) ?? pdfSetups.FirstOrDefault();
+            var settings = DwgExportSettingsStore.Read(ConfigManager.LoadConfig(), activeModelKey);
+            _outputFolder = settings.OutputFolder;
+            _pdfOutputFolder = settings.PdfOutputFolder;
+            _separatePdfFolder = settings.SeparatePdfFolder;
+            _copyMissingSetups = settings.CopyMissingSetups;
+            _useCurrentWindow = settings.UseCurrentWindow || sheetSets.Count == 0;
+            _selectedSheetNaming =
+                pdfSetups.FirstOrDefault(s => s.Name == settings.SheetNamingSetupName) ?? pdfSetups.FirstOrDefault();
+            _selectedViewNaming =
+                ViewNamingOptions.FirstOrDefault(s => s.Name == settings.ViewNamingSetupName)
+                ?? ViewNamingOptions.FirstOrDefault();
             _selectedDwgSetup =
-                dwgSetupNames.FirstOrDefault(n => n == config.DwgExportDwgSetupName) ?? dwgSetupNames.FirstOrDefault();
+                dwgSetupNames.FirstOrDefault(n => n == settings.DwgSetupName) ?? dwgSetupNames.FirstOrDefault();
             _selectedSheetSet =
-                sheetSets.FirstOrDefault(s => s.Name == config.DwgExportSheetSetName) ?? sheetSets.FirstOrDefault();
-            _exportDwgFormat = !config.DwgExportDwgOff;
-            _exportPdfFormat = config.DwgExportPdfOn;
+                sheetSets.FirstOrDefault(s => s.Name == settings.SheetSetName) ?? sheetSets.FirstOrDefault();
+            _exportDwgFormat = settings.ExportDwg;
+            _exportPdfFormat = settings.ExportPdf;
 
             RefreshExample();
         }
@@ -87,6 +113,7 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             {
                 SetProperty(ref _useCurrentWindow, value);
                 OnPropertyChanged(nameof(UseSheetSet)); // keep the inverse radio in sync
+                OnPropertyChanged(nameof(MultiModelEnabled));
                 RefreshExample();
             }
         }
@@ -97,6 +124,10 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             get => !_useCurrentWindow;
             set => UseCurrentWindow = !value;
         }
+
+        /// <summary>Other models can only join a saved-set run — "current window" is by
+        /// definition the active model's.</summary>
+        public bool MultiModelEnabled => !_useCurrentWindow && HasOtherModels;
 
         private bool _exportDwgFormat;
         public bool ExportDwgFormat
@@ -119,19 +150,32 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             set { SetProperty(ref _selectedSheetSet, value); RefreshExample(); }
         }
 
-        private PdfSetupItem? _selectedPdfSetup;
-        public PdfSetupItem? SelectedPdfSetup
+        private PdfSetupItem? _selectedSheetNaming;
+        public PdfSetupItem? SelectedSheetNaming
         {
-            get => _selectedPdfSetup;
+            get => _selectedSheetNaming;
             set
             {
-                SetProperty(ref _selectedPdfSetup, value);
-                OnPropertyChanged(nameof(PatternText));
+                SetProperty(ref _selectedSheetNaming, value);
+                OnPropertyChanged(nameof(SheetPatternText));
                 RefreshExample();
             }
         }
 
-        public string PatternText => _selectedPdfSetup?.Pattern ?? "";
+        private PdfSetupItem? _selectedViewNaming;
+        public PdfSetupItem? SelectedViewNaming
+        {
+            get => _selectedViewNaming;
+            set
+            {
+                SetProperty(ref _selectedViewNaming, value);
+                OnPropertyChanged(nameof(ViewPatternText));
+                RefreshExample();
+            }
+        }
+
+        public string SheetPatternText => _selectedSheetNaming?.Pattern ?? "";
+        public string ViewPatternText => _selectedViewNaming?.Pattern ?? "";
 
         private string? _selectedDwgSetup;
         public string? SelectedDwgSetup
@@ -145,6 +189,35 @@ namespace RVTuk.UI.DwgExporter.ViewModels
         {
             get => _outputFolder;
             set => SetProperty(ref _outputFolder, value);
+        }
+
+        private bool _separatePdfFolder;
+        public bool SeparatePdfFolder
+        {
+            get => _separatePdfFolder;
+            set => SetProperty(ref _separatePdfFolder, value);
+        }
+
+        private string _pdfOutputFolder = "";
+        public string PdfOutputFolder
+        {
+            get => _pdfOutputFolder;
+            set => SetProperty(ref _pdfOutputFolder, value);
+        }
+
+        private bool _copyMissingSetups;
+        /// <summary>True creates a missing setup in the other model; false skips that model.</summary>
+        public bool CopyMissingSetups
+        {
+            get => _copyMissingSetups;
+            set { SetProperty(ref _copyMissingSetups, value); OnPropertyChanged(nameof(SkipMissingSetups)); }
+        }
+
+        // Inverse binding target for the "skip" radio button.
+        public bool SkipMissingSetups
+        {
+            get => !_copyMissingSetups;
+            set => CopyMissingSetups = !value;
         }
 
         private string _exampleText = "";
@@ -173,7 +246,9 @@ namespace RVTuk.UI.DwgExporter.ViewModels
         public bool CanExport =>
             !IsExporting
             && !string.IsNullOrWhiteSpace(OutputFolder)
-            && SelectedPdfSetup != null
+            && (!SeparatePdfFolder || !ExportPdfFormat || !string.IsNullOrWhiteSpace(PdfOutputFolder))
+            && SelectedSheetNaming != null
+            && SelectedViewNaming != null
             && SelectedDwgSetup != null
             && (ExportDwgFormat || ExportPdfFormat)
             && (UseCurrentWindow || SelectedSheetSet != null);
@@ -182,11 +257,18 @@ namespace RVTuk.UI.DwgExporter.ViewModels
         {
             CurrentWindow = UseCurrentWindow,
             SheetSetName = SelectedSheetSet?.Name ?? "",
-            SheetNamingSetupName = SelectedPdfSetup?.Name ?? "",
+            SheetNamingSetupName = SelectedSheetNaming?.Name ?? "",
+            ViewNamingSetupName = SelectedViewNaming?.Name ?? DwgExportDefaults.ViewNameNamingName,
             DwgSetupName = SelectedDwgSetup ?? "",
             OutputFolder = OutputFolder.Trim(),
+            PdfOutputFolder = PdfOutputFolder.Trim(),
+            SeparatePdfFolder = SeparatePdfFolder,
             ExportDwg = ExportDwgFormat,
             ExportPdf = ExportPdfFormat,
+            CopyMissingSetups = CopyMissingSetups,
+            ExtraModelKeys = MultiModelEnabled
+                ? Models.Where(m => m.IsSelected && !m.IsActive).Select(m => m.Key).ToList()
+                : new List<string>(),
         };
 
         private void RefreshExample()
@@ -250,10 +332,15 @@ namespace RVTuk.UI.DwgExporter.ViewModels
                     PumpUi?.Invoke();
                 });
 
-                StatusText = result.Errors.Count == 0
-                    ? "Exported " + result.ExportedCount + " file(s) to " + request.OutputFolder
-                    : "Exported " + result.ExportedCount + ", failed " + result.Errors.Count + ":\n" +
-                      string.Join("\n", result.Errors);
+                var lines = new List<string>
+                {
+                    result.Errors.Count == 0
+                        ? "Exported " + result.ExportedCount + " file(s) to " + request.OutputFolder
+                        : "Exported " + result.ExportedCount + ", failed " + result.Errors.Count + ":",
+                };
+                lines.AddRange(result.Errors);
+                lines.AddRange(result.Notes);
+                StatusText = string.Join("\n", lines);
 
                 SaveLastUsed();
             }
@@ -272,13 +359,20 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             try
             {
                 var config = ConfigManager.LoadConfig();
-                config.SetDwgExportFolder(_modelKey, OutputFolder.Trim());
-                config.DwgExportPdfSetupName = SelectedPdfSetup?.Name ?? "";
-                config.DwgExportDwgSetupName = SelectedDwgSetup ?? "";
-                config.DwgExportSheetSetName = SelectedSheetSet?.Name ?? "";
-                config.DwgExportUseCurrentWindow = UseCurrentWindow;
-                config.DwgExportDwgOff = !ExportDwgFormat;
-                config.DwgExportPdfOn = ExportPdfFormat;
+                DwgExportSettingsStore.Write(config, _activeModelKey, new DwgExportSettings
+                {
+                    OutputFolder = OutputFolder.Trim(),
+                    PdfOutputFolder = PdfOutputFolder.Trim(),
+                    SeparatePdfFolder = SeparatePdfFolder,
+                    SheetNamingSetupName = SelectedSheetNaming?.Name ?? "",
+                    ViewNamingSetupName = SelectedViewNaming?.Name ?? DwgExportDefaults.ViewNameNamingName,
+                    DwgSetupName = SelectedDwgSetup ?? "",
+                    SheetSetName = SelectedSheetSet?.Name ?? "",
+                    UseCurrentWindow = UseCurrentWindow,
+                    ExportDwg = ExportDwgFormat,
+                    ExportPdf = ExportPdfFormat,
+                    CopyMissingSetups = CopyMissingSetups,
+                });
                 ConfigManager.SaveConfig(config);
             }
             catch

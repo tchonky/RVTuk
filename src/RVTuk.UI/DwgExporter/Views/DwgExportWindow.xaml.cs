@@ -27,14 +27,20 @@ namespace RVTuk.UI.DwgExporter.Views
         }
 
         private void Browse_Click(object sender, RoutedEventArgs e)
+            => _vm.OutputFolder = PickFolder("Choose the output folder", _vm.OutputFolder) ?? _vm.OutputFolder;
+
+        private void BrowsePdf_Click(object sender, RoutedEventArgs e)
+            => _vm.PdfOutputFolder = PickFolder("Choose the PDF output folder", _vm.PdfOutputFolder)
+                                     ?? _vm.PdfOutputFolder;
+
+        private static string? PickFolder(string description, string current)
         {
             using var dialog = new System.Windows.Forms.FolderBrowserDialog
             {
-                Description = "Choose the DWG output folder",
-                SelectedPath = _vm.OutputFolder,
+                Description = description,
+                SelectedPath = current,
             };
-            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-                _vm.OutputFolder = dialog.SelectedPath;
+            return dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK ? dialog.SelectedPath : null;
         }
 
         private void Close_Click(object sender, RoutedEventArgs e) => Close();

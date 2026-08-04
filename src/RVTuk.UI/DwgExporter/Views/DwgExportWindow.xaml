@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="RVTuk — Sheet Export (DWG / PDF)"
-        Width="520" SizeToContent="Height" MinWidth="440"
+        Width="560" SizeToContent="Height" MinWidth="480"
         WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
         ShowInTaskbar="False">
 
@@ -62,32 +62,65 @@
         <!-- ── File Naming ──────────────────────────────────────────────── -->
         <Border Style="{StaticResource Section}">
             <StackPanel>
-                <TextBlock Text="File Naming (from PDF export setup)" Style="{StaticResource SectionHeader}"/>
+                <TextBlock Text="File Naming (from PDF export setups)" Style="{StaticResource SectionHeader}"/>
                 <DockPanel>
+                    <TextBlock Text="Sheets:  " Width="56" VerticalAlignment="Center"/>
                     <Button Content="Edit…" DockPanel.Dock="Right" Padding="8,2" Margin="6,0,0,0"
                             Click="EditPdfDialog_Click"
                             ToolTip="Closes this window and opens Revit's PDF Export dialog — edit the setup's naming rule there (pencil button), then reopen DWG Export."/>
                     <ComboBox ItemsSource="{Binding PdfSetups}"
-                              SelectedItem="{Binding SelectedPdfSetup}"
+                              SelectedItem="{Binding SelectedSheetNaming}"
                               DisplayMemberPath="Name"/>
                 </DockPanel>
-                <Grid Margin="0,6,0,0">
+                <TextBlock Text="{Binding SheetPatternText}" Margin="56,2,0,0"
+                           TextWrapping="Wrap" Foreground="{StaticResource Brush.TextMuted}"/>
+                <DockPanel Margin="0,8,0,0">
+                    <TextBlock Text="Views:  " Width="56" VerticalAlignment="Center"/>
+                    <ComboBox ItemsSource="{Binding ViewNamingOptions}"
+                              SelectedItem="{Binding SelectedViewNaming}"
+                              DisplayMemberPath="Name"
+                              ToolTip="Applies to non-sheet views in the set. &lt;View Name&gt; uses the view's own name."/>
+                </DockPanel>
+                <TextBlock Text="{Binding ViewPatternText}" Margin="56,2,0,0"
+                           TextWrapping="Wrap" Foreground="{StaticResource Brush.TextMuted}"/>
+                <Grid Margin="0,8,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition/>
-                        <RowDefinition/>
-                    </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Pattern:  "
-                               Foreground="{StaticResource Brush.TextMuted}"/>
-                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding PatternText}"
-                               TextWrapping="Wrap" Foreground="{StaticResource Brush.TextMuted}"/>
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Example:  "/>
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ExampleText}"
+                    <TextBlock Grid.Column="0" Text="Example:  "/>
+                    <TextBlock Grid.Column="1" Text="{Binding ExampleText}"
                                TextWrapping="Wrap" FontWeight="SemiBold"/>
                 </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- ── Models ───────────────────────────────────────────────────── -->
+        <Border Style="{StaticResource Section}"
+                Visibility="{Binding HasOtherModels, Converter={StaticResource BoolVis}}">
+            <StackPanel IsEnabled="{Binding MultiModelEnabled}">
+                <TextBlock Text="Models" Style="{StaticResource SectionHeader}"/>
+                <ScrollViewer MaxHeight="110" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding Models}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding Display}"
+                                          IsChecked="{Binding IsSelected}"
+                                          IsEnabled="{Binding CanUnselect}"
+                                          Margin="0,2"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                <TextBlock Text="Other models match the set and setups above by name. If one is missing there:"
+                           TextWrapping="Wrap" Margin="0,8,0,4"
+                           Foreground="{StaticResource Brush.TextMuted}"/>
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton Content="Skip that model" IsChecked="{Binding SkipMissingSetups}"/>
+                    <RadioButton Content="Copy the setup into it" IsChecked="{Binding CopyMissingSetups}"
+                                 Margin="18,0,0,0"
+                                 ToolTip="Creates the export setup in that model — this modifies and dirties it. A read-only model is skipped either way."/>
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -120,13 +153,25 @@
 
         <!-- ── Location ─────────────────────────────────────────────────── -->
         <Border Style="{StaticResource Section}">
-            <DockPanel>
-                <TextBlock Text="Location:  " VerticalAlignment="Center"/>
-                <Button Content="Browse…" DockPanel.Dock="Right" Padding="10,3"
-                        Margin="8,0,0,0" Click="Browse_Click"/>
-                <TextBox Text="{Binding OutputFolder, UpdateSourceTrigger=PropertyChanged}"
-                         VerticalAlignment="Center"/>
-            </DockPanel>
+            <StackPanel>
+                <DockPanel>
+                    <TextBlock Text="Location:  " VerticalAlignment="Center"/>
+                    <Button Content="Browse…" DockPanel.Dock="Right" Padding="10,3"
+                            Margin="8,0,0,0" Click="Browse_Click"/>
+                    <TextBox Text="{Binding OutputFolder, UpdateSourceTrigger=PropertyChanged}"
+                             VerticalAlignment="Center"/>
+                </DockPanel>
+                <CheckBox Content="Separate folder for PDFs" IsChecked="{Binding SeparatePdfFolder}"
+                          Margin="0,8,0,0"/>
+                <DockPanel Margin="0,6,0,0"
+                           Visibility="{Binding SeparatePdfFolder, Converter={StaticResource BoolVis}}">
+                    <TextBlock Text="PDFs:  " VerticalAlignment="Center"/>
+                    <Button Content="Browse…" DockPanel.Dock="Right" Padding="10,3"
+                            Margin="8,0,0,0" Click="BrowsePdf_Click"/>
+                    <TextBox Text="{Binding PdfOutputFolder, UpdateSourceTrigger=PropertyChanged}"
+                             VerticalAlignment="Center"/>
+                </DockPanel>
+            </StackPanel>
         </Border>
 
         <!-- ── Progress / status ────────────────────────────────────────── -->
