@@ -56,4 +56,39 @@ public class DwgExportPlannerTests
         Assert.Equal("Publish (12 sheets)", new SheetSetItem { Name = "Publish", SheetCount = 12 }.Display);
         Assert.Equal("One (1 sheet)", new SheetSetItem { Name = "One", SheetCount = 1 }.Display);
     }
+
+    [Fact]
+    public void DwgExportRequest_Defaults_ViewsUseTheViewName()
+    {
+        Assert.Equal("<View Name>", DwgExportDefaults.ViewNameNamingName);
+        Assert.Equal(DwgExportDefaults.ViewNameNamingName, new DwgExportRequest().ViewNamingSetupName);
+        Assert.False(new DwgExportRequest().SeparatePdfFolder);
+        Assert.False(new DwgExportRequest().CopyMissingSetups);
+        Assert.Empty(new DwgExportRequest().ExtraModelKeys);
+    }
+
+    [Fact]
+    public void PdfFolder_IsTheOutputFolder_UnlessASeparateOneIsAskedForAndSet()
+    {
+        var shared = new DwgExportRequest { OutputFolder = @"D:\out", PdfOutputFolder = @"D:\pdf" };
+        Assert.Equal(@"D:\out", shared.PdfFolder); // checkbox off: the second path is ignored
+
+        var split = new DwgExportRequest
+        {
+            OutputFolder = @"D:\out", PdfOutputFolder = @"D:\pdf", SeparatePdfFolder = true,
+        };
+        Assert.Equal(@"D:\pdf", split.PdfFolder);
+
+        var splitButBlank = new DwgExportRequest { OutputFolder = @"D:\out", SeparatePdfFolder = true };
+        Assert.Equal(@"D:\out", splitButBlank.PdfFolder);
+    }
+
+    [Fact]
+    public void PlannedExportFile_Source_NamesTheModelOnlyWhenThereIsOne()
+    {
+        Assert.Equal("A-101", new PlannedExportFile { ViewLabel = "A-101" }.Source);
+        Assert.Equal(
+            "Tower-A.rvt — A-101",
+            new PlannedExportFile { ModelTitle = "Tower-A.rvt", ViewLabel = "A-101" }.Source);
+    }
 }
