@@ -64,17 +64,4 @@ public class FileNameComposerTests
         Assert.Equal("Sheet", FileNameComposer.Sanitize(""));
     }
 
-    [Fact]
-    public void FindDuplicates_IsCaseInsensitive_AndReturnsEachNameOnce()
-    {
-        var dupes = FileNameComposer.FindDuplicates(new[] { "A-101", "a-101", "A-102", "A-101", "B-1" });
-
-        Assert.Equal(new[] { "A-101" }, dupes);
-    }
-
-    [Fact]
-    public void FindDuplicates_Empty_WhenAllUnique()
-    {
-        Assert.Empty(FileNameComposer.FindDuplicates(new[] { "A-101", "A-102" }));
-    }
 }

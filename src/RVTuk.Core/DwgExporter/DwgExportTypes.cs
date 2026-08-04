@@ -74,11 +74,20 @@ namespace RVTuk.Core.DwgExporter
         public string Source => string.IsNullOrEmpty(ModelTitle) ? ViewLabel : ModelTitle + " — " + ViewLabel;
     }
 
+    /// <summary>One filename two or more views would both produce, and where each came from.</summary>
+    public class DuplicateFileName
+    {
+        public string FileName { get; set; } = "";
+
+        /// <summary>Each clashing view, as "Tower-A.rvt — A-101" once a run spans models.</summary>
+        public IReadOnlyList<string> Sources { get; set; } = new List<string>();
+    }
+
     /// <summary>Pre-flight result: everything the dialog needs to warn/abort before exporting.</summary>
     public class DwgExportPlan
     {
         public IReadOnlyList<PlannedExportFile> Files { get; set; } = new List<PlannedExportFile>();
-        public IReadOnlyList<string> DuplicateNames { get; set; } = new List<string>();
+        public IReadOnlyList<DuplicateFileName> Duplicates { get; set; } = new List<DuplicateFileName>();
         public IReadOnlyList<string> ExistingFileNames { get; set; } = new List<string>();
     }
 

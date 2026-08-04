@@ -6,8 +6,8 @@ namespace RVTuk.Core.Tests.DwgExporter;
 
 public class DwgExportPlannerTests
 {
-    private static PlannedExportFile File(string name)
-        => new PlannedExportFile { ViewLabel = name, FileName = name };
+    private static PlannedExportFile File(string name, string model = "")
+        => new PlannedExportFile { ViewLabel = name, FileName = name, ModelTitle = model };
 
     [Fact]
     public void Check_CleanPlan_HasNoDuplicatesOrExisting()
@@ -17,18 +17,39 @@ public class DwgExportPlannerTests
         var plan = DwgExportPlanner.Check(files, _ => false);
 
         Assert.Same(files, plan.Files);
-        Assert.Empty(plan.DuplicateNames);
+        Assert.Empty(plan.Duplicates);
         Assert.Empty(plan.ExistingFileNames);
     }
 
     [Fact]
-    public void Check_ReportsCaseInsensitiveDuplicates()
+    public void Check_ReportsCaseInsensitiveDuplicates_UnderTheFirstSpelling()
     {
         var plan = DwgExportPlanner.Check(
-            new List<PlannedExportFile> { File("A-101"), File("a-101"), File("A-102") },
+            new List<PlannedExportFile> { File("A-101"), File("a-101"), File("A-102"), File("A-101") },
             _ => false);
 
-        Assert.Equal(new[] { "A-101" }, plan.DuplicateNames);
+        var duplicate = Assert.Single(plan.Duplicates);
+        Assert.Equal("A-101", duplicate.FileName);
+        Assert.Equal(3, duplicate.Sources.Count);
+    }
+
+    [Fact]
+    public void Check_DuplicatesAcrossModels_NameTheModels()
+    {
+        var plan = DwgExportPlanner.Check(
+            new List<PlannedExportFile> { File("A-101", "Tower-A.rvt"), File("A-101", "Tower-B.rvt") },
+            _ => false);
+
+        var duplicate = Assert.Single(plan.Duplicates);
+        Assert.Equal(new[] { "Tower-A.rvt — A-101", "Tower-B.rvt — A-101" }, duplicate.Sources);
+    }
+
+    [Fact]
+    public void Check_AllUnique_ReportsNoDuplicates()
+    {
+        Assert.Empty(
+            DwgExportPlanner.Check(
+                new List<PlannedExportFile> { File("A-101"), File("A-102") }, _ => false).Duplicates);
     }
 
     [Fact]
