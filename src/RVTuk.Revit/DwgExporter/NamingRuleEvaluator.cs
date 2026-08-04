@@ -27,25 +27,46 @@ namespace RVTuk.Revit.DwgExporter
             return FileNameComposer.Compose(parts);
         }
 
-        public static IReadOnlyList<NamingRulePart> ResolveForSheet(
-            Document doc, ViewSheet sheet, IList<TableCellCombinedParameterData>? rule)
+        /// <summary>
+        /// Resolves the rule against one view. A null rule means the built-in fallback, which
+        /// differs by kind: sheets get "&lt;Sheet Number&gt; - &lt;Sheet Name&gt;", other views
+        /// their own name.
+        /// </summary>
+        public static IReadOnlyList<NamingRulePart> ResolveForView(
+            Document doc, View view, IList<TableCellCombinedParameterData>? rule)
         {
             if (rule == null || rule.Count == 0)
             {
-                return new List<NamingRulePart>
+                if (view is ViewSheet sheet)
                 {
-                    new NamingRulePart { Value = sheet.SheetNumber, Separator = " - " },
-                    new NamingRulePart { Value = sheet.Name },
-                };
+                    return new List<NamingRulePart>
+                    {
+                        new NamingRulePart { Value = sheet.SheetNumber, Separator = " - " },
+                        new NamingRulePart { Value = sheet.Name },
+                    };
+                }
+                return new List<NamingRulePart> { new NamingRulePart { Value = view.Name } };
             }
 
             return rule.Select(entry => new NamingRulePart
             {
                 Prefix = entry.Prefix ?? "",
-                Value = ResolveValue(doc, sheet, entry),
+                Value = ResolveValue(doc, view, entry),
                 Suffix = entry.Suffix ?? "",
                 Separator = entry.Separator ?? "",
             }).ToList();
+        }
+
+        /// <summary>
+        /// A one-field rule over the view's own Name. The "&lt;View Name&gt;" naming entry is
+        /// expressed as a real rule rather than a special case in the export loop, so Revit
+        /// names the PDFs exactly the way we name the DWGs.
+        /// </summary>
+        public static IList<TableCellCombinedParameterData> ViewNameRule()
+        {
+            var field = TableCellCombinedParameterData.Create();
+            field.ParamId = new ElementId(BuiltInParameter.VIEW_NAME);
+            return new List<TableCellCombinedParameterData> { field };
         }
 
         private static string ParamName(Document doc, TableCellCombinedParameterData entry)
@@ -57,12 +78,12 @@ namespace RVTuk.Revit.DwgExporter
 
         /// <summary>
         /// The rule stores which category each field comes from, but resolving is simpler and
-        /// more robust by probing: try the sheet first, then Project Information (the only two
-        /// sources the PDF naming rule offers for sheets).
+        /// more robust by probing: try the view (or sheet) first, then Project Information —
+        /// the two sources the PDF naming rule offers.
         /// </summary>
-        private static string ResolveValue(Document doc, ViewSheet sheet, TableCellCombinedParameterData entry)
+        private static string ResolveValue(Document doc, View view, TableCellCombinedParameterData entry)
         {
-            var param = FindParameter(doc, sheet, entry.ParamId)
+            var param = FindParameter(doc, view, entry.ParamId)
                         ?? FindParameter(doc, doc.ProjectInformation, entry.ParamId);
             if (param == null || !param.HasValue) return "";
             return (param.StorageType == StorageType.String ? param.AsString() : param.AsValueString()) ?? "";

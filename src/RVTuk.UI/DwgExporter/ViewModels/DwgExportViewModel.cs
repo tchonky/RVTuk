@@ -182,7 +182,7 @@ namespace RVTuk.UI.DwgExporter.ViewModels
         {
             CurrentWindow = UseCurrentWindow,
             SheetSetName = SelectedSheetSet?.Name ?? "",
-            PdfSetupName = SelectedPdfSetup?.Name ?? "",
+            SheetNamingSetupName = SelectedPdfSetup?.Name ?? "",
             DwgSetupName = SelectedDwgSetup ?? "",
             OutputFolder = OutputFolder.Trim(),
             ExportDwg = ExportDwgFormat,
@@ -221,12 +221,13 @@ namespace RVTuk.UI.DwgExporter.ViewModels
                 ShowError?.Invoke("Nothing to export — the selected range contains no sheets or views.");
                 return;
             }
-            if (plan.DuplicateNames.Count > 0)
+            if (plan.Duplicates.Count > 0)
             {
                 ShowError?.Invoke(
-                    "These filenames would be produced by more than one sheet, so sheets would " +
-                    "overwrite each other. Fix the naming rule or the sheet parameters:\n\n  " +
-                    string.Join("\n  ", plan.DuplicateNames));
+                    "These filenames would be produced by more than one view, so files would " +
+                    "overwrite each other. Fix the naming rule or the view parameters:\n\n  " +
+                    string.Join("\n  ", plan.Duplicates.Select(
+                        d => d.FileName + "  ←  " + string.Join(", ", d.Sources))));
                 return;
             }
             if (plan.ExistingFileNames.Count > 0)
