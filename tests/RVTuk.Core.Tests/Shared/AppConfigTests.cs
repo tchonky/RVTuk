@@ -197,4 +197,70 @@ public class AppConfigTests : IDisposable
 
         Assert.Equal(@"D:\out\tower", loaded.GetDwgExportFolder(@"C:\Projects\Tower.rvt"));
     }
+
+    [Fact]
+    public void DwgExportFolderLists_ArriveNull_AndStillWork()
+    {
+        // net48's DataContractJsonSerializer builds AppConfig via GetUninitializedObject, so
+        // a list absent from an older config file arrives null rather than as the
+        // initializer's empty list. Nothing here may throw.
+        var config = new AppConfig
+        {
+            DwgExportFolders = null!,
+            DwgExportPdfFolders = null!,
+            DwgExportFolder = @"D:\global",
+        };
+
+        Assert.Equal(@"D:\global", config.GetDwgExportFolder(@"C:\Projects\Tower.rvt"));
+        Assert.Equal(@"D:\global", config.GetDwgExportPdfFolder(@"C:\Projects\Tower.rvt"));
+
+        config.SetDwgExportFolder(@"C:\Projects\Tower.rvt", @"D:\out\dwg");
+        config.SetDwgExportPdfFolder(@"C:\Projects\Tower.rvt", @"D:\out\pdf");
+
+        Assert.Equal(@"D:\out\dwg", config.GetDwgExportFolder(@"C:\Projects\Tower.rvt"));
+        Assert.Equal(@"D:\out\pdf", config.GetDwgExportPdfFolder(@"C:\Projects\Tower.rvt"));
+    }
+
+    [Fact]
+    public void GetDwgExportPdfFolder_FallsBackToTheDwgFolder_WhenNeverSetSeparately()
+    {
+        var config = new AppConfig();
+        config.SetDwgExportFolder(@"C:\Projects\Tower.rvt", @"D:\out\tower");
+
+        Assert.Equal(@"D:\out\tower", config.GetDwgExportPdfFolder(@"C:\Projects\Tower.rvt"));
+    }
+
+    [Fact]
+    public void GetDwgExportPdfFolder_PrefersPerModel_ThenGlobalPdf()
+    {
+        var config = new AppConfig { DwgExportFolder = @"D:\dwg", DwgExportPdfFolder = @"D:\pdf" };
+        config.DwgExportPdfFolders.Add(
+            new DwgExportFolderEntry { ModelKey = @"C:\Projects\Tower.rvt", Folder = @"D:\pdf\tower" });
+
+        Assert.Equal(@"D:\pdf\tower", config.GetDwgExportPdfFolder(@"C:\Projects\Tower.rvt"));
+        Assert.Equal(@"D:\pdf", config.GetDwgExportPdfFolder(@"C:\Projects\Other.rvt"));
+    }
+
+    [Fact]
+    public void SetDwgExportPdfFolder_AlsoMovesTheGlobalFallback()
+    {
+        // Same rule as the DWG pair: the global fallback is "last used anywhere", so a model
+        // with no entry of its own inherits the most recent choice.
+        var config = new AppConfig { DwgExportPdfFolder = @"D:\pdf" };
+
+        config.SetDwgExportPdfFolder(@"C:\Projects\Tower.rvt", @"D:\pdf\tower");
+
+        Assert.Equal(@"D:\pdf\tower", config.DwgExportPdfFolder);
+        Assert.Equal(@"D:\pdf\tower", config.GetDwgExportPdfFolder(@"C:\Projects\Other.rvt"));
+    }
+
+    [Fact]
+    public void DwgExportNewKeys_AbsentFromFile_MeanTodaysBehaviour()
+    {
+        var loaded = System.Text.Json.JsonSerializer.Deserialize<AppConfig>("{}")!;
+
+        Assert.Equal(string.Empty, loaded.DwgExportViewNamingSetupName); // => "<View Name>"
+        Assert.False(loaded.DwgExportSeparatePdfFolder);                 // => one folder
+        Assert.False(loaded.DwgExportCopyMissingSetups);                 // => skip the model
+    }
 }

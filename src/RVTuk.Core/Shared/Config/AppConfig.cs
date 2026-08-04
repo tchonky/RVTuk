@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 
 namespace RVTuk.Core.Shared.Config
@@ -39,6 +40,18 @@ namespace RVTuk.Core.Shared.Config
         public string DwgExportSheetSetName { get; set; } = string.Empty;
         public bool DwgExportUseCurrentWindow { get; set; }
 
+        /// <summary>Last-used naming setup for non-sheet views. Empty means the built-in
+        /// "&lt;View Name&gt;" entry (the view's own name) — the behaviour before views could
+        /// take a rule, and still the default, so an absent key and the default agree.</summary>
+        public string DwgExportViewNamingSetupName { get; set; } = string.Empty;
+
+        /// <summary>False (the absent-key value) means PDFs and DWGs share one folder.</summary>
+        public bool DwgExportSeparatePdfFolder { get; set; }
+
+        /// <summary>False (the absent-key value) means an extra model missing a named export
+        /// setup is skipped, rather than having the setup created in it.</summary>
+        public bool DwgExportCopyMissingSetups { get; set; }
+
         /// <summary>Topo Tools: distance between generated toposolid points, in centimetres.
         /// Reads back as 0 from any config file written before this property existed — net48's
         /// DataContractJsonSerializer skips property initializers (same trap the DWG format
@@ -62,27 +75,66 @@ namespace RVTuk.Core.Shared.Config
 
         public const int DwgExportFolderCap = 30;
 
+        /// <summary>Per-model PDF output folders, used only when
+        /// <see cref="DwgExportSeparatePdfFolder"/> is on; same MRU/cap rules as
+        /// <see cref="DwgExportFolders"/>, with <see cref="DwgExportPdfFolder"/> as the
+        /// global fallback.</summary>
+        public string DwgExportPdfFolder { get; set; } = string.Empty;
+
+        public List<DwgExportFolderEntry> DwgExportPdfFolders { get; set; } =
+            new List<DwgExportFolderEntry>();
+
         /// <summary>The remembered output folder for a model (key = document path, or title for
         /// unsaved documents), falling back to the global last-used folder.</summary>
         public string GetDwgExportFolder(string modelKey)
-        {
-            var entry = DwgExportFolders.Find(e =>
-                string.Equals(e.ModelKey, modelKey, StringComparison.OrdinalIgnoreCase));
-            return entry != null && !string.IsNullOrWhiteSpace(entry.Folder) ? entry.Folder : DwgExportFolder;
-        }
+            => Lookup(DwgExportFolders, modelKey) ?? DwgExportFolder;
 
         /// <summary>Upserts the model's folder (MRU: entry moves to the end; oldest entries are
         /// dropped past the cap) and updates the global fallback.</summary>
         public void SetDwgExportFolder(string modelKey, string folder)
         {
             DwgExportFolder = folder;
-            if (string.IsNullOrWhiteSpace(modelKey)) return;
+            DwgExportFolders = Upsert(DwgExportFolders, modelKey, folder);
+        }
 
-            DwgExportFolders.RemoveAll(e =>
+        /// <summary>The remembered PDF folder for a model, falling back to the global PDF
+        /// folder and then to the DWG folder — where PDFs went before they could have one of
+        /// their own, so an upgraded config keeps behaving the same.</summary>
+        public string GetDwgExportPdfFolder(string modelKey)
+        {
+            var perModel = Lookup(DwgExportPdfFolders, modelKey);
+            if (perModel != null) return perModel;
+            return string.IsNullOrWhiteSpace(DwgExportPdfFolder)
+                ? GetDwgExportFolder(modelKey)
+                : DwgExportPdfFolder;
+        }
+
+        public void SetDwgExportPdfFolder(string modelKey, string folder)
+        {
+            DwgExportPdfFolder = folder;
+            DwgExportPdfFolders = Upsert(DwgExportPdfFolders, modelKey, folder);
+        }
+
+        private static string? Lookup(List<DwgExportFolderEntry>? entries, string modelKey)
+        {
+            var entry = entries?.Find(e =>
                 string.Equals(e.ModelKey, modelKey, StringComparison.OrdinalIgnoreCase));
-            DwgExportFolders.Add(new DwgExportFolderEntry { ModelKey = modelKey, Folder = folder });
-            while (DwgExportFolders.Count > DwgExportFolderCap)
-                DwgExportFolders.RemoveAt(0);
+            return entry != null && !string.IsNullOrWhiteSpace(entry.Folder) ? entry.Folder : null;
+        }
+
+        /// <summary>MRU upsert. Takes and returns the list because net48's
+        /// DataContractJsonSerializer skips property initializers: a list absent from an older
+        /// config file arrives null, and dereferencing it would throw before the dialog opens.</summary>
+        private static List<DwgExportFolderEntry> Upsert(
+            List<DwgExportFolderEntry>? entries, string modelKey, string folder)
+        {
+            var list = entries ?? new List<DwgExportFolderEntry>();
+            if (string.IsNullOrWhiteSpace(modelKey)) return list;
+
+            list.RemoveAll(e => string.Equals(e.ModelKey, modelKey, StringComparison.OrdinalIgnoreCase));
+            list.Add(new DwgExportFolderEntry { ModelKey = modelKey, Folder = folder });
+            while (list.Count > DwgExportFolderCap) list.RemoveAt(0);
+            return list;
         }
 
         // Derived — never stored separately; always lives inside the library folder.
