@@ -1,5 +1,25 @@
 # DWG Exporter — backlog
 
+## 🚀 New features (requested 2026-08-03)
+
+- [x] **Different File Naming for different input** — shipped 2026-08-04: separate
+  "Sheets" and "Views" naming dropdowns, applied per item, each with its own pattern and
+  worked example below it, and `<View Name>` (the view's own name, the previous behaviour)
+  as the views default. Laid out as two **rows** rather than the two columns the request
+  suggested — the patterns are long enough that halving the width would wrap most of them
+  in a 560px window. Say the word if you'd rather have columns.
+  Also closes the 2026-07-16 caveat where a non-sheet current view got a rule-based PDF
+  name and a view-name DWG name.
+- [x] **Export from two or more models** — shipped 2026-08-04: a Models list of the open
+  models; extra models match the active model's set and setups by name, and a missing
+  setup either skips that model or is created in it (a missing *set*, and a read-only
+  model, always skip). Unticking the extras is the "don't export from other models" option.
+- [x] **Hability to choose different paths for pdfs and dwgs files.** — shipped
+  2026-08-04: a "Separate folder for PDFs" checkbox revealing a second Location row.
+
+All three: [spec](specs/2026-08-03-multi-model-and-naming-design.md),
+[plan](plans/2026-08-03-multi-model-and-naming.md).
+
 ## 🚀 New features (requested 2026-07-16)
 
 - [x] **Naming-rule editor** — shipped 2026-07-16 as a **hand-off**, not a custom
@@ -37,6 +57,9 @@
   emitted next to the exports covering the achievable wishes: stamp layout paper sizes,
   `EXPORTLAYOUT` flatten to model space, in-block layer remaps. Decide whether to build
   after reading the research doc.
+- [ ] **Export Speed** - check if there is a way to improve the speed of exportation.
+  DWG normally takes a lot of time. Maybe simplifying the DWG drawing could be a workaround.
+  (Un-nested from the companion-script item above — it's its own question, not part of it.)
 
 ## Ideas / future
 
@@ -54,6 +77,25 @@
 - Run the manual checklist in [plans/2026-07-15-dwg-exporter.md](plans/2026-07-15-dwg-exporter.md)
   Task 6 — especially the naming-rule **separator placement** check against the native
   PDF export's filenames (fix lives in `FileNameComposer.Compose` if they differ).
+- 2026-08-03 batch (nothing below has been run in Revit yet):
+  - [ ] A set mixing sheets and views, two different naming setups picked — each file is
+        named by the rule for its own kind, and each row's example shows a file of that kind.
+  - [ ] Same run with PDF ticked — every `.dwg` has a `.pdf` of the same basename, for
+        views as well as sheets.
+  - [ ] Views left on `<View Name>` — filenames unchanged from before this batch.
+  - [ ] A views rule made only of sheet parameters — files fall back to view names and the
+        summary says so, instead of the run aborting on duplicates.
+  - [ ] "Separate folder for PDFs" — DWGs and PDFs land in their two folders; unticking it
+        puts both back in one.
+  - [ ] A second model whose set and setups have the same names — both models export.
+  - [ ] A second model missing a setup, "Skip that model" — it is skipped and the summary
+        names the missing setup.
+  - [ ] Same, "Copy the setup into it" — it exports, and the setup is afterwards present in
+        that model's own PDF Export / DWG setup dialog with its rule intact.
+  - [ ] A second model open read-only — skipped with the read-only reason, never attempted.
+  - [ ] Two models producing the same filename — the run aborts before writing and names
+        both models.
+  - [ ] "Current window" selected — the Models section is disabled.
 
 ## Done
 
