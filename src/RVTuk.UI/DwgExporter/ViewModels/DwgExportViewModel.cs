@@ -15,7 +15,7 @@ namespace RVTuk.UI.DwgExporter.ViewModels
     /// </summary>
     public class DwgExportViewModel : ViewModelBase
     {
-        private readonly Func<DwgExportRequest, string> _evaluateExample;
+        private readonly Func<DwgExportRequest, DwgExportExamples> _evaluateExample;
         private readonly Func<DwgExportRequest, DwgExportPlan> _planExport;
         private readonly Func<DwgExportRequest, Action<int, int, string>, DwgExportResult> _runExport;
         /// <summary>Identifies the active model (document path, or title while unsaved) so the
@@ -56,7 +56,7 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             string currentViewLabel,
             IReadOnlyList<ModelSetupInventory> models,
             string activeModelKey,
-            Func<DwgExportRequest, string> evaluateExample,
+            Func<DwgExportRequest, DwgExportExamples> evaluateExample,
             Func<DwgExportRequest, DwgExportPlan> planExport,
             Func<DwgExportRequest, Action<int, int, string>, DwgExportResult> runExport)
         {
@@ -220,11 +220,18 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             set => CopyMissingSetups = !value;
         }
 
-        private string _exampleText = "";
-        public string ExampleText
+        private string _sheetExampleText = "";
+        public string SheetExampleText
         {
-            get => _exampleText;
-            private set => SetProperty(ref _exampleText, value);
+            get => _sheetExampleText;
+            private set => SetProperty(ref _sheetExampleText, value);
+        }
+
+        private string _viewExampleText = "";
+        public string ViewExampleText
+        {
+            get => _viewExampleText;
+            private set => SetProperty(ref _viewExampleText, value);
         }
 
         private bool _isExporting;
@@ -275,11 +282,13 @@ namespace RVTuk.UI.DwgExporter.ViewModels
         {
             try
             {
-                ExampleText = _evaluateExample(BuildRequest());
+                var examples = _evaluateExample(BuildRequest());
+                SheetExampleText = examples.Sheet;
+                ViewExampleText = examples.View;
             }
             catch (Exception ex)
             {
-                ExampleText = "(example unavailable: " + ex.Message + ")";
+                SheetExampleText = ViewExampleText = "(example unavailable: " + ex.Message + ")";
             }
         }
 

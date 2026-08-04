@@ -34,13 +34,27 @@ namespace RVTuk.Revit.DwgExporter
             public NamingRules Rules { get; set; } = new NamingRules();
         }
 
-        public string EvaluateExample(DwgExportRequest request)
+        /// <summary>A worked filename per kind — each rule previewed against something it
+        /// actually applies to, rather than whichever file happens to sort first.</summary>
+        public DwgExportExamples EvaluateExample(DwgExportRequest request)
         {
             var rules = SheetDwgExporter.ReadNamingRules(_active, request);
             var files = request.CurrentWindow
                 ? SheetDwgExporter.PlanCurrentWindow(_uidoc, rules)
                 : SheetDwgExporter.PlanFiles(_active, request, rules, "", out _);
-            return files.Count == 0 ? "(no views in the selected set)" : files[0].File.FileName + ".dwg";
+
+            return new DwgExportExamples
+            {
+                Sheet = Example(files, wantSheet: true, "(no sheets in the selected range)"),
+                View = Example(files, wantSheet: false, "(no non-sheet views in the selected range)"),
+            };
+        }
+
+        private static string Example(
+            List<(ElementId Id, PlannedExportFile File)> files, bool wantSheet, string none)
+        {
+            var match = files.FirstOrDefault(f => f.File.IsSheet == wantSheet).File;
+            return match == null ? none : match.FileName + ".dwg";
         }
 
         public DwgExportPlan Plan(DwgExportRequest request)

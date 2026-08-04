@@ -74,6 +74,14 @@ namespace RVTuk.Core.DwgExporter
         public string Source => string.IsNullOrEmpty(ModelTitle) ? ViewLabel : ModelTitle + " — " + ViewLabel;
     }
 
+    /// <summary>A worked filename per kind, so each naming rule is previewed against something
+    /// it actually applies to. Either can be a "(no …)" message when the range holds none.</summary>
+    public class DwgExportExamples
+    {
+        public string Sheet { get; set; } = "";
+        public string View { get; set; } = "";
+    }
+
     /// <summary>One filename two or more views would both produce, and where each came from.</summary>
     public class DuplicateFileName
     {
