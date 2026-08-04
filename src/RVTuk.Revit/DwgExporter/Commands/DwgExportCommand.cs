@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
@@ -30,7 +29,7 @@ namespace RVTuk.Revit.DwgExporter.Commands
 
             try
             {
-                // ── Dropdown contents ────────────────────────────────────────────────
+                // ── Dropdown contents (all from the active model) ────────────────────
                 var pdfSettings = new FilteredElementCollector(doc)
                     .OfClass(typeof(ExportPDFSettings))
                     .Cast<ExportPDFSettings>()
@@ -51,10 +50,7 @@ namespace RVTuk.Revit.DwgExporter.Commands
                         },
                     };
 
-                var dwgNames = new FilteredElementCollector(doc)
-                    .OfClass(typeof(ExportDWGSettings))
-                    .Cast<ExportDWGSettings>()
-                    .Select(s => s.Name)
+                var dwgNames = ExportDWGSettings.ListNames(doc)
                     .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
                     .ToList();
                 if (dwgNames.Count == 0) dwgNames.Add(DwgExportDefaults.DefaultDwgSetupName);
@@ -75,39 +71,21 @@ namespace RVTuk.Revit.DwgExporter.Commands
                     ? vs.SheetNumber + " - " + vs.Name
                     : activeView?.Name ?? "(no graphical view)";
 
-                // Per-model key for remembering the output folder; unsaved docs fall back to title.
-                var modelKey = string.IsNullOrWhiteSpace(doc.PathName) ? doc.Title : doc.PathName;
+                // Active model first, so the dialog can lock its checkbox on.
+                var models = OpenModels.Enumerate(commandData.Application.Application)
+                    .OrderByDescending(d => ReferenceEquals(d, doc))
+                    .ThenBy(d => d.Title, StringComparer.OrdinalIgnoreCase)
+                    .Select(OpenModels.ReadInventory)
+                    .ToList();
 
                 // ── Delegates (run on the UI thread inside this command's API context) ──
-                Func<DwgExportRequest, string> evaluateExample = request =>
-                {
-                    var files = SheetDwgExporter.PlanFiles(uidoc, request, out _);
-                    return files.Count == 0 ? "(no sheets in the selected set)" : files[0].File.FileName + ".dwg";
-                };
-
-                Func<DwgExportRequest, DwgExportPlan> planExport = request =>
-                {
-                    if (!Directory.Exists(request.OutputFolder))
-                        Directory.CreateDirectory(request.OutputFolder);
-                    var files = SheetDwgExporter.PlanFiles(uidoc, request, out _);
-                    return DwgExportPlanner.Check(
-                        files.Select(f => f.File).ToList(),
-                        name => SheetDwgExporter.OutputFileExists(request.OutputFolder, name, request));
-                };
-
-                Func<DwgExportRequest, Action<int, int, string>, DwgExportResult> runExport =
-                    (request, progress) =>
-                    {
-                        var files = SheetDwgExporter.PlanFiles(uidoc, request, out var skipped);
-                        var result = SheetDwgExporter.Export(doc, request, files, progress);
-                        result.Errors.AddRange(
-                            skipped.Select(name => name + ": skipped (not an exportable view)"));
-                        return result;
-                    };
+                var runner = new DwgExportRunner(uidoc);
 
                 var vm = new DwgExportViewModel(
-                    pdfItems, dwgNames, sheetSets, currentViewLabel, modelKey,
-                    evaluateExample, planExport, runExport);
+                    pdfItems, dwgNames, sheetSets, currentViewLabel,
+                    models, OpenModels.KeyOf(doc),
+                    runner.EvaluateExample, runner.Plan, runner.Run);
+
                 vm.OpenNativeDialog = kind =>
                 {
                     // "sets" prefers Publish Settings (a dedicated view/sheet-set manager);
