@@ -60,15 +60,20 @@ All three: [spec](specs/2026-08-03-multi-model-and-naming-design.md),
 - [ ] **Export Speed** - check if there is a way to improve the speed of exportation.
   DWG normally takes a lot of time. Maybe simplifying the DWG drawing could be a workaround.
   (Un-nested from the companion-script item above — it's its own question, not part of it.)
-- [x] **Images inside the DWG (embedded or OLE), as a checkbox** — researched 2026-08-04,
-  see [research/2026-08-04-embedding-images-in-dwg.md](research/2026-08-04-embedding-images-in-dwg.md).
-  Verdict: **impossible**, and there is nothing for a checkbox to switch. Revit's DWG
-  export has no image option anywhere in `DWGExportOptions`/`ACADExportOptions`/
-  `BaseExportOptions`; DWG keeps raster images external by design; and `Ole2Frame`'s
-  payload (`OleObject`, `LinkName`, `LinkPath`, `Type`) is read-only in the AutoCAD managed
-  API, so OLE objects can be read but never authored. **Don't retry this** — the answers
-  are the PDF the tool already exports (which does embed images), or an eTransmit-style
-  bundle of DWG + image files.
+- [x] **Images inside the DWG as OLE, as a checkbox** — researched 2026-08-04, see
+  [research/2026-08-04-embedding-images-in-dwg.md](research/2026-08-04-embedding-images-in-dwg.md).
+  Verdict: **possible, but not from Revit** — it needs AutoCAD installed and an
+  AutoCAD-side plugin that post-processes the exported DWGs. No Autodesk API can author an
+  `Ole2Frame`'s payload, but you don't have to: let an AutoCAD command create the OLE
+  object, then set the frame's `Position3d`/`ScaleWidth`/`ScaleHeight`/`Rotation` (all
+  settable) to sit where the `RasterImage` was, and erase the original. DiRoots ProSheets
+  does exactly this — its `DiRoots.ProSheets.Cad.dll` references `accoremgd`/`Acdbmgd` and
+  its TypeRef table names `Ole2Frame`, `RasterImage`, `RasterImageDef` and
+  `CommandMethodAttribute`. *(An earlier version of this entry said "impossible" — the API
+  findings were right, the conclusion was not.)*
+  **Not scheduled.** Cost is a hard AutoCAD dependency, a second deploy target
+  (AutoCAD plugin + installer work), a visible AutoCAD session per run, and OLE's known
+  plot-reliability problems. Try the title-block vectorisation below first.
 - [ ] **Raster-image report on export** — fallout from the above: collect `ImageInstance`
   elements per exported view and read `GetExternalFileReference()`, so a run says which
   views carry images and which files must be handed over with the DWGs. Optional
