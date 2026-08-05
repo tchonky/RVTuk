@@ -74,10 +74,11 @@ All three: [spec](specs/2026-08-03-multi-model-and-naming-design.md),
   **Not scheduled.** Cost is a hard AutoCAD dependency, a second deploy target
   (AutoCAD plugin + installer work), a visible AutoCAD session per run, and OLE's known
   plot-reliability problems. Try the title-block vectorisation below first.
-- [ ] **Raster-image report on export** — fallout from the above: collect `ImageInstance`
-  elements per exported view and read `GetExternalFileReference()`, so a run says which
-  views carry images and which files must be handed over with the DWGs. Optional
-  follow-on: zip each run's DWGs with those files.
+- [ ] **eTransmit-style transmittal zip** — one archive per run holding the exported DWGs
+  and everything they depend on (images, xref'd view drawings, resolvable SHX fonts) plus a
+  `TRANSMITTAL.txt`, so the receiver gets no broken links or substituted text. Design
+  approved 2026-08-04: [spec](specs/2026-08-04-transmittal-zip-design.md). Supersedes the
+  raster-image-report idea — the zip covers it and more.
 
 ## Ideas / future
 
