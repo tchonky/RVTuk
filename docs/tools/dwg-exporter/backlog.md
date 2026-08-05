@@ -60,6 +60,19 @@ All three: [spec](specs/2026-08-03-multi-model-and-naming-design.md),
 - [ ] **Export Speed** - check if there is a way to improve the speed of exportation.
   DWG normally takes a lot of time. Maybe simplifying the DWG drawing could be a workaround.
   (Un-nested from the companion-script item above — it's its own question, not part of it.)
+- [x] **Images inside the DWG (embedded or OLE), as a checkbox** — researched 2026-08-04,
+  see [research/2026-08-04-embedding-images-in-dwg.md](research/2026-08-04-embedding-images-in-dwg.md).
+  Verdict: **impossible**, and there is nothing for a checkbox to switch. Revit's DWG
+  export has no image option anywhere in `DWGExportOptions`/`ACADExportOptions`/
+  `BaseExportOptions`; DWG keeps raster images external by design; and `Ole2Frame`'s
+  payload (`OleObject`, `LinkName`, `LinkPath`, `Type`) is read-only in the AutoCAD managed
+  API, so OLE objects can be read but never authored. **Don't retry this** — the answers
+  are the PDF the tool already exports (which does embed images), or an eTransmit-style
+  bundle of DWG + image files.
+- [ ] **Raster-image report on export** — fallout from the above: collect `ImageInstance`
+  elements per exported view and read `GetExternalFileReference()`, so a run says which
+  views carry images and which files must be handed over with the DWGs. Optional
+  follow-on: zip each run's DWGs with those files.
 
 ## Ideas / future
 
