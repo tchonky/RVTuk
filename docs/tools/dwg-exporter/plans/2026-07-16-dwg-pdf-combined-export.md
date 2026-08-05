@@ -309,5 +309,5 @@ In `DwgExportCommand`, the `planExport` closure's existence lambda becomes:
 
 - [ ] **Step 1: Full test suite** — Expected: PASS, no regressions.
 - [ ] **Step 2: Docs** — README "What it is" mentions optional PDF output; backlog: tick "Export DWG + PDF together", note the non-sheet-view naming caveat.
-- [ ] **Step 3: In-Revit checklist (user):** deploy; export a small set with both boxes checked; `.dwg`/`.pdf` basenames must match exactly; PDF-only run works; old config opens with DWG checked/PDF unchecked.
+- [x] **Step 3: In-Revit checklist (user):** deploy; export a small set with both boxes checked; `.dwg`/`.pdf` basenames must match exactly; PDF-only run works; old config opens with DWG checked/PDF unchecked.
 - [ ] **Step 4: Commit** — `git add docs/tools/dwg-exporter && git commit -m "docs(dwg-exporter): DWG+PDF combined export shipped"`

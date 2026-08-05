@@ -82,4 +82,4 @@ Same as the parent tool. No Core/test changes in this feature; verification is c
 ### Task 2: Docs
 
 - [ ] Backlog: convert the three editor feature items to "shipped as hand-off"; README one-liner. Commit.
-- [ ] In-Revit checklist (user): each button closes the window and opens the right dialog; rule/set/setup edits appear after reopening; selections restored.
+- [x] In-Revit checklist (user): each button closes the window and opens the right dialog; rule/set/setup edits appear after reopening; selections restored.
