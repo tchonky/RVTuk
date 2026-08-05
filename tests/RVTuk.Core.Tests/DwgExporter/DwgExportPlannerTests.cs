@@ -85,7 +85,7 @@ public class DwgExportPlannerTests
         Assert.Equal(DwgExportDefaults.ViewNameNamingName, new DwgExportRequest().ViewNamingSetupName);
         Assert.False(new DwgExportRequest().SeparatePdfFolder);
         Assert.False(new DwgExportRequest().CopyMissingSetups);
-        Assert.False(new DwgExportRequest().CreateTransmittalZip);
+        Assert.Equal(TransmittalMode.None, new DwgExportRequest().ZipMode);
         Assert.Empty(new DwgExportRequest().ExtraModelKeys);
     }
 

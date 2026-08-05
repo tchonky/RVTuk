@@ -117,7 +117,8 @@ namespace RVTuk.Revit.DwgExporter
             DWGExportOptions? dwgOptions,
             PDFExportOptions? sheetPdfOptions,
             PDFExportOptions? viewPdfOptions,
-            Action<int, int, string> progress)
+            Action<int, int, string> progress,
+            Action<PlannedExportFile>? afterEach = null)
         {
             var tag = request.ExportDwg && request.ExportPdf ? " (DWG+PDF)"
                 : request.ExportPdf ? " (PDF)" : " (DWG)";
@@ -164,6 +165,9 @@ namespace RVTuk.Revit.DwgExporter
                         ": the views naming rule produced nothing here, so the view name was used.");
                 }
 
+                // Per-drawing bundling snapshots here: whatever appeared since the last view
+                // belongs to this one.
+                afterEach?.Invoke(file);
                 progress(i + 1, files.Count, file.Source + tag);
             }
 

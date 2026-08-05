@@ -89,7 +89,8 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             _pdfOutputFolder = settings.PdfOutputFolder;
             _separatePdfFolder = settings.SeparatePdfFolder;
             _copyMissingSetups = settings.CopyMissingSetups;
-            _createTransmittalZip = settings.CreateTransmittalZip;
+            _createTransmittalZip = settings.ZipMode != TransmittalMode.None;
+            _zipPerDrawing = settings.ZipMode == TransmittalMode.PerDrawing;
             _useCurrentWindow = settings.UseCurrentWindow || sheetSets.Count == 0;
             _selectedSheetNaming =
                 pdfSetups.FirstOrDefault(s => s.Name == settings.SheetNamingSetupName) ?? pdfSetups.FirstOrDefault();
@@ -143,12 +144,35 @@ namespace RVTuk.UI.DwgExporter.ViewModels
         }
 
         private bool _createTransmittalZip;
-        /// <summary>Bundle the DWGs and what they depend on into one archive.</summary>
+        /// <summary>Bundle the DWGs and what they depend on. The shape is
+        /// <see cref="ZipPerDrawing"/>.</summary>
         public bool CreateTransmittalZip
         {
             get => _createTransmittalZip;
-            set => SetProperty(ref _createTransmittalZip, value);
+            set { SetProperty(ref _createTransmittalZip, value); OnPropertyChanged(nameof(ZipOptionsVisible)); }
         }
+
+        private bool _zipPerDrawing;
+        /// <summary>One archive per drawing rather than one for the whole run.</summary>
+        public bool ZipPerDrawing
+        {
+            get => _zipPerDrawing;
+            set { SetProperty(ref _zipPerDrawing, value); OnPropertyChanged(nameof(ZipOneBundle)); }
+        }
+
+        // Inverse binding target for the "one zip for the run" radio.
+        public bool ZipOneBundle
+        {
+            get => !_zipPerDrawing;
+            set => ZipPerDrawing = !value;
+        }
+
+        public bool ZipOptionsVisible => CreateTransmittalZip;
+
+        private TransmittalMode ZipMode =>
+            !CreateTransmittalZip || !ExportDwgFormat ? TransmittalMode.None
+            : ZipPerDrawing ? TransmittalMode.PerDrawing
+            : TransmittalMode.OneBundle;
 
         /// <summary>A PDF-only run has nothing to bundle.</summary>
         public bool CanBundle => ExportDwgFormat;
@@ -290,7 +314,7 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             ExportDwg = ExportDwgFormat,
             ExportPdf = ExportPdfFormat,
             CopyMissingSetups = CopyMissingSetups,
-            CreateTransmittalZip = CreateTransmittalZip && ExportDwgFormat,
+            ZipMode = ZipMode,
             ExtraModelKeys = MultiModelEnabled
                 ? Models.Where(m => m.IsSelected && !m.IsActive).Select(m => m.Key).ToList()
                 : new List<string>(),
@@ -399,7 +423,7 @@ namespace RVTuk.UI.DwgExporter.ViewModels
                     ExportDwg = ExportDwgFormat,
                     ExportPdf = ExportPdfFormat,
                     CopyMissingSetups = CopyMissingSetups,
-                    CreateTransmittalZip = CreateTransmittalZip,
+                    ZipMode = ZipMode,
                 });
                 ConfigManager.SaveConfig(config);
             }

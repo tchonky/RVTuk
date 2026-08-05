@@ -69,12 +69,19 @@ namespace RVTuk.Revit.DwgExporter
 
         public DwgExportResult Run(DwgExportRequest request, Action<int, int, string> progress)
         {
-            var bundling = request.CreateTransmittalZip && request.ExportDwg;
+            var mode = request.ExportDwg ? request.ZipMode : TransmittalMode.None;
+            var bundling = mode != TransmittalMode.None;
             // Taken before anything is written: the diff against the after-shot is how we
             // learn what Revit produced, images and xref'd view drawings included.
             var before = bundling
                 ? FolderSnapshot.Take(request.OutputFolder)
                 : new List<FileStamp>();
+
+            // Per-drawing bundling needs to know which view produced what, so it re-snapshots
+            // after every view instead of once at the end.
+            var perDrawing = mode == TransmittalMode.PerDrawing;
+            var productions = new List<DrawingProduction>();
+            var running = before;
 
             var jobs = BuildJobs(request, out var skippedModels, out var skippedViews);
             var total = jobs.Sum(j => j.Files.Count);
@@ -100,7 +107,19 @@ namespace RVTuk.Revit.DwgExporter
                 var offset = done;
                 var one = SheetDwgExporter.Export(
                     job.Doc, request, job.Files, dwgOptions, sheetPdfOptions, viewPdfOptions,
-                    (i, _, label) => progress(offset + i, total, label));
+                    (i, _, label) => progress(offset + i, total, label),
+                    perDrawing
+                        ? file =>
+                        {
+                            var now = FolderSnapshot.Take(request.OutputFolder);
+                            productions.Add(new DrawingProduction
+                            {
+                                File = file,
+                                ProducedFiles = FolderSnapshot.Diff(running, now),
+                            });
+                            running = now;
+                        }
+                        : (Action<PlannedExportFile>?)null);
 
                 done += job.Files.Count;
                 result.ExportedCount += one.ExportedCount;
@@ -111,9 +130,63 @@ namespace RVTuk.Revit.DwgExporter
             result.Notes.AddRange(skippedModels);
             result.Notes.AddRange(skippedViews.Select(name => name + ": skipped (not an exportable view)"));
 
-            if (bundling) WriteTransmittal(request, jobs, before, result);
+            if (bundling)
+            {
+                if (perDrawing) WritePerDrawingTransmittals(request, jobs, productions, result);
+                else WriteTransmittal(request, jobs, before, result);
+            }
             return result;
         }
+
+        /// <summary>
+        /// One archive per drawing, named after it. Same failure rule as the run-level
+        /// bundle: the drawings are already on disk, so a zip problem is reported and no more.
+        /// </summary>
+        private void WritePerDrawingTransmittals(
+            DwgExportRequest request, List<Job> jobs, List<DrawingProduction> productions, DwgExportResult result)
+        {
+            try
+            {
+                var bundles = PerDrawingTransmittal.Plan(request.OutputFolder, productions);
+                if (bundles.Count == 0)
+                {
+                    result.Notes.Add("No transmittals written — the export produced no drawings.");
+                    return;
+                }
+
+                var fonts = FontCollector.Collect(_active, request.DwgSetupName, out var fontWarnings);
+
+                foreach (var bundle in bundles)
+                {
+                    var contents = TransmittalBuilder.Build(bundle.Files, fonts, bundle.ArchivePath);
+                    contents.Warnings.AddRange(fontWarnings);
+
+                    var report = TransmittalReport.Render(
+                        DescribeRun(request, jobs, Path.GetFileNameWithoutExtension(bundle.ArchivePath)),
+                        contents);
+
+                    result.Notes.AddRange(TransmittalWriter.Write(bundle.ArchivePath, contents, report));
+                }
+
+                result.Notes.Add("Transmittals: " + bundles.Count + " zip(s) in " + request.OutputFolder);
+            }
+            catch (Exception ex)
+            {
+                result.Errors.Add("Transmittal zips failed (the exported files are unaffected): " + ex.Message);
+            }
+        }
+
+        private TransmittalInfo DescribeRun(DwgExportRequest request, List<Job> jobs, string? drawingName = null)
+            => new TransmittalInfo
+            {
+                CreatedUtc = DateTime.UtcNow,
+                SheetSetName = request.CurrentWindow ? "" : request.SheetSetName,
+                ModelTitles = jobs.Select(j => j.Doc.Title).Distinct().ToList(),
+                DwgSetupName = request.DwgSetupName,
+                SheetNamingSetupName = request.SheetNamingSetupName,
+                ViewNamingSetupName = request.ViewNamingSetupName,
+                DrawingName = drawingName ?? "",
+            };
 
         /// <summary>
         /// Bundles what the run just produced. Runs after a successful export and never fails
@@ -137,15 +210,7 @@ namespace RVTuk.Revit.DwgExporter
                 var contents = TransmittalBuilder.Build(produced, fonts, archivePath);
                 contents.Warnings.AddRange(fontWarnings);
 
-                var report = TransmittalReport.Render(new TransmittalInfo
-                {
-                    CreatedUtc = DateTime.UtcNow,
-                    SheetSetName = request.CurrentWindow ? "" : request.SheetSetName,
-                    ModelTitles = jobs.Select(j => j.Doc.Title).Distinct().ToList(),
-                    DwgSetupName = request.DwgSetupName,
-                    SheetNamingSetupName = request.SheetNamingSetupName,
-                    ViewNamingSetupName = request.ViewNamingSetupName,
-                }, contents);
+                var report = TransmittalReport.Render(DescribeRun(request, jobs), contents);
 
                 // Skipped-file warnings surface here rather than in the report: the report is
                 // already rendered by the time the writer discovers a lock.

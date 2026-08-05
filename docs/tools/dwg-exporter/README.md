@@ -43,9 +43,22 @@ in [backlog.md](backlog.md).
 
 A DWG from Revit is not self-contained: raster images are external references, and with the
 DWG setup's `MergedViews` off, the views on a sheet come out as separate xref'd drawings.
-Tick **Bundle DWGs into a zip (eTransmit-style)** and the run writes one archive beside the
-drawings — `<set name>_<date_time>.zip` — holding the DWGs, the images and xrefs Revit
-emitted, any SHX fonts found on the machine, and a `TRANSMITTAL.txt`.
+Tick **Bundle DWGs into a zip (eTransmit-style)** and choose a shape:
+
+- **One zip for the run** — a single `<set name>_<date_time>.zip` holding everything.
+- **One zip per drawing** — `<drawing name>.zip` each, so a recipient can be sent one sheet
+  without the rest.
+
+Either way an archive holds the DWGs, the images and xrefs Revit emitted, any SHX fonts
+found on the machine, and a `TRANSMITTAL.txt`.
+
+In per-drawing mode the output folder is re-snapshotted after **each view**, so every
+drawing gets exactly the `.dwg` files its own export produced — including the xref'd view
+drawings a setup with `MergedViews` off emits alongside a sheet. Images are different:
+Revit writes one copy per run, during whichever drawing used it first, so **every archive
+gets every image**. Without a DWG reader there is no way to know which drawings reference
+which image, and duplicating bytes beats shipping a broken link. A drawing that produced no
+DWG of its own — a PDF-only view, say — gets no archive rather than an empty one.
 
 Contents are found by **snapshotting the output folder before and after the run**: anything
 new or changed is what Revit produced. There is no DWG reader here, so what a drawing

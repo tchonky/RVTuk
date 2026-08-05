@@ -52,7 +52,8 @@ namespace RVTuk.Core.DwgExporter
             };
         }
 
-        private static TransmittalKind KindOf(string path)
+        /// <summary>What a produced file is, judged by extension — all we can judge it by.</summary>
+        public static TransmittalKind KindOf(string path)
         {
             if (IsExtension(path, ".dwg")) return TransmittalKind.Drawing;
             return ImageExtensions.Any(ext => IsExtension(path, ext))

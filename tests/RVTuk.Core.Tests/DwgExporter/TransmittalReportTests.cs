@@ -72,6 +72,15 @@ public class TransmittalReportTests
     }
 
     [Fact]
+    public void Render_NamesTheDrawing_WhenTheArchiveIsForJustOne()
+    {
+        var info = Info();
+        info.DrawingName = "A-101";
+
+        Assert.Contains("A-101", TransmittalReport.Render(info, new TransmittalContents()));
+    }
+
+    [Fact]
     public void Render_IncludesWarnings()
     {
         var contents = new TransmittalContents

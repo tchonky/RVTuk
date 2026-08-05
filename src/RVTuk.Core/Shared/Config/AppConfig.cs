@@ -52,8 +52,12 @@ namespace RVTuk.Core.Shared.Config
         /// setup is skipped, rather than having the setup created in it.</summary>
         public bool DwgExportCopyMissingSetups { get; set; }
 
-        /// <summary>False (the absent-key value) means no transmittal archive is written.</summary>
+        /// <summary>Superseded by <see cref="DwgExportZipMode"/>; still read so a config
+        /// written before the mode existed keeps its bundling turned on.</summary>
         public bool DwgExportCreateZip { get; set; }
+
+        /// <summary>None (0, the absent-key value) means no transmittal archive is written.</summary>
+        public DwgExporter.TransmittalMode DwgExportZipMode { get; set; }
 
         /// <summary>Topo Tools: distance between generated toposolid points, in centimetres.
         /// Reads back as 0 from any config file written before this property existed — net48's

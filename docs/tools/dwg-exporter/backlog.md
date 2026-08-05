@@ -138,6 +138,14 @@ All three: [spec](specs/2026-08-03-multi-model-and-naming-design.md),
   - [ ] A run with both formats and a separate PDF folder — no `.pdf` in the archive.
   - [ ] PDF-only run — the bundle checkbox is disabled.
   - [x] The loose DWGs are still on disk after the zip is written.
+- 2026-08-05 per-drawing zips:
+  - [ ] "One zip per drawing" — one `<drawing name>.zip` per exported DWG, each opening to
+        that drawing plus the run's images.
+  - [ ] `MergedViews` off — a sheet's xref'd view drawings are in *that sheet's* zip and not
+        in any other's.
+  - [ ] A previous run's zip left in the folder is not swallowed into the new archives.
+  - [ ] Switching back to "One zip for the run" still produces the single archive.
+  - [ ] A config that had the old bundling checkbox on still bundles after upgrading.
 
 ## Done
 

@@ -170,7 +170,17 @@
                           IsChecked="{Binding CreateTransmittalZip}"
                           IsEnabled="{Binding CanBundle}"
                           Margin="0,8,0,0"
-                          ToolTip="Writes one archive beside the drawings holding the DWGs, the images and xrefs they reference, any SHX fonts found on this machine, and a TRANSMITTAL.txt. TrueType fonts are listed but not copied — redistributing them generally breaches their licence. The loose files are kept."/>
+                          ToolTip="Writes archives beside the drawings holding the DWGs, the images and xrefs they reference, any SHX fonts found on this machine, and a TRANSMITTAL.txt. TrueType fonts are listed but not copied — redistributing them generally breaches their licence. The loose files are kept."/>
+                <StackPanel Orientation="Horizontal" Margin="20,4,0,0"
+                            IsEnabled="{Binding CanBundle}"
+                            Visibility="{Binding ZipOptionsVisible, Converter={StaticResource BoolVis}}">
+                    <RadioButton Content="One zip for the run" IsChecked="{Binding ZipOneBundle}"
+                                 GroupName="ZipShape"
+                                 ToolTip="A single archive named after the view/sheet set."/>
+                    <RadioButton Content="One zip per drawing" IsChecked="{Binding ZipPerDrawing}"
+                                 GroupName="ZipShape" Margin="18,0,0,0"
+                                 ToolTip="An archive per drawing, named after it. Each holds its own DWG and any xrefs it produced; images are copied into every archive, since a DWG can't be read to learn which ones it uses."/>
+                </StackPanel>
             </StackPanel>
         </Border>
 

@@ -17,7 +17,7 @@ namespace RVTuk.Core.DwgExporter
         public bool ExportDwg { get; set; } = true;
         public bool ExportPdf { get; set; }
         public bool CopyMissingSetups { get; set; }
-        public bool CreateTransmittalZip { get; set; }
+        public TransmittalMode ZipMode { get; set; } = TransmittalMode.None;
     }
 
     /// <summary>
@@ -43,7 +43,11 @@ namespace RVTuk.Core.DwgExporter
             ExportDwg = !config.DwgExportDwgOff,
             ExportPdf = config.DwgExportPdfOn,
             CopyMissingSetups = config.DwgExportCopyMissingSetups,
-            CreateTransmittalZip = config.DwgExportCreateZip,
+            // The mode supersedes the old bool; fall back to it so a config written before
+            // the mode existed doesn't silently lose its bundling.
+            ZipMode = config.DwgExportZipMode != TransmittalMode.None
+                ? config.DwgExportZipMode
+                : config.DwgExportCreateZip ? TransmittalMode.OneBundle : TransmittalMode.None,
         };
 
         public static void Write(AppConfig config, string modelKey, DwgExportSettings settings)
@@ -62,7 +66,9 @@ namespace RVTuk.Core.DwgExporter
             config.DwgExportDwgOff = !settings.ExportDwg;
             config.DwgExportPdfOn = settings.ExportPdf;
             config.DwgExportCopyMissingSetups = settings.CopyMissingSetups;
-            config.DwgExportCreateZip = settings.CreateTransmittalZip;
+            config.DwgExportZipMode = settings.ZipMode;
+            // Kept in step so a downgrade, or another reader of the old key, still sees it.
+            config.DwgExportCreateZip = settings.ZipMode != TransmittalMode.None;
         }
     }
 }

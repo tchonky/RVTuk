@@ -2,6 +2,17 @@ using System.Collections.Generic;
 
 namespace RVTuk.Core.DwgExporter
 {
+    /// <summary>How a run bundles its output. <see cref="None"/> is 0 so an absent config key
+    /// and the out-of-box default agree, the same rule every other DWG export key follows.</summary>
+    public enum TransmittalMode
+    {
+        None = 0,
+        /// <summary>One archive for the whole run.</summary>
+        OneBundle = 1,
+        /// <summary>One archive per drawing, named after it.</summary>
+        PerDrawing = 2,
+    }
+
     /// <summary>What a bundled file is, for grouping in the transmittal report.</summary>
     public enum TransmittalKind
     {
@@ -48,5 +59,8 @@ namespace RVTuk.Core.DwgExporter
         public string DwgSetupName { get; set; } = "";
         public string SheetNamingSetupName { get; set; } = "";
         public string ViewNamingSetupName { get; set; } = "";
+
+        /// <summary>Set only for a per-drawing archive, so the report says which one it is.</summary>
+        public string DrawingName { get; set; } = "";
     }
 }

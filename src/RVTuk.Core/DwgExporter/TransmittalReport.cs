@@ -19,6 +19,8 @@ namespace RVTuk.Core.DwgExporter
             sb.AppendLine("=======================");
             sb.AppendLine();
             sb.AppendLine("Created:        " + info.CreatedUtc.ToString("yyyy-MM-dd HH:mm") + " UTC");
+            if (!string.IsNullOrWhiteSpace(info.DrawingName))
+                sb.AppendLine("Drawing:        " + info.DrawingName);
             if (!string.IsNullOrWhiteSpace(info.SheetSetName))
                 sb.AppendLine("Range:          " + info.SheetSetName);
             if (info.ModelTitles.Count > 0)

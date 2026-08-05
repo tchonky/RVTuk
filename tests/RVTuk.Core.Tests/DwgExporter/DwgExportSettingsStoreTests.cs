@@ -16,17 +16,42 @@ public class DwgExportSettingsStoreTests
         Assert.False(settings.CopyMissingSetups);
         Assert.True(settings.ExportDwg);
         Assert.False(settings.ExportPdf);
-        Assert.False(settings.CreateTransmittalZip);
+        Assert.Equal(TransmittalMode.None, settings.ZipMode);
     }
 
-    [Fact]
-    public void CreateTransmittalZip_RoundTrips()
+    [Theory]
+    [InlineData(TransmittalMode.OneBundle)]
+    [InlineData(TransmittalMode.PerDrawing)]
+    public void ZipMode_RoundTrips(TransmittalMode mode)
     {
         var config = new AppConfig();
 
-        DwgExportSettingsStore.Write(config, "m", new DwgExportSettings { CreateTransmittalZip = true });
+        DwgExportSettingsStore.Write(config, "m", new DwgExportSettings { ZipMode = mode });
 
-        Assert.True(DwgExportSettingsStore.Read(config, "m").CreateTransmittalZip);
+        Assert.Equal(mode, DwgExportSettingsStore.Read(config, "m").ZipMode);
+    }
+
+    [Fact]
+    public void ZipMode_AbsentFromAnOldConfig_IsNone()
+    {
+        Assert.Equal(TransmittalMode.None, DwgExportSettingsStore.Read(new AppConfig(), "m").ZipMode);
+    }
+
+    [Fact]
+    public void ZipMode_ReadsTheSupersededBool_SoBundlingStaysOnAfterAnUpgrade()
+    {
+        // Configs written before the mode existed carry DwgExportCreateZip instead.
+        var config = new AppConfig { DwgExportCreateZip = true };
+
+        Assert.Equal(TransmittalMode.OneBundle, DwgExportSettingsStore.Read(config, "m").ZipMode);
+    }
+
+    [Fact]
+    public void ZipMode_TheNewKeyWins_WhenBothArePresent()
+    {
+        var config = new AppConfig { DwgExportCreateZip = true, DwgExportZipMode = TransmittalMode.PerDrawing };
+
+        Assert.Equal(TransmittalMode.PerDrawing, DwgExportSettingsStore.Read(config, "m").ZipMode);
     }
 
     [Fact]
