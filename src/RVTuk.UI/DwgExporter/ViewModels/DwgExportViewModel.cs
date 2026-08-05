@@ -89,6 +89,7 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             _pdfOutputFolder = settings.PdfOutputFolder;
             _separatePdfFolder = settings.SeparatePdfFolder;
             _copyMissingSetups = settings.CopyMissingSetups;
+            _createTransmittalZip = settings.CreateTransmittalZip;
             _useCurrentWindow = settings.UseCurrentWindow || sheetSets.Count == 0;
             _selectedSheetNaming =
                 pdfSetups.FirstOrDefault(s => s.Name == settings.SheetNamingSetupName) ?? pdfSetups.FirstOrDefault();
@@ -133,8 +134,24 @@ namespace RVTuk.UI.DwgExporter.ViewModels
         public bool ExportDwgFormat
         {
             get => _exportDwgFormat;
-            set { SetProperty(ref _exportDwgFormat, value); OnPropertyChanged(nameof(CanExport)); }
+            set
+            {
+                SetProperty(ref _exportDwgFormat, value);
+                OnPropertyChanged(nameof(CanExport));
+                OnPropertyChanged(nameof(CanBundle));
+            }
         }
+
+        private bool _createTransmittalZip;
+        /// <summary>Bundle the DWGs and what they depend on into one archive.</summary>
+        public bool CreateTransmittalZip
+        {
+            get => _createTransmittalZip;
+            set => SetProperty(ref _createTransmittalZip, value);
+        }
+
+        /// <summary>A PDF-only run has nothing to bundle.</summary>
+        public bool CanBundle => ExportDwgFormat;
 
         private bool _exportPdfFormat;
         public bool ExportPdfFormat
@@ -273,6 +290,7 @@ namespace RVTuk.UI.DwgExporter.ViewModels
             ExportDwg = ExportDwgFormat,
             ExportPdf = ExportPdfFormat,
             CopyMissingSetups = CopyMissingSetups,
+            CreateTransmittalZip = CreateTransmittalZip && ExportDwgFormat,
             ExtraModelKeys = MultiModelEnabled
                 ? Models.Where(m => m.IsSelected && !m.IsActive).Select(m => m.Key).ToList()
                 : new List<string>(),
@@ -381,6 +399,7 @@ namespace RVTuk.UI.DwgExporter.ViewModels
                     ExportDwg = ExportDwgFormat,
                     ExportPdf = ExportPdfFormat,
                     CopyMissingSetups = CopyMissingSetups,
+                    CreateTransmittalZip = CreateTransmittalZip,
                 });
                 ConfigManager.SaveConfig(config);
             }

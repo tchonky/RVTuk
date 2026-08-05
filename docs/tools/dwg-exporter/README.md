@@ -36,6 +36,29 @@ AutoCAD shows the default plot device's paper until the page setup is set there.
 (companion AutoCAD script that stamps each layout with the measured title-block size) is
 in [backlog.md](backlog.md).
 
+## Transmittal zip
+
+A DWG from Revit is not self-contained: raster images are external references, and with the
+DWG setup's `MergedViews` off, the views on a sheet come out as separate xref'd drawings.
+Tick **Bundle DWGs into a zip (eTransmit-style)** and the run writes one archive beside the
+drawings — `<set name>_<date_time>.zip` — holding the DWGs, the images and xrefs Revit
+emitted, any SHX fonts found on the machine, and a `TRANSMITTAL.txt`.
+
+Contents are found by **snapshotting the output folder before and after the run**: anything
+new or changed is what Revit produced. There is no DWG reader here, so what a drawing
+references is observed rather than parsed — which is also why this catches the xref'd view
+drawings whose names Revit invents.
+
+Entries are stored flat, because a DWG references its images and xrefs by bare filename.
+`.pdf` is excluded, so a shared DWG/PDF folder doesn't contaminate the bundle. The loose
+files are kept, and a zip failure never fails the export.
+
+**Fonts:** SHX files are copied when found under an Autodesk product's `Fonts` folder;
+TrueType fonts are named in `TRANSMITTAL.txt` but not copied, because redistributing them
+generally breaches their licence — and a receiver almost always has the common ones. Where
+no Autodesk font folder exists at all, the report says so rather than implying none were
+needed.
+
 ## Multi-model runs
 
 Export setups and view/sheet sets are per-document elements with no cross-document

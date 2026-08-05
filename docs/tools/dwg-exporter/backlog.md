@@ -74,11 +74,14 @@ All three: [spec](specs/2026-08-03-multi-model-and-naming-design.md),
   **Not scheduled.** Cost is a hard AutoCAD dependency, a second deploy target
   (AutoCAD plugin + installer work), a visible AutoCAD session per run, and OLE's known
   plot-reliability problems. Try the title-block vectorisation below first.
-- [ ] **eTransmit-style transmittal zip** — one archive per run holding the exported DWGs
-  and everything they depend on (images, xref'd view drawings, resolvable SHX fonts) plus a
-  `TRANSMITTAL.txt`, so the receiver gets no broken links or substituted text. Design
-  approved 2026-08-04: [spec](specs/2026-08-04-transmittal-zip-design.md). Supersedes the
-  raster-image-report idea — the zip covers it and more.
+- [x] **eTransmit-style transmittal zip** — shipped 2026-08-04
+  ([spec](specs/2026-08-04-transmittal-zip-design.md)): a "Bundle DWGs into a zip" checkbox
+  writes one archive per run beside the drawings, holding the DWGs, the images and xref'd
+  view drawings Revit emitted, any SHX fonts found on the machine, and a `TRANSMITTAL.txt`
+  naming what is *not* in the bundle. Contents are discovered by snapshotting the output
+  folder before and after the run — we have no DWG reader, so what a drawing references is
+  observed rather than parsed. Loose files are kept; a zip failure never fails the export.
+  Supersedes the raster-image-report idea. Pending in-Revit verification.
 
 ## Ideas / future
 
@@ -115,6 +118,21 @@ All three: [spec](specs/2026-08-03-multi-model-and-naming-design.md),
   - [ ] Two models producing the same filename — the run aborts before writing and names
         both models.
   - [ ] "Current window" selected — the Models section is disabled.
+- 2026-08-04 transmittal zip:
+  - [ ] A set whose sheets carry raster images — the archive holds the DWGs *and* the images
+        Revit wrote beside them.
+  - [ ] A DWG setup with `MergedViews` off — the xref'd view drawings Revit names itself are
+        in the archive too.
+  - [ ] Unzip somewhere else entirely and open a drawing — no broken links.
+  - [ ] A setup mapping text to an SHX font — the `.shx` is collected from the AutoCAD font
+        folder and `TRANSMITTAL.txt` lists it under Fonts.
+  - [ ] A setup mapping only to TrueType — nothing is copied, and the report names the fonts
+        under "Fonts NOT included" with the licence reason.
+  - [ ] Same run on a machine with no AutoCAD — the report says no font folder was found
+        rather than implying no fonts were needed.
+  - [ ] A run with both formats and a separate PDF folder — no `.pdf` in the archive.
+  - [ ] PDF-only run — the bundle checkbox is disabled.
+  - [ ] The loose DWGs are still on disk after the zip is written.
 
 ## Done
 

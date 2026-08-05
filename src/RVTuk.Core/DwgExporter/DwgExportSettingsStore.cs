@@ -17,6 +17,7 @@ namespace RVTuk.Core.DwgExporter
         public bool ExportDwg { get; set; } = true;
         public bool ExportPdf { get; set; }
         public bool CopyMissingSetups { get; set; }
+        public bool CreateTransmittalZip { get; set; }
     }
 
     /// <summary>
@@ -42,6 +43,7 @@ namespace RVTuk.Core.DwgExporter
             ExportDwg = !config.DwgExportDwgOff,
             ExportPdf = config.DwgExportPdfOn,
             CopyMissingSetups = config.DwgExportCopyMissingSetups,
+            CreateTransmittalZip = config.DwgExportCreateZip,
         };
 
         public static void Write(AppConfig config, string modelKey, DwgExportSettings settings)
@@ -60,6 +62,7 @@ namespace RVTuk.Core.DwgExporter
             config.DwgExportDwgOff = !settings.ExportDwg;
             config.DwgExportPdfOn = settings.ExportPdf;
             config.DwgExportCopyMissingSetups = settings.CopyMissingSetups;
+            config.DwgExportCreateZip = settings.CreateTransmittalZip;
         }
     }
 }

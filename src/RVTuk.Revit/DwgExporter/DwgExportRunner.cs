@@ -69,6 +69,13 @@ namespace RVTuk.Revit.DwgExporter
 
         public DwgExportResult Run(DwgExportRequest request, Action<int, int, string> progress)
         {
+            var bundling = request.CreateTransmittalZip && request.ExportDwg;
+            // Taken before anything is written: the diff against the after-shot is how we
+            // learn what Revit produced, images and xref'd view drawings included.
+            var before = bundling
+                ? FolderSnapshot.Take(request.OutputFolder)
+                : new List<FileStamp>();
+
             var jobs = BuildJobs(request, out var skippedModels, out var skippedViews);
             var total = jobs.Sum(j => j.Files.Count);
             var done = 0;
@@ -103,7 +110,60 @@ namespace RVTuk.Revit.DwgExporter
 
             result.Notes.AddRange(skippedModels);
             result.Notes.AddRange(skippedViews.Select(name => name + ": skipped (not an exportable view)"));
+
+            if (bundling) WriteTransmittal(request, jobs, before, result);
             return result;
+        }
+
+        /// <summary>
+        /// Bundles what the run just produced. Runs after a successful export and never fails
+        /// it — the drawings are already on disk, so a zip problem is reported and no more.
+        /// </summary>
+        private void WriteTransmittal(
+            DwgExportRequest request, List<Job> jobs, IReadOnlyList<FileStamp> before, DwgExportResult result)
+        {
+            try
+            {
+                var produced = FolderSnapshot.Diff(before, FolderSnapshot.Take(request.OutputFolder));
+                if (produced.Count == 0)
+                {
+                    result.Notes.Add("No transmittal written — the export produced no files.");
+                    return;
+                }
+
+                var archivePath = Path.Combine(request.OutputFolder, ArchiveName(request));
+                var fonts = FontCollector.Collect(_active, request.DwgSetupName, out var fontWarnings);
+
+                var contents = TransmittalBuilder.Build(produced, fonts, archivePath);
+                contents.Warnings.AddRange(fontWarnings);
+
+                var report = TransmittalReport.Render(new TransmittalInfo
+                {
+                    CreatedUtc = DateTime.UtcNow,
+                    SheetSetName = request.CurrentWindow ? "" : request.SheetSetName,
+                    ModelTitles = jobs.Select(j => j.Doc.Title).Distinct().ToList(),
+                    DwgSetupName = request.DwgSetupName,
+                    SheetNamingSetupName = request.SheetNamingSetupName,
+                    ViewNamingSetupName = request.ViewNamingSetupName,
+                }, contents);
+
+                // Skipped-file warnings surface here rather than in the report: the report is
+                // already rendered by the time the writer discovers a lock.
+                result.Notes.AddRange(TransmittalWriter.Write(archivePath, contents, report));
+                result.Notes.Add("Transmittal: " + archivePath);
+            }
+            catch (Exception ex)
+            {
+                result.Errors.Add("Transmittal zip failed (the exported files are unaffected): " + ex.Message);
+            }
+        }
+
+        private string ArchiveName(DwgExportRequest request)
+        {
+            var stem = request.CurrentWindow || string.IsNullOrWhiteSpace(request.SheetSetName)
+                ? _active.Title
+                : request.SheetSetName;
+            return FileNameComposer.Sanitize(stem) + "_" + DateTime.Now.ToString("yyyy-MM-dd_HHmm") + ".zip";
         }
 
         /// <summary>

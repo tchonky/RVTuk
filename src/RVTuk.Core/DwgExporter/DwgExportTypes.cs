@@ -49,6 +49,9 @@ namespace RVTuk.Core.DwgExporter
         /// there, false skips the model.</summary>
         public bool CopyMissingSetups { get; set; }
 
+        /// <summary>Bundle the run's DWGs and everything they depend on into one zip.</summary>
+        public bool CreateTransmittalZip { get; set; }
+
         /// <summary>Where PDFs go: the separate folder when asked for and filled in, else the
         /// DWG folder — so an unticked checkbox behaves exactly as before it existed.</summary>
         public string PdfFolder => SeparatePdfFolder && !string.IsNullOrWhiteSpace(PdfOutputFolder)

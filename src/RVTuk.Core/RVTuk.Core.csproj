@@ -68,6 +68,14 @@
     <Reference Include="System.Drawing" />
   </ItemGroup>
 
+  <!-- net48: ZipFile/ZipArchive for the DWG transmittal live in these GAC assemblies.
+       Framework assemblies, so no NuGet and no polyfills to clash with Revit's preloads;
+       net8 has both in-box. -->
+  <ItemGroup Condition="'$(TargetFramework)'=='net48'">
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+  </ItemGroup>
+
   <!-- net8.0: System.Drawing.Common NuGet provides GDI+ access on non-Windows or without WPF -->
   <ItemGroup Condition="'$(TargetFramework)'=='net8.0-windows'">
     <PackageReference Include="System.Drawing.Common" Version="8.0.*" />

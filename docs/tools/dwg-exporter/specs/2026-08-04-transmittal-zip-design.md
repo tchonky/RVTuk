@@ -144,9 +144,9 @@ somewhere else and opening a drawing with no broken links; a setup mapping to an
 confirming it is collected; the same on a machine without AutoCAD, confirming the report
 says so.
 
-> **Unverified until then:** whether a given Revit export actually writes image files beside
-> the DWG. The snapshot approach is correct whatever Revit emits — that is why it was chosen
-> over globbing — but the checklist has to confirm the images are there to collect at all.
+> **Confirmed by the user (2026-08-04):** Revit writes the exported images into the same
+> folder as the DWG, so the snapshot picks them up with no path resolution needed. Still
+> worth ticking off in the checklist, but it is no longer a design risk.
 
 ## Out of scope
 

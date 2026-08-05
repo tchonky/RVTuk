@@ -52,6 +52,9 @@ namespace RVTuk.Core.Shared.Config
         /// setup is skipped, rather than having the setup created in it.</summary>
         public bool DwgExportCopyMissingSetups { get; set; }
 
+        /// <summary>False (the absent-key value) means no transmittal archive is written.</summary>
+        public bool DwgExportCreateZip { get; set; }
+
         /// <summary>Topo Tools: distance between generated toposolid points, in centimetres.
         /// Reads back as 0 from any config file written before this property existed — net48's
         /// DataContractJsonSerializer skips property initializers (same trap the DWG format

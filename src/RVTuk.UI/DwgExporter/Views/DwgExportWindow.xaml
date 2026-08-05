@@ -166,6 +166,11 @@
                     <TextBox Text="{Binding PdfOutputFolder, UpdateSourceTrigger=PropertyChanged}"
                              VerticalAlignment="Center"/>
                 </DockPanel>
+                <CheckBox Content="Bundle DWGs into a zip (eTransmit-style)"
+                          IsChecked="{Binding CreateTransmittalZip}"
+                          IsEnabled="{Binding CanBundle}"
+                          Margin="0,8,0,0"
+                          ToolTip="Writes one archive beside the drawings holding the DWGs, the images and xrefs they reference, any SHX fonts found on this machine, and a TRANSMITTAL.txt. TrueType fonts are listed but not copied — redistributing them generally breaches their licence. The loose files are kept."/>
             </StackPanel>
         </Border>
 

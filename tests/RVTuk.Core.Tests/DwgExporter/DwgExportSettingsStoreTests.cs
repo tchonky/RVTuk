@@ -16,6 +16,17 @@ public class DwgExportSettingsStoreTests
         Assert.False(settings.CopyMissingSetups);
         Assert.True(settings.ExportDwg);
         Assert.False(settings.ExportPdf);
+        Assert.False(settings.CreateTransmittalZip);
+    }
+
+    [Fact]
+    public void CreateTransmittalZip_RoundTrips()
+    {
+        var config = new AppConfig();
+
+        DwgExportSettingsStore.Write(config, "m", new DwgExportSettings { CreateTransmittalZip = true });
+
+        Assert.True(DwgExportSettingsStore.Read(config, "m").CreateTransmittalZip);
     }
 
     [Fact]
