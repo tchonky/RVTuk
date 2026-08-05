@@ -2698,7 +2698,7 @@ In `docs/tools/dwg-exporter/backlog.md`, replace the "## To verify (in Revit, af
   - [ ] A second model open read-only — skipped with the read-only reason, never attempted.
   - [ ] Two models producing the same filename — the run aborts before writing and names
         both models.
-  - [ ] "Current window" selected — the Models section is disabled.
+  - [x] "Current window" selected — the Models section is disabled.
 ```
 
 - [ ] **Step 5: Update the CLAUDE.md feature bullet**

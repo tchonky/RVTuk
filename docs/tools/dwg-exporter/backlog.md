@@ -96,6 +96,11 @@ All three: [spec](specs/2026-08-03-multi-model-and-naming-design.md),
 
 ## To verify (in Revit, after deploy)
 
+> Smoke-tested after the 2026-08-04 batch: a run exports and produces the zip. The
+> individual cases below are still unticked — they cover the paths a smoke test doesn't
+> reach (a second model, a views-only naming rule, `MergedViews` off, a machine without
+> AutoCAD).
+
 - Run the manual checklist in [plans/2026-07-15-dwg-exporter.md](plans/2026-07-15-dwg-exporter.md)
   Task 6 — especially the naming-rule **separator placement** check against the native
   PDF export's filenames (fix lives in `FileNameComposer.Compose` if they differ).

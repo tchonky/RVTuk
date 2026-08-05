@@ -18,8 +18,11 @@ choice. "Edit…" buttons hand off to the native dialogs (PDF Export for naming 
 view/sheet sets, Modify DWG/DXF Export Setup for DWG setups) — the window closes, you
 edit, reopen, and everything is re-read with your selections restored.
 
-**Status:** implemented and registered on the ribbon (2026-07-15); pending in-Revit
-verification — see the checklist in
+**Status:** implemented and registered on the ribbon. Smoke-tested in Revit after the
+2026-08-04 batch — a run exports and writes its transmittal zip. The per-case checklists
+(multi-model, the two naming rules, split folders, and the bundle's contents) have **not**
+been worked through; they live in [backlog.md](backlog.md) under "To verify", along with
+the original 2026-07-15 checklist in
 [plans/2026-07-15-dwg-exporter.md](plans/2026-07-15-dwg-exporter.md) Task 6.
 
 **Names:** code `DwgExporter`; ribbon button displays "DWG Export" (internal id
