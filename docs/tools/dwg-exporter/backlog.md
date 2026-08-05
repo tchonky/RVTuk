@@ -107,7 +107,7 @@ All three: [spec](specs/2026-08-03-multi-model-and-naming-design.md),
 - 2026-08-03 batch (nothing below has been run in Revit yet):
   - [ ] A set mixing sheets and views, two different naming setups picked — each file is
         named by the rule for its own kind, and each row's example shows a file of that kind.
-  - [ ] Same run with PDF ticked — every `.dwg` has a `.pdf` of the same basename, for
+  - [x] Same run with PDF ticked — every `.dwg` has a `.pdf` of the same basename, for
         views as well as sheets.
   - [ ] Views left on `<View Name>` — filenames unchanged from before this batch.
   - [ ] A views rule made only of sheet parameters — files fall back to view names and the
@@ -122,13 +122,13 @@ All three: [spec](specs/2026-08-03-multi-model-and-naming-design.md),
   - [ ] A second model open read-only — skipped with the read-only reason, never attempted.
   - [ ] Two models producing the same filename — the run aborts before writing and names
         both models.
-  - [ ] "Current window" selected — the Models section is disabled.
+  - [x] "Current window" selected — the Models section is disabled.
 - 2026-08-04 transmittal zip:
-  - [ ] A set whose sheets carry raster images — the archive holds the DWGs *and* the images
+  - [x] A set whose sheets carry raster images — the archive holds the DWGs *and* the images
         Revit wrote beside them.
   - [ ] A DWG setup with `MergedViews` off — the xref'd view drawings Revit names itself are
         in the archive too.
-  - [ ] Unzip somewhere else entirely and open a drawing — no broken links.
+  - [x] Unzip somewhere else entirely and open a drawing — no broken links.
   - [ ] A setup mapping text to an SHX font — the `.shx` is collected from the AutoCAD font
         folder and `TRANSMITTAL.txt` lists it under Fonts.
   - [ ] A setup mapping only to TrueType — nothing is copied, and the report names the fonts
@@ -137,7 +137,7 @@ All three: [spec](specs/2026-08-03-multi-model-and-naming-design.md),
         rather than implying no fonts were needed.
   - [ ] A run with both formats and a separate PDF folder — no `.pdf` in the archive.
   - [ ] PDF-only run — the bundle checkbox is disabled.
-  - [ ] The loose DWGs are still on disk after the zip is written.
+  - [x] The loose DWGs are still on disk after the zip is written.
 
 ## Done
 
