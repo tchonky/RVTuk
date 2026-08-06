@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Autodesk.Revit.DB;
 using RVTuk.Core.RoundPositions;
@@ -47,7 +48,7 @@ namespace RVTuk.Revit.RoundPositions
                             element.Id.Value, ElementEligibility.CategoryName(element), SkipReason.NotOrthogonal);
                         break;
 
-                    default:
+                    case LineOffsetOutcome.Offset:
                         var translation = new XYZ(
                             GridSnapper.ToFeet(offset.DeltaX), GridSnapper.ToFeet(offset.DeltaY), 0);
 
@@ -61,6 +62,10 @@ namespace RVTuk.Revit.RoundPositions
                                 element.Id.Value, ElementEligibility.CategoryName(element), SkipReason.RevitRejected);
                         }
                         break;
+
+                    default:
+                        throw new InvalidOperationException(
+                            $"Unhandled {nameof(LineOffsetOutcome)}: {offset.Outcome}");
                 }
             }
         }
