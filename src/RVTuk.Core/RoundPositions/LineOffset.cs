@@ -16,9 +16,11 @@ namespace RVTuk.Core.RoundPositions
 
     /// <summary>
     /// v1 moves a line parallel to itself: the coordinate it does not run along is snapped, and
-    /// the along-axis coordinates are left exactly where they were. Lengths and angles never
-    /// change — which is what stops two walls sharing a corner from each moving it and splitting
-    /// it in two.
+    /// the along-axis coordinates are left exactly where they were. One delta carries both
+    /// endpoints, so a line's own length and angle cannot change — snapping each endpoint
+    /// separately is what would deform it. This says nothing about a corner two walls share:
+    /// the horizontal one snaps its Y and the vertical one its X, so the corner does land in
+    /// two places, and closing it is Revit's wall-join maintenance to do.
     /// </summary>
     public static class LineOffset
     {

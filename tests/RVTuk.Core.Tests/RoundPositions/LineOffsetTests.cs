@@ -35,10 +35,23 @@ public class LineOffsetTests
     [Fact]
     public void TheAlongAxisCoordinatesAreNeverTouched()
     {
-        // This is the whole point of translating rather than reshaping: lengths cannot change,
-        // so two walls sharing a corner cannot pull it apart.
+        // This is the whole point of translating rather than reshaping: one delta carries both
+        // endpoints, so the line's length and angle survive the move.
         var result = For(new GridPoint(10.3, 5.2, 0), new GridPoint(410.9, 5.2, 0));
         Assert.Equal(0.0, result.DeltaX, Epsilon);
+    }
+
+    [Fact]
+    public void TheStartPointAnchorsTheTranslation()
+    {
+        // The two ends may differ across the line by up to the orthogonality tolerance and still
+        // count as horizontal — here by 0.0099 cm. That is not a rounding whisker: Snap is a step
+        // function, and these two straddle a midpoint, so anchoring on end instead would land the
+        // wall a full 0.5 cm step away, on the next grid line over (+0.2451 rather than -0.2450).
+        var result = For(new GridPoint(0.0, 5.2450, 0), new GridPoint(400.0, 5.2549, 0));
+
+        Assert.Equal(LineOffsetOutcome.Offset, result.Outcome);
+        Assert.Equal(-0.2450, result.DeltaY, Epsilon);
     }
 
     [Fact]
@@ -54,7 +67,9 @@ public class LineOffsetTests
     [Fact]
     public void ANonOrthogonalLineIsRejectedWithNoDelta()
     {
-        var result = For(new GridPoint(0, 0, 0), new GridPoint(301.2, 400.1, 0));
+        // Both coordinates of the start are off-grid, so a delta leaked out of the rejection path
+        // would be ±0.2 rather than the zero an on-grid start would hand back either way.
+        var result = For(new GridPoint(10.3, 5.2, 0), new GridPoint(311.5, 405.3, 0));
 
         Assert.Equal(LineOffsetOutcome.NotOrthogonal, result.Outcome);
         Assert.Equal(0.0, result.DeltaX, Epsilon);
