@@ -206,7 +206,8 @@ src/RVTuk.Core/RoundPositions/
 
 src/RVTuk.Revit/RoundPositions/
     RoundPositionsRunner            orchestrates the six passes
-    ElementEligibility              link / import / group / design option / workset / pin checks
+    ElementEligibility              link / import / group / design option / workset checks
+                                    (deliberately NOT pins — see Pins and constraints)
     ConstraintReleaser              unlock-or-delete-then-retry
     BasePointPass, LevelPass, DatumPass, LinePass, PointInstancePass, HostedInstancePass
     RoundingFailurePreprocessor     keeps Revit's warning dialogs out of a model-wide run
