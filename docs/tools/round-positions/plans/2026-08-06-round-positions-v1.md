@@ -1114,6 +1114,7 @@ git add src/RVTuk.Revit/RoundPositions && git commit -m "feat(round-positions): 
 ### Task 8: The line pass and the runner (walls only)
 
 **Files:**
+- Modify: `src/RVTuk.Revit/RoundPositions/ConstraintReleaser.cs` (Task 7's file — it must return what it released instead of recording it; see Step 0)
 - Create: `src/RVTuk.Revit/RoundPositions/MoveAttempt.cs`
 - Create: `src/RVTuk.Revit/RoundPositions/LinePass.cs`
 - Create: `src/RVTuk.Revit/RoundPositions/RoundPositionsRunner.cs`
@@ -1121,6 +1122,32 @@ git add src/RVTuk.Revit/RoundPositions && git commit -m "feat(round-positions): 
 **Interfaces:**
 - Consumes: `LineOffset`, `LineOffsetOutcome`, `GridPoint`, `GridSnapper`, `AxisClassifier`, `RoundingReportBuilder`, `SkipReason`, `ElementEligibility`, `ConstraintReleaser`, `RoundingFailurePreprocessor`.
 - Produces: `LinePass.Run(Document doc, IReadOnlyList<Element> elements, double step, RoundingReportBuilder report)`; `RoundPositionsRunner.Run(Document doc, bool allowHalfCentimetres) → RoundingReport`; `MoveAttempt.TryApply(Document doc, Element element, Action apply, RoundingReportBuilder report) → bool` and `MoveAttempt.TryMove(Document doc, Element element, XYZ translation, RoundingReportBuilder report) → bool` (a thin wrapper over `TryApply`). Later passes that change something other than position — a level's elevation, an instance's rotation — call `TryApply` directly rather than re-implementing the unpin/rollback/retry wrapper.
+
+- [ ] **Step 0: Make the constraint releaser report nothing itself**
+
+As written in Task 7, `ConstraintReleaser.Release` writes to the report the moment it unlocks or
+deletes something. That is a lie waiting to happen: the release runs inside a sub-transaction, and
+if that sub-transaction rolls back the model reverts while the report entries survive — naming
+constraints as released that are still in the model. Since that report is *the only record a
+constraint ever existed*, it must never over-claim.
+
+So `Release` returns what it released and records nothing. The caller records only after the
+commit succeeds.
+
+In `src/RVTuk.Revit/RoundPositions/ConstraintReleaser.cs`, change the signature to:
+
+```csharp
+        public static IReadOnlyList<ReleasedConstraint> Release(Document doc, Element element)
+```
+
+Drop the `RoundingReportBuilder` parameter. Replace each `report.RecordReleasedConstraint(...)` call
+with adding to a local `var released = new List<ReleasedConstraint>();`, built with the same element
+id, category and wording as before, and return it. Drop the `released` bool — the list's emptiness
+carries that. `ReleasedConstraint` is `RVTuk.Core.RoundPositions.ReleasedConstraint(long ElementId,
+string Category, string Description)`.
+
+Also capture `doc.Delete(alignmentIds)`'s return value and record only the ids it actually deleted:
+Revit can delete fewer ids than requested, and the report must not claim the difference.
 
 - [ ] **Step 1: Write the shared move helper**
 
@@ -1131,6 +1158,7 @@ Create `src/RVTuk.Revit/RoundPositions/MoveAttempt.cs`:
 
 ```csharp
 using System;
+using System.Collections.Generic;
 using Autodesk.Revit.DB;
 using RVTuk.Core.RoundPositions;
 
@@ -1155,30 +1183,49 @@ namespace RVTuk.Revit.RoundPositions
             var wasPinned = element.Pinned;
 
             if (TryOnce(doc, element, apply, wasPinned)) return true;
+            if (!TryRelease(doc, element, report)) return false;
 
-            using (var retry = new SubTransaction(doc))
+            return TryOnce(doc, element, apply, wasPinned);
+        }
+
+        /// <summary>
+        /// Releases what is holding the element and commits that on its own, before the retry.
+        /// Keeping the two apart is what stops the report claiming a constraint was removed that
+        /// a failed retry then rolled back — and the run is still one transaction, so Ctrl+Z
+        /// takes the release with it either way.
+        /// </summary>
+        private static bool TryRelease(Document doc, Element element, RoundingReportBuilder report)
+        {
+            IReadOnlyList<ReleasedConstraint> released;
+
+            using (var sub = new SubTransaction(doc))
             {
-                retry.Start();
+                sub.Start();
                 try
                 {
-                    if (!ConstraintReleaser.Release(doc, element, report))
+                    released = ConstraintReleaser.Release(doc, element);
+                    if (released.Count == 0)
                     {
-                        retry.RollBack();
+                        sub.RollBack();
                         return false;
                     }
 
-                    if (wasPinned) element.Pinned = false;
-                    apply();
-                    if (wasPinned) element.Pinned = true;
-                    retry.Commit();
-                    return true;
+                    sub.Commit();
                 }
                 catch (Exception)
                 {
-                    retry.RollBack();
+                    sub.RollBack();
                     return false;
                 }
             }
+
+            foreach (var constraint in released)
+            {
+                report.RecordReleasedConstraint(
+                    constraint.ElementId, constraint.Category, constraint.Description);
+            }
+
+            return true;
         }
 
         public static bool TryMove(
