@@ -1120,7 +1120,7 @@ git add src/RVTuk.Revit/RoundPositions && git commit -m "feat(round-positions): 
 
 **Interfaces:**
 - Consumes: `LineOffset`, `LineOffsetOutcome`, `GridPoint`, `GridSnapper`, `AxisClassifier`, `RoundingReportBuilder`, `SkipReason`, `ElementEligibility`, `ConstraintReleaser`, `RoundingFailurePreprocessor`.
-- Produces: `LinePass.Run(Document doc, IReadOnlyList<Element> elements, double step, RoundingReportBuilder report)`; `RoundPositionsRunner.Run(Document doc, bool allowHalfCentimetres) → RoundingReport`; `MoveAttempt.TryMove(Document doc, Element element, XYZ translation, RoundingReportBuilder report) → bool`.
+- Produces: `LinePass.Run(Document doc, IReadOnlyList<Element> elements, double step, RoundingReportBuilder report)`; `RoundPositionsRunner.Run(Document doc, bool allowHalfCentimetres) → RoundingReport`; `MoveAttempt.TryApply(Document doc, Element element, Action apply, RoundingReportBuilder report) → bool` and `MoveAttempt.TryMove(Document doc, Element element, XYZ translation, RoundingReportBuilder report) → bool` (a thin wrapper over `TryApply`). Later passes that change something other than position — a level's elevation, an instance's rotation — call `TryApply` directly rather than re-implementing the unpin/rollback/retry wrapper.
 
 - [ ] **Step 1: Write the shared move helper**
 
@@ -1143,28 +1143,18 @@ namespace RVTuk.Revit.RoundPositions
     /// </summary>
     public static class MoveAttempt
     {
-        public static bool TryMove(
-            Document doc, Element element, XYZ translation, RoundingReportBuilder report)
+        /// <summary>
+        /// Applies one change to one element under the rules every pass shares: unpin first,
+        /// re-pin after, roll back cleanly on failure, then retry once with whatever was holding
+        /// the element released. <paramref name="apply"/> is the only part that differs between
+        /// passes — a translation, a rotation, or writing a level's elevation.
+        /// </summary>
+        public static bool TryApply(
+            Document doc, Element element, Action apply, RoundingReportBuilder report)
         {
             var wasPinned = element.Pinned;
 
-            using (var sub = new SubTransaction(doc))
-            {
-                sub.Start();
-                try
-                {
-                    if (wasPinned) element.Pinned = false;
-                    ElementTransformUtils.MoveElement(doc, element.Id, translation);
-                    if (wasPinned) element.Pinned = true;
-                    sub.Commit();
-                    return true;
-                }
-                catch (Exception)
-                {
-                    // Rolling back restores the pin along with the position.
-                    sub.RollBack();
-                }
-            }
+            if (TryOnce(doc, element, apply, wasPinned)) return true;
 
             using (var retry = new SubTransaction(doc))
             {
@@ -1178,7 +1168,7 @@ namespace RVTuk.Revit.RoundPositions
                     }
 
                     if (wasPinned) element.Pinned = false;
-                    ElementTransformUtils.MoveElement(doc, element.Id, translation);
+                    apply();
                     if (wasPinned) element.Pinned = true;
                     retry.Commit();
                     return true;
@@ -1186,6 +1176,33 @@ namespace RVTuk.Revit.RoundPositions
                 catch (Exception)
                 {
                     retry.RollBack();
+                    return false;
+                }
+            }
+        }
+
+        public static bool TryMove(
+            Document doc, Element element, XYZ translation, RoundingReportBuilder report) =>
+            TryApply(doc, element,
+                () => ElementTransformUtils.MoveElement(doc, element.Id, translation), report);
+
+        private static bool TryOnce(Document doc, Element element, Action apply, bool wasPinned)
+        {
+            using (var sub = new SubTransaction(doc))
+            {
+                sub.Start();
+                try
+                {
+                    if (wasPinned) element.Pinned = false;
+                    apply();
+                    if (wasPinned) element.Pinned = true;
+                    sub.Commit();
+                    return true;
+                }
+                catch (Exception)
+                {
+                    // Rolling back restores the pin along with the position.
+                    sub.RollBack();
                     return false;
                 }
             }
@@ -1788,7 +1805,7 @@ git add src/RVTuk.Revit/RoundPositions && git commit -m "feat(round-positions): 
 - Modify: `src/RVTuk.Revit/RoundPositions/RoundPositionsRunner.cs`
 
 **Interfaces:**
-- Consumes: `GridSnapper`, `RoundingReportBuilder`, `ElementEligibility`, `ConstraintReleaser`.
+- Consumes: `GridSnapper`, `RoundingReportBuilder`, `ElementEligibility`, `MoveAttempt.TryApply`.
 - Produces: `LevelPass.Run(Document doc, double step, RoundingReportBuilder report)`.
 
 A level is moved by writing `Elevation`, not by transforming it, so it needs its own pass.
@@ -1838,7 +1855,8 @@ namespace RVTuk.Revit.RoundPositions
                     continue;
                 }
 
-                if (TrySetElevation(doc, level, GridSnapper.ToFeet(snapped), report))
+                var elevationFeet = GridSnapper.ToFeet(snapped);
+                if (MoveAttempt.TryApply(doc, level, () => level.Elevation = elevationFeet, report))
                 {
                     report.RecordMoved();
                 }
@@ -1846,53 +1864,6 @@ namespace RVTuk.Revit.RoundPositions
                 {
                     report.RecordSkipped(
                         level.Id.Value, ElementEligibility.CategoryName(level), SkipReason.RevitRejected);
-                }
-            }
-        }
-
-        private static bool TrySetElevation(
-            Document doc, Level level, double elevationFeet, RoundingReportBuilder report)
-        {
-            var wasPinned = level.Pinned;
-
-            using (var sub = new SubTransaction(doc))
-            {
-                sub.Start();
-                try
-                {
-                    if (wasPinned) level.Pinned = false;
-                    level.Elevation = elevationFeet;
-                    if (wasPinned) level.Pinned = true;
-                    sub.Commit();
-                    return true;
-                }
-                catch (Exception)
-                {
-                    sub.RollBack();
-                }
-            }
-
-            using (var retry = new SubTransaction(doc))
-            {
-                retry.Start();
-                try
-                {
-                    if (!ConstraintReleaser.Release(doc, level, report))
-                    {
-                        retry.RollBack();
-                        return false;
-                    }
-
-                    if (wasPinned) level.Pinned = false;
-                    level.Elevation = elevationFeet;
-                    if (wasPinned) level.Pinned = true;
-                    retry.Commit();
-                    return true;
-                }
-                catch (Exception)
-                {
-                    retry.RollBack();
-                    return false;
                 }
             }
         }
@@ -2173,7 +2144,11 @@ namespace RVTuk.Revit.RoundPositions
                 var rotated = false;
                 if (needsRotation && (!needsMove || translated))
                 {
-                    rotated = TryRotate(doc, instance, rotation);
+                    var point = ((LocationPoint)instance.Location).Point;
+                    var axis = Line.CreateBound(point, point + XYZ.BasisZ);
+                    rotated = MoveAttempt.TryApply(doc, instance,
+                        () => ElementTransformUtils.RotateElement(doc, instance.Id, axis, rotation),
+                        report);
                 }
 
                 // Translation and rotation are independent: a family that moved but could not be
@@ -2200,31 +2175,6 @@ namespace RVTuk.Revit.RoundPositions
             var correction = nearest - currentRadians;
             var toleranceRadians = RotationToleranceDegrees * Math.PI / 180.0;
             return Math.Abs(correction) <= toleranceRadians ? correction : 0.0;
-        }
-
-        private static bool TryRotate(Document doc, FamilyInstance instance, double radians)
-        {
-            var point = ((LocationPoint)instance.Location).Point;
-            var axis = Line.CreateBound(point, point + XYZ.BasisZ);
-            var wasPinned = instance.Pinned;
-
-            using (var sub = new SubTransaction(doc))
-            {
-                sub.Start();
-                try
-                {
-                    if (wasPinned) instance.Pinned = false;
-                    ElementTransformUtils.RotateElement(doc, instance.Id, axis, radians);
-                    if (wasPinned) instance.Pinned = true;
-                    sub.Commit();
-                    return true;
-                }
-                catch (Exception)
-                {
-                    sub.RollBack();
-                    return false;
-                }
-            }
         }
     }
 }
