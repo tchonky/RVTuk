@@ -34,6 +34,13 @@ public class AxisClassifierTests
     }
 
     [Fact]
+    public void DriftOfExactlyTheToleranceStillCountsAsOrthogonal()
+    {
+        // The rule is "at most the tolerance is dust", so the boundary value belongs to AlongX.
+        Assert.Equal(LineAxis.AlongX, AxisClassifier.Classify(400.0, Tol, Tol));
+    }
+
+    [Fact]
     public void ANearOrthogonalWallIsNotOrthogonal()
     {
         // 89.97° over 4 m is ~0.2 cm of drift. v1 skips it rather than sliding a crooked wall

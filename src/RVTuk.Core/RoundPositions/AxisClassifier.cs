@@ -24,6 +24,10 @@ namespace RVTuk.Core.RoundPositions
         /// </summary>
         public const double ToleranceCentimetres = 0.01;
 
+        /// <summary>
+        /// <paramref name="deltaX"/> and <paramref name="deltaY"/> are in centimetres like the
+        /// tolerance; Revit callers convert from feet with <see cref="GridSnapper.FromFeet"/>.
+        /// </summary>
         public static LineAxis Classify(double deltaX, double deltaY, double toleranceCentimetres)
         {
             var spansX = Math.Abs(deltaX) > toleranceCentimetres;
