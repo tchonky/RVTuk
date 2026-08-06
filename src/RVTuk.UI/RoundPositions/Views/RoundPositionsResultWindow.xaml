@@ -48,6 +48,26 @@
                                     <Run Text="{Binding Elements.Count, Mode=OneWay}"/>
                                     <Run Text="element(s)"/>
                                 </TextBlock>
+                                <!-- Each element is named, not just counted: on an inherited model this
+                                     list is the v2 work queue, and "12 element(s)" cannot be triaged.
+                                     MaxHeight caps a long group so one pile cannot push the rest of the
+                                     groups out of reach; the bindings are OneWay because SkippedElement
+                                     is a readonly record struct (two-way onto a boxed struct fails
+                                     silently). -->
+                                <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto"
+                                              Margin="0,4,0,0">
+                                    <ItemsControl ItemsSource="{Binding Elements}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Opacity="0.7" Margin="10,1,0,1">
+                                                    <Run Text="{Binding Category, Mode=OneWay}"/>
+                                                    <Run Text="·"/>
+                                                    <Run Text="{Binding ElementId, Mode=OneWay}"/>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
                             </StackPanel>
                         </Border>
                     </DataTemplate>
@@ -55,12 +75,21 @@
             </ItemsControl>
         </ScrollViewer>
 
+        <!-- The clean run is the case the window would otherwise say least about: an empty
+             ItemsControl above is simply a blank panel. -->
+        <TextBlock Grid.Row="1" VerticalAlignment="Top" Opacity="0.7" TextWrapping="Wrap"
+                   Visibility="{Binding NothingSkipped, Converter={StaticResource BoolVis}}"
+                   Text="Nothing was skipped — every eligible element is on the grid."/>
+
         <!-- Foreground is set explicitly: WPF's own Expander style pins it to the system
              control-text colour, which is near-black against this window's background. -->
         <Expander Grid.Row="2" Margin="0,8,0,0"
                   Foreground="{StaticResource Brush.Text}"
                   Visibility="{Binding HasReleasedConstraints, Converter={StaticResource BoolVis}}"
                   Header="Constraints released">
+            <!-- MaxHeight is load-bearing, not cosmetic: this Expander sits in an Auto row, an Auto
+                 row takes its full desired height, and a long list would therefore starve the *
+                 row and push the Close button off the bottom of the window. Don't remove it. -->
             <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
                 <ItemsControl ItemsSource="{Binding ReleasedConstraints}" Margin="0,6,0,0">
                     <ItemsControl.ItemTemplate>

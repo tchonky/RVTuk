@@ -14,7 +14,8 @@ namespace RVTuk.UI.RoundPositions.ViewModels
         public RoundPositionsResultViewModel(
             RoundingReport report, Action<IReadOnlyList<long>> selectInModel)
         {
-            _selectInModel = selectInModel;
+            _selectInModel = selectInModel
+                ?? throw new ArgumentNullException(nameof(selectInModel));
 
             Summary =
                 $"Examined {report.Examined}   ·   Moved {report.Moved}   ·   " +
@@ -33,6 +34,9 @@ namespace RVTuk.UI.RoundPositions.ViewModels
         public IReadOnlyList<ReleasedConstraint> ReleasedConstraints { get; }
 
         public bool HasReleasedConstraints => ReleasedConstraints.Count > 0;
+
+        /// <summary>The fully clean run: no groups to show, so say so rather than show a blank panel.</summary>
+        public bool NothingSkipped => Groups.Count == 0;
 
         public ICommand SelectGroupCommand { get; }
 
