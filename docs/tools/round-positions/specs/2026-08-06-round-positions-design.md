@@ -89,9 +89,10 @@ This is the highest-consequence thing the tool does and is treated accordingly:
 - Moving the Survey Point is **not a local change**. Every linked model positioned by shared
   coordinates shifts relative to this one, as does anything exported by shared coordinates.
 - **Clipped vs unclipped changes what "move" means** for both points — one moves the coordinate
-  system, the other moves the marker. The tool reads the clip state and **refuses to touch a point
-  whose clip state it does not expect**, reporting it instead. The expected behaviour is an
-  in-Revit check, not a design assumption.
+  system, the other moves the marker. **Only unclipped points are touched**, where the move
+  relocates the marker rather than the coordinate system; a clipped point is reported and left
+  exactly where it is. That the clip parameter actually reads this way is an in-Revit check before
+  the pass is trusted, not a design assumption.
 
 ## What v1 moves
 
@@ -114,8 +115,12 @@ coordinate the line does *not* run along is snapped, and the along-axis coordina
 as they were. A horizontal wall from (10.3, 5.2) to (410.9, 5.2) becomes (10.3, 5.0) to (410.9, 5.0)
 — the line lands clean, its length is untouched, and nothing along it shifts.
 
-"Exactly orthogonal" means within **0.01°** of 0° or 90° — tight enough to mean *actually
-orthogonal*, loose enough to absorb float dust in Revit's stored geometry.
+"Exactly orthogonal" is a **displacement** test, not an angle test: a line runs along X iff its Y
+extent is at most **0.01 cm** and its X extent is more than that. An angular tolerance would scale
+with length — 0.01° is float dust on a 40 cm wall and 0.7 cm of real drift on a 40 m one — so the
+same number would quietly mean two different things depending on what it was applied to. The
+displacement test is tight enough to mean *actually orthogonal* and loose enough to absorb float
+dust in Revit's stored geometry, at any length.
 
 **A wall at 89.97° is skipped and reported.** This is deliberate and it is the main limitation of
 v1: translating a near-orthogonal wall does not make it orthogonal, and straightening it is exactly
