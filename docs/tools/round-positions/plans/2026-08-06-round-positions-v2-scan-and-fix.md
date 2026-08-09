@@ -982,9 +982,20 @@ git add -A src/RVTuk && git commit -m "feat(round-positions): scan reads, fix ba
 
 ### Task 5: The timing gate — first in-Revit measurement
 
-**Files:** none. This task produces a number, not code.
+> **REORDERED 2026-08-06 — this task now runs AFTER the pane (Tasks 6–7), not before.**
+>
+> The gate was protecting against the wrong risk. It assumed the only way to measure was to fix
+> the whole model at once — and doing that froze Revit with no way out, because an
+> `IExternalCommand` owns Revit's main thread and its cancel button cannot interrupt a loop that
+> never yields. The pane is what makes measurement *safe*: fix one wall, then a level, then a
+> category, and the timing falls out of normal use without ever committing to a run you cannot stop.
+>
+> Two consequences folded into the pane tasks:
+> - **A fix must be cancellable between batches.** `BatchMover` checks a cancellation flag at each
+>   batch boundary, so a Fix stops cleanly with everything up to that point intact.
+> - **Fix All is not the first thing to trust.** Work up: one element, one level, one category.
 
-**This is a gate.** Everything after it assumes batching delivered. If it did not, stop and report rather than continuing to build a pane over an engine that is still too slow.
+**Files:** none. This task produces a number, not code.
 
 - [ ] **Step 1: Build and deploy**
 
