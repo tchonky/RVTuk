@@ -38,10 +38,14 @@ namespace RVTuk.Revit.RoundPositions
 
         public string Category { get; }
 
-        public void Scan(Document doc, double step, ScanResultBuilder builder)
+        public void Scan(
+            Document doc, double step, ScanResultBuilder builder,
+            CancellationToken cancellation = default)
         {
             foreach (var element in _collect(doc))
             {
+                if (cancellation.IsCancellationRequested) break;
+
                 builder.CountExamined();
 
                 var skip = ElementEligibility.ReasonToSkip(doc, element);

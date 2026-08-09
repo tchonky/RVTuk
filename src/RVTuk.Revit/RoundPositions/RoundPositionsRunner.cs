@@ -12,12 +12,18 @@ namespace RVTuk.Revit.RoundPositions
         /// Read-only: opens no transaction and triggers no regeneration, so it is cheap enough to
         /// re-run after every fix.
         /// </summary>
-        public static ScanResult Scan(Document doc, bool allowHalfCentimetres)
+        public static ScanResult Scan(
+            Document doc, bool allowHalfCentimetres,
+            System.Threading.CancellationToken cancellation = default)
         {
             var step = GridSnapper.StepFor(allowHalfCentimetres);
             var builder = new ScanResultBuilder();
 
-            foreach (var pass in PassRegistry.All) pass.Scan(doc, step, builder);
+            foreach (var pass in PassRegistry.All)
+            {
+                if (cancellation.IsCancellationRequested) break;
+                pass.Scan(doc, step, builder, cancellation);
+            }
 
             return builder.Build();
         }

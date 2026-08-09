@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Windows.Threading;
 using RVTuk.Core.RoundPositions;
 using RVTuk.UI.Shared.ViewModels;
 
@@ -12,10 +13,18 @@ namespace RVTuk.UI.RoundPositions.ViewModels
 {
     public class RoundPositionsPaneViewModel : ViewModelBase
     {
-        private readonly Func<bool, ScanResult> _scan;
+        private readonly Func<bool, CancellationToken, ScanResult> _scan;
         private readonly Func<bool, IReadOnlyList<long>, CancellationToken, RoundingReport> _fix;
         private readonly Action<IReadOnlyList<long>> _selectInModel;
         private readonly Action<bool> _persistSetting;
+
+        /// <summary>
+        /// Captured here rather than read from Application.Current later: Revit never creates a
+        /// WPF Application, so Application.Current is null and the completion callback would run
+        /// on the pool thread — touching an ObservableCollection from there throws inside a
+        /// continuation nobody observes, and the pane sits on "Working…" for ever.
+        /// </summary>
+        private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
 
         private CancellationTokenSource? _cancellation;
         private bool _allowHalfCentimetres;
@@ -24,7 +33,7 @@ namespace RVTuk.UI.RoundPositions.ViewModels
         private string _status = "Not scanned yet.";
 
         public RoundPositionsPaneViewModel(
-            Func<bool, ScanResult> scan,
+            Func<bool, CancellationToken, ScanResult> scan,
             Func<bool, IReadOnlyList<long>, CancellationToken, RoundingReport> fix,
             Action<IReadOnlyList<long>> selectInModel,
             bool allowHalfCentimetres,
@@ -100,7 +109,7 @@ namespace RVTuk.UI.RoundPositions.ViewModels
 
         private void RunScan() => Run(() =>
         {
-            var result = _scan(AllowHalfCentimetres);
+            var result = _scan(AllowHalfCentimetres, _cancellation!.Token);
             return () =>
             {
                 ShowScan(result);
@@ -122,7 +131,7 @@ namespace RVTuk.UI.RoundPositions.ViewModels
 
                 // Always re-scan the whole model, not just the node fixed: a fix moves things
                 // outside its own node — a level carries its floor, a wall drags its openings.
-                var scan = _scan(AllowHalfCentimetres);
+                var scan = _scan(AllowHalfCentimetres, CancellationToken.None);
                 return () =>
                 {
                     ShowScan(scan);
@@ -156,15 +165,24 @@ namespace RVTuk.UI.RoundPositions.ViewModels
             // the UI thread would freeze the pane along with Revit.
             Task.Run(work).ContinueWith(t =>
             {
-                Action apply = t.IsFaulted
-                    ? () => Status = $"Failed: {t.Exception?.GetBaseException().Message}"
-                    : t.Result;
-
-                Action finish = () => { apply(); IsBusy = false; };
-
-                var dispatcher = System.Windows.Application.Current?.Dispatcher;
-                if (dispatcher == null) finish();
-                else dispatcher.Invoke(finish);
+                // IsBusy must come back down on every path. If it does not, the pane sits on
+                // "Working…" and every button stays disabled with no way back.
+                _dispatcher.Invoke(new Action(() =>
+                {
+                    try
+                    {
+                        if (t.IsFaulted) Status = $"Failed: {t.Exception?.GetBaseException().Message}";
+                        else t.Result();
+                    }
+                    catch (Exception ex)
+                    {
+                        Status = $"Failed while showing the result: {ex.Message}";
+                    }
+                    finally
+                    {
+                        IsBusy = false;
+                    }
+                }));
             });
         }
 

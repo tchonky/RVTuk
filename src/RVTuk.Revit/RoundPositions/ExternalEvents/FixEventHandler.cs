@@ -36,7 +36,9 @@ namespace RVTuk.Revit.RoundPositions.ExternalEvents
             _done.Reset();
         }
 
-        public void WaitForCompletion() => _done.Wait();
+        /// <summary>False means Revit never ran the event — see ScanEventHandler for why this is
+        /// bounded rather than an open-ended wait.</summary>
+        public bool WaitForCompletion(TimeSpan timeout) => _done.Wait(timeout);
 
         public void Execute(UIApplication app)
         {

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -20,7 +21,7 @@ namespace RVTuk.Revit.RoundPositions.ExternalEvents
             _done.Reset();
         }
 
-        public void WaitForCompletion() => _done.Wait();
+        public bool WaitForCompletion(TimeSpan timeout) => _done.Wait(timeout);
 
         public void Execute(UIApplication app)
         {

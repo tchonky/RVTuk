@@ -199,11 +199,21 @@ namespace RVTuk.Revit
                 // The pane (UI project) only ever sees these delegates — no Revit type crosses
                 // over. All three block on WaitForCompletion, so the view model calls them from
                 // the pool.
-                Func<bool, ScanResult> scan = allowHalf =>
+                // Bounded waits: an external event Revit never runs would otherwise leave the pane
+                // blocked with nothing on screen to say so. A fix gets longer than a scan because
+                // it legitimately takes longer.
+                var scanTimeout = TimeSpan.FromMinutes(5);
+                var fixTimeout = TimeSpan.FromMinutes(30);
+                const string NoResponse =
+                    "Revit did not run the request. It may be busy with another command, or " +
+                    "waiting on a dialog — close anything open and try again.";
+
+                Func<bool, System.Threading.CancellationToken, ScanResult> scan = (allowHalf, cancellation) =>
                 {
-                    RoundScanHandler.Prepare(allowHalf);
+                    RoundScanHandler.Prepare(allowHalf, cancellation);
                     RoundScanEvent.Raise();
-                    RoundScanHandler.WaitForCompletion();
+                    if (!RoundScanHandler.WaitForCompletion(scanTimeout))
+                        throw new TimeoutException(NoResponse);
                     if (RoundScanHandler.Error != null) throw RoundScanHandler.Error;
                     return RoundScanHandler.Result;
                 };
@@ -213,7 +223,8 @@ namespace RVTuk.Revit
                 {
                     RoundFixHandler.Prepare(allowHalf, new HashSet<long>(ids), cancellation);
                     RoundFixEvent.Raise();
-                    RoundFixHandler.WaitForCompletion();
+                    if (!RoundFixHandler.WaitForCompletion(fixTimeout))
+                        throw new TimeoutException(NoResponse);
                     if (RoundFixHandler.Error != null) throw RoundFixHandler.Error;
                     return RoundFixHandler.Report;
                 };
@@ -222,7 +233,7 @@ namespace RVTuk.Revit
                 {
                     RoundSelectHandler.Prepare(ids);
                     RoundSelectEvent.Raise();
-                    RoundSelectHandler.WaitForCompletion();
+                    RoundSelectHandler.WaitForCompletion(TimeSpan.FromMinutes(1));
                 };
 
                 // Stored inverted: the config default (false) is "half centimetres allowed".
