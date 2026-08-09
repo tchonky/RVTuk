@@ -16,7 +16,11 @@ using RVTuk.Revit.DwgExporter.Commands;
 using RVTuk.Revit.FamilyBrowser.Commands;
 using RVTuk.Revit.NeoProperties.Commands;
 using RVTuk.Revit.RishuiZamin.Commands;
+using RVTuk.Revit.RoundPositions;
 using RVTuk.Revit.RoundPositions.Commands;
+using RVTuk.Revit.RoundPositions.ExternalEvents;
+using RVTuk.Core.RoundPositions;
+using RVTuk.Core.Shared.Config;
 using RVTuk.Revit.FamilyBrowser.ExternalEvents;
 using RVTuk.Revit.RishuiZamin.ExternalEvents;
 using RVTuk.Revit.NeoProperties;
@@ -71,6 +75,19 @@ namespace RVTuk.Revit
         /// separate project; recover the code from git history if ever needed.)
         /// </summary>
         private static readonly bool RegisterNeoProperties = false;
+
+        /// <summary>Round Positions ships on the RVTuk panel. Its single entry point is the
+        /// dockable pane — the one-click button it replaced could not be stopped once started.</summary>
+        private static readonly bool RegisterRoundPositions = true;
+
+        public static ScanEventHandler RoundScanHandler { get; private set; } = null!;
+        public static ExternalEvent RoundScanEvent { get; private set; } = null!;
+        public static FixEventHandler RoundFixHandler { get; private set; } = null!;
+        public static ExternalEvent RoundFixEvent { get; private set; } = null!;
+        public static SelectEventHandler RoundSelectHandler { get; private set; } = null!;
+        public static ExternalEvent RoundSelectEvent { get; private set; } = null!;
+        public static RVTuk.UI.RoundPositions.ViewModels.RoundPositionsPaneViewModel? RoundPositionsPaneViewModel
+        { get; private set; }
 
         private static string? _addinDir;
 
@@ -168,6 +185,68 @@ namespace RVTuk.Revit
                     AutoDimensionsPaneProvider.PaneId,
                     "Auto Dimensions",
                     new AutoDimensionsPaneProvider(autoDimView));
+            }
+
+            if (RegisterRoundPositions)
+            {
+                RoundScanHandler   = new ScanEventHandler();
+                RoundScanEvent     = ExternalEvent.Create(RoundScanHandler);
+                RoundFixHandler    = new FixEventHandler();
+                RoundFixEvent      = ExternalEvent.Create(RoundFixHandler);
+                RoundSelectHandler = new SelectEventHandler();
+                RoundSelectEvent   = ExternalEvent.Create(RoundSelectHandler);
+
+                // The pane (UI project) only ever sees these delegates — no Revit type crosses
+                // over. All three block on WaitForCompletion, so the view model calls them from
+                // the pool.
+                Func<bool, ScanResult> scan = allowHalf =>
+                {
+                    RoundScanHandler.Prepare(allowHalf);
+                    RoundScanEvent.Raise();
+                    RoundScanHandler.WaitForCompletion();
+                    if (RoundScanHandler.Error != null) throw RoundScanHandler.Error;
+                    return RoundScanHandler.Result;
+                };
+
+                Func<bool, IReadOnlyList<long>, System.Threading.CancellationToken, RoundingReport> fix =
+                    (allowHalf, ids, cancellation) =>
+                {
+                    RoundFixHandler.Prepare(allowHalf, new HashSet<long>(ids), cancellation);
+                    RoundFixEvent.Raise();
+                    RoundFixHandler.WaitForCompletion();
+                    if (RoundFixHandler.Error != null) throw RoundFixHandler.Error;
+                    return RoundFixHandler.Report;
+                };
+
+                Action<IReadOnlyList<long>> selectInModel = ids =>
+                {
+                    RoundSelectHandler.Prepare(ids);
+                    RoundSelectEvent.Raise();
+                    RoundSelectHandler.WaitForCompletion();
+                };
+
+                // Stored inverted: the config default (false) is "half centimetres allowed".
+                var roundConfig = ConfigManager.LoadConfig();
+                Action<bool> persistRoundSetting = allowHalf =>
+                {
+                    var current = ConfigManager.LoadConfig();
+                    current.RoundPositionsWholeCentimetresOnly = !allowHalf;
+                    ConfigManager.SaveConfig(current);
+                };
+
+                RoundPositionsPaneViewModel =
+                    new RVTuk.UI.RoundPositions.ViewModels.RoundPositionsPaneViewModel(
+                        scan, fix, selectInModel,
+                        !roundConfig.RoundPositionsWholeCentimetresOnly, persistRoundSetting);
+
+                var roundView = new RVTuk.UI.RoundPositions.Views.RoundPositionsPaneView
+                {
+                    DataContext = RoundPositionsPaneViewModel
+                };
+                application.RegisterDockablePane(
+                    RoundPositionsPaneProvider.PaneId,
+                    "Round Positions",
+                    new RoundPositionsPaneProvider(roundView));
             }
 
             try
