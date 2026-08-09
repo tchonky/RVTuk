@@ -4,7 +4,9 @@ using System.Linq;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RVTuk.Core.RoundPositions;
 using RVTuk.Core.Shared.Config;
+using RVTuk.Revit.RoundPositions;
 using RVTuk.UI.RoundPositions.ViewModels;
 using RVTuk.UI.RoundPositions.Views;
 
@@ -28,6 +30,7 @@ namespace RVTuk.Revit.RoundPositions.Commands
             if (uidoc == null) return Result.Cancelled;
             var doc = uidoc.Document;
 
+            RoundingReport report;
             try
             {
                 var config = ConfigManager.LoadConfig();
@@ -47,20 +50,7 @@ namespace RVTuk.Revit.RoundPositions.Commands
                 config.RoundPositionsWholeCentimetresOnly = !viewModel.AllowHalfCentimetres;
                 ConfigManager.SaveConfig(config);
 
-                var report = RoundPositionsRunner.Run(doc, viewModel.AllowHalfCentimetres);
-
-                Action<IReadOnlyList<long>> selectInModel = ids =>
-                    uidoc.Selection.SetElementIds(ids.Select(id => new ElementId(id)).ToList());
-
-                var resultWindow = new RoundPositionsResultWindow(
-                    new RoundPositionsResultViewModel(report, selectInModel));
-                new System.Windows.Interop.WindowInteropHelper(resultWindow)
-                {
-                    Owner = commandData.Application.MainWindowHandle,
-                };
-                resultWindow.ShowDialog();
-
-                return Result.Succeeded;
+                report = RoundPositionsRunner.Run(doc, viewModel.AllowHalfCentimetres);
             }
             catch (Exception ex)
             {
@@ -70,6 +60,21 @@ namespace RVTuk.Revit.RoundPositions.Commands
                 TaskDialog.Show("RVTuk — Round Positions", $"The run failed:\n\n{ex.Message}");
                 return Result.Failed;
             }
+
+            // Past this line the transaction has committed and the model HAS changed, so a failure
+            // while building the results window must not be reported as a failed run.
+            Action<IReadOnlyList<long>> selectInModel = ids =>
+                uidoc.Selection.SetElementIds(ids.Select(id => new ElementId(id)).ToList());
+
+            var resultWindow = new RoundPositionsResultWindow(
+                new RoundPositionsResultViewModel(report, selectInModel));
+            new System.Windows.Interop.WindowInteropHelper(resultWindow)
+            {
+                Owner = commandData.Application.MainWindowHandle,
+            };
+            resultWindow.ShowDialog();
+
+            return Result.Succeeded;
         }
     }
 }
