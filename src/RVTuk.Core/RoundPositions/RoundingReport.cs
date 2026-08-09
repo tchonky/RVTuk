@@ -17,6 +17,10 @@ namespace RVTuk.Core.RoundPositions
         IReadOnlyList<SkippedElement> Skipped,
         IReadOnlyList<ReleasedConstraint> ReleasedConstraints)
     {
+        /// <summary>How long the fix took. The pane shows it because the first version of this
+        /// tool was abandoned mid-run for being slow with nothing on screen to say so.</summary>
+        public long ElapsedMilliseconds { get; init; }
+
         /// <summary>Largest group first — on an inherited model the biggest pile is the story.</summary>
         public IReadOnlyList<SkipGroup> GroupedByReason() =>
             Skipped

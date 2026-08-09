@@ -50,7 +50,11 @@ namespace RVTuk.Revit.RoundPositions.Commands
                 config.RoundPositionsWholeCentimetresOnly = !viewModel.AllowHalfCentimetres;
                 ConfigManager.SaveConfig(config);
 
-                report = RoundPositionsRunner.Run(doc, viewModel.AllowHalfCentimetres);
+                // Interim: scan, then fix everything the scan found. Task 7 replaces this whole
+                // command with one that opens the pane.
+                var scan = RoundPositionsRunner.Scan(doc, viewModel.AllowHalfCentimetres);
+                var ids = new HashSet<long>(scan.Dirty.Select(d => d.ElementId));
+                report = RoundPositionsRunner.Fix(doc, viewModel.AllowHalfCentimetres, ids);
             }
             catch (Exception ex)
             {
