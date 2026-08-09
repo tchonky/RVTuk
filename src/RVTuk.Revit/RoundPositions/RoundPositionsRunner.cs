@@ -26,7 +26,9 @@ namespace RVTuk.Revit.RoundPositions
         /// One transaction, so a fix is one Ctrl+Z. Passes run in tier order because each tier can
         /// move what sits below it — a level carries its whole floor, a wall drags its openings.
         /// </summary>
-        public static RoundingReport Fix(Document doc, bool allowHalfCentimetres, ISet<long> ids)
+        public static RoundingReport Fix(
+            Document doc, bool allowHalfCentimetres, ISet<long> ids,
+            System.Threading.CancellationToken cancellation = default)
         {
             var step = GridSnapper.StepFor(allowHalfCentimetres);
             var report = new RoundingReportBuilder();
@@ -44,7 +46,10 @@ namespace RVTuk.Revit.RoundPositions
                 transaction.SetFailureHandlingOptions(options);
 
                 foreach (var pass in PassRegistry.All)
-                    pass.Apply(doc, step, ids, Batches.DefaultSize, report);
+                {
+                    if (cancellation.IsCancellationRequested) break;
+                    pass.Apply(doc, step, ids, Batches.DefaultSize, report, cancellation);
+                }
 
                 status = transaction.Commit();
             }

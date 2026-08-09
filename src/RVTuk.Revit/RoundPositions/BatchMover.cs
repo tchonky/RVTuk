@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using Autodesk.Revit.DB;
 using RVTuk.Core.RoundPositions;
 
@@ -18,12 +19,18 @@ namespace RVTuk.Revit.RoundPositions
             Document doc,
             IReadOnlyList<(Element Element, XYZ Translation)> moves,
             int batchSize,
-            RoundingReportBuilder report)
+            RoundingReportBuilder report,
+            CancellationToken cancellation = default)
         {
             var moved = 0;
 
             foreach (var batch in Batches.Split(moves, batchSize))
             {
+                // The batch boundary is the only safe place to stop: a Revit command owns the main
+                // thread, so nothing can interrupt a batch once it starts, and stopping between
+                // them leaves every completed batch intact.
+                if (cancellation.IsCancellationRequested) break;
+
                 if (TryWholeBatch(doc, batch))
                 {
                     moved += batch.Count;

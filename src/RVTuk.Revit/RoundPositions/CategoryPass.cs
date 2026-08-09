@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using Autodesk.Revit.DB;
 using RVTuk.Core.RoundPositions;
 
@@ -77,12 +78,14 @@ namespace RVTuk.Revit.RoundPositions
         }
 
         public void Apply(
-            Document doc, double step, ISet<long> ids, int batchSize, RoundingReportBuilder report)
+            Document doc, double step, ISet<long> ids, int batchSize, RoundingReportBuilder report,
+            CancellationToken cancellation = default)
         {
             var moves = new List<(Element, XYZ)>();
 
             foreach (var element in _collect(doc))
             {
+                if (cancellation.IsCancellationRequested) break;
                 if (!ids.Contains(element.Id.Value)) continue;
 
                 report.CountExamined();
@@ -130,7 +133,7 @@ namespace RVTuk.Revit.RoundPositions
 
             if (moves.Count == 0) return;
 
-            var moved = BatchMover.Move(doc, moves, batchSize, report);
+            var moved = BatchMover.Move(doc, moves, batchSize, report, cancellation);
             for (var i = 0; i < moved; i++) report.RecordMoved();
         }
     }
