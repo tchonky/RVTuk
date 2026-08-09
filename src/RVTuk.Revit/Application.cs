@@ -16,6 +16,7 @@ using RVTuk.Revit.DwgExporter.Commands;
 using RVTuk.Revit.FamilyBrowser.Commands;
 using RVTuk.Revit.NeoProperties.Commands;
 using RVTuk.Revit.RishuiZamin.Commands;
+using RVTuk.Revit.RoundPositions.Commands;
 using RVTuk.Revit.FamilyBrowser.ExternalEvents;
 using RVTuk.Revit.RishuiZamin.ExternalEvents;
 using RVTuk.Revit.NeoProperties;
@@ -243,6 +244,19 @@ namespace RVTuk.Revit
 
             panel.AddItem(dwgBtn);
 
+            var roundBtn = new PushButtonData(
+                "RoundPositions",
+                "Round\nPositions",
+                assemblyPath,
+                typeof(RoundPositionsCommand).FullName!)
+            {
+                ToolTip = "Move every eligible element onto a whole-centimetre grid (lengths and angles are never changed)"
+            };
+            roundBtn.LargeImage = CreateRoundPositionsIcon(32);
+            roundBtn.Image      = CreateRoundPositionsIcon(16);
+
+            panel.AddItem(roundBtn);
+
             if (RegisterAutoDimensions)
             {
                 var autoDimBtn = new PushButtonData(
@@ -368,6 +382,41 @@ namespace RVTuk.Revit
                 ctx.DrawLine(pen, new WpfPoint(s * 0.24, s * 0.78), new WpfPoint(s * 0.72, s * 0.78));
                 ctx.DrawLine(pen, new WpfPoint(s * 0.60, s * 0.67), new WpfPoint(s * 0.72, s * 0.78));
                 ctx.DrawLine(pen, new WpfPoint(s * 0.60, s * 0.89), new WpfPoint(s * 0.72, s * 0.78));
+            }
+            var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            bmp.Freeze();
+            return bmp;
+        }
+
+        private static BitmapSource CreateRoundPositionsIcon(int size)
+        {
+            var dv = new DrawingVisual();
+            using (var ctx = dv.RenderOpen())
+            {
+                double s = size;
+                ctx.DrawRectangle(new SolidColorBrush(WpfColor.FromRgb(0x25, 0x25, 0x26)), null,
+                    new Rect(0, 0, s, s));
+
+                // A faint grid with one element snapped onto an intersection.
+                var gridPen = new Pen(new SolidColorBrush(WpfColor.FromRgb(0x5A, 0x5A, 0x5A)),
+                    Math.Max(1, s * 0.04));
+                gridPen.Freeze();
+                foreach (var f in new[] { 0.30, 0.55, 0.80 })
+                {
+                    ctx.DrawLine(gridPen, new WpfPoint(s * 0.12, s * f), new WpfPoint(s * 0.88, s * f));
+                    ctx.DrawLine(gridPen, new WpfPoint(s * f, s * 0.12), new WpfPoint(s * f, s * 0.88));
+                }
+
+                var arrowPen = new Pen(new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00)),
+                    Math.Max(1, s * 0.07));
+                arrowPen.Freeze();
+                ctx.DrawLine(arrowPen, new WpfPoint(s * 0.72, s * 0.24), new WpfPoint(s * 0.58, s * 0.38));
+                ctx.DrawLine(arrowPen, new WpfPoint(s * 0.58, s * 0.38), new WpfPoint(s * 0.58, s * 0.28));
+                ctx.DrawLine(arrowPen, new WpfPoint(s * 0.58, s * 0.38), new WpfPoint(s * 0.68, s * 0.38));
+
+                ctx.DrawEllipse(new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00)), null,
+                    new WpfPoint(s * 0.55, s * 0.55), s * 0.09, s * 0.09);
             }
             var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
             bmp.Render(dv);

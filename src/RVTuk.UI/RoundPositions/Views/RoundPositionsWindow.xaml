@@ -27,7 +27,7 @@
                    Text="On: 0.34 → 0.5.   Off: 0.34 → 0, and 0.5 → 1."/>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="RunButton" Content="Run" Width="90" Height="26" Margin="0,0,8,0"
+            <Button Content="Run" Width="90" Height="26" Margin="0,0,8,0"
                     IsDefault="True" Click="OnRun"/>
             <Button Content="Cancel" Width="90" Height="26" IsCancel="True"/>
         </StackPanel>
