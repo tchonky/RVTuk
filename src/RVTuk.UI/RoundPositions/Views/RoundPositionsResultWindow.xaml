@@ -55,7 +55,8 @@
                                      is a readonly record struct (two-way onto a boxed struct fails
                                      silently). -->
                                 <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto"
-                                              Margin="0,4,0,0">
+                                              Margin="0,4,0,0"
+                                              PreviewMouseWheel="InnerList_PreviewMouseWheel">
                                     <ItemsControl ItemsSource="{Binding Elements}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -83,14 +84,19 @@
 
         <!-- Foreground is set explicitly: WPF's own Expander style pins it to the system
              control-text colour, which is near-black against this window's background. -->
-        <Expander Grid.Row="2" Margin="0,8,0,0"
+        <!-- Open by default: nothing else in a Revit model records that a constraint was removed,
+             so this list is the only trace of it. Behind a closed disclosure triangle it can be
+             missed entirely; the MaxHeight below bounds what that costs, and the Expander is only
+             visible when there is something in it. -->
+        <Expander Grid.Row="2" Margin="0,8,0,0" IsExpanded="True"
                   Foreground="{StaticResource Brush.Text}"
                   Visibility="{Binding HasReleasedConstraints, Converter={StaticResource BoolVis}}"
                   Header="Constraints released">
             <!-- MaxHeight is load-bearing, not cosmetic: this Expander sits in an Auto row, an Auto
                  row takes its full desired height, and a long list would therefore starve the *
                  row and push the Close button off the bottom of the window. Don't remove it. -->
-            <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
+            <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto"
+                          PreviewMouseWheel="InnerList_PreviewMouseWheel">
                 <ItemsControl ItemsSource="{Binding ReleasedConstraints}" Margin="0,6,0,0">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
