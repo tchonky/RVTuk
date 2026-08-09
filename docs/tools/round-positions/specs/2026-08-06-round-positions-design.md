@@ -247,10 +247,15 @@ Registered like the Auto Dimensions and Topo Tools panes, opened by the ribbon b
 
 - **Controls** — *Allow half centimetres*, a **Scan** button, and a status line: when the last scan
   ran and what the last fix did.
-- **The tree** — three tiers: **Category → Level → element**. Counts on the two group tiers, a Fix
-  button on both of them, and **Fix all** above the tree. Element rows exist for **inspection only** —
-  they name the element and select it in the model, and carry no Fix button of their own. Fixing is a
-  group action; picking off single elements is not the workflow.
+- **The tree** — three tiers: **Category → Level → element**. Counts on the two group tiers, and a Fix
+  button on **every** tier including individual elements, plus **Fix all** above the tree. Group
+  fixing is the normal workflow; the per-element button is there for the case where one thing looks
+  wrong and you want to try it alone before trusting the group.
+
+  **Categories are ordered by the dependency hierarchy below, never alphabetically.** The order is
+  the point: fixing walls before levels means the level fix moves those walls again. Reading the tree
+  top to bottom is reading the order it is safe to work in, and **Fix all** walks it in exactly that
+  order.
 - **Cannot be fixed** — grouped by reason, with counts and select-in-model. This is the v2 queue.
 
 Selecting any node — category, level or element — selects the elements it covers in the model. The
@@ -268,9 +273,10 @@ crosses into `RVTuk.UI`. Each delegate raises an `ExternalEvent` and blocks on a
 panes use. This applies to the scan as well: read-only or not, the Revit API may only be touched on
 its own thread.
 
-## Order of operations
+## The dependency hierarchy
 
-Within a fix, when more than one category is involved:
+This is one order, used in three places: the order categories appear in the tree, the order **Fix
+all** walks them, and the order within any single fix that spans more than one category.
 
 1. **Base points** — so everything below is measured against a clean origin.
 2. **Levels** — so everything hosted sits on clean heights.
@@ -278,6 +284,16 @@ Within a fix, when more than one category is involved:
 4. **Walls**, then **structural framing**, then **model and detail lines**.
 5. **Point-positioned unhosted families.**
 6. **Wall-hosted families** — last, because they need their host resolved.
+
+Each tier can move what sits below it: a level carries its whole floor, a wall drags its openings.
+Nothing below is expected to move anything above — with one exception, which is why the post-fix scan
+covers the whole model rather than just the tiers underneath. A constraint can propagate in either
+direction (a wall locked to a grid moves the grid, not only the reverse), so a fix low in the
+hierarchy can in principle dirty something high in it. A full re-scan is cheap and cannot be fooled;
+a clever partial refresh can.
+
+The tree does not enforce the order — you can fix any node at any time. It only makes the safe order
+the obvious one to read.
 
 ## Architecture
 
