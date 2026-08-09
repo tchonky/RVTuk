@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using Autodesk.Revit.DB;
 using RVTuk.Core.RoundPositions;
 
@@ -40,16 +41,19 @@ namespace RVTuk.Revit.RoundPositions
             var report = new RoundingReportBuilder();
             var stopwatch = Stopwatch.StartNew();
             TransactionStatus status;
+            RoundingFailurePreprocessor? preprocessor = null;
 
             using (var transaction = new Transaction(doc, "Round Positions"))
             {
                 transaction.Start();
 
+                var failures = new RoundingFailurePreprocessor();
                 var options = transaction.GetFailureHandlingOptions();
                 options.SetForcedModalHandling(false);
                 options.SetClearAfterRollback(true);
-                options.SetFailuresPreprocessor(new RoundingFailurePreprocessor());
+                options.SetFailuresPreprocessor(failures);
                 transaction.SetFailureHandlingOptions(options);
+                preprocessor = failures;
 
                 foreach (var pass in PassRegistry.All)
                 {
@@ -69,6 +73,19 @@ namespace RVTuk.Revit.RoundPositions
             // those constraints ever existed.
             if (status != TransactionStatus.Committed)
             {
+                var atRisk = preprocessor?.ElementsAtRisk ?? new ElementId[0];
+                if (atRisk.Length > 0)
+                {
+                    var shown = string.Join(", ", atRisk.Take(10).Select(id => id.Value.ToString()));
+                    var more = atRisk.Length > 10 ? $" and {atRisk.Length - 10} more" : string.Empty;
+                    throw new InvalidOperationException(
+                        $"Stopped: moving these elements would have made Revit delete {atRisk.Length} " +
+                        "other element(s), so the whole fix was rolled back and nothing changed. " +
+                        "This is usually a window or door that would be left outside its wall. " +
+                        $"Element id(s) at risk: {shown}{more}. Fix a smaller group to find the wall " +
+                        "responsible, and leave that one for now.");
+                }
+
                 throw new InvalidOperationException(
                     "Revit rolled the whole fix back, so nothing in the model changed: no elements " +
                     "were moved and no alignment constraints were deleted. This happens when Revit " +
