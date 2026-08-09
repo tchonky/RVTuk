@@ -25,6 +25,7 @@ namespace RVTuk.UI.RoundPositions.ViewModels
             Groups = report.GroupedByReason();
             ReleasedConstraints = report.ReleasedConstraints;
             SelectGroupCommand = new RelayCommand<SkipGroup>(SelectGroup);
+            SelectReleasedCommand = new RelayCommand<object>(_ => SelectReleased());
         }
 
         public string Summary { get; }
@@ -40,10 +41,21 @@ namespace RVTuk.UI.RoundPositions.ViewModels
 
         public ICommand SelectGroupCommand { get; }
 
+        public ICommand SelectReleasedCommand { get; }
+
         private void SelectGroup(SkipGroup? group)
         {
             if (group == null) return;
             _selectInModel(group.Elements.Select(e => e.ElementId).ToList());
         }
+
+        /// <summary>
+        /// Selects the elements the constraints were taken off — not the constraints themselves.
+        /// A deleted alignment lock's own id is a tombstone that resolves to nothing, and this
+        /// list is the only record in existence that the removal happened, so it has to point at
+        /// something the user can still find.
+        /// </summary>
+        private void SelectReleased() =>
+            _selectInModel(ReleasedConstraints.Select(c => c.ElementId).Distinct().ToList());
     }
 }

@@ -95,20 +95,29 @@
             <!-- MaxHeight is load-bearing, not cosmetic: this Expander sits in an Auto row, an Auto
                  row takes its full desired height, and a long list would therefore starve the *
                  row and push the Close button off the bottom of the window. Don't remove it. -->
-            <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto"
-                          PreviewMouseWheel="InnerList_PreviewMouseWheel">
-                <ItemsControl ItemsSource="{Binding ReleasedConstraints}" Margin="0,6,0,0">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Opacity="0.8" Margin="0,1">
-                                <Run Text="{Binding Category, Mode=OneWay}"/>
-                                <Run Text="—"/>
-                                <Run Text="{Binding Description, Mode=OneWay}"/>
-                            </TextBlock>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
+            <StackPanel>
+                <!-- The element id shown is the host's, not the constraint's: a deleted alignment
+                     lock's own id is a tombstone that resolves to nothing, so the row has to name
+                     something the user can still select. -->
+                <Button Content="Select the elements these came off" Padding="8,2"
+                        HorizontalAlignment="Left" Margin="0,6,0,0"
+                        Command="{Binding SelectReleasedCommand}"/>
+                <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto"
+                              PreviewMouseWheel="InnerList_PreviewMouseWheel">
+                    <ItemsControl ItemsSource="{Binding ReleasedConstraints}" Margin="0,6,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Opacity="0.8" Margin="0,1">
+                                    <Run Text="{Binding Category, Mode=OneWay}"/>
+                                    <Run Text="{Binding ElementId, Mode=OneWay}"/>
+                                    <Run Text="—"/>
+                                    <Run Text="{Binding Description, Mode=OneWay}"/>
+                                </TextBlock>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
         </Expander>
 
         <Button Grid.Row="3" Content="Close" Width="90" Height="26" Margin="0,12,0,0"
