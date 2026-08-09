@@ -19,7 +19,8 @@ namespace RVTuk.UI.RoundPositions.ViewModels
 
             Summary =
                 $"Examined {report.Examined}   ·   Moved {report.Moved}   ·   " +
-                $"Already clean {report.AlreadyClean}   ·   Skipped {report.Skipped.Count}";
+                $"Already clean {report.AlreadyClean}   ·   Skipped {report.Skipped.Count}   ·   " +
+                $"{report.ElapsedMilliseconds} ms";
 
             // GroupedByReason re-groups on every call — hold the one result, don't bind the method.
             Groups = report.GroupedByReason();
