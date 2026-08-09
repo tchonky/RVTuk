@@ -229,11 +229,14 @@ namespace RVTuk.Revit
                     return RoundFixHandler.Report;
                 };
 
+                // Raise and return — deliberately no wait. The pane's WPF thread IS Revit's main
+                // thread, so blocking here would block the very thread that has to run the event:
+                // it would sit until the timeout and only then select. Nothing needs the result,
+                // and Revit runs the event the moment it is idle, which is immediately.
                 Action<IReadOnlyList<long>> selectInModel = ids =>
                 {
                     RoundSelectHandler.Prepare(ids);
                     RoundSelectEvent.Raise();
-                    RoundSelectHandler.WaitForCompletion(TimeSpan.FromMinutes(1));
                 };
 
                 // Stored inverted: the config default (false) is "half centimetres allowed".
