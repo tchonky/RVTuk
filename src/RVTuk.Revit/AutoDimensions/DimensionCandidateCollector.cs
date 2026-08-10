@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
 using RVTuk.Core.AutoDimensions;
+using RVTuk.Core.Shared.Geometry;
 
 namespace RVTuk.Revit.AutoDimensions
 {
@@ -44,6 +45,14 @@ namespace RVTuk.Revit.AutoDimensions
         /// "pretend walls are not there".
         /// </summary>
         public IReadOnlyList<WallCandidate> Occluders { get; set; } = new List<WallCandidate>();
+
+        /// <summary>
+        /// Every collected wall as an element, index-aligned with <see cref="Occluders"/>. A ref
+        /// line must resolve a wall end whether or not Walls is ticked — the same reasoning that
+        /// already makes every wall an occluder.
+        /// </summary>
+        public IReadOnlyList<DimensionCandidate> OccluderItems { get; set; } =
+            new List<DimensionCandidate>();
 
         /// <summary>
         /// Elements the view draws but does not cut — walls below the cut plane, shown in
@@ -90,6 +99,7 @@ namespace RVTuk.Revit.AutoDimensions
                 Segments = accumulated.Segments,
                 MatchModes = accumulated.MatchModes,
                 Occluders = accumulated.Occluders,
+                OccluderItems = accumulated.OccluderItems,
                 ExcludedNotCut = accumulated.ExcludedNotCut,
                 CutPlaneElevation = cutZ,
             };
@@ -102,6 +112,7 @@ namespace RVTuk.Revit.AutoDimensions
             public readonly List<WallCandidate> Segments = new List<WallCandidate>();
             public readonly List<CandidateMatch> MatchModes = new List<CandidateMatch>();
             public readonly List<WallCandidate> Occluders = new List<WallCandidate>();
+            public readonly List<DimensionCandidate> OccluderItems = new List<DimensionCandidate>();
             public int ExcludedNotCut;
 
             public void Add(DimensionCandidate candidate, WallCandidate segment, CandidateMatch match)
@@ -113,16 +124,16 @@ namespace RVTuk.Revit.AutoDimensions
         }
 
         /// <summary>
-        /// Appends the candidate's two references (a wall's side faces, an opening's Left/Right)
-        /// to the array. Returns false — leaving the array untouched — when either side can't be
-        /// resolved, so one unreadable element doesn't cost the whole line its dimension.
+        /// The candidate's two references (a wall's side faces, an opening's Left/Right), or null
+        /// when either side can't be resolved — so one unreadable element doesn't cost the whole
+        /// line its dimension. Returned rather than appended, because the runner interleaves them
+        /// with ref line marks by position along the line before building the array.
         /// </summary>
-        public static bool TryAppendReferences(
+        public static List<Reference>? TryResolveReferences(
             DimensionCandidateSet candidates,
             int index,
             XyPoint lineStart,
-            XyPoint lineEnd,
-            ReferenceArray target)
+            XyPoint lineEnd)
         {
             try
             {
@@ -134,26 +145,26 @@ namespace RVTuk.Revit.AutoDimensions
 
                 if (candidate.Kind == DimensionCandidateKind.Wall)
                 {
-                    if (candidate.Wall == null) return false;
+                    if (candidate.Wall == null) return null;
                     if (!ReferenceAlignment.CanDimension(
                             lineStart, lineEnd, segment, ReferenceNormal.AcrossSegment))
-                        return false;
+                        return null;
 
                     var cutZ = LocalCutPlane(candidates.CutPlaneElevation, candidate.Link);
                     first = PickSideFace(candidate.Wall, ShellLayerType.Exterior, cutZ);
                     second = PickSideFace(candidate.Wall, ShellLayerType.Interior, cutZ);
-                    if (first == null || second == null) return false;
+                    if (first == null || second == null) return null;
                 }
                 else
                 {
-                    if (candidate.Instance == null) return false;
+                    if (candidate.Instance == null) return null;
 
                     // Jamb planes face along the host wall, so a line crossing that wall lies
                     // parallel to them. Revit rejects the whole dimension when handed one, which
                     // is why a line through a doorway used to produce nothing at all.
                     if (!ReferenceAlignment.CanDimension(
                             lineStart, lineEnd, segment, ReferenceNormal.AlongSegment))
-                        return false;
+                        return null;
 
                     // Left and Right ONLY — never CenterLeftRight, Front/Back or Strong/Weak.
                     // Exactly two references, both belonging to this instance, is what makes the
@@ -163,7 +174,7 @@ namespace RVTuk.Revit.AutoDimensions
                     // Reference" property inside the family, not their names.
                     var left = candidate.Instance.GetReferences(FamilyInstanceReferenceType.Left);
                     var right = candidate.Instance.GetReferences(FamilyInstanceReferenceType.Right);
-                    if (left.Count == 0 || right.Count == 0) return false;
+                    if (left.Count == 0 || right.Count == 0) return null;
 
                     // Expected to be one apiece; a family exposing several (nested families being
                     // the likely source) is served by the first, which at least stays stable.
@@ -177,16 +188,14 @@ namespace RVTuk.Revit.AutoDimensions
                     // view until it is re-expressed through the link instance that places it.
                     first = first.CreateLinkReference(candidate.Link);
                     second = second.CreateLinkReference(candidate.Link);
-                    if (first == null || second == null) return false;
+                    if (first == null || second == null) return null;
                 }
 
-                target.Append(first);
-                target.Append(second);
-                return true;
+                return new List<Reference> { first, second };
             }
             catch
             {
-                return false;
+                return null;
             }
         }
 
@@ -363,19 +372,20 @@ namespace RVTuk.Revit.AutoDimensions
                     ToXyPoint(transform.OfPoint(centerline.GetEndPoint(0))),
                     ToXyPoint(transform.OfPoint(centerline.GetEndPoint(1))));
 
-                // Every wall stands in the way of the openings behind it, dimensioned or not.
+                // One instance in both lists: every wall stands in the way of the openings behind
+                // it, dimensioned or not, and a ref line may point at any of their ends.
+                var item = new DimensionCandidate
+                {
+                    Kind = DimensionCandidateKind.Wall,
+                    Wall = wall,
+                    Link = link,
+                };
+
                 accumulated.Occluders.Add(segment);
+                accumulated.OccluderItems.Add(item);
                 if (!dimensionThem) continue;
 
-                accumulated.Add(
-                    new DimensionCandidate
-                    {
-                        Kind = DimensionCandidateKind.Wall,
-                        Wall = wall,
-                        Link = link,
-                    },
-                    segment,
-                    CandidateMatch.Crossing);
+                accumulated.Add(item, segment, CandidateMatch.Crossing);
             }
         }
 

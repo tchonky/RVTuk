@@ -7,9 +7,10 @@ namespace RVTuk.Revit.AutoDimensions
 {
     /// <summary>
     /// Discovers, per level, which of its plan views can act as the reference view (owns at least
-    /// one Dimensions_Line detail line) and which views can receive the fanned-out dimensions.
-    /// Views with no level — 3D, sections, drafting views, schedules, sheets — are never
-    /// candidates for either role.
+    /// one _DP-Dim Outer or _DP-Dim Inner detail line) and which views can receive the fanned-out
+    /// dimensions. A view holding only ref lines is not a reference view: ref lines with no
+    /// string to join produce nothing. Views with no level — 3D, sections, drafting views,
+    /// schedules, sheets — are never candidates for either role.
     /// </summary>
     public static class LevelScopeFinder
     {
@@ -28,7 +29,7 @@ namespace RVTuk.Revit.AutoDimensions
                     .OfClass(typeof(CurveElement))
                     .Cast<CurveElement>()
                     .OfType<DetailLine>()
-                    .Where(DimensionLineStyle.IsDimensionsLine)
+                    .Where(l => DimensionLineStyle.TryGetRing(l, out _))
                     .Select(l => l.OwnerViewId));
 
             var scopes = new List<(double Elevation, LevelScope Scope)>();

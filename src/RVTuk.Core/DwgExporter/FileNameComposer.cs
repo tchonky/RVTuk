@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 
 namespace RVTuk.Core.DwgExporter
@@ -33,16 +32,6 @@ namespace RVTuk.Core.DwgExporter
                 sb.Append(Array.IndexOf(invalid, c) >= 0 ? '-' : c);
             var clean = sb.ToString().Trim().TrimEnd('.', ' ').Trim();
             return clean.Length == 0 ? "Sheet" : clean;
-        }
-
-        /// <summary>Names occurring more than once (case-insensitive), each reported once.</summary>
-        public static IReadOnlyList<string> FindDuplicates(IEnumerable<string> names)
-        {
-            return names
-                .GroupBy(n => n, StringComparer.OrdinalIgnoreCase)
-                .Where(g => g.Count() > 1)
-                .Select(g => g.Key)
-                .ToList();
         }
     }
 }
