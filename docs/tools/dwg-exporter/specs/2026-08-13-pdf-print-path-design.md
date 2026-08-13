@@ -121,6 +121,19 @@ Verified 2026-08-13 on Windows 11 26200 with PDF24 Creator 11.30.0.
    a 200-sheet set submitted at once would put roughly 9 GB in the spool folder, and the
    5000 × 900 sheets will be worse. Submit up to N jobs (start at 10), and top the window up
    as jobs drain. Correlation is by GUID, so throttling changes throughput and nothing else.
+
+   **Submit grouped by paper size**, smallest group last so the longest-spooling sheets start
+   earliest. A real set has a handful of distinct sizes, not one per sheet, so grouping keeps
+   nearly all the parallelism while changing the paper setting only a few times per run.
+
+   The reason to group rather than interleave is that `PrintManager` is stateful and
+   demonstrably unforgiving about it (established fact 8). Whether a job carries the paper
+   size that was set at *its* `SubmitPrint()`, or simply whatever was set last, is unverified —
+   see the spikes. It ought to work, because the spooler captures a DEVMODE per document and
+   page size is baked into the spooled data, but the failure mode is silent: correctly named
+   PDFs at the wrong size. Grouping shrinks the exposure from "every sheet" to "the boundary
+   between two groups", and if the spike shows per-job sizing does not survive at all, the
+   groups become the serialisation unit with no other change to the design.
 5. **Naming is unchanged.** `NamingRuleEvaluator` already evaluates the PDF setup's rule to
    produce `PlannedExportFile.FileName` for the DWGs. The print path reuses that same string,
    so `.dwg`/`.pdf` basenames stay in lockstep exactly as they do today. This was expected to
@@ -245,7 +258,13 @@ staging swept            → anything left behind is deleted, never adopted
    needle. Note that the job-name spike only exercised `PrintRange.Current`, and established
    fact 8 says property pairings throw rather than correct — so expect `CombinedFile` to need
    revisiting under `Select`, where it must be false.
-2. **Where the window size should sit.** Decision 4 starts at 10 outstanding jobs on the
+2. **Does a job carry the paper size set at its own submit?** The one that decides whether
+   decision 4 works at all. Register two forms of obviously different size, submit a sheet to
+   each back to back without waiting, and **measure both output PDFs**. If job two's size
+   leaked onto job one, batching must serialise at the paper-size boundary — which grouping
+   already prepares for. Do not eyeball this; a wrong-sized page with the right filename looks
+   entirely normal.
+3. **Where the window size should sit.** Decision 4 starts at 10 outstanding jobs on the
    strength of one 44 MB sample. Measure a real set — spool size varies hugely with sheet
    content — and check what the spool folder does on the biggest sheets.
 3. **Writing the auto-save settings non-interactively.** The values are now known (see the
@@ -291,11 +310,16 @@ PDF's page dimensions *measured* rather than eyeballed; a sheet whose size has n
 form, confirming the error names the size; a mixed DWG+PDF run, confirming basenames still
 pair; a run with per-drawing transmittals, confirming no `.pdf` enters an archive.
 
-The batch case needs deliberate attention, because decision 4's failure mode is silent. Run a
-set of **at least 20 sheets with visibly different content**, then open every PDF and check the
-drawing matches its filename — not just that the right number of files appeared. Include one
-sheet guaranteed to fail (no registered form) and confirm the sheets after it are still named
-correctly.
+The batch case needs deliberate attention, because decision 4 has two silent failure modes.
+Run a set of **at least 20 sheets with visibly different content, spanning at least three
+paper sizes**, then check every output on both axes:
+
+- **Right drawing under the right name** — open them, don't just count files.
+- **Right page size for each** — measure, don't eyeball. A 900 × 1200 drawing on an A1 page
+  looks like a drawing until someone plots it.
+
+Include one sheet guaranteed to fail (no registered form) and confirm the sheets after it are
+still correct on both counts.
 
 **Installer (manual)** — a machine with no PDF24; a machine with PDF24 from ProSheets (Inno
 build), confirming it is detected and not reinstalled; `--uninstall` leaving PDF24 in place.
