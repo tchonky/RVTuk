@@ -58,7 +58,28 @@ Verified 2026-08-13 on Windows 11 26200 with PDF24 Creator 11.30.0.
 5. **`AddForm` requires administrator.** RVTuk runs inside Revit as a normal user, so **the
    add-in cannot register forms at runtime.** This is almost certainly behind the ProSheets
    FAQ entry "Printer Permission Issue (Failed to access print parameters)".
-6. **There is no "driver only" PDF24.** The printer is a named pipe
+6. **`PrintToFileName` becomes the print job name, verbatim.** Proven by macro spike on
+   2026-08-13: setting `PrintManager.PrintToFileName` to a full path and calling
+   `SubmitPrint()` produced a queued job whose `DocumentName` was exactly
+   `C:\RVTuk-Spike\spike-0bb1cef8….pdf`. Revit neither normalised nor rejected it — it read
+   back identical. **This is the channel**, and it is the same one ProSheets uses.
+7. **Revit forces `PrintToFile = true` for virtual printers.** Trying to set it false throws
+   *"The PrintToFile property cannot be set to false while the printer is Virtual."* So the
+   job-name channel is not an opt-in we have to arrange — for a PDF printer it is the only
+   mode Revit will operate in.
+8. **`PrintManager` enforces ordering constraints between its own properties**, and throws
+   rather than correcting. `CombinedFile = false` is rejected while `PrintRange` is
+   `Current`/`Visible` (*"CombinedFile property cannot be set to false when the Print Range is
+   Current/Visible!"*). Assume every property pairing needs checking, not just this one.
+9. **`doc.PrintManager` itself can throw** `"Failed to access print parameters"` — hit during
+   the same spike after printer state was changed underneath a running Revit. It cleared only
+   on a Revit restart. ProSheets documents the same error, blaming printer permissions or a
+   missing default printer. This is a real-world condition, not a theoretical one.
+10. **The PDF24 save dialog is real and blocking.** With auto-save unconfigured, the spike's
+    single sheet left `pdf24-DocTool` sitting on a *"Save As"* window. One of those inside a
+    200-sheet run would stop everything, which is why the reference configuration below is
+    part of the design rather than a nicety.
+11. **There is no "driver only" PDF24.** The printer is a named pipe
    (`\\.\pipe\PDFPrint`, Local Monitor) serviced by `pdf24.exe -service`, which drives
    Ghostscript. Remove the service and the printer silently produces nothing. Footprint is
    1,080 MB / 2,336 files; the documented MSI properties strip it to roughly 456 MB.
@@ -200,6 +221,11 @@ staging swept            → anything left behind is deleted, never adopted
   collected, so a leftover from a crashed earlier run cannot be adopted.
 - **PDF24 is not installed** → the print engine is disabled in the dialog with the reason
   shown, rather than failing at run time.
+- **`doc.PrintManager` throws "Failed to access print parameters"** → abort the run before
+  printing anything, with a message naming the three known causes: a printer changed
+  underneath a running Revit (restart Revit), no Windows default printer, or missing "Manage
+  this printer" / "Manage documents" rights on the printer. Established fact 9 — this happened
+  during the spike, so it needs a real message, not a raw exception.
 - **A PDF already exists at the target path** → caught by the existing pre-flight
   (`OutputFileExists`), unchanged.
 - **A printed PDF lands in a shared DWG/PDF folder** → already excluded from transmittals by
@@ -208,20 +234,21 @@ staging swept            → anything left behind is deleted, never adopted
 
 ## Open questions — spike before implementing
 
-1. **Which API call sets the job name?** *Whether* it can be done is settled — ProSheets does
-   it. `PrintManager` exposes no job-name property, so the likely mechanism is
-   `PrintToFile = true` with `PrintToFileName` set to the full path, which is the documented
-   pattern for PDF printers generally. Confirm by printing one sheet that way and seeing
-   whether PDF24 writes where told. **Still the first spike** — everything else assumes it.
-2. **How to print a single arbitrary sheet without dirtying the model.** `PrintRange.Select`
-   drives `ViewSheetSetting.CurrentViewSheetSet`, and saving a set creates a `ViewSheetSet`
-   element — a document modification in a model the user did not open for editing.
-   `PrintRange.Current` avoids it but needs each sheet activated, which is slow and moves the
-   user's active view. Setting the in-session set without `SaveAs` may thread the needle.
-3. **Where the window size should sit.** Decision 4 starts at 10 outstanding jobs on the
+> **Spike 1 is closed** (2026-08-13). `PrintToFileName` is the job-name channel — established
+> facts 6 and 7. The remaining spikes are unaffected by the answer.
+
+1. **How to print a single arbitrary sheet without dirtying the model.** Now the first spike.
+   `PrintRange.Select` drives `ViewSheetSetting.CurrentViewSheetSet`, and saving a set creates
+   a `ViewSheetSet` element — a document modification in a model the user did not open for
+   editing. `PrintRange.Current` avoids it but needs each sheet activated, which is slow and
+   moves the user's active view. Setting the in-session set without `SaveAs` may thread the
+   needle. Note that the job-name spike only exercised `PrintRange.Current`, and established
+   fact 8 says property pairings throw rather than correct — so expect `CombinedFile` to need
+   revisiting under `Select`, where it must be false.
+2. **Where the window size should sit.** Decision 4 starts at 10 outstanding jobs on the
    strength of one 44 MB sample. Measure a real set — spool size varies hugely with sheet
    content — and check what the spool folder does on the biggest sheets.
-4. **Writing the auto-save settings non-interactively.** The values are now known (see the
+3. **Writing the auto-save settings non-interactively.** The values are now known (see the
    reference configuration below); what is not known is where PDF24 keeps them.
    Per-user settings live under `HKCU\SOFTWARE\PDF24` and machine-wide ones under
    `HKLM\SOFTWARE\PDF24` — find the per-instance auto-save keys so the installer can write
