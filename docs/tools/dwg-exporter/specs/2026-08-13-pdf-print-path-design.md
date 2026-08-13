@@ -73,28 +73,33 @@ Verified 2026-08-13 on Windows 11 26200 with PDF24 Creator 11.30.0.
    for automatic save with no dialog. The user's own `PDF24` printer is never reconfigured —
    PDF24 pops a save-assistant dialog by default, and for a 200-sheet batch that is fatal.
    Precedent: DiRoots ship `diroots.prosheets` for exactly this reason.
-3. **Name the file through the print job name, with staging as the fallback.** PDF24 derives
-   the output path from the print job name — set the job name to a full path and that is where
-   the PDF is written ([PDF24 help](https://help.pdf24.org/en/forums/topic/print-to-pdf24-assistant-from-visual-basic-with-filename/)),
-   and the auto-save template's `$fileName` resolves to whatever the printer interface
-   supplied. If Revit lets us set the job name, each PDF names itself and there is nothing to
-   correlate.
+3. **The job name carries a GUID staging path; we do the final rename.** PDF24 derives the
+   output path from the print job name, and the auto-save template's `$fileName` resolves to
+   what the printer interface supplied. So the job name is our channel — but it carries
+   `<staging>\<guid>.pdf`, **not** the final filename.
 
-   If it does not, the fallback is a private staging folder: print, wait for a new `.pdf`,
-   move it to the computed name. That works but forces decision 4 to be serial. **Settle the
-   job-name question first** — it decides the shape of the whole export loop.
+   The GUID is the correlation key. It is unique per job, so a returning file identifies its
+   sheet exactly with no dependence on ordering; it is immune to PDF24's "Strings to erase in
+   filenames" post-processing, which can silently alter a name; and it keeps Hebrew and other
+   non-ASCII characters out of a path that has to survive the spooler. The final name — the
+   one `NamingRuleEvaluator` computed — is applied by our own move, where we control it
+   completely.
 
-4. **Submit every print job first, then export the DWGs, then collect.** `SubmitPrint` returns
-   as soon as the job reaches the spooler, so the PDFs are rendered by PDF24's own process
-   while Revit gets on with DWG work in the API context. That is real parallelism for free —
-   no background thread inside Revit — and by the time the DWGs are done most PDFs have
-   landed. Collection then waits only on the stragglers.
+   This is exactly what ProSheets does, observed 2026-08-13 by pausing `diroots.prosheets` and
+   reading the queued job name:
+   `C:\Users\danie\AppData\Local\DiRoots\ProSheets\Temp\PDF\5e45beb0-…-0c2116a0429f.pdf`.
+   Which also settles the open question — **a Revit add-in can set the job name to a full
+   path.** Only the API call used to do it still needs identifying.
 
-   **This depends entirely on decision 3 resolving in favour of job names.** Without them,
-   files can only be matched to sheets by order of appearance, and a single failed job
-   desynchronises every sheet after it — producing correct-looking names over the wrong
-   drawings, which is far worse than being slow. If job names are unavailable, printing stays
-   serial and this decision is dropped.
+4. **Submit print jobs in a bounded window, export the DWGs, then collect.** `SubmitPrint`
+   returns as soon as the job reaches the spooler, so PDFs render in PDF24's process while
+   Revit gets on with DWG work in the API context — real parallelism with no background thread
+   inside Revit.
+
+   Not a free-for-all, though. The observed ProSheets job was **44 MB of spool for one page**;
+   a 200-sheet set submitted at once would put roughly 9 GB in the spool folder, and the
+   5000 × 900 sheets will be worse. Submit up to N jobs (start at 10), and top the window up
+   as jobs drain. Correlation is by GUID, so throttling changes throughput and nothing else.
 5. **Naming is unchanged.** `NamingRuleEvaluator` already evaluates the PDF setup's rule to
    produce `PlannedExportFile.FileName` for the DWGs. The print path reuses that same string,
    so `.dwg`/`.pdf` basenames stay in lockstep exactly as they do today. This was expected to
@@ -131,7 +136,7 @@ Verified 2026-08-13 on Windows 11 26200 with PDF24 Creator 11.30.0.
 | File | Responsibility |
 |------|----------------|
 | `PrinterForms.cs` *(new)* | `EnumForms` via P/Invoke — **read-only, no elevation** — returning `IReadOnlyList<PaperForm>` for a printer. Also `TitleBlockSizes(doc)`, reading `SHEET_WIDTH`/`SHEET_HEIGHT` off each sheet so the helper can be told what to register. |
-| `SheetPdfPrinter.cs` *(new)* | The `PrintManager` path. `Submit(doc, file, form)` configures the printer and job name and calls `SubmitPrint()` — it does **not** wait. `Collect(expected, timeout)` waits for the outstanding files and reports what never arrived. Splitting submit from collect is what lets decision 4 overlap the two formats. |
+| `SheetPdfPrinter.cs` *(new)* | The `PrintManager` path. `Submit(doc, file, form)` issues a GUID, sets the job name to `<staging>\<guid>.pdf`, calls `SubmitPrint()` and returns the GUID — it does **not** wait. `Collect(outstanding, timeout)` waits on each GUID, moves the file to its planned name, and reports what never arrived. Splitting submit from collect is what lets decision 4 overlap the two formats; the GUID is what makes it safe. |
 | `SheetDwgExporter.cs` | `Export` branches on `request.PdfEngine`: `Native` keeps today's `doc.Export(...)` call at [line 152](../../../src/RVTuk.Revit/DwgExporter/SheetDwgExporter.cs); `Print` submits via `SheetPdfPrinter` instead. The DWG half is untouched. |
 | `DwgExportRunner.cs` | Owns the new run order — submit every print job, export the DWGs, then collect. Per-drawing transmittal snapshots must stay bracketed around **the DWG export only**, since printed PDFs now land at unpredictable moments; harmless either way, because `TransmittalBuilder` already excludes `.pdf` by extension. |
 
@@ -151,7 +156,7 @@ a UAC prompt, and reports what it registered.
 | Piece | Responsibility |
 |------|----------------|
 | `RVTuk.FormSetup` *(new project)* | Self-elevating console exe. `--register <name>:<w>x<h>` (repeatable), `--defaults`, `--list`, `--remove <name>`. Wraps `OpenPrinter`(server, `SERVER_ACCESS_ADMINISTER`) + `AddForm`/`DeleteForm`/`EnumForms`. Not in `RVTuk.sln`, same as `RVTuk.Setup` — it has no `Release{year}` configs. |
-| `RVTuk.Setup` | Detects PDF24 (both the MSI and Inno registry shapes); if absent, downloads the official MSI and runs it silently; creates the `RVTuk PDF` printer instance and configures it for automatic save; invokes `RVTuk.FormSetup --defaults`. `--uninstall` removes the printer instance and RVTuk's own forms, and leaves PDF24 alone — it may predate us. |
+| `RVTuk.Setup` | Detects PDF24 (both the MSI and Inno registry shapes); if absent, downloads the official MSI and runs it silently; creates the `RVTuk PDF` printer instance and applies the reference configuration below; invokes `RVTuk.FormSetup --defaults`. `--uninstall` removes the printer instance and RVTuk's own forms, and leaves PDF24 alone — it may predate us. |
 
 Silent install line, all documented PDF24 properties:
 
@@ -168,17 +173,20 @@ msiexec /i pdf24-creator.msi /qn ADDLOCAL=ALL REMOVE=WebView2 FAXPRINTER=No
 plan every file          → PlannedExportFile.FileName        (unchanged, shared by both formats)
 PrinterForms.EnumForms   → registered forms for "RVTuk PDF"          once per run
 
-for each file:                                                       ── submit phase
+for each file, up to N outstanding:                                  ── submit phase
   read the sheet size    → SHEET_WIDTH / SHEET_HEIGHT
   PaperSizeMatcher.Match → the form, or an error naming the size
-  job name               → <PdfFolder>\<FileName>.pdf
+  guid                   → remember guid → PlannedExportFile
+  job name               → <staging>\<guid>.pdf
   SubmitPrint()          → returns at once; PDF24 renders out of process
 
 for each file:                                                       ── DWG phase
   doc.Export(...)        → unchanged, runs while the PDFs spool
 
-collect                  → wait for the outstanding .pdf paths, timeout → errors
+collect                  → for each guid still outstanding, wait for <staging>\<guid>.pdf,
+                           then move to <PdfFolder>\<FileName>.pdf; timeout → errors
 transmittal              → snapshots bracket the DWG phase only
+staging swept            → anything left behind is deleted, never adopted
 ```
 
 ## Error handling
@@ -186,8 +194,10 @@ transmittal              → snapshots bracket the DWG phase only
 - **No form fits the sheet** → an error naming the sheet, its size in mm, and the
   "Register paper sizes" action. That sheet is not submitted; the run continues.
 - **A file never arrives before the collect timeout** → an error naming the sheet. Because
-  each job carries its own destination path, one missing file cannot misname any other — which
-  is the entire reason decision 4 is safe.
+  every job is keyed by its own GUID, a missing file can never be confused with another
+  sheet's — which is what makes decision 4 safe.
+- **An unexpected file appears in staging** → ignored. Only GUIDs this run issued are
+  collected, so a leftover from a crashed earlier run cannot be adopted.
 - **PDF24 is not installed** → the print engine is disabled in the dialog with the reason
   shown, rather than failing at run time.
 - **A PDF already exists at the target path** → caught by the existing pre-flight
@@ -198,26 +208,46 @@ transmittal              → snapshots bracket the DWG phase only
 
 ## Open questions — spike before implementing
 
-1. **Can Revit's print job name be set?** This is the pivotal one — decisions 3 and 4 both
-   collapse without it, and the export loop goes back to serial print-and-rename.
-   `PrintManager` exposes no job-name property; find out what Revit puts in
-   `DOCINFO.lpszDocName` and whether `PrintToFileName` or anything else influences it. Verify
-   by printing one sheet and seeing where PDF24 writes it. **Do this spike first.**
+1. **Which API call sets the job name?** *Whether* it can be done is settled — ProSheets does
+   it. `PrintManager` exposes no job-name property, so the likely mechanism is
+   `PrintToFile = true` with `PrintToFileName` set to the full path, which is the documented
+   pattern for PDF printers generally. Confirm by printing one sheet that way and seeing
+   whether PDF24 writes where told. **Still the first spike** — everything else assumes it.
 2. **How to print a single arbitrary sheet without dirtying the model.** `PrintRange.Select`
    drives `ViewSheetSetting.CurrentViewSheetSet`, and saving a set creates a `ViewSheetSet`
    element — a document modification in a model the user did not open for editing.
    `PrintRange.Current` avoids it but needs each sheet activated, which is slow and moves the
    user's active view. Setting the in-session set without `SaveAs` may thread the needle.
-3. **Spooler queue depth.** Decision 4 queues every sheet at once, and a 5000 × 900 sheet
-   spools a lot of PostScript. Check whether a 200-sheet set needs a bounded submit window
-   rather than a free-for-all.
-4. **No modal dialog mid-batch.** `PrintToFileName` is documented as unreliable, with reports
-   of Revit ignoring it and showing a Save dialog. One modal in a 200-sheet run is a
-   showstopper, so confirm the configured `RVTuk PDF` instance never prompts.
-5. **Configuring the `RVTuk PDF` instance for automatic save non-interactively.** PDF24 stores
-   per-user settings under `HKCU\SOFTWARE\PDF24` and machine-wide ones under
-   `HKLM\SOFTWARE\PDF24`; find which keys hold a printer instance's auto-save profile, and
-   whether the installer can write them rather than driving the PDF24 GUI.
+3. **Where the window size should sit.** Decision 4 starts at 10 outstanding jobs on the
+   strength of one 44 MB sample. Measure a real set — spool size varies hugely with sheet
+   content — and check what the spool folder does on the biggest sheets.
+4. **Writing the auto-save settings non-interactively.** The values are now known (see the
+   reference configuration below); what is not known is where PDF24 keeps them.
+   Per-user settings live under `HKCU\SOFTWARE\PDF24` and machine-wide ones under
+   `HKLM\SOFTWARE\PDF24` — find the per-instance auto-save keys so the installer can write
+   them instead of driving the GUI. Note that the installer runs elevated while these may be
+   per-user, so this may need a first-run step inside RVTuk rather than install-time setup.
+
+## Reference configuration
+
+The `diroots.prosheets` instance, read from the PDF24 settings GUI on 2026-08-13. `RVTuk PDF`
+should be set up the same way — this is a known-working configuration, not a guess.
+
+| Setting | Value |
+|---|---|
+| PDF Printer Tool | **Automatically save documents after printed** |
+| Auto Save → Output Directory | the staging folder |
+| Auto Save → Filename | `$fileName` |
+| Auto Save → Profile | Best quality |
+| Overwrite existing file | on |
+| **Use a file name chooser before saving the file** | **off** — this is the modal that would kill a batch |
+| Show progress while saving | off |
+| Open folder after saving | off |
+
+`$fileName` is what makes the job-name channel work: it resolves to the name the printer
+interface supplied. Also note the **"Strings to erase in filenames"** section — PDF24 can
+rewrite names on the way out, which is the second reason decision 3 puts a GUID in the job
+name rather than the real one.
 
 ## Testing
 
