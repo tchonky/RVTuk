@@ -75,6 +75,21 @@ generally breaches their licence — and a receiver almost always has the common
 no Autodesk font folder exists at all, the report says so rather than implying none were
 needed.
 
+## Known limitation: Hebrew mixed with English in PDFs
+
+Revit's native PDF exporter mis-orders bidirectional text: a sheet that reads correctly on
+screen comes out with the Latin runs relocated and the parentheses and quotes moved. Pure
+Hebrew survives; Hebrew *with* embedded English does not. The bug is Revit's — we pass the
+setup's options through untouched — and it affects text notes, schedules and generic
+annotations alike.
+
+The fix is to route PDF output through a print driver instead, which renders through Windows
+text shaping and gets the order right. Designed 2026-08-13 in
+[specs/2026-08-13-pdf-print-path-design.md](specs/2026-08-13-pdf-print-path-design.md), **not
+yet implemented**. That doc also records what was ruled out — raster processing, the Windows
+non-Unicode locale, Microsoft Print to PDF (tops out at 864 × 1118 mm from Revit and rejects
+custom forms), and clawPDF — so none of it gets retried.
+
 ## Multi-model runs
 
 Export setups and view/sheet sets are per-document elements with no cross-document
@@ -112,4 +127,5 @@ Revit 2024/2025 only — not hosted in KKarea (2023).
 
 - [backlog.md](backlog.md) — bugs / improvements / ideas
 - [specs/](specs/) — dated designs
-  ([2026-07-15 design](specs/2026-07-15-dwg-exporter-design.md))
+  ([2026-07-15 design](specs/2026-07-15-dwg-exporter-design.md),
+  [2026-08-13 PDF print path](specs/2026-08-13-pdf-print-path-design.md))
