@@ -79,7 +79,19 @@ Verified 2026-08-13 on Windows 11 26200 with PDF24 Creator 11.30.0.
     single sheet left `pdf24-DocTool` sitting on a *"Save As"* window. One of those inside a
     200-sheet run would stop everything, which is why the reference configuration below is
     part of the design rather than a nicety.
-11. **There is no "driver only" PDF24.** The printer is a named pipe
+11. **Mixed paper sizes in one batch come out correct.** A ProSheets export of six sheets on
+    2026-08-13 produced three distinct page sizes, interleaved, every one right: A0
+    (841 × 1189), A4 (210 × 297) and a custom 317 × 773 — the custom one submitted **two
+    seconds after** an A4. The size travels with the job; changing `PrintManager` between
+    submissions does not leak the last setting onto earlier ones.
+12. **Hebrew filenames survive the rename.** The same run produced `מממ.pdf` and
+    `בניין 01,.pdf` intact. Naming the file ourselves after the job completes, rather than
+    pushing the real name through the spooler, is what makes this safe.
+13. **Revit is the bottleneck, not PDF24 — but not by much.** Gaps between submissions ran
+    5–39 s (Revit rendering each sheet); PDF24 took 2–27 s to convert, the A0s at the top of
+    that range. The two are comparable, so overlapping them is worth something, though less
+    than a naive reading of "SubmitPrint returns immediately" suggests.
+14. **There is no "driver only" PDF24.** The printer is a named pipe
    (`\\.\pipe\PDFPrint`, Local Monitor) serviced by `pdf24.exe -service`, which drives
    Ghostscript. Remove the service and the printer silently produces nothing. Footprint is
    1,080 MB / 2,336 files; the documented MSI properties strip it to roughly 456 MB.
@@ -122,18 +134,12 @@ Verified 2026-08-13 on Windows 11 26200 with PDF24 Creator 11.30.0.
    5000 × 900 sheets will be worse. Submit up to N jobs (start at 10), and top the window up
    as jobs drain. Correlation is by GUID, so throttling changes throughput and nothing else.
 
-   **Submit grouped by paper size**, smallest group last so the longest-spooling sheets start
-   earliest. A real set has a handful of distinct sizes, not one per sheet, so grouping keeps
-   nearly all the parallelism while changing the paper setting only a few times per run.
-
-   The reason to group rather than interleave is that `PrintManager` is stateful and
-   demonstrably unforgiving about it (established fact 8). Whether a job carries the paper
-   size that was set at *its* `SubmitPrint()`, or simply whatever was set last, is unverified —
-   see the spikes. It ought to work, because the spooler captures a DEVMODE per document and
-   page size is baked into the spooled data, but the failure mode is silent: correctly named
-   PDFs at the wrong size. Grouping shrinks the exposure from "every sheet" to "the boundary
-   between two groups", and if the spike shows per-job sizing does not survive at all, the
-   groups become the serialisation unit with no other change to the design.
+   **Mixed paper sizes need no special handling** — established fact 11 settles it. Sheets can
+   be submitted in whatever order the plan produces them, and each job keeps the size set at
+   its own `SubmitPrint()`. Grouping by paper size remains a free optimisation if the
+   implementation finds it convenient, since it reduces churn on a `PrintManager` that is
+   demonstrably unforgiving about its own state (fact 8), but it is not needed for
+   correctness and should not complicate the loop.
 5. **Naming is unchanged.** `NamingRuleEvaluator` already evaluates the PDF setup's rule to
    produce `PlannedExportFile.FileName` for the DWGs. The print path reuses that same string,
    so `.dwg`/`.pdf` basenames stay in lockstep exactly as they do today. This was expected to
@@ -247,8 +253,9 @@ staging swept            → anything left behind is deleted, never adopted
 
 ## Open questions — spike before implementing
 
-> **Spike 1 is closed** (2026-08-13). `PrintToFileName` is the job-name channel — established
-> facts 6 and 7. The remaining spikes are unaffected by the answer.
+> **Two spikes closed** (2026-08-13). `PrintToFileName` is the job-name channel (facts 6, 7),
+> and mixed paper sizes in one batch come out correct (fact 11). What remains cannot change
+> the design, only tune it — except the first, which shapes `SheetPdfPrinter`.
 
 1. **How to print a single arbitrary sheet without dirtying the model.** Now the first spike.
    `PrintRange.Select` drives `ViewSheetSetting.CurrentViewSheetSet`, and saving a set creates
@@ -258,15 +265,15 @@ staging swept            → anything left behind is deleted, never adopted
    needle. Note that the job-name spike only exercised `PrintRange.Current`, and established
    fact 8 says property pairings throw rather than correct — so expect `CombinedFile` to need
    revisiting under `Select`, where it must be false.
-2. **Does a job carry the paper size set at its own submit?** The one that decides whether
-   decision 4 works at all. Register two forms of obviously different size, submit a sheet to
-   each back to back without waiting, and **measure both output PDFs**. If job two's size
-   leaked onto job one, batching must serialise at the paper-size boundary — which grouping
-   already prepares for. Do not eyeball this; a wrong-sized page with the right filename looks
-   entirely normal.
-3. **Where the window size should sit.** Decision 4 starts at 10 outstanding jobs on the
+2. **Where the window size should sit.** Decision 4 starts at 10 outstanding jobs on the
    strength of one 44 MB sample. Measure a real set — spool size varies hugely with sheet
    content — and check what the spool folder does on the biggest sheets.
+
+   **Do not measure this with print-queue depth.** That was tried and it does not answer the
+   question: a job leaves the queue once the spooler has finished writing to the pipe, while
+   PDF24 goes on converting outside it. Observed max depth was 1 across nine jobs even though
+   a submission at 17:08:08 overlapped a conversion that only finished at 17:08:10. Measure
+   the spool folder's size on disk, or PDF24's own process activity, instead.
 3. **Writing the auto-save settings non-interactively.** The values are now known (see the
    reference configuration below); what is not known is where PDF24 keeps them.
    Per-user settings live under `HKCU\SOFTWARE\PDF24` and machine-wide ones under
