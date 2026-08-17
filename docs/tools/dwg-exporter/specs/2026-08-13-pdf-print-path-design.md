@@ -91,7 +91,22 @@ Verified 2026-08-13 on Windows 11 26200 with PDF24 Creator 11.30.0.
     5–39 s (Revit rendering each sheet); PDF24 took 2–27 s to convert, the A0s at the top of
     that range. The two are comparable, so overlapping them is worth something, though less
     than a naive reading of "SubmitPrint returns immediately" suggests.
-14. **There is no "driver only" PDF24.** The printer is a named pipe
+14. **`PrintRange.Select` with the in-session set prints any sheet and dirties nothing.**
+    Measured 2026-08-13 on a saved model, targeting a sheet that was deliberately *not* the
+    active view:
+
+    ```
+    BEFORE  IsModified = False   ViewSheetSet count = 9
+    AFTER   IsModified = False   ViewSheetSet count = 9
+    ```
+
+    The recipe: `pm.PrintRange = PrintRange.Select`, then
+    `vss.CurrentViewSheetSet = vss.InSession`, then assign a one-view `ViewSet` to
+    `CurrentViewSheetSet.Views`. **Never call `SaveAs`** — that is what would create a
+    persistent `ViewSheetSet` element. No transaction was needed, and the queued job still
+    carried our full path as its `DocumentName`, so the naming channel works for arbitrary
+    sheets and not just the active view.
+15. **There is no "driver only" PDF24.** The printer is a named pipe
    (`\\.\pipe\PDFPrint`, Local Monitor) serviced by `pdf24.exe -service`, which drives
    Ghostscript. Remove the service and the printer silently produces nothing. Footprint is
    1,080 MB / 2,336 files; the documented MSI properties strip it to roughly 456 MB.
@@ -213,12 +228,18 @@ msiexec /i pdf24-creator.msi /qn ADDLOCAL=ALL REMOVE=WebView2 FAXPRINTER=No
 plan every file          → PlannedExportFile.FileName        (unchanged, shared by both formats)
 PrinterForms.EnumForms   → registered forms for "RVTuk PDF"          once per run
 
+once per run:
+  PrintRange             → Select
+  CurrentViewSheetSet    → InSession        never SaveAs - that creates an element
+
 for each file, up to N outstanding:                                  ── submit phase
   read the sheet size    → SHEET_WIDTH / SHEET_HEIGHT
   PaperSizeMatcher.Match → the form, or an error naming the size
+  CurrentViewSheetSet.Views → a ViewSet holding just this sheet
+  CombinedFile           → true (one sheet per submission, one output file)
   guid                   → remember guid → PlannedExportFile
-  job name               → <staging>\<guid>.pdf
-  SubmitPrint()          → returns at once; PDF24 renders out of process
+  PrintToFileName        → <staging>\<guid>.pdf   (becomes the job name)
+  Apply(); SubmitPrint() → returns at once; PDF24 renders out of process
 
 for each file:                                                       ── DWG phase
   doc.Export(...)        → unchanged, runs while the PDFs spool
@@ -253,19 +274,13 @@ staging swept            → anything left behind is deleted, never adopted
 
 ## Open questions — spike before implementing
 
-> **Two spikes closed** (2026-08-13). `PrintToFileName` is the job-name channel (facts 6, 7),
-> and mixed paper sizes in one batch come out correct (fact 11). What remains cannot change
-> the design, only tune it — except the first, which shapes `SheetPdfPrinter`.
+> **Every design-shaping spike is closed** (2026-08-13). `PrintToFileName` is the job-name
+> channel (facts 6, 7); mixed paper sizes in one batch come out correct (fact 11); and
+> `PrintRange.Select` on the in-session set prints any sheet without dirtying the model
+> (fact 15). What remains only tunes the implementation — **the design is ready to build
+> against.**
 
-1. **How to print a single arbitrary sheet without dirtying the model.** Now the first spike.
-   `PrintRange.Select` drives `ViewSheetSetting.CurrentViewSheetSet`, and saving a set creates
-   a `ViewSheetSet` element — a document modification in a model the user did not open for
-   editing. `PrintRange.Current` avoids it but needs each sheet activated, which is slow and
-   moves the user's active view. Setting the in-session set without `SaveAs` may thread the
-   needle. Note that the job-name spike only exercised `PrintRange.Current`, and established
-   fact 8 says property pairings throw rather than correct — so expect `CombinedFile` to need
-   revisiting under `Select`, where it must be false.
-2. **Where the window size should sit.** Decision 4 starts at 10 outstanding jobs on the
+1. **Where the window size should sit.** Decision 4 starts at 10 outstanding jobs on the
    strength of one 44 MB sample. Measure a real set — spool size varies hugely with sheet
    content — and check what the spool folder does on the biggest sheets.
 
@@ -274,7 +289,7 @@ staging swept            → anything left behind is deleted, never adopted
    PDF24 goes on converting outside it. Observed max depth was 1 across nine jobs even though
    a submission at 17:08:08 overlapped a conversion that only finished at 17:08:10. Measure
    the spool folder's size on disk, or PDF24's own process activity, instead.
-3. **Writing the auto-save settings non-interactively.** The values are now known (see the
+2. **Writing the auto-save settings non-interactively.** The values are now known (see the
    reference configuration below); what is not known is where PDF24 keeps them.
    Per-user settings live under `HKCU\SOFTWARE\PDF24` and machine-wide ones under
    `HKLM\SOFTWARE\PDF24` — find the per-instance auto-save keys so the installer can write
