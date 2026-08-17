@@ -36,7 +36,7 @@ Recorded so none of it is retried.
 | Windows "language for non-Unicode programs" = Hebrew | Tested 2026-08-13. No effect. |
 | **Microsoft Print to PDF** | Fixes the text, but unusable. Its GPD declares sizes with no classic `DMPAPER` id (`A0`, `A1`, a `600x91` = 6000×910mm entry), and Revit — which enumerates via `DeviceCapabilities` — never sees them. Revit's list tops out at **"E size sheet", 864 × 1118 mm**; not even A0 fits. The driver also declares no `CUSTOMSIZE` block, so it rejects user-created forms outright. Raising the limit means editing `V4Dirs\…\77e218f1.gpd`, a **generated cache with a CRC in the registry** (`V4_Merged_ConfigFile_CRC`) that Windows may regenerate; the durable version means patching a signed DriverStore package. Dead end. |
 | **clawPDF** | Rejected before installing: AGPL-3.0, last code push May 2023, **unsigned MSI** installing a printer driver — a non-starter for fleet deployment. |
-| Fixing the text at source with bidi marks (RLM `U+200F`) | **Never tested.** Still the only approach that would keep native vector export, and the only one that would work if a sheet ever exceeds what forms can express. Tracked in [backlog.md](../backlog.md). |
+| Fixing the text at source with bidi marks (RLM `U+200F`) | **Rejected on 2026-08-17, untested.** It would have kept vector output, but it works by permanently rewriting parameter values across schedules, annotations and text notes in the client's model — needing a preview/undo pass, an exclusion list so RLM never contaminates the `RZ_*` parameters feeding Rishui Zamin's `.dat`/`.dxf`, and handling for read-only params, type-vs-instance and worksharing. The print path was then measured to modify **nothing** (fact 14: `IsModified` unchanged), which makes mutating a client's model the strictly worse trade. Ctrl+Right Shift does the equivalent by hand but sets a paragraph attribute `FormattedText` cannot reach, so it could never have been scripted for text notes anyway. Revisit only if the print path is ever abandoned. |
 
 ## What was established empirically
 
@@ -350,8 +350,8 @@ build), confirming it is detected and not reinstalled; `--uninstall` leaving PDF
 
 - Replacing native export. It stays the default and the only path for anything a form cannot
   express.
-- Fixing the text at source with bidi control marks. Still untested and still the only fix
-  that would keep vector output — [backlog.md](../backlog.md).
+- Fixing the text at source with bidi control marks — rejected, see the ruled-out table. It
+  mutates the client's model; the print path does not.
 - Bundling the PDF24 MSI into the payload zip.
 - Any attempt to install "just the driver" — established fact 6 above shows there is no such
   thing.

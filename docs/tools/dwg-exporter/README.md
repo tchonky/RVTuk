@@ -85,10 +85,15 @@ annotations alike.
 
 The fix is to route PDF output through a print driver instead, which renders through Windows
 text shaping and gets the order right. Designed 2026-08-13 in
-[specs/2026-08-13-pdf-print-path-design.md](specs/2026-08-13-pdf-print-path-design.md), **not
-yet implemented**. That doc also records what was ruled out — raster processing, the Windows
-non-Unicode locale, Microsoft Print to PDF (tops out at 864 × 1118 mm from Revit and rejects
-custom forms), and clawPDF — so none of it gets retried.
+[specs/2026-08-13-pdf-print-path-design.md](specs/2026-08-13-pdf-print-path-design.md), with
+an implementation plan at
+[plans/2026-08-17-pdf-print-path.md](plans/2026-08-17-pdf-print-path.md). **Not yet
+implemented.** Every design question is closed against measurements taken in Revit; what
+remains is tuning.
+
+The spec also records what was ruled out — raster processing, the Windows non-Unicode locale,
+Microsoft Print to PDF (tops out at 864 × 1118 mm from Revit and rejects custom forms),
+clawPDF, and fixing the text at source with bidi control marks — so none of it gets retried.
 
 ## Multi-model runs
 
@@ -129,3 +134,5 @@ Revit 2024/2025 only — not hosted in KKarea (2023).
 - [specs/](specs/) — dated designs
   ([2026-07-15 design](specs/2026-07-15-dwg-exporter-design.md),
   [2026-08-13 PDF print path](specs/2026-08-13-pdf-print-path-design.md))
+- [plans/](plans/) — dated implementation plans
+  ([2026-08-17 PDF print path](plans/2026-08-17-pdf-print-path.md))

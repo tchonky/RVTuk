@@ -85,21 +85,6 @@ All three: [spec](specs/2026-08-03-multi-model-and-naming-design.md),
 
 ## Ideas / future
 
-- **Fix Hebrew bidi at source with control marks** — the untested alternative to the print
-  path ([spec](specs/2026-08-13-pdf-print-path-design.md)). Revit's native PDF writer assumes
-  an LTR paragraph base direction; prepending RLM (`U+200F`) to a string makes the first
-  strong character RTL, which should force the base direction without the paragraph attribute
-  that `FormattedText` cannot reach. **Never tested** — the two-minute check is
-  `powershell -c "Set-Clipboard -Value ([char]0x200F)"`, paste at the start of one broken
-  schedule's parameter value, export natively, compare.
-  If it works it is strictly better than printing: vector output, no driver, no registered
-  forms, no size ceiling, and it fixes schedules and generic annotations (parameter values,
-  reachable via `Parameter.Set`) as well as text notes. It would need a preview-then-apply
-  pass, an exclusion list so RLM never contaminates the `RZ_*` parameters feeding Rishui
-  Zamin's `.dat`/`.dxf`, and handling for read-only params, type-vs-instance and worksharing.
-  Ctrl+Right Shift in Revit's text editor does the equivalent by hand, but it sets a paragraph
-  attribute with no API, so it can only ever be a manual fix for text notes.
-
 - Companion AutoCAD script for layout paper size: Revit's API can't set the exported
   layout's page setup (see README "Known limitation"), but we can measure the real
   title-block size (as the Rishui Zamin extractor already does) and emit one script
