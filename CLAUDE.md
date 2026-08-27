@@ -65,6 +65,8 @@ Each config maps to a target framework and a per-year `DefineConstants` symbol (
 
 All three configs use `Microsoft.Data.Sqlite`. Build outputs land in each project's `bin\{2023|2024|2025}\Release{...}\{tfm}\`, e.g. `src\RVTuk.Revit\bin\2024\Release2024\net48\`.
 
+`Directory.Build.targets` at the repo root applies to every project: it drops any `e_sqlite3.dll` native that `SQLitePCLRaw.lib.e_sqlite3` lists for copying but no longer ships. Version 2.1.12 (dragged in by the floating `Microsoft.Data.Sqlite` `8.0.*`) removed the win-arm binary while its net461 targets still reference it, which broke every net48 build with `MSB3030: Could not copy ... runtimes\win-arm\native\e_sqlite3.dll`. The win-x64 native the deploy scripts ship is untouched.
+
 `Release2023` builds only `RVTuk.Core`, `RVTuk.UI`, and `KKarea.Revit` (the Revit 2023 host); `RVTuk.Revit` does not build for 2023. The net48-vs-net8 code split (JSON serializer choice, and the native `e_sqlite3.dll` pre-load on net48) is gated on the compiler-provided `NETFRAMEWORK` symbol, not on `REVIT2024`; the `REVIT<year>` constants are for year-specific Revit API differences only (e.g. the `ElementId` shims in the shared area sources).
 
 ## Tests

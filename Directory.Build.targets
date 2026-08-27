@@ -1,0 +1,32 @@
+<Project>
+
+  <!--
+    Repo-wide build fixups. Imported automatically into every project under this folder.
+
+    SQLitePCLRaw.lib.e_sqlite3 2.1.12 (pulled in transitively by Microsoft.Data.Sqlite
+    8.0.*, whose servicing releases bumped SQLitePCLRaw.bundle_e_sqlite3 from 2.1.6 to
+    2.1.12) dropped the win-arm — 32-bit ARM — native binary, but its net461 targets still
+    list runtimes\win-arm\native\e_sqlite3.dll as Content to copy to the output. Every
+    net48 build (Release2023 and Release2024) then dies with
+
+      error MSB3030: Could not copy the file
+        "...\sqlitepclraw.lib.e_sqlite3\2.1.12\runtimes\win-arm\native\e_sqlite3.dll"
+        because it was not found.
+
+    even though nothing in this repo changed — a floating package version is enough.
+    Pinning is not an escape: the bundle package requires the matching lib version, so a
+    direct downgrade reference trips NU1605. Revit is x64-only and Deploy.ps1 /
+    Build-Installer.ps1 ship runtimes\win-x64\native\e_sqlite3.dll, so simply drop any
+    e_sqlite3 native the package no longer contains before the copy runs. The filter is
+    keyed on "missing", not on "win-arm", so it also absorbs the next RID the package
+    drops; the natives that do exist (win-x86/win-x64/win-arm64) still land in bin.
+  -->
+  <Target Name="RemoveMissingSqliteNativeContent" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <_MissingSqliteNative Include="@(Content)"
+                            Condition="'%(Filename)%(Extension)' == 'e_sqlite3.dll' And !Exists('%(FullPath)')" />
+      <Content Remove="@(_MissingSqliteNative)" />
+    </ItemGroup>
+  </Target>
+
+</Project>
