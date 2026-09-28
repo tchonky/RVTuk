@@ -28,8 +28,11 @@ namespace RVTuk.Revit.RoomFloors
             floor.SetEntity(entity);
         }
 
-        /// <summary>Every floor this tool made from <paramref name="room"/>. Normally zero or
-        /// one; more only after a copy-paste duplicated a linked floor.</summary>
+        /// <summary>Every floor this tool made from <paramref name="room"/>, on the room's own
+        /// level and not in a group. Normally zero or one; more only after a copy-paste
+        /// duplicated a linked floor on that same level. Paste-Aligned-to-levels copies carry the
+        /// original room's UniqueId too, but they are not "this room's floor" — grouped copies and
+        /// copies on other levels are left alone rather than replaced or deleted.</summary>
         public static IReadOnlyList<Floor> FindLinkedFloors(Document doc, Room room)
         {
             var schema = Schema.Lookup(SchemaGuid);
@@ -40,6 +43,7 @@ namespace RVTuk.Revit.RoomFloors
                 .WherePasses(new ExtensibleStorageFilter(SchemaGuid))
                 .Cast<Floor>()
                 .Where(f => f.GetEntity(schema).Get<string>(FieldName) == room.UniqueId)
+                .Where(f => f.LevelId == room.LevelId && f.GroupId == ElementId.InvalidElementId)
                 .ToList();
         }
 

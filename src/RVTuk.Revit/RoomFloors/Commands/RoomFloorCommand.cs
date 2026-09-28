@@ -38,6 +38,7 @@ namespace RVTuk.Revit.RoomFloors.Commands
             }
 
             var skipped = new List<string>();
+            int misclicks = 0;
 
             var preselected = uidoc.Selection.GetElementIds()
                 .Select(doc.GetElement)
@@ -58,16 +59,27 @@ namespace RVTuk.Revit.RoomFloors.Commands
                 {
                     break;
                 }
+                catch (Autodesk.Revit.Exceptions.InvalidOperationException)
+                {
+                    // EnsureWorkPlane may have failed to commit its work-plane transaction above;
+                    // PickPoint then throws instead of prompting. Stop the loop rather than let it
+                    // propagate, so the summary of anything already done still shows.
+                    break;
+                }
 
                 // The user may have switched views mid-pick: the point belongs to whichever view
                 // is active now, and a non-plan view ends the loop.
                 if (!(uidoc.ActiveView is ViewPlan clicked) || clicked.GenLevel == null) break;
 
                 var room = RoomFinder.FindAt(clicked, point);
-                if (room == null) skipped.Add("A click outside any room: no room there");
+                if (room == null) misclicks++;
                 else Build(doc, room, floorTypeId, skipped);
             }
 
+            if (misclicks > 0)
+                skipped.Add(misclicks == 1
+                    ? "1 click outside any room: no room there"
+                    : $"{misclicks} clicks outside any room: no room there");
             if (skipped.Count > 0) ShowSummary(skipped);
             return Result.Succeeded;
         }
@@ -86,7 +98,7 @@ namespace RVTuk.Revit.RoomFloors.Commands
             var name = room.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString() ?? "";
             var label = $"{room.Number} {name}".Trim();
             if (label.Length == 0) label = $"Room {room.Id}";
-            return "⁨" + label + "⁩";
+            return "\u2068" + label + "\u2069";
         }
 
         /// <summary>PickPoint needs a work plane, and a plan whose work plane was never set has
@@ -105,11 +117,14 @@ namespace RVTuk.Revit.RoomFloors.Commands
 
         private static void ShowSummary(List<string> skipped)
         {
+            // "Skipped" here is a mix of rooms (the floor wasn't made or replaced) and, at most,
+            // one collapsed line for misclicks — neither of those is a "room", so the heading
+            // says "item(s)" rather than counting them as rooms.
             var dialog = new TaskDialog(Title)
             {
                 MainInstruction = skipped.Count == 1
-                    ? "1 room was skipped"
-                    : $"{skipped.Count} rooms were skipped",
+                    ? "1 item was skipped"
+                    : $"{skipped.Count} items were skipped",
                 MainContent = string.Join("\n", skipped.Select(s => "• " + s)),
             };
             dialog.Show();

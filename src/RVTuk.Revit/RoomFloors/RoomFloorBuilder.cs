@@ -45,10 +45,17 @@ namespace RVTuk.Revit.RoomFloors
             var old = RoomFloorLinkStore.FindLinkedFloors(doc, room);
 
             // Replacing is delete + create, and deleting a floor silently deletes whatever it
-            // hosts. Refuse rather than lose someone's work.
-            int hosted = old.Sum(CountHostedElements);
-            if (hosted > 0)
-                return $"its floor hosts {hosted} element(s) that replacing would delete — update it by hand";
+            // hosts (FamilyInstance, Opening, a slab edge) and whatever annotates it (a floor
+            // tag, a spot elevation/dimension). Refuse rather than lose someone's work.
+            int hostedCount = old.Sum(CountHostedElements);
+            int annotationCount = old.Sum(CountAnnotations);
+            if (hostedCount > 0 || annotationCount > 0)
+            {
+                var parts = new List<string>();
+                if (annotationCount > 0) parts.Add($"{annotationCount} tag(s)/dimension(s)");
+                if (hostedCount > 0) parts.Add($"{hostedCount} hosted element(s)");
+                return $"its floor carries {string.Join(" and ", parts)} that replacing would delete — update it by hand";
+            }
 
             // Read before the delete below.
             var typeId = old.Count > 0 ? old[0].GetTypeId() : defaultFloorTypeId;
@@ -80,7 +87,7 @@ namespace RVTuk.Revit.RoomFloors
             return null;
         }
 
-        /// <summary>The room's finish-face boundary as loops at its level's elevation, largest
+        /// <summary>The room's finish-face boundary as loops flattened to a single Z, largest
         /// (the outer) first; null with <paramref name="error"/> set when it cannot be built.</summary>
         private static IList<CurveLoop>? BoundaryLoops(Room room, out string? error)
         {
@@ -96,10 +103,12 @@ namespace RVTuk.Revit.RoomFloors
                 return null;
             }
 
-            // The floor's height comes from its offset parameter, not from the sketch, so the
-            // loops go to the level's own elevation. Translating (not rebuilding as lines) keeps
-            // arcs from curved walls intact.
-            double z = room.Level.ProjectElevation;
+            // The floor's height comes from its offset parameter, not from the sketch, so all
+            // loops are flattened to one Z — the first boundary curve's start point, since the
+            // curves are already horizontal. This avoids depending on the level's project
+            // elevation, which can differ from where the room's boundary curves actually sit.
+            // Translating (not rebuilding as lines) keeps arcs from curved walls intact.
+            double z = segmentLists.SelectMany(s => s).First().GetCurve().GetEndPoint(0).Z;
             var loops = new List<CurveLoop>();
             try
             {
@@ -135,13 +144,26 @@ namespace RVTuk.Revit.RoomFloors
                  * (points.Max(p => p.Y) - points.Min(p => p.Y));
         }
 
-        /// <summary>Family instances and openings that deleting <paramref name="floor"/> would
-        /// delete with it.</summary>
+        /// <summary>Family instances, openings and hosted sweeps (e.g. slab edges) that deleting
+        /// <paramref name="floor"/> would delete with it.</summary>
         private static int CountHostedElements(Floor floor)
         {
-            var filter = new LogicalOrFilter(
+            var filter = new LogicalOrFilter(new List<ElementFilter>
+            {
                 new ElementClassFilter(typeof(FamilyInstance)),
-                new ElementClassFilter(typeof(Opening)));
+                new ElementClassFilter(typeof(Opening)),
+                new ElementClassFilter(typeof(HostedSweep)),
+            });
+            return floor.GetDependentElements(filter).Count;
+        }
+
+        /// <summary>Tags and dimensions (e.g. floor tags, spot elevations) that deleting
+        /// <paramref name="floor"/> would delete with it.</summary>
+        private static int CountAnnotations(Floor floor)
+        {
+            var filter = new LogicalOrFilter(
+                new ElementClassFilter(typeof(IndependentTag)),
+                new ElementClassFilter(typeof(Dimension)));
             return floor.GetDependentElements(filter).Count;
         }
     }

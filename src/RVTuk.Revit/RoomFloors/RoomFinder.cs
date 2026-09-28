@@ -10,13 +10,11 @@ namespace RVTuk.Revit.RoomFloors
     /// </summary>
     public static class RoomFinder
     {
-        /// <summary>Lift above a room's base (feet) so the test point is inside its volume
-        /// rather than on its bottom face.</summary>
-        private const double Lift = 0.01;
-
         /// <summary>The room on <paramref name="view"/>'s level and in its phase that contains
-        /// the clicked plan position, or null. Each candidate is tested at its own base, so a
-        /// room with a base offset is still found.</summary>
+        /// the clicked plan position, or null. Each candidate is tested at the vertical middle of
+        /// its own bounding box, not at the level's elevation plus its base offset: that stays
+        /// inside the room's volume regardless of the project's elevation base, and even when
+        /// Area and Volume computation raises the room's usable bottom above its base.</summary>
         public static Room? FindAt(ViewPlan view, XYZ point)
         {
             var level = view.GenLevel;
@@ -29,8 +27,13 @@ namespace RVTuk.Revit.RoomFloors
                 .Where(r => r.Location != null && r.LevelId == level.Id)
                 .Where(r => phaseId == null
                          || r.get_Parameter(BuiltInParameter.ROOM_PHASE)?.AsElementId() == phaseId)
-                .FirstOrDefault(r => r.IsPointInRoom(
-                    new XYZ(point.X, point.Y, level.ProjectElevation + r.BaseOffset + Lift)));
+                .FirstOrDefault(r =>
+                {
+                    var bb = r.get_BoundingBox(null);
+                    if (bb == null) return false;
+                    var z = (bb.Min.Z + bb.Max.Z) / 2;
+                    return r.IsPointInRoom(new XYZ(point.X, point.Y, z));
+                });
         }
     }
 }
