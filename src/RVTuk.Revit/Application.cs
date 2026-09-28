@@ -22,6 +22,7 @@ using RVTuk.Revit.NeoProperties;
 using RVTuk.Core.TopoTools;
 using RVTuk.Revit.TopoTools;
 using RVTuk.Revit.TopoTools.ExternalEvents;
+using RVTuk.Revit.RoomFloors.Commands;
 
 namespace RVTuk.Revit
 {
@@ -81,6 +82,12 @@ namespace RVTuk.Revit
         /// entry point is the dockable pane.
         /// </summary>
         private static readonly bool RegisterTopoTools = true;
+
+        /// <summary>
+        /// Room Floor ships on the RVTuk panel: a one-shot command (no pane, no dialog) that makes
+        /// a finish floor per clicked room, like Automatic Ceiling does for ceilings.
+        /// </summary>
+        private static readonly bool RegisterRoomFloors = true;
 
         /// <summary>
         /// Neo Properties is still unreleased: no ribbon panel, no dockable pane, no selection
@@ -368,6 +375,22 @@ namespace RVTuk.Revit
                 panel.AddItem(topoBtn);
             }
 
+            if (RegisterRoomFloors)
+            {
+                var roomFloorBtn = new PushButtonData(
+                    "RoomFloors",
+                    "Room\nFloor",
+                    assemblyPath,
+                    typeof(RoomFloorCommand).FullName!)
+                {
+                    ToolTip = "Click rooms in a plan view to create a finish floor that follows each room's outline. Click a room again to update its floor."
+                };
+                roomFloorBtn.LargeImage = CreateRoomFloorsIcon(32);
+                roomFloorBtn.Image      = CreateRoomFloorsIcon(16);
+
+                panel.AddItem(roomFloorBtn);
+            }
+
             if (!RegisterNeoProperties) return;
 
             RibbonPanel neoPanel = app.CreateRibbonPanel("Neo Properties");
@@ -405,6 +428,41 @@ namespace RVTuk.Revit
 
                 ctx.DrawEllipse(new SolidColorBrush(Colors.White), null,
                     new WpfPoint(s * 0.5, s * 0.31), s * 0.07, s * 0.07);
+            }
+            var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            bmp.Freeze();
+            return bmp;
+        }
+
+        private static BitmapSource CreateRoomFloorsIcon(int size)
+        {
+            var dv = new DrawingVisual();
+            using (var ctx = dv.RenderOpen())
+            {
+                double s = size;
+                ctx.DrawRectangle(new SolidColorBrush(WpfColor.FromRgb(0x25, 0x25, 0x26)), null,
+                    new Rect(0, 0, s, s));
+
+                // An L-shaped room: white walls around an orange floor.
+                var outline = new StreamGeometry();
+                using (var g = outline.Open())
+                {
+                    g.BeginFigure(new WpfPoint(s * 0.14, s * 0.14), true, true);
+                    g.PolyLineTo(new[]
+                    {
+                        new WpfPoint(s * 0.86, s * 0.14),
+                        new WpfPoint(s * 0.86, s * 0.86),
+                        new WpfPoint(s * 0.50, s * 0.86),
+                        new WpfPoint(s * 0.50, s * 0.50),
+                        new WpfPoint(s * 0.14, s * 0.50),
+                    }, true, true);
+                }
+                outline.Freeze();
+
+                var wall = new Pen(new SolidColorBrush(Colors.White), Math.Max(1, s * 0.06));
+                wall.Freeze();
+                ctx.DrawGeometry(new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00)), wall, outline);
             }
             var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
             bmp.Render(dv);
