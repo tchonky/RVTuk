@@ -34,13 +34,16 @@
        System.Runtime.CompilerServices.Unsafe, etc.) conflict with Revit's preloaded
        versions; JSON uses DataContractJsonSerializer instead. The native e_sqlite3.dll
        and any polyfill DLLs are handled by Deploy.ps1 (copied / stripped). -->
+  <!-- Microsoft.Data.Sqlite pinned to 8.0.29 (both targets): 8.0.30+ pulls SQLitePCLRaw 2.1.12,
+       whose net461 build targets copy runtimes\win-arm\native\e_sqlite3.dll, a file that
+       package does not ship, so every net48 build fails with MSB3030. 8.0.29 brings 2.1.6. -->
   <ItemGroup Condition="'$(TargetFramework)'=='net48'">
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.29" />
   </ItemGroup>
 
   <!-- net8.0-windows (Revit 2025): Microsoft.Data.Sqlite + System.Text.Json are fine here -->
   <ItemGroup Condition="'$(TargetFramework)'=='net8.0-windows'">
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.29" />
     <PackageReference Include="System.Text.Json" Version="8.0.*" />
   </ItemGroup>
 
