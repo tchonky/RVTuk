@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Architecture;
+using RVTuk.Revit.Shared;
 
 namespace RVTuk.Revit.RoomFloors
 {
@@ -14,21 +15,6 @@ namespace RVTuk.Revit.RoomFloors
     /// </summary>
     public static class RoomFloorBuilder
     {
-        /// <summary>The project's default floor type, else its first non-foundation floor type;
-        /// <see cref="ElementId.InvalidElementId"/> when it has neither.</summary>
-        public static ElementId DefaultFloorTypeId(Document doc)
-        {
-            var id = doc.GetDefaultElementTypeId(ElementTypeGroup.FloorType);
-            if (id != ElementId.InvalidElementId && doc.GetElement(id) is FloorType) return id;
-
-            return new FilteredElementCollector(doc)
-                .OfClass(typeof(FloorType))
-                .Cast<FloorType>()
-                .Where(t => !t.IsFoundationSlab)
-                .Select(t => t.Id)
-                .FirstOrDefault() ?? ElementId.InvalidElementId;
-        }
-
         /// <summary>
         /// Creates <paramref name="room"/>'s floor — replacing any floor this tool made for it
         /// before — in one "Room Floor" transaction. Returns null on success, else why the room was
@@ -47,8 +33,8 @@ namespace RVTuk.Revit.RoomFloors
             // Replacing is delete + create, and deleting a floor silently deletes whatever it
             // hosts (FamilyInstance, Opening, a slab edge) and whatever annotates it (a floor
             // tag, a spot elevation/dimension). Refuse rather than lose someone's work.
-            int hostedCount = old.Sum(CountHostedElements);
-            int annotationCount = old.Sum(CountAnnotations);
+            int hostedCount = old.Sum(f => DependentsCounter.Hosted(f));
+            int annotationCount = old.Sum(f => DependentsCounter.Annotations(f));
             if (hostedCount > 0 || annotationCount > 0)
             {
                 var parts = new List<string>();
@@ -130,41 +116,7 @@ namespace RVTuk.Revit.RoomFloors
                 return null;
             }
 
-            // Outer loop first. Revit may sort the loops itself; ordering them here costs
-            // nothing and removes the question.
-            return loops.OrderByDescending(PlanExtentArea).ToList();
-        }
-
-        /// <summary>Area of the loop's plan bounding box: enough to tell the outer loop from the
-        /// holes, which it always encloses.</summary>
-        private static double PlanExtentArea(CurveLoop loop)
-        {
-            var points = loop.SelectMany(c => c.Tessellate()).ToList();
-            return (points.Max(p => p.X) - points.Min(p => p.X))
-                 * (points.Max(p => p.Y) - points.Min(p => p.Y));
-        }
-
-        /// <summary>Family instances, openings and hosted sweeps (e.g. slab edges) that deleting
-        /// <paramref name="floor"/> would delete with it.</summary>
-        private static int CountHostedElements(Floor floor)
-        {
-            var filter = new LogicalOrFilter(new List<ElementFilter>
-            {
-                new ElementClassFilter(typeof(FamilyInstance)),
-                new ElementClassFilter(typeof(Opening)),
-                new ElementClassFilter(typeof(HostedSweep)),
-            });
-            return floor.GetDependentElements(filter).Count;
-        }
-
-        /// <summary>Tags and dimensions (e.g. floor tags, spot elevations) that deleting
-        /// <paramref name="floor"/> would delete with it.</summary>
-        private static int CountAnnotations(Floor floor)
-        {
-            var filter = new LogicalOrFilter(
-                new ElementClassFilter(typeof(IndependentTag)),
-                new ElementClassFilter(typeof(Dimension)));
-            return floor.GetDependentElements(filter).Count;
+            return LoopOrder.OuterFirst(loops);
         }
     }
 }

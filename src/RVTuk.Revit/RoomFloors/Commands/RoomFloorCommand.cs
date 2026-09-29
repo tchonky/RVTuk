@@ -4,6 +4,7 @@ using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.UI;
+using RVTuk.Revit.Shared;
 
 namespace RVTuk.Revit.RoomFloors.Commands
 {
@@ -30,7 +31,7 @@ namespace RVTuk.Revit.RoomFloors.Commands
                 return Result.Cancelled;
             }
 
-            var floorTypeId = RoomFloorBuilder.DefaultFloorTypeId(doc);
+            var floorTypeId = DefaultTypes.FloorTypeId(doc);
             if (floorTypeId == ElementId.InvalidElementId)
             {
                 TaskDialog.Show(Title, "This project has no floor type to use. Load or create one first.");
