@@ -55,16 +55,18 @@ namespace RVTuk.Core.TopoTools
         /// "2 hosted elements, 3 tags or dimensions and 1 subdivision". Only the counts that are
         /// not zero; "" when all are.
         /// </summary>
-        public static string DescribeDependents(int hosted, int annotations, int subdivisions)
+        /// <param name="parts">Parts divided from the element (Modify → Create Parts).</param>
+        public static string DescribeDependents(int hosted, int annotations, int subdivisions, int parts)
         {
-            var parts = new List<string>();
-            if (hosted > 0) parts.Add(Count(hosted, "hosted element", "hosted elements"));
-            if (annotations > 0) parts.Add(Count(annotations, "tag or dimension", "tags or dimensions"));
-            if (subdivisions > 0) parts.Add(Count(subdivisions, "subdivision", "subdivisions"));
+            var items = new List<string>();
+            if (hosted > 0) items.Add(Count(hosted, "hosted element", "hosted elements"));
+            if (annotations > 0) items.Add(Count(annotations, "tag or dimension", "tags or dimensions"));
+            if (subdivisions > 0) items.Add(Count(subdivisions, "subdivision", "subdivisions"));
+            if (parts > 0) items.Add(Count(parts, "part", "parts"));
 
-            if (parts.Count == 0) return "";
-            if (parts.Count == 1) return parts[0];
-            return string.Join(", ", parts.Take(parts.Count - 1)) + " and " + parts[parts.Count - 1];
+            if (items.Count == 0) return "";
+            if (items.Count == 1) return items[0];
+            return string.Join(", ", items.Take(items.Count - 1)) + " and " + items[items.Count - 1];
         }
 
         private static string Count(int n, string singular, string plural) =>

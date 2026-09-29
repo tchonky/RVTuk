@@ -16,7 +16,9 @@
 
 ## Bugs
 
-(none yet)
+- **A floor divided into parts is replaced without a word, and its parts go with it.** Replace
+  refuses on hosted elements and annotations only. `Shared/DependentsCounter.Parts` exists since
+  the Topo Tools converter (2026-09-29); add it to `RoomFloorBuilder`'s refusal.
 
 ## Done
 

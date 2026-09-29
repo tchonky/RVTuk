@@ -69,7 +69,8 @@ namespace RVTuk.Revit.TopoTools
                     Dependents = ConvertReport.DescribeDependents(
                         DependentsCounter.Hosted(element),
                         DependentsCounter.Annotations(element),
-                        DependentsCounter.Subdivisions(element)),
+                        DependentsCounter.Subdivisions(element),
+                        DependentsCounter.Parts(element)),
                 });
             }
 
@@ -143,6 +144,8 @@ namespace RVTuk.Revit.TopoTools
                             $"{(candidate.IsFloor ? "Floor" : "Toposolid")} {Isolate(candidate.TypeName)} " +
                             $"(id {candidate.Id.Value}) carries {candidate.Dependents} that converting deletes.",
                         AllowCancellation = true,
+                        // A reflexive Enter keeps the element's work rather than deleting it.
+                        DefaultButton = TaskDialogResult.CommandLink2,
                     };
                     dialog.AddCommandLink(TaskDialogCommandLinkId.CommandLink1, "Convert and delete them");
                     dialog.AddCommandLink(TaskDialogCommandLinkId.CommandLink2, "Skip this one");

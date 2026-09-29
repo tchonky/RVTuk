@@ -96,10 +96,16 @@ everything below *except* the type.
 - Excavation relationships (Revit 2025).
 - Any point or split line Revit refuses. This is counted on the status line.
 
-**Dependents are confirmed first.** Hosted families, openings, slab edges, tags, dimensions and
-subdivisions would be deleted with the source, so each element that has any gets a dialog —
-*Convert and delete them* or *Skip this one* — with *Do the same for the rest of the selection*.
-Esc cancels the whole run before anything has changed.
+**Dependents are confirmed first.** Hosted families, openings, slab edges, reinforcement (rebar,
+area and path reinforcement, fabric), tags, dimensions, subdivisions and parts would be deleted
+with the source, so each element that has any gets a dialog — *Convert and delete them* or *Skip
+this one* — with *Do the same for the rest of the selection*. Enter picks *Skip*; Esc cancels the
+whole run before anything has changed.
+
+**Edge points are drawn, not added.** `AddPoints` refuses a point on the outline or a hole's edge,
+and one such point fails the whole batch. So the planner sets them apart: they are drawn onto the
+new element while it is still flat, then the interior points go in as one batch, and every raise
+comes last.
 
 **Refused, with the reason on the status line:**
 - toposolid subdivisions;
@@ -121,16 +127,19 @@ Tick each case only once it has actually been checked in Revit.
 | 1 | **Default toposolid type probe.** Place a toposolid with a type that is *not* first alphabetically, then convert a floor | Record which type the new toposolid gets: the placed one means `GetDefaultFamilyTypeId` answers; the first by name means the fallback ran | [ ] | [ ] |
 | 2 | Flat rectangular floor → toposolid | Same outline, level and offset; top at the same height | [ ] | [ ] |
 | 3 | Floor with a hole and an arc edge → toposolid → floor | Hole and arc intact both ways | [ ] | [ ] |
-| 4 | Shape-edited floor (raised corners, interior points) → toposolid → floor | Every vertex back at its Z within 0.1 mm | [ ] | [ ] |
+| 4 | Shape-edited floor (raised outer **and hole** corners, interior points) → toposolid → floor | Every vertex back at its Z within 0.1 mm | [ ] | [ ] |
+| 4b | Shape-edited floor with an arc edge whose end corners are raised → toposolid → floor | Surface along the arc matches the original | [ ] | [ ] |
 | 5 | Survey toposolid (hundreds of points) → floor → toposolid | Same surface; acceptable speed | [ ] | [ ] |
 | 6 | Apply Points, round trip the toposolid, Apply Points again | Same counts added and replaced; nothing reported "moved by hand" | [ ] | [ ] |
 | 7 | User-drawn split line on a floor → toposolid | Split line present on the toposolid | [ ] | [ ] |
-| 8 | Floor with points on a boundary edge → toposolid | Edge points present (via `AddPoints` or the `DrawPoint` fallback) | [ ] | [ ] |
+| 8 | Floor with **several** points on one boundary edge, and one on a hole's edge, all raised to different heights → toposolid | Every edge point present at its height (drawn with `DrawPoint`), none counted as lost | [ ] | [ ] |
+| 8b | Survey toposolid clipped to a site boundary, so hundreds of its points lie on the outline → floor | Interior points go in one batch; acceptable speed; no points lost | [ ] | [ ] |
 | 9 | Sloped floor (slope arrow) → toposolid → floor | Same geometry; comes back shape-edited with no slope arrow | [ ] | [ ] |
 | 10 | Structural floor with a Floors-only shared parameter set to `ריצוף A-12` → toposolid → floor | Structural ticked again; parameter reads `ריצוף A-12` | [ ] | [ ] |
 | 11 | Comments, Mark, Phase Created, Workset | Copied both ways | [ ] | [ ] |
 | 12 | A Room Floor floor → toposolid → floor, then click its room with Room Floor | The floor is replaced, not duplicated | [ ] | [ ] |
-| 13 | Floor with a hosted family: Convert / Skip / Esc | Deleted and converted / untouched, "kept its 1 hosted element" / "Cancelled — nothing converted." | [ ] | [ ] |
+| 13 | Floor with a hosted family: Convert / Skip / Esc / Enter | Deleted and converted / untouched, "kept its 1 hosted element" / "Cancelled — nothing converted." / same as Skip | [ ] | [ ] |
+| 13b | Structural floor with rebar; a floor divided into parts | The dialog lists "1 hosted element" / "N parts" before anything is deleted | [ ] | [ ] |
 | 14 | Three floors with hosted families, "Do the same" ticked on the first | One dialog only | [ ] | [ ] |
 | 15 | Floor whose type name is Hebrew with Latin and a number, e.g. `ריצוף LIQUI HARD 200`, with a hosted family | Dialog text reads correctly; the name and "(id …)" do not swap places | [ ] | [ ] |
 | 16 | Mixed selection: 2 floors, 1 toposolid, 1 wall | Each flips; wall ignored; new elements selected | [ ] | [ ] |

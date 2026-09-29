@@ -46,13 +46,16 @@ public class ConvertReportTests
     }
 
     [Theory]
-    [InlineData(2, 0, 0, "2 hosted elements")]
-    [InlineData(0, 1, 0, "1 tag or dimension")]
-    [InlineData(1, 0, 3, "1 hosted element and 3 subdivisions")]
-    [InlineData(2, 3, 1, "2 hosted elements, 3 tags or dimensions and 1 subdivision")]
-    [InlineData(0, 0, 0, "")]
-    public void DescribesOnlyTheDependentsThereAre(int hosted, int annotations, int subdivisions, string expected)
+    [InlineData(2, 0, 0, 0, "2 hosted elements")]
+    [InlineData(0, 1, 0, 0, "1 tag or dimension")]
+    [InlineData(1, 0, 3, 0, "1 hosted element and 3 subdivisions")]
+    [InlineData(2, 3, 1, 0, "2 hosted elements, 3 tags or dimensions and 1 subdivision")]
+    [InlineData(0, 0, 0, 1, "1 part")]
+    [InlineData(1, 0, 0, 6, "1 hosted element and 6 parts")]
+    [InlineData(0, 0, 0, 0, "")]
+    public void DescribesOnlyTheDependentsThereAre(
+        int hosted, int annotations, int subdivisions, int parts, string expected)
     {
-        Assert.Equal(expected, ConvertReport.DescribeDependents(hosted, annotations, subdivisions));
+        Assert.Equal(expected, ConvertReport.DescribeDependents(hosted, annotations, subdivisions, parts));
     }
 }

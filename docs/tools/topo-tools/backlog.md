@@ -91,6 +91,20 @@ Also unverified, and only visible in Revit:
 
 ## Next
 
+- **Deferred from the converter's final review (2026-09-29), all minor:**
+  - A flat toposolid converted to a floor comes back with shape editing enabled, because a
+    toposolid always reports its corner vertices and `Replay` enables the floor's editor even for
+    an empty plan. Fix: `ResetSlabShape()` on a floor target that was not enabled and got nothing.
+  - `ShapeReplayPlanner.Plan` de-duplicates with a linear scan (O(n²)); bucket on an XY grid if
+    survey toposolids of tens of thousands of points turn out slow (checklist 5/8b).
+  - A convert summary is lost if the refresh after it fails ("Could not read this view…").
+  - Losses the docs do not list yet: walls and columns attached to the floor detach; global
+    parameter associations are lost (only the value copies); the span-direction symbol is lost.
+  - A Revit or exception message ending in "." gives ".." in a skip line.
+  - The spec still says `Uri.EscapeDataString` and "2 hosted families, 1 slab edge"; the code
+    escapes only `% | ;` and says "hosted elements / tags or dimensions / parts". Sync the spec.
+  - The unverified list should name that `AddPoints` Z is absolute on a **floor** too; so far it is
+    only proven on toposolids (checklist 4 covers it).
 - **▶ Apply's and a height commit's summaries vanish at once.** Both set the status line and then
   call `Refresh()`, whose `Populate` overwrites it with the view's scope message. Found while
   building the converter, which avoids it with `RefreshCore(summary)`. The fix is to pass the

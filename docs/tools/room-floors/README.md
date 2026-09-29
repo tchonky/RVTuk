@@ -11,7 +11,7 @@ Extensible Storage link on the floor, `RoomFloorLinkStore`). A second click dele
 and creates a new one, **keeping the old floor's type and height offset** — nothing else: the old
 floor's instance parameters (Comments, Mark, finish-schedule fields), workset, and any hand-edited
 shape are not carried over to the new floor. A floor that hosts elements (face-based families, an
-opening, a slab edge) or carries tags or dimensions (a floor tag, a spot elevation) is never
+opening, a slab edge, reinforcement) or carries tags or dimensions (a floor tag, a spot elevation) is never
 replaced, because deleting it would delete them too. That room is listed as skipped instead.
 
 **Type and height.** New floors use the project's default floor type; change it in Properties

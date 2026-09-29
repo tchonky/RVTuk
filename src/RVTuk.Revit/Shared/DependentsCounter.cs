@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Structure;
 
 namespace RVTuk.Revit.Shared
 {
@@ -9,7 +10,8 @@ namespace RVTuk.Revit.Shared
     /// </summary>
     public static class DependentsCounter
     {
-        /// <summary>Family instances, openings and hosted sweeps (e.g. slab edges).</summary>
+        /// <summary>Family instances, openings, hosted sweeps (e.g. slab edges) and reinforcement
+        /// (rebar, area and path reinforcement, fabric).</summary>
         public static int Hosted(Element element)
         {
             var filter = new LogicalOrFilter(new List<ElementFilter>
@@ -17,9 +19,20 @@ namespace RVTuk.Revit.Shared
                 new ElementClassFilter(typeof(FamilyInstance)),
                 new ElementClassFilter(typeof(Opening)),
                 new ElementClassFilter(typeof(HostedSweep)),
+                new ElementClassFilter(typeof(Rebar)),
+                new ElementClassFilter(typeof(AreaReinforcement)),
+                new ElementClassFilter(typeof(PathReinforcement)),
+                new ElementClassFilter(typeof(FabricArea)),
+                new ElementClassFilter(typeof(FabricSheet)),
             });
             return element.GetDependentElements(filter).Count;
         }
+
+        /// <summary>Parts divided from the element, and the parts divided from those.</summary>
+        public static int Parts(Element element) =>
+            PartUtils.HasAssociatedParts(element.Document, element.Id)
+                ? PartUtils.GetAssociatedParts(element.Document, element.Id, true, true).Count
+                : 0;
 
         /// <summary>Tags and dimensions (e.g. floor tags, spot elevations).</summary>
         public static int Annotations(Element element)
