@@ -21,6 +21,10 @@ equals the room's Base Offset.
 **Stops at the wall face.** Like the room boundary, the floor does not run into door openings.
 Door sills are filled by hand for now (see the backlog).
 
+**Toposolids.** Topo Tools' ⇄ can turn a room's floor into a toposolid and back, and the room link
+travels with it. While it is a toposolid, though, Room Floor does not see it (`FindLinkedFloors`
+collects floors only), so clicking the room then creates a second floor. Convert it back first.
+
 **Status:** v1, Revit 2024/2025. Behind `RegisterRoomFloors` (on) in `src/RVTuk.Revit/Application.cs`.
 Not in KKarea (2023).
 

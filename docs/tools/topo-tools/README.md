@@ -64,13 +64,91 @@ found design faults.
 **Names:** code `TopoTools`; ribbon button "Topo Tools"; line style `_DP-Topo Line`. There is no shared
 parameter — see above.
 
+## Floor ⇄ toposolid
+
+**⇄ in the pane converts the selection.** Every selected floor becomes a toposolid and every
+selected toposolid a floor. A mixed selection flips each element its own way, and the new elements
+are left selected, so pressing ⇄ again flips them straight back. One Ctrl+Z undoes the whole run.
+
+**The type is Revit's last-placed type** for the new kind, meaning what Revit's own Floor or
+Toposolid tool would place next (`Shared/DefaultTypes`). A round trip therefore restores
+everything below *except* the type.
+
+**What carries across:**
+- **The outline:** the sketch as it is, so arcs stay arcs and holes stay holes.
+- **Level and height offset.**
+- **The top surface, point for point.** Corners are raised in place, interior and edge points
+  added, and user-drawn split lines redrawn (`SlabShape`). The thickness and the bottom follow the
+  new type.
+- **Parameters.** Every writable value both kinds carry is copied: Comments, Mark, phases,
+  workset, and shared or project parameters bound to both. A value only one kind can hold, such as
+  a floor's *Structural* flag or a Floors-only shared parameter, is **parked** in Extensible
+  Storage (`ParkedParameterStore`) and put back on the return trip.
+- **RVTuk's own storage:** the point ledger, so ▶ Apply Points stays idempotent across a round
+  trip, and the Room Floor link.
+- **Pinned.**
+
+**Lost:**
+- A sloped floor's slope arrow. It comes back as a flat floor with raised corners and the same
+  geometry.
+- Join Geometry.
+- Per-view graphic overrides.
+- Excavation relationships (Revit 2025).
+- Any point or split line Revit refuses. This is counted on the status line.
+
+**Dependents are confirmed first.** Hosted families, openings, slab edges, tags, dimensions and
+subdivisions would be deleted with the source, so each element that has any gets a dialog —
+*Convert and delete them* or *Skip this one* — with *Do the same for the rest of the selection*.
+Esc cancels the whole run before anything has changed.
+
+**Refused, with the reason on the status line:**
+- toposolid subdivisions;
+- elements in a model group;
+- elements outside the design option being edited;
+- elements borrowed by another user.
+
+**Code:** `ConvertRunner` (the run), `SlabConverter` (one element), `SlabShape`,
+`ParameterCarrier`, `ParkedParameterStore`, with `DefaultTypes` and `DependentsCounter` in
+`RVTuk.Revit/Shared/`. The pure parts are in Core with tests: `ShapeReplayPlanner`,
+`LoopChainer`, `PlaneHeight`, `ParkedParameterCodec`, `ConvertReport`.
+
+### In-Revit checklist: floor ⇄ toposolid
+
+Tick each case only once it has actually been checked in Revit.
+
+| # | Case | Expected | 2024 | 2025 |
+|---|------|----------|------|------|
+| 1 | **Default toposolid type probe.** Place a toposolid with a type that is *not* first alphabetically, then convert a floor | Record which type the new toposolid gets: the placed one means `GetDefaultFamilyTypeId` answers; the first by name means the fallback ran | [ ] | [ ] |
+| 2 | Flat rectangular floor → toposolid | Same outline, level and offset; top at the same height | [ ] | [ ] |
+| 3 | Floor with a hole and an arc edge → toposolid → floor | Hole and arc intact both ways | [ ] | [ ] |
+| 4 | Shape-edited floor (raised corners, interior points) → toposolid → floor | Every vertex back at its Z within 0.1 mm | [ ] | [ ] |
+| 5 | Survey toposolid (hundreds of points) → floor → toposolid | Same surface; acceptable speed | [ ] | [ ] |
+| 6 | Apply Points, round trip the toposolid, Apply Points again | Same counts added and replaced; nothing reported "moved by hand" | [ ] | [ ] |
+| 7 | User-drawn split line on a floor → toposolid | Split line present on the toposolid | [ ] | [ ] |
+| 8 | Floor with points on a boundary edge → toposolid | Edge points present (via `AddPoints` or the `DrawPoint` fallback) | [ ] | [ ] |
+| 9 | Sloped floor (slope arrow) → toposolid → floor | Same geometry; comes back shape-edited with no slope arrow | [ ] | [ ] |
+| 10 | Structural floor with a Floors-only shared parameter set to `ריצוף A-12` → toposolid → floor | Structural ticked again; parameter reads `ריצוף A-12` | [ ] | [ ] |
+| 11 | Comments, Mark, Phase Created, Workset | Copied both ways | [ ] | [ ] |
+| 12 | A Room Floor floor → toposolid → floor, then click its room with Room Floor | The floor is replaced, not duplicated | [ ] | [ ] |
+| 13 | Floor with a hosted family: Convert / Skip / Esc | Deleted and converted / untouched, "kept its 1 hosted element" / "Cancelled — nothing converted." | [ ] | [ ] |
+| 14 | Three floors with hosted families, "Do the same" ticked on the first | One dialog only | [ ] | [ ] |
+| 15 | Floor whose type name is Hebrew with Latin and a number, e.g. `ריצוף LIQUI HARD 200`, with a hosted family | Dialog text reads correctly; the name and "(id …)" do not swap places | [ ] | [ ] |
+| 16 | Mixed selection: 2 floors, 1 toposolid, 1 wall | Each flips; wall ignored; new elements selected | [ ] | [ ] |
+| 17 | A toposolid subdivision selected | Skipped: "it is a subdivision" | [ ] | [ ] |
+| 18 | An element in a model group; one outside the design option being edited | Both skipped with their reasons | [ ] | [ ] |
+| 19 | Ctrl+Z after converting three elements | All three back in one step | [ ] | [ ] |
+| 20 | Workshared: an element borrowed by another user | Skipped, naming the owner | [ ] | [ ] |
+| 21 | Pinned floor → toposolid | The toposolid is pinned | [ ] | [ ] |
+| 22 | Nothing relevant selected, press ⇄ | "Select floors or toposolids first." | [ ] | [ ] |
+| 23 | The status line after any conversion | The summary stays after the pane refreshes | [ ] | [ ] |
+
 ## Code
 
 | Layer | Folder |
 |-------|--------|
-| Core  | `src/RVTuk.Core/TopoTools/` (sampler, containment, ledger codec, scope models) |
+| Core  | `src/RVTuk.Core/TopoTools/` (sampler, containment, ledger codec, scope models, converter planner / chainer / parked-parameter codec / report) |
 | UI    | `src/RVTuk.UI/TopoTools/` (pane view + view model) |
-| Revit | `src/RVTuk.Revit/TopoTools/` (line style, elevation store, collectors, router, applier, ledger store, runner, pane, selection handler, external events) |
+| Revit | `src/RVTuk.Revit/TopoTools/` (line style, elevation store, collectors, router, applier, ledger store, runner, pane, selection handler, external events, floor ⇄ toposolid converter) |
 | Tests | `tests/RVTuk.Core.Tests/TopoTools/` |
 
 `XyPoint` moved to `src/RVTuk.Core/Shared/Geometry/` when this tool was built — Auto Dimensions and
@@ -82,4 +160,6 @@ project's first records, and net48 has no such marker type in its BCL.
 
 - [specs/2026-07-29-topo-tools-design.md](specs/2026-07-29-topo-tools-design.md) — approved design
 - [plans/2026-07-29-topo-tools.md](plans/2026-07-29-topo-tools.md) — implementation plan
+- [specs/2026-09-29-floor-toposolid-convert-design.md](specs/2026-09-29-floor-toposolid-convert-design.md) — floor ⇄ toposolid converter design
+- [plans/2026-09-29-floor-toposolid-convert.md](plans/2026-09-29-floor-toposolid-convert.md) — its implementation plan
 - [backlog.md](backlog.md) — bugs / improvements / ideas

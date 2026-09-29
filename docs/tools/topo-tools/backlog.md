@@ -75,8 +75,26 @@ round-trips through `Get<double>(field, UnitTypeId.Feet)` on a detail line.
       sources of truth wired together and a guard flag between them; this is the sequence most
       likely to expose a loop or a stuck highlight.
 
+## To check: floor ⇄ toposolid converter (2026-09-29)
+
+Work through the checklist in [README.md](README.md#in-revit-checklist-floor--toposolid). The
+two unknowns the design leans on are cases 1 and 8: whether Revit answers
+`GetDefaultFamilyTypeId` for toposolids, and whether `AddPoints` takes points on a boundary edge.
+Case 6 is the most important: a round trip must not break Apply Points' idempotence.
+
+Also unverified, and only visible in Revit:
+- whether an `Entity` read from an element stays usable for `SetEntity` after that element is
+  deleted (cases 6 and 12 cover it);
+- whether `Sketch.Profile` of a sloped floor includes the slope arrow (case 9);
+- in 2025, split lines go through `AddSplitLine`, since `DrawSplitLine` is deprecated there, and
+  edge points still use the deprecated `DrawPoint` (cases 7 and 8, 2025 column).
+
 ## Next
 
+- **▶ Apply's and a height commit's summaries vanish at once.** Both set the status line and then
+  call `Refresh()`, whose `Populate` overwrites it with the view's scope message. Found while
+  building the converter, which avoids it with `RefreshCore(summary)`. The fix is to pass the
+  summary the same way from `RunApply` and `CommitElevation`.
 - **Coincident points should average, not race.** Two points landing on the same XY should become
   one at the mean Z rather than both being handed to `AddPoints` for Revit to reconcile however it
   sees fit. Two contours crossing in plan is not an error — it is what a saddle or a steep bank
