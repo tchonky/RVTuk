@@ -11,8 +11,8 @@ using RVTuk.UI.Shared.ViewModels;
 namespace RVTuk.UI.TopoTools.ViewModels
 {
     /// <summary>
-    /// The Topo Tools pane. All three Revit interactions arrive as delegates that block on an
-    /// ExternalEvent ping-pong, so all three are invoked from the thread pool and their results
+    /// The Topo Tools pane. Every Revit interaction arrives as a delegate that blocks on an
+    /// ExternalEvent ping-pong, so each is invoked from the thread pool and their results
     /// marshalled back through the dispatcher — never called on the WPF UI thread, which is Revit's
     /// main thread and would deadlock waiting for its own event.
     /// </summary>
@@ -24,23 +24,27 @@ namespace RVTuk.UI.TopoTools.ViewModels
         private readonly Func<double, string> _apply;
         private readonly Func<IReadOnlyList<long>, string, string> _setElevation;
         private readonly Action<IReadOnlyList<long>> _selectInView;
+        private readonly Func<string> _convert;
         private readonly Dispatcher _dispatcher;
 
         public TopoToolsPaneViewModel(
             Func<double, TopoScope> discover,
             Func<double, string> apply,
             Func<IReadOnlyList<long>, string, string> setElevation,
-            Action<IReadOnlyList<long>> selectInView)
+            Action<IReadOnlyList<long>> selectInView,
+            Func<string> convert)
         {
             _discover = discover;
             _apply = apply;
             _setElevation = setElevation;
             _selectInView = selectInView;
+            _convert = convert;
             _dispatcher = Dispatcher.CurrentDispatcher;
 
             Lines = new ObservableCollection<TopoLineRowViewModel>();
             RefreshCommand = new RelayCommand(Refresh, () => !IsBusy);
             ApplyCommand = new RelayCommand(RunApply, () => !IsBusy);
+            ConvertCommand = new RelayCommand(RunConvert, () => !IsBusy);
 
             try
             {
@@ -59,6 +63,7 @@ namespace RVTuk.UI.TopoTools.ViewModels
         public ObservableCollection<TopoLineRowViewModel> Lines { get; }
         public RelayCommand RefreshCommand { get; }
         public RelayCommand ApplyCommand { get; }
+        public RelayCommand ConvertCommand { get; }
 
         private double _spacingCentimetres;
 
@@ -106,7 +111,11 @@ namespace RVTuk.UI.TopoTools.ViewModels
         }
 
         /// <summary>Re-reads the active view's topo lines. Returns immediately.</summary>
-        public void Refresh()
+        public void Refresh() => RefreshCore(null);
+
+        /// <param name="statusAfter">Shown instead of the view's own message once the rows are
+        /// rebuilt, so a run's summary survives the refresh that follows it.</param>
+        private void RefreshCore(string? statusAfter)
         {
             if (IsBusy) return;
 
@@ -133,13 +142,13 @@ namespace RVTuk.UI.TopoTools.ViewModels
 
                 _dispatcher.Invoke(() =>
                 {
-                    Populate(scope);
+                    Populate(scope, statusAfter);
                     IsBusy = false;
                 });
             });
         }
 
-        private void Populate(TopoScope scope)
+        private void Populate(TopoScope scope, string? statusAfter)
         {
             ViewName = scope.ViewName;
 
@@ -153,7 +162,7 @@ namespace RVTuk.UI.TopoTools.ViewModels
             // otherwise editing one height silently drops the highlight off all of them.
             ApplySelection();
 
-            StatusMessage = scope.Message;
+            StatusMessage = statusAfter ?? scope.Message;
         }
 
         private IReadOnlyCollection<long> _selectedLineIds = Array.Empty<long>();
@@ -278,6 +287,37 @@ namespace RVTuk.UI.TopoTools.ViewModels
                     StatusMessage = summary;
                     IsBusy = false;
                     Refresh();
+                });
+            });
+        }
+
+        /// <summary>
+        /// ⇄: converts the floors and toposolids selected in Revit. Revit may show dialogs while
+        /// this waits, which is why it runs off the UI thread like everything else here. The
+        /// summary stays on the status line through the refresh that follows, because the run can
+        /// change which toposolids the view has.
+        /// </summary>
+        private void RunConvert()
+        {
+            IsBusy = true;
+            StatusMessage = "Converting…";
+
+            Task.Run(() =>
+            {
+                string summary;
+                try
+                {
+                    summary = _convert();
+                }
+                catch (Exception ex)
+                {
+                    summary = "Convert failed: " + ex.Message;
+                }
+
+                _dispatcher.Invoke(() =>
+                {
+                    IsBusy = false;
+                    RefreshCore(summary);
                 });
             });
         }
