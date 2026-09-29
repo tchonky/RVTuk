@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using RVTuk.Core.Shared.Geometry;
 
 namespace RVTuk.Core.TopoTools
 {
@@ -13,16 +14,23 @@ namespace RVTuk.Core.TopoTools
     /// <summary>A split line to draw, by the indices of its two end vertices.</summary>
     public readonly record struct VertexPair(int StartIndex, int EndIndex);
 
+    /// <param name="Additions">Strictly inside the outline: one <c>AddPoints</c> batch.</param>
+    /// <param name="EdgePoints">On an edge of the outline or a hole, where <c>AddPoints</c> refuses
+    /// them: drawn onto the still-flat surface one by one, then raised.</param>
     public sealed record ShapeReplayPlan(
-        IReadOnlyList<VertexOffset> Offsets, IReadOnlyList<XyzPoint> Additions);
+        IReadOnlyList<VertexOffset> Offsets,
+        IReadOnlyList<XyzPoint> Additions,
+        IReadOnlyList<XyzPoint> EdgePoints);
 
     public sealed record CreaseReplayPlan(IReadOnlyList<VertexPair> Pairs, int Dropped);
 
     /// <summary>
     /// How to give a freshly created, flat floor or toposolid the top surface of the element it
     /// replaces. Both have the same outline, so every corner of the source already exists on the
-    /// target: those are raised or lowered in place (<c>ModifySubElement</c>). Everything else
-    /// (interior points, points on an edge) is added at its absolute position (<c>AddPoints</c>).
+    /// target: those are raised or lowered in place (<c>ModifySubElement</c>). Interior points are
+    /// added at their absolute position (<c>AddPoints</c>). Points on an edge are kept apart,
+    /// because <c>AddPoints</c> wants points strictly inside the boundary and one edge point would
+    /// fail the whole batch.
     ///
     /// Vertices are matched by XY alone, within the same 0.1 mm the Topo Tools point ledger
     /// matches with, so a round trip leaves the ledger still pointing at real vertices.
@@ -32,10 +40,20 @@ namespace RVTuk.Core.TopoTools
         /// <summary>0.1 mm, in Revit's internal feet.</summary>
         public const double ToleranceFeet = 0.1 / 304.8;
 
-        public static ShapeReplayPlan Plan(IReadOnlyList<XyzPoint> source, IReadOnlyList<XyzPoint> target)
+        /// <summary>1 mm, in feet: how close to an edge a point is treated as on it. Generous on
+        /// purpose, since an edge point is drawn while the surface is still flat, where drawing
+        /// works anywhere on the face; a point wrongly left in the batch fails all of it.</summary>
+        public const double EdgeBandFeet = 1.0 / 304.8;
+
+        /// <param name="outline">The outline and holes, tessellated: the loops edge points lie on.</param>
+        public static ShapeReplayPlan Plan(
+            IReadOnlyList<XyzPoint> source,
+            IReadOnlyList<XyzPoint> target,
+            IReadOnlyList<IReadOnlyList<XyPoint>> outline)
         {
             var offsets = new List<VertexOffset>();
             var additions = new List<XyzPoint>();
+            var edgePoints = new List<XyzPoint>();
             var matchedTargets = new HashSet<int>();
 
             foreach (var point in source)
@@ -53,11 +71,15 @@ namespace RVTuk.Core.TopoTools
 
                 // AddPoints rejects the whole batch if two points share an XY, so the first wins
                 // and the rest are dropped here rather than losing every point there.
-                if (IndexOfXy(additions, point) >= 0) continue;
-                additions.Add(point);
+                if (IndexOfXy(additions, point) >= 0 || IndexOfXy(edgePoints, point) >= 0) continue;
+
+                if (PolygonContainment.IsNearEdge(outline, new XyPoint(point.X, point.Y), EdgeBandFeet))
+                    edgePoints.Add(point);
+                else
+                    additions.Add(point);
             }
 
-            return new ShapeReplayPlan(offsets, additions);
+            return new ShapeReplayPlan(offsets, additions, edgePoints);
         }
 
         /// <summary>

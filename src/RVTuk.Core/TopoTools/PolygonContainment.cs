@@ -19,15 +19,7 @@ namespace RVTuk.Core.TopoTools
             IReadOnlyList<IReadOnlyList<XyPoint>> loops, XyPoint point, double edgeTolerance = 1e-9)
         {
             if (loops == null || loops.Count == 0) return false;
-
-            foreach (var loop in loops)
-            {
-                if (loop == null || loop.Count < 2) continue;
-                for (int i = 0, j = loop.Count - 1; i < loop.Count; j = i++)
-                {
-                    if (DistanceToSegment(point, loop[j], loop[i]) <= edgeTolerance) return true;
-                }
-            }
+            if (IsNearEdge(loops, point, edgeTolerance)) return true;
 
             bool inside = false;
             foreach (var loop in loops)
@@ -45,6 +37,24 @@ namespace RVTuk.Core.TopoTools
                 }
             }
             return inside;
+        }
+
+        /// <summary>Whether <paramref name="point"/> lies within <paramref name="tolerance"/> of any
+        /// edge of any loop, the closing edge included.</summary>
+        public static bool IsNearEdge(
+            IReadOnlyList<IReadOnlyList<XyPoint>> loops, XyPoint point, double tolerance)
+        {
+            if (loops == null) return false;
+
+            foreach (var loop in loops)
+            {
+                if (loop == null || loop.Count < 2) continue;
+                for (int i = 0, j = loop.Count - 1; i < loop.Count; j = i++)
+                {
+                    if (DistanceToSegment(point, loop[j], loop[i]) <= tolerance) return true;
+                }
+            }
+            return false;
         }
 
         private static double DistanceToSegment(XyPoint point, XyPoint a, XyPoint b)

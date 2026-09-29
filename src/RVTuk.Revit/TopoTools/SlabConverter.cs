@@ -48,7 +48,7 @@ namespace RVTuk.Revit.TopoTools
             OffsetParameter(target)?.Set(offset);
             doc.Regenerate();
 
-            var replay = SlabShape.Replay(doc, target, shape);
+            var replay = SlabShape.Replay(doc, target, shape, loops);
             var carry = ParameterCarrier.Apply(target, parameters);
             foreach (var entity in entities) target.SetEntity(entity);
             if (pinned) target.Pinned = true;
