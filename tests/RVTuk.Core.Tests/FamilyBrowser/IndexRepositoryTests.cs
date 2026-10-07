@@ -36,6 +36,7 @@ public class IndexRepositoryTests : IDisposable
         Assert.NotNull(family);
         Assert.Equal(1234, family!.FileSize);
         Assert.Equal(modified, family.ModifiedDate);
+        Assert.Equal(DateTimeKind.Utc, family.ModifiedDate.Kind); // DateTime equality ignores Kind
     }
 
     [Fact]

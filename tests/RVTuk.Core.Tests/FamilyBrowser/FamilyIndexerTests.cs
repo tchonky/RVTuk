@@ -28,9 +28,9 @@ public class FamilyIndexerTests : IDisposable
 
     // Writes a fake .rfa under the library root. Content is irrelevant: ThumbnailExtractor
     // swallows non-OLE files and returns (null, 0), so the indexer treats them as valid families
-    // whose thumbnail extraction always "fails" — every thumbnail-facet test below is written
-    // around that constraint (successful thumbnail commits are covered directly in
-    // IndexRepositoryTests instead).
+    // whose thumbnail extraction always "fails" — the thumbnail-facet tests below are written
+    // around that constraint, except the one that writes a real compound file
+    // (ThumbnailExtractorTests.WriteRfa).
     private string WriteRfa(string relative, string content = "fake")
     {
         var full = Path.Combine(_root, relative.Replace('/', Path.DirectorySeparatorChar));
@@ -68,10 +68,6 @@ public class FamilyIndexerTests : IDisposable
         var indexer = new FamilyIndexer(repo, _root);
         Assert.Single(indexer.Scan(NoProgress, default, includeParameters: true));   // initial index
 
-        // Release the leaked OpenMcdf handle (fake .rfa), then change the file size.
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
         File.WriteAllText(a, "two-different-and-longer");
 
         var second = indexer.Scan(NoProgress, default, includeParameters: true);     // incremental
@@ -110,6 +106,21 @@ public class FamilyIndexerTests : IDisposable
 
         Assert.Empty(work);                            // thumbnails-only never reaches Phase 2
         Assert.Single(repo.GetAllRelativePaths());      // file info still synced
+    }
+
+    [Fact]
+    public void Scan_IncludeThumbnailsOnly_CommitsARealThumbnailDirectly()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "Doors"));
+        ThumbnailExtractorTests.WriteRfa(Path.Combine(_root, "Doors", "A.rfa"));
+        using var repo = new IndexRepository(_dbPath);
+        var indexer = new FamilyIndexer(repo, _root);
+
+        var work = indexer.Scan(NoProgress, default, includeThumbnails: true);
+
+        Assert.Empty(work);
+        Assert.Equal(1, indexer.ThumbnailOnlyCount);
+        Assert.Single(repo.GetFamilyIdsWithThumbnail());
     }
 
     [Fact]
@@ -275,17 +286,49 @@ public class FamilyIndexerTests : IDisposable
         indexer.Scan(NoProgress);      // filenames-only sync is enough to add both rows
         Assert.Equal(2, repo.GetAllRelativePaths().Count);
 
-        // The fake .rfa is not a valid OLE file, so OpenMcdf throws while opening it and leaks
-        // the file handle until finalization. Force collection so we can delete it.
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
         File.Delete(a);
         indexer.Scan(NoProgress);
 
         var remaining = repo.GetAllRelativePaths();
         Assert.Single(remaining);
         Assert.DoesNotContain(remaining, p => p.EndsWith("A.rfa", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Scan_FileDeletedMidScan_IsPrunedNotFatal()
+    {
+        var a = WriteRfa("Doors/A.rfa");
+        var b = WriteRfa("Doors/B.rfa");
+        using var repo = new IndexRepository(_dbPath);
+        var indexer = new FamilyIndexer(repo, _root);
+        indexer.Scan(NoProgress);
+        Assert.Equal(2, repo.GetAllRelativePaths().Count);
+
+        // The walk has listed both files by the first callback; delete the one not reached yet.
+        indexer.Scan((name, current, total) =>
+        {
+            if (current == 1) File.Delete(name == "A.rfa" ? b : a);
+        });
+
+        Assert.Single(repo.GetAllRelativePaths());
+    }
+
+    // A path this machine can't open (>= MAX_PATH) may be another user's shorter-root path to
+    // the same family; skipping it must not prune the row they indexed and curated.
+    [Fact]
+    public void Scan_LongPathFamily_KeepsItsRow()
+    {
+        var rel = new string('d', 120) + "\\" + new string('f', 150) + ".rfa";
+        var full = WriteRfa(rel);
+        Assert.True(full.Length >= 260);
+        using var repo = new IndexRepository(_dbPath);
+        repo.UpsertFamilyFileInfo(rel, Path.GetFileName(rel), 4, DateTime.UtcNow);
+        var indexer = new FamilyIndexer(repo, _root);
+
+        indexer.Scan(NoProgress);
+
+        Assert.Equal(1, indexer.SkippedLongPath);
+        Assert.Single(repo.GetAllRelativePaths());
     }
 
     [Fact]
@@ -318,10 +361,7 @@ public class FamilyIndexerTests : IDisposable
             revitYear: 0, modifiedDate: item.ModifiedDate, fileSize: item.FileSize);
         Assert.Empty(indexer.Scan(NoProgress, default, includeParameters: true)); // confirm skipped
 
-        // Change the file. Release the leaked OpenMcdf handle first.
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
+        // Change the file.
         File.WriteAllText(a, "two-different-and-longer");
 
         // Scan sees the change but extraction is cancelled (no UpdateFamilyMetadata).
@@ -348,8 +388,6 @@ public class FamilyIndexerTests : IDisposable
         // Simulate a case-only rename of the folder ("Doors" -> "doors"). On Windows this is the
         // same file; the DB row (and its curated data) must survive under the same Id, re-keyed
         // to the new casing — not be pruned as stale and re-indexed as a new family.
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
         var oldDir = Path.Combine(_root, "Doors");
         var newDir = Path.Combine(_root, "doors");
         var tmpDir = Path.Combine(_root, "doors_tmp");
@@ -383,9 +421,6 @@ public class FamilyIndexerTests : IDisposable
         var rel = repo.GetAllRelativePaths().Single();
         long id1 = repo.GetFamilyByPath(rel)!.Id;
 
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
         File.WriteAllText(a, "two-different-and-longer");
         indexer.Scan(NoProgress, default, includeParameters: true);
 

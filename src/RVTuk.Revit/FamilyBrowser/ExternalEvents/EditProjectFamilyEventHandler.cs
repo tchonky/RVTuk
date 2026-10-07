@@ -46,6 +46,25 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
                     return;
                 }
 
+                var target = SaveAsPath ?? Path.Combine(
+                    Path.GetTempPath(), "RVTuk", "FamilyEdit", FamilyName + ".rfa");
+
+                // Opened from here before and still open: SaveAs over an open file fails, so
+                // just bring that editor back.
+                if (SaveAsPath == null && app.Application.Documents.Cast<Document>()
+                        .Any(d => string.Equals(d.PathName, target, StringComparison.OrdinalIgnoreCase)))
+                {
+                    app.OpenAndActivateDocument(target);
+                    Success = true;
+                    return;
+                }
+
+                if (doc.IsFamilyDocument)
+                {
+                    ErrorMessage = LoadFamilyEventHandler.FamilyDocumentActive;
+                    return;
+                }
+
                 var family = new FilteredElementCollector(doc)
                     .OfClass(typeof(Family))
                     .Cast<Family>()
@@ -65,9 +84,6 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
                     ErrorMessage = "This family is not editable.";
                     return;
                 }
-
-                var target = SaveAsPath ?? Path.Combine(
-                    Path.GetTempPath(), "RVTuk", "FamilyEdit", FamilyName + ".rfa");
 
                 var famDoc = doc.EditFamily(family);
                 try

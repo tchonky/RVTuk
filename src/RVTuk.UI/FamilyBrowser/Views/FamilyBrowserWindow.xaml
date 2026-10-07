@@ -5,7 +5,6 @@
         xmlns:ctrl="clr-namespace:RVTuk.UI.Shared.Controls"
         Title="RVTuk — Family Browser"
         Width="900" Height="620" MinWidth="660" MinHeight="420"
-        Topmost="True"
         WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
@@ -59,14 +58,17 @@
                                           IsChecked="{Binding IsAllCategoriesSelected, Mode=OneWay}"
                                           Click="AllCategoriesCheckBox_Click"/>
                                 <Separator/>
-                                <ItemsControl ItemsSource="{Binding CategoryOptions}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <CheckBox Content="{Binding Name}" Margin="2"
-                                                      IsChecked="{Binding IsSelected, Mode=TwoWay}"/>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                <!-- A Popup taller than the screen can't scroll: cap it. -->
+                                <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding CategoryOptions}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <CheckBox Content="{Binding Name}" Margin="2"
+                                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"/>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
                             </StackPanel>
                         </Border>
                     </Popup>
@@ -403,7 +405,24 @@
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <!-- Rail footer: help/about (left) · grid-view toggle + settings (right) -->
+            <!-- Empty state: a blank list with no explanation reads as broken. -->
+            <TextBlock Grid.Row="3" Margin="16" TextWrapping="Wrap" TextAlignment="Center"
+                       VerticalAlignment="Center" FontSize="11" IsHitTestVisible="False"
+                       Foreground="{StaticResource Brush.TextMuted}"
+                       Text="No families to show. Clear the search or filters, press &#x27F3; to check the open project, or run Scan in Settings if the library is new.">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding FilteredItems.Count}" Value="0">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+
+            <!-- Rail footer: help/about (left) · busy note · grid-view toggle + settings (right) -->
             <Grid Grid.Row="4" Margin="6" >
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -416,6 +435,10 @@
                         Command="{Binding ToggleHelpCommand}"
                         ToolTip="Help, info &amp; support"
                         Content="ℹ️"/>
+                <TextBlock Grid.Column="1" Text="Working…" Margin="8,0" VerticalAlignment="Center"
+                           Foreground="{StaticResource Brush.TextMuted}" FontSize="11"
+                           ToolTip="Revit or the library database is busy with your last action"
+                           Visibility="{Binding IsBusy, Converter={StaticResource BoolVis}}"/>
                 <!-- Grid-view toggle (2x2 squares). Hand-drawn vector to match the other icon-only
                      buttons in this window rather than an emoji. -->
                 <ToggleButton Grid.Column="2" Width="30" Height="28" Padding="0" Margin="0,0,4,0"
@@ -542,14 +565,15 @@
                     <!-- Load / Update — one button, vertically centred against the thumbnail's
                          height; switches to "Update" + orange when a newer version exists. -->
                     <Button Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0"
-                            Padding="16,7" FontWeight="SemiBold" Content="Load"
+                            Padding="16,7" FontWeight="SemiBold"
                             Command="{Binding LoadFamilyCommand}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                <!-- Content lives in the style: a local value would beat the trigger. -->
+                                <Setter Property="Content" Value="Load"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding ShowUpdateInProject}" Value="True">
                                         <Setter Property="Content" Value="Update"/>
-                                        <Setter Property="Command" Value="{Binding UpdateInProjectCommand}"/>
                                         <Setter Property="Background" Value="{StaticResource Brush.UpdateOrange}"/>
                                         <Setter Property="BorderBrush" Value="{StaticResource Brush.UpdateOrange}"/>
                                     </DataTrigger>
@@ -638,7 +662,7 @@
 
                 <TabControl Grid.Row="1" Margin="12,0,12,10">
                     <TabItem Header="Instructions">
-                        <RichTextBox IsReadOnly="True"
+                        <RichTextBox IsReadOnly="True" IsDocumentEnabled="True"
                                      ctrl:RichTextBoxHelper.DocumentXaml="{Binding InstructionsXaml}"/>
                     </TabItem>
                     <TabItem Header="{Binding FilteredParameters.Count, StringFormat='Parameters ({0})'}">
@@ -799,7 +823,7 @@
                 <TextBlock Grid.Row="0" Text="{Binding HelpSourceLabel}"
                            Foreground="{StaticResource Brush.TextDisabled}" FontSize="10"
                            Margin="0,0,0,10" TextWrapping="Wrap"/>
-                <RichTextBox Grid.Row="1" IsReadOnly="True" BorderThickness="0"
+                <RichTextBox Grid.Row="1" IsReadOnly="True" IsDocumentEnabled="True" BorderThickness="0"
                              VerticalScrollBarVisibility="Auto"
                              ctrl:RichTextBoxHelper.MarkdownSource="{Binding HelpMarkdownRaw}"/>
             </Grid>

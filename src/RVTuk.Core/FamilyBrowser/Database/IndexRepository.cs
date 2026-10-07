@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using RVTuk.Core.FamilyBrowser.Models;
 using Microsoft.Data.Sqlite;
 using SQLiteConnection = Microsoft.Data.Sqlite.SqliteConnection;
@@ -42,16 +43,24 @@ namespace RVTuk.Core.FamilyBrowser.Database
             _connection = new SQLiteConnection(connectionString);
             _connection.Open();
 
-            // WAL is NOT safe across machines on a network filesystem (it relies on host-local
-            // shared memory). Use a rollback journal so the DB can live on \\server\share.
-            // busy_timeout lets brief writes wait for a lock instead of failing immediately.
-            Execute("PRAGMA busy_timeout=5000;");
-            ProbeWritable();
-            Execute("PRAGMA journal_mode=DELETE;");
-            Execute("PRAGMA synchronous=NORMAL;");
-            Execute("PRAGMA foreign_keys=ON;");
-            CreateSchemaIfNeeded();
-            MigrateSchema();
+            // A throw below (read-only probe, locked/corrupt DB) never reaches Dispose: close here.
+            try
+            {
+                // WAL is NOT safe across machines on a network filesystem (it relies on host-local
+                // shared memory). Use a rollback journal so the DB can live on \\server\share.
+                // busy_timeout lets brief writes wait for a lock instead of failing immediately.
+                Execute(_connection, "PRAGMA busy_timeout=5000;");
+                ProbeWritable();
+                Execute(_connection, "PRAGMA journal_mode=DELETE;");
+                Execute(_connection, "PRAGMA synchronous=NORMAL;");
+                Execute(_connection, "PRAGMA foreign_keys=ON;");
+                EnsureSchema(_connection);
+            }
+            catch
+            {
+                _connection.Dispose();
+                throw;
+            }
         }
 
         // SQLite silently degrades a ReadWriteCreate open to read-only when the file denies
@@ -71,84 +80,77 @@ namespace RVTuk.Core.FamilyBrowser.Database
                     "file's read-only attribute.");
         }
 
-        private void CreateSchemaIfNeeded()
+        // The one schema definition, also used by BrowserRepository (which creates a DB no scan
+        // has touched yet, and migrates an outdated one). Tables first, then the columns added
+        // after a table first shipped.
+        private static readonly (string Table, string Create)[] SchemaTables =
         {
-            Execute(@"
-                CREATE TABLE IF NOT EXISTS Families (
-                    Id INTEGER PRIMARY KEY,
-                    RelativePath TEXT UNIQUE NOT NULL,
-                    FileName TEXT NOT NULL,
-                    ModifiedDate DATETIME NOT NULL,
-                    FileSize INTEGER NOT NULL,
-                    Category TEXT,
-                    IndexedDate DATETIME DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS Parameters (
-                    Id INTEGER PRIMARY KEY,
-                    FamilyId INTEGER NOT NULL,
-                    ParameterName TEXT NOT NULL,
-                    DataType TEXT NOT NULL,
-                    IsInstance INTEGER NOT NULL,
-                    FOREIGN KEY (FamilyId) REFERENCES Families(Id) ON DELETE CASCADE
-                );
-                CREATE TABLE IF NOT EXISTS Thumbnail (
-                    Id INTEGER PRIMARY KEY,
-                    FamilyId INTEGER UNIQUE NOT NULL,
-                    PngData BLOB NOT NULL,
-                    FOREIGN KEY (FamilyId) REFERENCES Families(Id) ON DELETE CASCADE
-                );");
-        }
-
-        private void MigrateSchema()
-        {
-            // Add InstructionsXaml column to Families if missing
-            using var checkCmd = _connection.CreateCommand();
-            checkCmd.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='InstructionsXaml'";
-            var count = (long)(checkCmd.ExecuteScalar() ?? 0L);
-            if (count == 0)
-                Execute("ALTER TABLE Families ADD COLUMN InstructionsXaml TEXT");
-
-            Execute(@"CREATE TABLE IF NOT EXISTS CustomThumbnail (
+            ("Families", @"CREATE TABLE IF NOT EXISTS Families (
+                Id INTEGER PRIMARY KEY,
+                RelativePath TEXT UNIQUE NOT NULL,
+                FileName TEXT NOT NULL,
+                ModifiedDate DATETIME NOT NULL,
+                FileSize INTEGER NOT NULL,
+                Category TEXT,
+                IndexedDate DATETIME DEFAULT CURRENT_TIMESTAMP
+            )"),
+            ("Parameters", @"CREATE TABLE IF NOT EXISTS Parameters (
+                Id INTEGER PRIMARY KEY,
+                FamilyId INTEGER NOT NULL,
+                ParameterName TEXT NOT NULL,
+                DataType TEXT NOT NULL,
+                IsInstance INTEGER NOT NULL,
+                FOREIGN KEY (FamilyId) REFERENCES Families(Id) ON DELETE CASCADE
+            )"),
+            ("Thumbnail", @"CREATE TABLE IF NOT EXISTS Thumbnail (
+                Id INTEGER PRIMARY KEY,
+                FamilyId INTEGER UNIQUE NOT NULL,
+                PngData BLOB NOT NULL,
+                FOREIGN KEY (FamilyId) REFERENCES Families(Id) ON DELETE CASCADE
+            )"),
+            ("CustomThumbnail", @"CREATE TABLE IF NOT EXISTS CustomThumbnail (
                 Id       INTEGER PRIMARY KEY,
                 FamilyId INTEGER UNIQUE NOT NULL,
                 PngData  BLOB    NOT NULL,
                 OleSynced INTEGER NOT NULL DEFAULT 1,
                 FOREIGN KEY (FamilyId) REFERENCES Families(Id) ON DELETE CASCADE
-            )");
+            )"),
+        };
 
-            foreach (var col in new[] { "ParamGroup", "Kind", "Guid", "Formula" })
-            {
-                using var c = _connection.CreateCommand();
-                c.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('Parameters') WHERE name='{col}'";
-                if ((long)(c.ExecuteScalar() ?? 0L) == 0)
-                    Execute($"ALTER TABLE Parameters ADD COLUMN {col} TEXT");
-            }
+        private static readonly (string Table, string Column, string Type)[] SchemaAddedColumns =
+        {
+            ("Families", "InstructionsXaml", "TEXT"),
+            ("Parameters", "ParamGroup", "TEXT"),
+            ("Parameters", "Kind", "TEXT"),
+            ("Parameters", "Guid", "TEXT"),
+            ("Parameters", "Formula", "TEXT"),
+            ("Families", "RevitYear", "INTEGER NOT NULL DEFAULT 0"),
+            ("Families", "Tags", "TEXT"),
+            ("Families", "IsFavorite", "INTEGER NOT NULL DEFAULT 0"),
+            ("Families", "ParametersExtracted", "INTEGER NOT NULL DEFAULT 0"),
+            ("Families", "Version", "TEXT"),
+        };
 
-            // Add RevitYear column to Families if missing
-            using var yearCheck = _connection.CreateCommand();
-            yearCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='RevitYear'";
-            if ((long)(yearCheck.ExecuteScalar() ?? 0L) == 0)
-                Execute("ALTER TABLE Families ADD COLUMN RevitYear INTEGER NOT NULL DEFAULT 0");
+        internal static void EnsureSchema(SQLiteConnection c)
+        {
+            foreach (var (_, create) in SchemaTables)
+                Execute(c, create);
+            foreach (var (table, column, type) in SchemaAddedColumns)
+                if (!ColumnExists(c, table, column))
+                    Execute(c, $"ALTER TABLE {table} ADD COLUMN {column} {type}");
+        }
 
-            using var tagsCheck = _connection.CreateCommand();
-            tagsCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='Tags'";
-            if ((long)(tagsCheck.ExecuteScalar() ?? 0L) == 0)
-                Execute("ALTER TABLE Families ADD COLUMN Tags TEXT");
+        // True when EnsureSchema has nothing to do — readable on a read-only connection. Every
+        // table has an Id column, so probing it also catches a table that is missing outright.
+        internal static bool SchemaIsCurrent(SQLiteConnection c) =>
+            SchemaTables.All(t => ColumnExists(c, t.Table, "Id"))
+            && SchemaAddedColumns.All(a => ColumnExists(c, a.Table, a.Column));
 
-            using var favCheck = _connection.CreateCommand();
-            favCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='IsFavorite'";
-            if ((long)(favCheck.ExecuteScalar() ?? 0L) == 0)
-                Execute("ALTER TABLE Families ADD COLUMN IsFavorite INTEGER NOT NULL DEFAULT 0");
-
-            using var paramsExtractedCheck = _connection.CreateCommand();
-            paramsExtractedCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='ParametersExtracted'";
-            if ((long)(paramsExtractedCheck.ExecuteScalar() ?? 0L) == 0)
-                Execute("ALTER TABLE Families ADD COLUMN ParametersExtracted INTEGER NOT NULL DEFAULT 0");
-
-            using var versionCheck = _connection.CreateCommand();
-            versionCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='Version'";
-            if ((long)(versionCheck.ExecuteScalar() ?? 0L) == 0)
-                Execute("ALTER TABLE Families ADD COLUMN Version TEXT");
+        internal static bool ColumnExists(SQLiteConnection c, string table, string column)
+        {
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name='{column}'";
+            return (long)(cmd.ExecuteScalar() ?? 0L) > 0;
         }
 
         public FamilyModel? GetFamilyByPath(string relativePath)
@@ -374,49 +376,20 @@ namespace RVTuk.Core.FamilyBrowser.Database
             // Ignore-case like the scanner's own path set: a row whose stored casing differs from
             // the scanned path is still the same file on a Windows filesystem, not a stale row.
             var valid = new HashSet<string>(validRelativePaths, StringComparer.OrdinalIgnoreCase);
-            foreach (var path in GetAllRelativePaths())
+            var paths = GetAllRelativePaths();
+
+            // One transaction, not an autocommit (journal round-trip over SMB) per row. The
+            // Parameters/Thumbnail/CustomThumbnail rows go with each family (ON DELETE CASCADE).
+            using var transaction = _connection.BeginTransaction();
+            using var cmd = CreateCommand("DELETE FROM Families WHERE RelativePath=@path", transaction);
+            var pathParam = cmd.Parameters.Add("@path", SqliteType.Text);
+            foreach (var path in paths)
             {
-                if (!valid.Contains(path))
-                {
-                    // Look up Id before deleting so we can clean up the gallery folder.
-                    long id = 0;
-                    using (var lookup = CreateCommand("SELECT Id FROM Families WHERE RelativePath=@path"))
-                    {
-                        AddParam(lookup, "@path", path);
-                        var scalar = lookup.ExecuteScalar();
-                        if (scalar != null && scalar != DBNull.Value)
-                            id = (long)scalar;
-                    }
-
-                    using var cmd = CreateCommand("DELETE FROM Families WHERE RelativePath=@path");
-                    AddParam(cmd, "@path", path);
-                    cmd.ExecuteNonQuery();
-
-                    if (id != 0)
-                    {
-                        try
-                        {
-                            var folder = GalleryRoot(id);
-                            if (System.IO.Directory.Exists(folder))
-                                System.IO.Directory.Delete(folder, true);
-                        }
-                        catch { /* best-effort; never let a file-delete failure propagate */ }
-                    }
-                }
+                if (valid.Contains(path)) continue;
+                pathParam.Value = path;
+                cmd.ExecuteNonQuery();
             }
-        }
-
-        public void ClearAll()
-        {
-            Execute("DELETE FROM Thumbnail; DELETE FROM Parameters; DELETE FROM Families;");
-
-            try
-            {
-                var g = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(_databasePath)!, "Gallery");
-                if (System.IO.Directory.Exists(g))
-                    System.IO.Directory.Delete(g, true);
-            }
-            catch { /* best-effort */ }
+            transaction.Commit();
         }
 
         private SQLiteCommand CreateCommand(string sql, IDbTransaction? transaction = null)
@@ -450,12 +423,9 @@ namespace RVTuk.Core.FamilyBrowser.Database
             Version      = r.IsDBNull(7) ? null : r.GetString(7)
         };
 
-        private string GalleryRoot(long familyId) =>
-            System.IO.Path.Combine(System.IO.Path.GetDirectoryName(_databasePath)!, "Gallery", familyId.ToString());
-
-        private void Execute(string sql)
+        private static void Execute(SQLiteConnection c, string sql)
         {
-            using var cmd = _connection.CreateCommand();
+            using var cmd = c.CreateCommand();
             cmd.CommandText = sql;
             cmd.ExecuteNonQuery();
         }

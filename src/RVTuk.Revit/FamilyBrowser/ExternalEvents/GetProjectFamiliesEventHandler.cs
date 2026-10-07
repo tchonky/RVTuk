@@ -15,7 +15,10 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
 
         public IReadOnlyList<ProjectFamilyInfo> Result { get; private set; } = Array.Empty<ProjectFamilyInfo>();
 
-        public void Reset() => _done.Reset();
+        /// <summary>Set when there is no project to compare against (a family is active).</summary>
+        public string? ErrorMessage { get; private set; }
+
+        public void Reset() { ErrorMessage = null; _done.Reset(); }
         public void WaitForCompletion() => _done.Wait();
 
         public void Execute(UIApplication app)
@@ -24,6 +27,14 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
             {
                 var doc = app.ActiveUIDocument?.Document;
                 if (doc == null) { Result = Array.Empty<ProjectFamilyInfo>(); return; }
+                // A family document lists its nested families — comparing those against the
+                // library would be wrong; say so instead of showing a misleading list.
+                if (doc.IsFamilyDocument)
+                {
+                    Result = Array.Empty<ProjectFamilyInfo>();
+                    ErrorMessage = LoadFamilyEventHandler.FamilyDocumentActive;
+                    return;
+                }
 
                 var infos = new List<ProjectFamilyInfo>();
                 var unresolved = new Dictionary<ElementId, ProjectFamilyInfo>();

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -7,6 +8,7 @@ using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
 
 namespace RVTuk.UI.Shared.Controls
 {
@@ -178,6 +180,20 @@ namespace RVTuk.UI.Shared.Controls
             if (node is Image image) images.Add(image);
             foreach (var child in LogicalTreeHelper.GetChildren(node))
                 if (child is DependencyObject dep) CollectImages(dep, images);
+        }
+
+        // Hyperlink.RequestNavigate handler for windows showing instructions. Opens only web and
+        // mail links: instructions are shared office content, so file:/relative links are ignored.
+        public static void OpenLink(object sender, RequestNavigateEventArgs e)
+        {
+            var uri = e.Uri;
+            if (uri != null && uri.IsAbsoluteUri &&
+                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeMailto))
+            {
+                try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }
+                catch { /* no handler for the scheme, etc. */ }
+            }
+            e.Handled = true;
         }
     }
 }

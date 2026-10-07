@@ -22,20 +22,21 @@ namespace RVTuk.Revit.FamilyBrowser.Extraction
             _app = app;
         }
 
-        public (string? Category, IReadOnlyList<ParameterModel> Parameters, string? Version) ExtractMetadata(string rfaPath)
+        /// <returns>Null when Revit could not open the file as a family document.</returns>
+        public (string? Category, IReadOnlyList<ParameterModel> Parameters, string? Version)? ExtractMetadata(string rfaPath)
         {
             // Revit's OpenDocumentFile throws / shows a modal "path too long" dialog for paths
             // over Windows MAX_PATH on .NET Framework. Such families are already skipped during the
             // scan; guard here too so extraction can never surface that dialog.
             if (string.IsNullOrEmpty(rfaPath) || rfaPath.Length >= 260)
-                return (null, Array.Empty<ParameterModel>(), null);
+                return null;
 
             Document? doc = null;
             try
             {
                 doc = _app.OpenDocumentFile(rfaPath);
                 if (doc == null || !doc.IsFamilyDocument)
-                    return (null, Array.Empty<ParameterModel>(), null);
+                    return null;
 
                 string? category = null;
                 try { category = doc.OwnerFamily?.FamilyCategory?.Name; } catch { }
@@ -61,7 +62,7 @@ namespace RVTuk.Revit.FamilyBrowser.Extraction
             }
             catch
             {
-                return (null, Array.Empty<ParameterModel>(), null);
+                return null;
             }
             finally
             {

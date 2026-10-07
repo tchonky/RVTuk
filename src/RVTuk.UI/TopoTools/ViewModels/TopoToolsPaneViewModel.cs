@@ -51,8 +51,7 @@ namespace RVTuk.UI.TopoTools.ViewModels
                 _spacingCentimetres = DefaultSpacingCentimetres;
             }
 
-            // Reads back as 0 from a config file written before the property existed — net48's
-            // DataContractJsonSerializer skips property initializers. See AppConfig.
+            // A spacing has no usable zero (e.g. a hand-edited config file). See AppConfig.
             if (_spacingCentimetres <= 0) _spacingCentimetres = DefaultSpacingCentimetres;
         }
 

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Text;
-using System.Threading;
 using OpenMcdf;
 
 namespace RVTuk.Core.FamilyBrowser.Extraction
@@ -26,79 +25,44 @@ namespace RVTuk.Core.FamilyBrowser.Extraction
         /// </summary>
         public static (byte[]? Thumbnail, int RevitYear) ExtractFromRfa(string rfaPath)
         {
-            byte[]? thumb;
-            int year = 0;
-            string reason;
             try
             {
-                using var rootStorage = RootStorage.OpenRead(rfaPath);
-                thumb = TryExtractThumbnail(rootStorage, out reason);
-                year = TryReadRevitYear(rootStorage);
-            }
-            catch (Exception ex)
-            {
-                thumb = null;
-                reason = "open-failed:" + ex.GetType().Name + ":" + ex.Message;
-            }
-            ThumbDebug.Log(rfaPath, thumb, reason);
-            return (thumb, year);
-        }
-
-        // Keep the old single-purpose method so nothing else breaks
-        public static byte[]? ExtractThumbnailFromRfa(string rfaPath)
-        {
-            try
-            {
-                using var rootStorage = RootStorage.OpenRead(rfaPath);
-                return TryExtractThumbnail(rootStorage, out _);
+                // Our own stream, not RootStorage.OpenRead: that one leaks its FileStream until GC
+                // when the header parse throws (0-byte/truncated file), blocking Revit from saving it.
+                using var fs = new FileStream(rfaPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var rootStorage = RootStorage.Open(fs, StorageModeFlags.LeaveOpen);
+                return (TryExtractThumbnail(rootStorage), TryReadRevitYear(rootStorage));
             }
             catch
             {
-                return null;
+                return (null, 0);
             }
         }
 
         // ── thumbnail ────────────────────────────────────────────────────────────
 
-        private static byte[]? TryExtractThumbnail(RootStorage rootStorage, out string reason)
-        {
-            // 1) Preferred path: the modern "RevitPreview4.0" stream holds an embedded PNG.
-            //    This is what current Revit 2024/2025 families actually populate.
-            var previewPng = TryExtractRevitPreviewPng(rootStorage, out string previewReason);
-            if (previewPng != null) { reason = previewReason; return previewPng; }
-
-            // 2) Fallback path (never worse than before): legacy \x05SummaryInformation
-            //    PIDSI_THUMBNAIL DIB. Kept for old families / files that still carry it.
-            var summaryPng = TryExtractSummaryInfoThumbnail(rootStorage, out string summaryReason);
-            reason = previewReason + "|" + summaryReason;
-            return summaryPng;
-        }
+        // 1) Preferred path: the modern "RevitPreview4.0" stream holds an embedded PNG.
+        //    This is what current Revit 2024/2025 families actually populate.
+        // 2) Fallback path (never worse than before): legacy \x05SummaryInformation
+        //    PIDSI_THUMBNAIL DIB. Kept for old families / files that still carry it.
+        private static byte[]? TryExtractThumbnail(RootStorage rootStorage)
+            => TryExtractRevitPreviewPng(rootStorage) ?? TryExtractSummaryInfoThumbnail(rootStorage);
 
         // ── modern Revit preview stream ─────────────────────────────────────────
         // "RevitPreview4.0" is a PNG sandwiched between a small binary prefix (image
         // type/size metadata) and a postfix, so we scan the stream for the PNG
         // signature rather than assuming the image starts at offset 0.
-        private static byte[]? TryExtractRevitPreviewPng(RootStorage rootStorage, out string reason)
+        private static byte[]? TryExtractRevitPreviewPng(RootStorage rootStorage)
         {
             string? streamName = FindRevitPreviewStreamName(rootStorage);
-            if (streamName == null) { reason = "no-revitpreview-stream"; return null; }
+            if (streamName == null) return null;
 
-            CfbStream stream;
-            try { stream = rootStorage.OpenStream(streamName); }
-            catch (Exception ex) { reason = "revitpreview-open-threw:" + ex.GetType().Name; return null; }
-
-            using (stream)
+            try
             {
-                byte[] data;
-                try { data = ReadAllBytes(stream); }
-                catch (Exception ex) { reason = "revitpreview-read-threw:" + ex.GetType().Name; return null; }
-
-                var png = ExtractEmbeddedPng(data);
-                if (png != null) { reason = "ok-revitpreview-png:" + png.Length; return png; }
-
-                reason = "revitpreview-no-png:len=" + data.Length;
-                return null;
+                using var stream = rootStorage.OpenStream(streamName);
+                return ExtractEmbeddedPng(ReadAllBytes(stream));
             }
+            catch { return null; }
         }
 
         // Locate the preview stream by name, tolerating future "RevitPreviewX.Y"
@@ -155,32 +119,18 @@ namespace RVTuk.Core.FamilyBrowser.Extraction
         private static readonly byte[] IendChunkType = { 0x49, 0x45, 0x4E, 0x44 }; // "IEND"
 
         // ── legacy SummaryInformation thumbnail ─────────────────────────────────
-        private static byte[]? TryExtractSummaryInfoThumbnail(RootStorage rootStorage, out string reason)
+        private static byte[]? TryExtractSummaryInfoThumbnail(RootStorage rootStorage)
         {
-            CfbStream stream;
+            byte[] data;
             try
             {
-                stream = rootStorage.OpenStream(SummaryInfoStreamName);
+                using var stream = rootStorage.OpenStream(SummaryInfoStreamName);
+                data = ReadAllBytes(stream);
             }
-            catch (Exception ex)
-            {
-                reason = "no-summaryinfo-stream:" + ex.GetType().Name;
-                return null;
-            }
+            catch { return null; }
 
-            using (stream)
-            {
-                byte[] data;
-                try { data = ReadAllBytes(stream); }
-                catch (Exception ex) { reason = "stream-read-threw:" + ex.GetType().Name; return null; }
-
-                var dib = ParseThumbnailDib(data, out reason);
-                if (dib == null) return null;
-
-                var png = ConvertDibToPng(dib, out string convReason);
-                reason = convReason;
-                return png;
-            }
+            var dib = ParseThumbnailDib(data);
+            return dib == null ? null : ConvertDibToPng(dib);
         }
 
         private static byte[] ReadAllBytes(CfbStream stream)
@@ -190,13 +140,13 @@ namespace RVTuk.Core.FamilyBrowser.Extraction
             return ms.ToArray();
         }
 
-        private static byte[]? ParseThumbnailDib(byte[] data, out string reason)
+        private static byte[]? ParseThumbnailDib(byte[] data)
         {
-            if (data.Length < 48) { reason = "data-too-short:" + data.Length; return null; }
-            if (BitConverter.ToUInt16(data, 0) != 0xFFFE) { reason = "no-bom:0x" + BitConverter.ToUInt16(data, 0).ToString("X4"); return null; }
+            if (data.Length < 48) return null;
+            if (BitConverter.ToUInt16(data, 0) != 0xFFFE) return null;
 
             uint sectionOffset = BitConverter.ToUInt32(data, 44);
-            if (sectionOffset + 8 > (uint)data.Length) { reason = "section-offset-oob:" + sectionOffset; return null; }
+            if (sectionOffset + 8 > (uint)data.Length) return null;
 
             uint propertyCount = BitConverter.ToUInt32(data, (int)sectionOffset + 4);
 
@@ -211,31 +161,29 @@ namespace RVTuk.Core.FamilyBrowser.Extraction
                 if (propId != 0x0F) continue; // PIDSI_THUMBNAIL
 
                 uint absOffset = sectionOffset + valueRelOffset;
-                if (absOffset + 12 > (uint)data.Length) { reason = "value-oob"; return null; }
+                if (absOffset + 12 > (uint)data.Length) return null;
 
                 ushort varType = BitConverter.ToUInt16(data, (int)absOffset);
-                if (varType != 0x0047) { reason = "not-vt-cf:0x" + varType.ToString("X4"); return null; } // VT_CF
+                if (varType != 0x0047) return null; // VT_CF
 
                 uint cbSize = BitConverter.ToUInt32(data, (int)absOffset + 4);
                 uint clipFormat = BitConverter.ToUInt32(data, (int)absOffset + 8);
-                if (clipFormat != 8 && clipFormat != 2) { reason = "bad-clipformat:" + clipFormat; return null; } // CF_DIB / CF_BITMAP
+                if (clipFormat != 8 && clipFormat != 2) return null; // CF_DIB / CF_BITMAP
 
                 int dibStart = (int)absOffset + 12;
                 int dibLength = (int)cbSize - 4;
-                if (dibLength <= 0 || dibStart + dibLength > data.Length) { reason = "bad-dib-length:" + dibLength; return null; }
+                if (dibLength <= 0 || dibStart + dibLength > data.Length) return null;
 
                 var dib = new byte[dibLength];
                 Array.Copy(data, dibStart, dib, 0, dibLength);
-                reason = "ok-dib:" + dibLength;
                 return dib;
             }
-            reason = "thumb-prop-not-found:props=" + propertyCount;
             return null;
         }
 
-        private static byte[]? ConvertDibToPng(byte[] dib, out string reason)
+        private static byte[]? ConvertDibToPng(byte[] dib)
         {
-            if (dib.Length < 40) { reason = "dib-header-too-short:" + dib.Length; return null; }
+            if (dib.Length < 40) return null;
             try
             {
                 int biBitCount = BitConverter.ToInt16(dib, 14);
@@ -255,12 +203,10 @@ namespace RVTuk.Core.FamilyBrowser.Extraction
                 using var bitmap = new System.Drawing.Bitmap(bmpStream);
                 using var pngStream = new MemoryStream();
                 bitmap.Save(pngStream, System.Drawing.Imaging.ImageFormat.Png);
-                reason = "ok";
                 return pngStream.ToArray();
             }
-            catch (Exception ex)
+            catch
             {
-                reason = "dib-to-png-threw:" + ex.GetType().Name + ":" + ex.Message;
                 return null;
             }
         }
@@ -276,10 +222,16 @@ namespace RVTuk.Core.FamilyBrowser.Extraction
                 stream.CopyTo(ms);
                 var bytes = ms.ToArray();
 
-                // BasicFileInfo contains UTF-16LE text with a line like:
-                //   "Revit Build: Autodesk Revit 2024 (Build: 20240606_1515(x64))"
-                var marker = Encoding.Unicode.GetBytes("Revit Build:");
+                // BasicFileInfo contains UTF-16LE text lines (at an odd byte offset, hence the
+                // byte search). Modern Revit writes "Format: 2024"; older files wrote
+                //   "Revit Build: Autodesk Revit 2017 (Build: 20160225_1515(x64))"
+                var marker = Encoding.Unicode.GetBytes("Format: ");
                 int pos = IndexOf(bytes, marker);
+                if (pos < 0)
+                {
+                    marker = Encoding.Unicode.GetBytes("Revit Build:");
+                    pos = IndexOf(bytes, marker);
+                }
                 if (pos < 0) return 0;
 
                 int start = pos + marker.Length;
@@ -322,33 +274,6 @@ namespace RVTuk.Core.FamilyBrowser.Extraction
                 if (match) return i;
             }
             return -1;
-        }
-
-        // ── TEMP DIAGNOSTIC — remove once the OLE-thumbnail bug is fixed (see BACKLOG) ──
-        // Records, per family, which stage produced/failed the thumbnail so we can localise the
-        // "no thumbnails extract" bug from a real Revit run. Best-effort and capped so a large
-        // scan can't fill the disk.
-        private static class ThumbDebug
-        {
-            private static readonly string LogPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "RVTuk", "thumb-debug.log");
-            private static int _count;
-            private const int MaxLines = 2000;
-
-            public static void Log(string rfaPath, byte[]? thumb, string reason)
-            {
-                try
-                {
-                    if (Interlocked.Increment(ref _count) > MaxLines) return;
-                    var size = thumb?.Length ?? 0;
-                    var name = Path.GetFileName(rfaPath);
-                    Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
-                    File.AppendAllText(LogPath,
-                        $"{(thumb != null ? "OK " : "NUL")} size={size,-7} {reason,-32} {name}{Environment.NewLine}");
-                }
-                catch { /* diagnostics must never break a scan */ }
-            }
         }
     }
 }

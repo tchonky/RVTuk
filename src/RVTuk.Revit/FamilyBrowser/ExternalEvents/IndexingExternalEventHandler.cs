@@ -20,11 +20,19 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
         public IndexRepository? Repository { get; set; }
         public FamilyMetadataExtractor? Extractor { get; set; }
 
+        /// <summary>The DB write failed (locked, disk full, share gone) — the waiter reports it.</summary>
+        public string? Error { get; private set; }
+
+        /// <summary>Revit opened the family and its metadata was written.</summary>
+        public bool Extracted { get; private set; }
+
         public void PrepareAndWait(ExtractionWorkItem item, IndexRepository repository, FamilyMetadataExtractor extractor)
         {
             CurrentItem = item;
             Repository = repository;
             Extractor = extractor;
+            Error = null;
+            Extracted = false;
             _done.Reset();
         }
 
@@ -39,25 +47,32 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
 
                 // Skip families newer than the running Revit version — opening such a family
                 // document triggers native processing that can crash Revit.
-                string? category = null;
-                string? familyVersion = null;
-                IReadOnlyList<RVTuk.Core.FamilyBrowser.Models.ParameterModel> parameters = System.Array.Empty<RVTuk.Core.FamilyBrowser.Models.ParameterModel>();
-
                 bool tooNew = CurrentItem.FileRevitYear > 0
                     && int.TryParse(app.Application.VersionNumber, out int runningYear)
                     && CurrentItem.FileRevitYear > runningYear;
 
-                if (!tooNew)
+                var metadata = tooNew ? null : Extractor.ExtractMetadata(CurrentItem.FullPath);
+                if (metadata is { } m)
                 {
-                    try { (category, parameters, familyVersion) = Extractor.ExtractMetadata(CurrentItem.FullPath); }
-                    catch { /* skip family if extraction fails */ }
+                    // Pass the file's real size/date through: writing them here (only after a
+                    // successful extraction) is what marks the row current. A cancelled family is
+                    // never updated, so it stays stale and is re-scanned next time.
+                    Repository.UpdateFamilyMetadata(CurrentItem.FamilyId, m.Category, m.Parameters, CurrentItem.ThumbnailPng,
+                        CurrentItem.FileRevitYear, CurrentItem.ModifiedDate, CurrentItem.FileSize, m.Version);
+                    Extracted = true;
                 }
-
-                // Pass the file's real size/date through: writing them here (only after a
-                // successful extraction) is what marks the row current. A cancelled family is
-                // never updated, so it stays stale and is re-scanned next time.
-                Repository.UpdateFamilyMetadata(CurrentItem.FamilyId, category, parameters, CurrentItem.ThumbnailPng, CurrentItem.FileRevitYear,
-                    CurrentItem.ModifiedDate, CurrentItem.FileSize, familyVersion);
+                else if (CurrentItem.ThumbnailPng != null)
+                {
+                    // Too new, locked or unreadable: keep the fresh thumbnail but leave the row's
+                    // metadata alone and unextracted, so a later scan (or a newer Revit) retries
+                    // instead of stamping empty data as done.
+                    Repository.UpdateThumbnailOnly(CurrentItem.FamilyId, CurrentItem.ThumbnailPng,
+                        CurrentItem.FileRevitYear, CurrentItem.ModifiedDate, CurrentItem.FileSize);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Error = ex.Message;
             }
             finally
             {

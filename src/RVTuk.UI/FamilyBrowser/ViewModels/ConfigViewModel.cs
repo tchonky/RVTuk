@@ -83,17 +83,18 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         public string IgnoredSubfoldersText
         {
-            get => _ignoredSubfoldersText ?? string.Join(Environment.NewLine, _config.IgnoredSubfolders);
+            get => _ignoredSubfoldersText ?? string.Join(Environment.NewLine,
+                       _config.IgnoredSubfolders ?? new System.Collections.Generic.List<string>());
             set
             {
                 if (Equals(_ignoredSubfoldersText, value)) return;
                 _ignoredSubfoldersText = value;
-                _config.IgnoredSubfolders = (value ?? string.Empty)
+                var folders = (value ?? string.Empty)
                     .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                     .Select(s => s.Trim())
                     .Where(s => !string.IsNullOrEmpty(s))
                     .ToList();
-                ConfigManager.SaveConfig(_config);
+                Persist(c => c.IgnoredSubfolders = folders);
                 OnPropertyChanged();
             }
         }
@@ -111,14 +112,24 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             {
                 if (Equals(_ignoredFilePatternsText, value)) return;
                 _ignoredFilePatternsText = value;
-                _config.IgnoredFilePatterns = (value ?? string.Empty)
+                var patterns = (value ?? string.Empty)
                     .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                     .Select(s => s.Trim())
                     .Where(s => !string.IsNullOrEmpty(s))
                     .ToList();
-                ConfigManager.SaveConfig(_config);
+                Persist(c => c.IgnoredFilePatterns = patterns);
                 OnPropertyChanged();
             }
+        }
+
+        // Writes one change through to config.json, re-reading it first: the browser stays open
+        // for hours, and other tools (Area Calc, DWG Export, Topo Tools) save to the same file.
+        private void Persist(Action<AppConfig> apply)
+        {
+            apply(_config);
+            var saved = ConfigManager.LoadConfig();
+            apply(saved);
+            ConfigManager.SaveConfig(saved);
         }
 
         public ICommand BrowseLibraryCommand { get; }
@@ -141,11 +152,11 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 return;
             }
 
-            LibraryFolderPath = dialog.SelectedPath;
-            AppConfig.MigrateLegacyDbFolder(dialog.SelectedPath);
-            Directory.CreateDirectory(Path.Combine(dialog.SelectedPath, AppConfig.DbFolderName));
-            ConfigManager.SaveConfig(_config);
+            var folder = dialog.SelectedPath;
+            LibraryFolderPath = folder;
+            Persist(c => c.LibraryFolderPath = folder);
             CommandManager.InvalidateRequerySuggested(); // re-enable the Scan button now a folder is set
+            // The host reloads the browser against the new folder (creating its .DB folder).
             _onLibraryFolderChanged?.Invoke();
         }
     }

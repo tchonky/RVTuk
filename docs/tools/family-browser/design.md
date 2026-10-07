@@ -56,7 +56,9 @@ closes it manually.
   `ComboBox`. Header row is an "All categories" master checkbox with tri-state
   checked/unchecked/indeterminate behaviour; below it, one checkbox per category, all **on by
   default**. This is a genuine multi-select: unchecking a category hides its families from the
-  list immediately, and any combination of categories can be shown at once.
+  list immediately, and any combination of categories can be shown at once. The options come
+  from the rows in the list (not a DB query), so a model-only family's category always has
+  one, and families without a category get a "(No category)" option at the end.
 - **Toggle buttons (⬅️ / ⭐ / ➡️)** — three always-visible toolbar toggles, all **off by default**
   (unfiltered — nothing hidden):
   - ⬅️ — families loaded in the model (model-only rows **and** families that are also in the
@@ -194,30 +196,31 @@ inclusion filter); that default no longer applies — see *Deviations*.
 
 ## 4. Instructions Editor window
 
-Separate **modal** WPF window opened by `Edit Info`.
+Separate **non-modal** WPF window opened by `Edit Info`, owned by the browser, one at a time.
+Opening another family's editor closes the current one first.
 
 - **Thumbnail section** — shows the current thumbnail (custom-over-system); border colour +
   status label signal state (system / custom in-sync / custom out-of-sync with the `.rfa`).
   `⁝` menu: `Replace…` (file picker, resized into DB), `Reset to system original` (deletes the
-  custom row), `Update .rfa with DB image` (rewrites the OLE stream; enabled only when out of
-  sync). Drag-drop and paste onto the thumbnail also replace it.
+  custom row), `Write this thumbnail into the .rfa file` (rewrites the OLE stream and stores the
+  thumbnail; enabled only when out of sync). Drag-drop and paste onto the thumbnail also replace
+  it. Save writes the .rfa only while it is out of sync, so a text-only edit never touches the
+  shared library file.
 - **Rich-text body** — Bold/Italic/Underline/H1/H2/bulleted list/Add Image; inline images with
   a remove button; a drop zone accepts drag-drop / paste. Stored as a XAML `FlowDocument`
   string with images base64-embedded (no separate image table for instructions). This inline
   image capability is also what replaced the removed per-family gallery — see §6 note.
-- **Footer** — `Cancel` discards; `Save` persists instructions and thumbnail changes.
+- **Footer** — `Save` persists instructions and thumbnail changes. Closing without saving
+  (`Cancel`, Esc, the window's ✕, or the browser opening another editor or closing) asks
+  before discarding unsaved changes, and only when there are some.
 
 ### 4a. Help/About panel (new)
 
 Toggled by the ℹ️ footer button (§1) in place of the family detail. Renders markdown fetched
-over HTTP from a raw GitHub URL, currently a **placeholder constant** in
-`FamilyBrowserViewModel.cs`:
-
-```
-HelpMarkdownUrl = "https://raw.githubusercontent.com/knafo-klimor/rvtuk-docs/main/help.md"
-```
-
-> ⚠️ **This placeholder URL needs to be pointed at the real docs repo before this ships.**
+over HTTP from this repo's [`help.md`](help.md) on `master` (`HelpMarkdownUrl` in
+`FamilyBrowserViewModel.cs`), so editing that file and merging it updates every user's help
+page with no deploy. The fetch times out after 10 s and is retried the next time the panel
+opens if it failed. Links open in the web browser (http, https and mailto only).
 
 Rendering goes through a new hand-rolled markdown→`FlowDocument` converter,
 `RVTuk.UI.Helpers.MarkdownConverter` (deliberately no new NuGet dependency), consumed via a new
@@ -317,9 +320,9 @@ Schema is migrated on open (the `pragma_table_info` add-column pattern in the re
 > creating/reading/writing gallery data going forward. An existing production database may still
 > carry a populated `FamilyImage` table with historical data; it's simply untouched dead weight
 > now. Repository methods `GetImages`/`AddImage`/`UpdateCaption`/`DeleteImage`/`ReorderImages`/
-> `GetGalleryPath` were deleted along with it. Orphan-folder cleanup (deleting a *deleted
-> family's* leftover gallery folder in `DeleteStaleEntries`) was kept as-is — that's unrelated
-> pre-existing cleanup, not a gallery-editing feature.
+> `GetGalleryPath` were deleted along with it. The orphan-folder cleanup in `DeleteStaleEntries`
+> (deleting a *deleted family's* leftover gallery folder) outlived it until 2026-10-04, when it
+> went too and the stale-row prune became a single transaction.
 
 ---
 
@@ -348,7 +351,6 @@ composed as `FamilyBrowserViewModel.Settings`.
 - Parameter **write-back** / reorganizing params from the tool.
 - Configuring parameter values before loading a family.
 - Auto-flagging rules for "disorganized" params (this iteration only shows + filters).
-- Pointing the Help/About panel at the real docs repo URL (currently a placeholder — see §4a).
 
 ---
 
@@ -375,8 +377,8 @@ composed as `FamilyBrowserViewModel.Settings`.
   supported drag-drop/paste and made the separate gallery redundant. `FamilyImage.cs`,
   `GalleryItemViewModel.cs`, and the `FamilyImage` table creation/repository methods are gone;
   no data migration touches existing production databases.
-- **New Help/About panel (2026-07-07):** a markdown-rendered help page (§4a), fetched from a
-  URL that is still a placeholder and must be pointed at the real docs repo before shipping.
+- **New Help/About panel (2026-07-07):** a markdown-rendered help page (§4a). Its URL was a
+  placeholder until 2026-10-04, when it was pointed at `help.md` in this repo.
 - **Read-only refresh (2026-07-16):** Sync previously also fast-synced the DB with the `.rfa`
   files on disk (one write transaction per file + stale-row pruning) — a write burst that
   locked the shared DB for every other user (backlog "Read Only DB"). Refresh now only
@@ -405,3 +407,20 @@ composed as `FamilyBrowserViewModel.Settings`.
   ⭐ became an AND constraint too (⭐+⬅️ = favourites in the model, an intersection, no longer a
   union). The predicate moved to Core (`SourceToggleFilter`) under a truth-table test;
   `ShowLibraryOnlyFamilies` was renamed `ShowLibraryFamilies`.
+- **Review fixes (2026-10-04):** a full code review's verified findings were fixed in one pass.
+  The behaviour changes a user sees:
+  - The browser is no longer `Topmost`: it is owned by Revit's main window, so Revit's own
+    dialogs show above it. The editor and the scan progress window are owned by the browser.
+  - Load, Open, Save to Library and Sync refuse to act on a family document (after "Open in
+    Family Editor" the browser stays clickable) and say to switch to the project window.
+    Open in Family Editor now reports its failures instead of silently doing nothing.
+  - The selection survives filtering, starring and Sync. A failed Sync keeps the last good
+    list. A Scan re-reads the list when it finishes. Rescan updates the row's category,
+    version and verdict in place, against the project copy the last Sync saw.
+  - Category options come from the loaded rows, with a "(No category)" option, so unscanned
+    and model-only families can always be shown.
+  - "Working…" in the rail footer shows while a Revit round-trip or a DB re-read runs, and
+    the buttons it would race are disabled. An empty list explains itself.
+  - A family Revit cannot open during a scan (too new, locked, damaged) keeps its old
+    metadata and stays unextracted, so a later scan retries it, instead of being stamped
+    extracted with empty data.

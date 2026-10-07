@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Windows.Interop;
 
 namespace RVTuk.Revit.FamilyBrowser.Commands
 {
@@ -33,10 +34,15 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
                 };
             }
 
+            // Owning our windows by Revit's main window keeps them above Revit without Topmost,
+            // which would also float them over Revit's own modal dialogs.
+            var revitWindow = commandData.Application.MainWindowHandle;
+
             var config = ConfigManager.LoadConfig();
             if (!ConfigManager.IsConfigured(config))
             {
                 var settings = new SettingsWindow();
+                new WindowInteropHelper(settings).Owner = revitWindow;
                 settings.ShowDialog();
                 config = ConfigManager.LoadConfig();
                 if (!ConfigManager.IsConfigured(config))
@@ -56,24 +62,28 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
             Func<IReadOnlyList<ProjectFamilyInfo>> getProjectFamilies = () =>
             {
                 Application.GetFamiliesHandler.Reset();
-                Application.GetFamiliesEvent.Raise();
+                Raise(Application.GetFamiliesEvent);
                 Application.GetFamiliesHandler.WaitForCompletion();
+                if (Application.GetFamiliesHandler.ErrorMessage is string error)
+                    throw new InvalidOperationException(error);
                 return Application.GetFamiliesHandler.Result;
             };
 
             Func<string, (bool Success, string? Error)> loadFamily = path =>
             {
                 Application.LoadFamilyHandler.Prepare(path);
-                Application.LoadFamilyEvent.Raise();
+                Raise(Application.LoadFamilyEvent);
                 Application.LoadFamilyHandler.WaitForCompletion();
                 return (Application.LoadFamilyHandler.Success, Application.LoadFamilyHandler.ErrorMessage);
             };
 
-            Action<string> openInFamilyEditor = path =>
+            Func<string, (bool Success, string? Error)> openInFamilyEditor = path =>
             {
                 Application.OpenFamilyEditorHandler.Prepare(path);
-                Application.OpenFamilyEditorEvent.Raise();
+                Raise(Application.OpenFamilyEditorEvent);
                 Application.OpenFamilyEditorHandler.WaitForCompletion();
+                var error = Application.OpenFamilyEditorHandler.ErrorMessage;
+                return (error == null, error);
             };
 
             // Both wrap the same EditProjectFamilyEventHandler singleton; the VM serializes
@@ -81,7 +91,7 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
             Func<string, (bool Success, string? Error)> openModelFamilyInEditor = familyName =>
             {
                 Application.EditProjectFamilyHandler.Prepare(familyName, null);
-                Application.EditProjectFamilyEvent.Raise();
+                Raise(Application.EditProjectFamilyEvent);
                 Application.EditProjectFamilyHandler.WaitForCompletion();
                 return (Application.EditProjectFamilyHandler.Success, Application.EditProjectFamilyHandler.ErrorMessage);
             };
@@ -89,7 +99,7 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
             Func<string, string, (bool Success, string? Error)> saveFamilyToLibrary = (familyName, targetPath) =>
             {
                 Application.EditProjectFamilyHandler.Prepare(familyName, targetPath);
-                Application.EditProjectFamilyEvent.Raise();
+                Raise(Application.EditProjectFamilyEvent);
                 Application.EditProjectFamilyHandler.WaitForCompletion();
                 return (Application.EditProjectFamilyHandler.Success, Application.EditProjectFamilyHandler.ErrorMessage);
             };
@@ -98,7 +108,7 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
             Func<IReadOnlyList<string>, IReadOnlyDictionary<string, byte[]>> getFamilyPreviews = familyNames =>
             {
                 Application.GetFamilyPreviewsHandler.Prepare(familyNames);
-                Application.GetFamilyPreviewsEvent.Raise();
+                Raise(Application.GetFamilyPreviewsEvent);
                 Application.GetFamilyPreviewsHandler.WaitForCompletion();
                 return Application.GetFamilyPreviewsHandler.Result;
             };
@@ -107,9 +117,12 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
             var capturedUIApp = commandData.Application;
 
             // Runs a scan (used by the browser's embedded Settings panel — the ribbon Config
-            // window was removed in favour of settings embedded directly in the browser).
+            // window was removed in favour of settings embedded directly in the browser), then
+            // re-reads the browser's list so new and pruned families show without a manual ⟳.
             Action<bool, bool> scan = (includeThumbnails, includeParameters) =>
-                IndexLibraryCommand.RunScan(capturedUIApp, ConfigManager.LoadConfig(), includeThumbnails, includeParameters);
+                IndexLibraryCommand.RunScan(capturedUIApp, Application.BrowserWindow, ConfigManager.LoadConfig(),
+                    includeThumbnails, includeParameters,
+                    onDone: () => Application.BrowserWindow?.ViewModel.SyncCommand.Execute(null));
 
             // Re-extract metadata for ONE family (selected in the browser), reusing the same
             // indexing ExternalEvent ping-pong. Called from a background thread by the VM, so
@@ -141,9 +154,14 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
                     // IndexingGate: the deep scan (Config window) shares this handler.
                     lock (Application.IndexingGate)
                     {
-                        Application.IndexingHandler.PrepareAndWait(workItem, repo, extractor);
-                        Application.IndexingEvent.Raise();
-                        Application.IndexingHandler.WaitForCompletion();
+                        var handler = Application.IndexingHandler;
+                        handler.PrepareAndWait(workItem, repo, extractor);
+                        Raise(Application.IndexingEvent);
+                        handler.WaitForCompletion();
+                        if (handler.Error != null) return (false, handler.Error);
+                        if (!handler.Extracted)
+                            return (false, "Revit could not open this family to read its parameters. It may be " +
+                                           "saved in a newer Revit version, open in another session, or damaged.");
                     }
                     return (true, null);
                 }
@@ -203,8 +221,12 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
                 var window = new FamilyBrowserWindow(config, getProjectFamilies, loadFamily, rescanFamily,
                     scan, openInFamilyEditor, openModelFamilyInEditor, saveFamilyToLibrary, getFamilyPreviews);
                 window.Closed += (s, e) =>
+                {
                     System.Windows.Application.Current.DispatcherUnhandledException -= dispatcherHandler;
+                    if (ReferenceEquals(Application.BrowserWindow, window)) Application.BrowserWindow = null;
+                };
                 Application.BrowserWindow = window; // set before Show() so handler can close it if layout throws
+                new WindowInteropHelper(window).Owner = revitWindow;
                 window.Show();
                 return Result.Succeeded;
             }
@@ -215,6 +237,19 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
                     $"Failed to open the browser:\n\n{ex.GetType().Name}: {ex.Message}\n\n{ex.StackTrace}");
                 return Result.Failed;
             }
+        }
+
+        /// <summary>
+        /// Raises an ExternalEvent for a caller that then waits on its handler. A raise Revit
+        /// refuses never reaches the handler, so the wait would block forever (holding whatever
+        /// lock the caller is in) — throw instead; every caller reports the message.
+        /// </summary>
+        internal static void Raise(ExternalEvent externalEvent)
+        {
+            var request = externalEvent.Raise();
+            if (request == ExternalEventRequest.Denied || request == ExternalEventRequest.TimedOut)
+                throw new InvalidOperationException(
+                    $"Revit did not accept the request ({request}). Finish or cancel what Revit is doing and try again.");
         }
     }
 }

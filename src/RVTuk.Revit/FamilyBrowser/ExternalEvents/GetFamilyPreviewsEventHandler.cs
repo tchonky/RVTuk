@@ -38,7 +38,7 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
             try
             {
                 var doc = app.ActiveUIDocument?.Document;
-                if (doc == null || _familyNames.Count == 0) return;
+                if (doc == null || doc.IsFamilyDocument || _familyNames.Count == 0) return;
 
                 var wanted = new HashSet<string>(_familyNames, StringComparer.OrdinalIgnoreCase);
                 foreach (var family in new FilteredElementCollector(doc)

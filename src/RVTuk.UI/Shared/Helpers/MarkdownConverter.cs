@@ -30,17 +30,12 @@ namespace RVTuk.UI.Shared.Helpers
         private static readonly Regex TableSeparatorRegex = new Regex(
             @"^\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?$", RegexOptions.Compiled);
 
-        // Raised when the user clicks a generated [text](url) hyperlink. Opening a browser (or
-        // whatever) from this library-level helper isn't this class's call to make, so we just
-        // surface the URL and let the caller decide what to do with it.
-        public static event Action<string>? LinkClicked;
-
         private static readonly Regex InlineRegex = new Regex(
             @"!\[(?<imgalt>[^\]]*)\]\((?<imgurl>[^)]+)\)" +
             @"|\[(?<linktext>[^\]]+)\]\((?<linkurl>[^)]+)\)" +
-            @"|\*\*(?<bold>[^*]+)\*\*" +
+            @"|\*\*(?<bold>\*[^*]+\*|[^*]+)\*\*" +    // ***x*** = bold around *x*
             @"|\*(?<italic1>[^*]+)\*" +
-            @"|_(?<italic2>[^_]+)_" +
+            @"|(?<!\w)_(?<italic2>[^_]+)_(?!\w)" +   // never inside a word: Door_Single_90.rfa
             @"|`(?<code>[^`]+)`",
             RegexOptions.Compiled);
 
@@ -221,13 +216,13 @@ namespace RVTuk.UI.Shared.Helpers
             isFirstBlock = false;
         }
 
-        // "| a | b |" -> ["a", "b"]. Tolerates missing leading/trailing pipes.
+        // "| a | b |" -> ["a", "b"]. Tolerates missing leading/trailing pipes; "\|" is a literal pipe.
         private static string[] SplitTableRow(string line)
         {
             var t = line;
             if (t.StartsWith("|", StringComparison.Ordinal)) t = t.Substring(1);
             if (t.EndsWith("|", StringComparison.Ordinal)) t = t.Substring(0, t.Length - 1);
-            return t.Split('|').Select(c => c.Trim()).ToArray();
+            return Regex.Split(t, @"(?<!\\)\|").Select(c => c.Trim().Replace("\\|", "|")).ToArray();
         }
 
         private static void AddTable(FlowDocument doc, string[] headerCells,
@@ -310,9 +305,10 @@ namespace RVTuk.UI.Shared.Helpers
                         Foreground = AccentBrush,
                         TextDecorations = null
                     };
+                    // Opened via RequestNavigate (RichTextBoxHelper.OpenLink): a Click handler
+                    // would not survive the XAML save, NavigateUri does.
                     if (Uri.TryCreate(url, UriKind.RelativeOrAbsolute, out var uri))
                         hyperlink.NavigateUri = uri;
-                    hyperlink.Click += (s, e) => LinkClicked?.Invoke(url);
                     result.Add(hyperlink);
                 }
                 else if (m.Groups["bold"].Success)
@@ -519,20 +515,10 @@ namespace RVTuk.UI.Shared.Helpers
                     if (italic) return "*" + text + "*";
                     return text;
                 }
-                case Bold b:
-                {
-                    var inner = InlinesToMarkdown(b.Inlines, imageProvider, suppressBold);
-                    return suppressBold ? inner : "**" + inner + "**";
-                }
-                case Italic it:
-                    return "*" + InlinesToMarkdown(it.Inlines, imageProvider, suppressBold) + "*";
-                case Underline u:
-                    // No Markdown equivalent for underline — drop the decoration, keep the text.
-                    return InlinesToMarkdown(u.Inlines, imageProvider, suppressBold);
                 case Hyperlink h:
                 {
                     var inner = InlinesToMarkdown(h.Inlines, imageProvider, suppressBold);
-                    var url = h.NavigateUri?.ToString() ?? string.Empty;
+                    var url = h.NavigateUri?.OriginalString ?? string.Empty; // ToString() adds a trailing "/"
                     return "[" + inner + "](" + url + ")";
                 }
                 case InlineUIContainer iuc:
@@ -549,6 +535,9 @@ namespace RVTuk.UI.Shared.Helpers
                 case LineBreak:
                     return "\n";
                 case Span s:
+                    // Bold/Italic/Underline included: the Runs inside inherit the span's weight and
+                    // style and emit the markers themselves; wrapping here too would double them.
+                    // Underline has no Markdown form and is dropped.
                     return InlinesToMarkdown(s.Inlines, imageProvider, suppressBold);
                 default:
                     return string.Empty;
@@ -567,7 +556,9 @@ namespace RVTuk.UI.Shared.Helpers
             string CellText(TableCell cell)
             {
                 var p = cell.Blocks.OfType<Paragraph>().FirstOrDefault();
-                var text = p == null ? string.Empty : InlinesToMarkdown(p.Inlines, imageProvider, false);
+                // Header cells are bold paragraphs; a Markdown header row is bold anyway.
+                var text = p == null ? string.Empty
+                    : InlinesToMarkdown(p.Inlines, imageProvider, suppressBold: p.FontWeight.ToOpenTypeWeight() >= 600);
                 return text.Replace("|", "\\|").Replace("\n", " ").Trim();
             }
 

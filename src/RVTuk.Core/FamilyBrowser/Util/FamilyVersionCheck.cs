@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Globalization;
 
 namespace RVTuk.Core.FamilyBrowser.Util
 {
@@ -22,17 +21,19 @@ namespace RVTuk.Core.FamilyBrowser.Util
             if (lib == null || proj == null) return false;
             if (string.Equals(lib, proj, StringComparison.OrdinalIgnoreCase)) return false;
 
-            // Numeric versions compare numerically ("10" > "9"), and only a library value
-            // AHEAD of the project counts as an update — a project holding a newer copy than
-            // the library must not be prompted to "update" backwards.
-            if (double.TryParse(lib, NumberStyles.Float, CultureInfo.InvariantCulture, out var libNum)
-                && double.TryParse(proj, NumberStyles.Float, CultureInfo.InvariantCulture, out var projNum))
-                return libNum > projNum;
+            // Numeric versions compare per dotted part ("10" > "9", "1.10" > "1.9"), and only a
+            // library value AHEAD of the project counts as an update — a project holding a newer
+            // copy than the library must not be prompted to "update" backwards.
+            if (Version.TryParse(Dotted(lib), out var libVer) && Version.TryParse(Dotted(proj), out var projVer))
+                return libVer > projVer;
 
             // Non-numeric schemes have no reliable ordering: any difference means the library
             // copy is not what the project holds.
             return true;
         }
+
+        // Version.TryParse needs at least two parts.
+        private static string Dotted(string v) => v.IndexOf('.') < 0 ? v + ".0" : v;
 
         /// <summary>Trims and maps empty to null, so "no value" and "missing parameter" behave alike.</summary>
         public static string? Normalize(string? version)

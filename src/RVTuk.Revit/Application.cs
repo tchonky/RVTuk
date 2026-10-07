@@ -304,7 +304,7 @@ namespace RVTuk.Revit
                 assemblyPath,
                 typeof(BrowseLibraryCommand).FullName!)
             {
-                ToolTip = "Open the family browser to search, load, sync, and deep-scan library families"
+                ToolTip = "Search the office family library and load or update families in the open project"
             };
             browseBtn.LargeImage = CreateBrowseLibraryIcon(32);
             browseBtn.Image      = CreateBrowseLibraryIcon(16);

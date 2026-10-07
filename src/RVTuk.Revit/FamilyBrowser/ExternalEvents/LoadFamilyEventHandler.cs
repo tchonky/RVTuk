@@ -32,6 +32,13 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
                     ErrorMessage = "No active document.";
                     return;
                 }
+                // Open in Family Editor leaves a family active while the browser stays clickable;
+                // loading into it would nest the family (and save into the library .rfa).
+                if (doc.IsFamilyDocument)
+                {
+                    ErrorMessage = FamilyDocumentActive;
+                    return;
+                }
 
                 using var tx = new Transaction(doc, "Load Family");
                 tx.Start();
@@ -52,6 +59,9 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
         }
 
         public string GetName() => "RVTuk.LoadFamilyEventHandler";
+
+        internal const string FamilyDocumentActive =
+            "The active window is a family in the Family Editor. Switch to the project window and try again.";
 
         private class OverwriteLoadOptions : IFamilyLoadOptions
         {

@@ -12,6 +12,9 @@ namespace RVTuk.UI.FamilyBrowser.Views
             InitializeComponent();
             ViewModel = new IndexProgressViewModel();
             DataContext = ViewModel;
+            // Closing the window (its X, or the browser that owns it closing) cancels the scan
+            // rather than leaving it running with no UI.
+            Closed += (_, __) => ViewModel.CancelCommand.Execute(null);
         }
     }
 }

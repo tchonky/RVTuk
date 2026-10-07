@@ -2,8 +2,6 @@
 using System.IO;
 using System.Text;
 using System.Threading;
-using Autodesk.Revit.Attributes;
-using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RVTuk.Core.Shared.Config;
 using RVTuk.Core.FamilyBrowser.Database;
@@ -13,23 +11,13 @@ using RVTuk.UI.FamilyBrowser.Views;
 
 namespace RVTuk.Revit.FamilyBrowser.Commands
 {
-    [Transaction(TransactionMode.Manual)]
-    public class IndexLibraryCommand : IExternalCommand
+    /// <summary>The library scan, started from the browser's embedded Settings panel.</summary>
+    internal static class IndexLibraryCommand
     {
-        public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
-        {
-            var config = ConfigManager.LoadConfig();
-            if (!ConfigManager.IsConfigured(config))
-            {
-                new SettingsWindow().ShowDialog();
-                config = ConfigManager.LoadConfig();
-                if (!ConfigManager.IsConfigured(config))
-                    return Result.Cancelled;
-            }
-            RunScan(commandData.Application, config, includeThumbnails: true, includeParameters: true);
-            return Result.Succeeded;
-        }
-
+        /// <param name="owner">
+        /// The browser: owning the progress window keeps it above the browser, and closing the
+        /// browser closes it — which cancels the scan.
+        /// </param>
         /// <param name="includeThumbnails">
         /// Re-extract thumbnails for families that are new/changed or simply missing one. A plain
         /// file read — never touches Revit's main thread.
@@ -41,11 +29,14 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
         /// <remarks>
         /// Both false is a filenames-only sync: add new families, prune deleted ones, no
         /// extraction. Non-destructive either way — curated data (instructions, tags, favourites,
-        /// custom thumbnails, gallery) is always preserved.
+        /// custom thumbnails) is always preserved.
         /// </remarks>
-        public static void RunScan(UIApplication uiApp, AppConfig config, bool includeThumbnails, bool includeParameters)
+        public static void RunScan(UIApplication uiApp, System.Windows.Window? owner, AppConfig config,
+            bool includeThumbnails, bool includeParameters, Action? onDone = null)
         {
-            var progressWindow = new IndexProgressWindow();
+            var progressWindow = new IndexProgressWindow { Owner = owner };
+            bool progressClosed = false;
+            progressWindow.Closed += (_, __) => progressClosed = true;
             var vm = progressWindow.ViewModel;
             var handler = Application.IndexingHandler;
             var externalEvent = Application.IndexingEvent;
@@ -60,6 +51,7 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
                 int thumbnailOnly = 0;
                 int skippedLong = 0;
                 int skippedIgnored = 0;
+                bool failed = false;
                 try
                 {
                     AppConfig.MigrateLegacyDbFolder(config.LibraryFolderPath);
@@ -91,16 +83,20 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
                         lock (Application.IndexingGate)
                         {
                             handler.PrepareAndWait(item, repo, extractor);
-                            externalEvent.Raise();
+                            BrowseLibraryCommand.Raise(externalEvent);
                             handler.WaitForCompletion();
+                            // A failed DB write (locked, disk full, share gone) fails every
+                            // family after it the same way — stop and say so.
+                            if (handler.Error != null) throw new InvalidOperationException(handler.Error);
                         }
                     }
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
+                    failed = true;
                     System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-                        TaskDialog.Show("RVTuk – Error", ex.Message));
+                        TaskDialog.Show("RVTuk – Scan failed", ex.Message));
                 }
                 finally
                 {
@@ -112,9 +108,12 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
 
                     WriteScanLog(config, finalUpdated, finalThumbnailOnly, finalSkippedLong, finalSkippedIgnored);
 
+                    bool cancelled = cancellationToken.IsCancellationRequested;
                     System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                     {
-                        progressWindow.Close();
+                        if (!progressClosed) progressWindow.Close();
+                        onDone?.Invoke();
+                        if (failed) return; // the error dialog already said what happened
 
                         var msg = new StringBuilder();
                         msg.Append($"Indexed: {finalUpdated} families.");
@@ -125,7 +124,7 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
                         if (finalSkippedIgnored > 0)
                             msg.Append($"\nSkipped (ignored folder): {finalSkippedIgnored}");
 
-                        TaskDialog.Show("RVTuk – Scan Complete", msg.ToString());
+                        TaskDialog.Show(cancelled ? "RVTuk – Scan Cancelled" : "RVTuk – Scan Complete", msg.ToString());
                     });
                 }
             });
