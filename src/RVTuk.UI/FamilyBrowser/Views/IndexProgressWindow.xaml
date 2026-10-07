@@ -1,10 +1,20 @@
 ﻿<Window x:Class="RVTuk.UI.FamilyBrowser.Views.IndexProgressWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="RVTuk – Indexing Library"
+        Title="RVTuk – Scanning Library"
         Width="440" SizeToContent="Height"
-        WindowStartupLocation="CenterScreen"
+        WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/RVTuk.UI;component/Shared/Themes/DarkTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Window.Background><StaticResource ResourceKey="Brush.Bg"/></Window.Background>
+    <Window.Foreground><StaticResource ResourceKey="Brush.Text"/></Window.Foreground>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>

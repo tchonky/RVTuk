@@ -89,21 +89,21 @@ namespace RVTuk.Core.FamilyBrowser.Extraction
                 cancellationToken.ThrowIfCancellationRequested();
 
                 string fullPath = rfaFiles[i];
-
-                // A family whose full path exceeds Windows MAX_PATH cannot be opened by Revit on
-                // .NET Framework; skip it so it neither aborts the scan nor triggers Revit's
-                // "path too long" dialog during metadata extraction.
-                if (fullPath.Length >= 260)
-                {
-                    SkippedLongPath++;
-                    progressCallback(Path.GetFileName(fullPath), i + 1, total);
-                    continue;
-                }
-
                 string relativePath = PathUtil.GetRelativePath(_libraryRoot, fullPath);
                 string fileName = Path.GetFileName(fullPath);
 
                 progressCallback(fileName, i + 1, total);
+
+                // A family whose full path exceeds Windows MAX_PATH cannot be opened by Revit on
+                // .NET Framework; skip it so it neither aborts the scan nor triggers Revit's
+                // "path too long" dialog during metadata extraction. Keep its row: a user with a
+                // shorter library root (e.g. a mapped drive) may have indexed and curated it.
+                if (fullPath.Length >= 260)
+                {
+                    scannedPaths.Add(relativePath);
+                    SkippedLongPath++;
+                    continue;
+                }
 
                 // Ignored-file pattern (e.g. Revit backups "Door.0001.rfa"): skip extraction but
                 // add to scannedPaths so a previously indexed row is preserved, mirroring the
@@ -115,9 +115,12 @@ namespace RVTuk.Core.FamilyBrowser.Extraction
                     continue;
                 }
 
-                scannedPaths.Add(relativePath);
-
+                // Deleted/renamed since the walk listed it: skip, so its row is pruned below.
+                // (FileInfo caches on Exists, so Length/LastWriteTimeUtc can't race it after.)
                 var info = new FileInfo(fullPath);
+                if (!info.Exists) continue;
+
+                scannedPaths.Add(relativePath);
                 long fileSize = info.Length;
                 DateTime modifiedDate = info.LastWriteTimeUtc;
 
@@ -142,7 +145,9 @@ namespace RVTuk.Core.FamilyBrowser.Extraction
                     // Filenames-only sync (also the "neither checkbox" case): keep the row's
                     // name/size/date current with no extraction. Real values written directly —
                     // there is nothing to extract afterward, so no sentinel/resumability dance.
-                    _repository.UpsertFamilyFileInfo(relativePath, fileName, fileSize, modifiedDate);
+                    // Unchanged rows are not rewritten (a write per family is an autocommit each).
+                    if (fileChanged)
+                        _repository.UpsertFamilyFileInfo(relativePath, fileName, fileSize, modifiedDate);
                     continue;
                 }
 

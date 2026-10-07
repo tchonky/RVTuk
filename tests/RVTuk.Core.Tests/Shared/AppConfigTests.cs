@@ -1,5 +1,9 @@
 ﻿using System;
 using System.IO;
+using System.Runtime.Serialization.Json;
+using System.Text;
+using System.Text.Json;
+using RVTuk.Core.RishuiZamin;
 using RVTuk.Core.Shared.Config;
 using Xunit;
 
@@ -201,9 +205,8 @@ public class AppConfigTests : IDisposable
     [Fact]
     public void DwgExportFolderLists_ArriveNull_AndStillWork()
     {
-        // net48's DataContractJsonSerializer builds AppConfig via GetUninitializedObject, so
-        // a list absent from an older config file arrives null rather than as the
-        // initializer's empty list. Nothing here may throw.
+        // A list written as null (or nulled by hand) arrives null — a missing key does not,
+        // see Config_ReadsAcrossBothSerializers. Nothing here may throw.
         var config = new AppConfig
         {
             DwgExportFolders = null!,
@@ -252,6 +255,46 @@ public class AppConfigTests : IDisposable
 
         Assert.Equal(@"D:\pdf\tower", config.DwgExportPdfFolder);
         Assert.Equal(@"D:\pdf\tower", config.GetDwgExportPdfFolder(@"C:\Projects\Other.rvt"));
+    }
+
+    // One config.json serves Revit 2024 (net48 ConfigManager: DataContractJsonSerializer) and
+    // Revit 2025 (net8: System.Text.Json), so each must read what the other wrote.
+    [Fact]
+    public void Config_ReadsAcrossBothSerializers()
+    {
+        var config = new AppConfig
+        {
+            LibraryFolderPath = @"\\server\ספריה\Lib 1",
+            AreaCalcMarkerForm = MarkerForm.FormB,
+            TopoPointSpacingCentimetres = 50,
+        };
+        config.SetDwgExportFolder(@"C:\Projects\Tower.rvt", @"D:\out\tower");
+
+        var readBy2024 = ReadWithDcjs(JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }));
+        using var ms = new MemoryStream();
+        new DataContractJsonSerializer(typeof(AppConfig)).WriteObject(ms, config);
+        var readBy2025 = JsonSerializer.Deserialize<AppConfig>(Encoding.UTF8.GetString(ms.ToArray()))!;
+
+        foreach (var loaded in new[] { readBy2024, readBy2025 })
+        {
+            Assert.Equal(@"\\server\ספריה\Lib 1", loaded.LibraryFolderPath);
+            Assert.Equal(MarkerForm.FormB, loaded.AreaCalcMarkerForm);
+            Assert.Equal(50, loaded.TopoPointSpacingCentimetres);
+            Assert.Equal(@"D:\out\tower", loaded.GetDwgExportFolder(@"C:\Projects\Tower.rvt"));
+        }
+
+        // A file written before a key existed. AppConfig is a plain class, so the serializer
+        // runs its constructor: initializers apply and the lists come back empty, not null.
+        var old = ReadWithDcjs("{}");
+        Assert.Empty(old.DwgExportFolders);
+        Assert.Equal(new AppConfig().IgnoredFilePatterns, old.IgnoredFilePatterns);
+        Assert.Equal(100, old.TopoPointSpacingCentimetres);
+    }
+
+    private static AppConfig ReadWithDcjs(string json)
+    {
+        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        return (AppConfig)new DataContractJsonSerializer(typeof(AppConfig)).ReadObject(ms)!;
     }
 
     [Fact]

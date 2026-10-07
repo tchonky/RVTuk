@@ -20,6 +20,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         private readonly DispatcherTimer _timer;
         private DateTime _startTime;
+        private DateTime _phaseStart; // the scan runs in two phases, each counting from 1
+        private bool _isCancelling;
         private CancellationTokenSource? _cts;
 
         public int ProgressValue { get => _progressValue; set => SetProperty(ref _progressValue, value); }
@@ -34,7 +36,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         public IndexProgressViewModel()
         {
-            CancelCommand = new RelayCommand(Cancel, () => IsRunning);
+            CancelCommand = new RelayCommand(Cancel, () => IsRunning && !_isCancelling);
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _timer.Tick += (_, _) =>
@@ -51,7 +53,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 RemainingTime = _currentCount >= _totalCount && _totalCount > 0 ? "00:00:00" : "--:--:--";
                 return;
             }
-            var elapsed = DateTime.UtcNow - _startTime;
+            var elapsed = DateTime.UtcNow - _phaseStart;
             var remaining = TimeSpan.FromTicks(elapsed.Ticks / _currentCount * (_totalCount - _currentCount));
             RemainingTime = remaining.ToString(@"hh\:mm\:ss");
         }
@@ -59,7 +61,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         public CancellationToken Start()
         {
             _cts = new CancellationTokenSource();
-            _startTime = DateTime.UtcNow;
+            _startTime = _phaseStart = DateTime.UtcNow;
             RemainingTime = "--:--:--";
             IsRunning = true;
             _timer.Start();
@@ -70,7 +72,9 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
-                CurrentFileName = fileName;
+                // A new phase restarts the count: time its ETA from now, not from the scan's start.
+                if (current < _currentCount || total != _totalCount) _phaseStart = DateTime.UtcNow;
+                if (!_isCancelling) CurrentFileName = fileName;
                 CurrentCount = current;
                 TotalCount = total;
                 ProgressValue = total > 0 ? (int)(100.0 * current / total) : 0;
@@ -84,11 +88,16 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             {
                 _timer.Stop();
                 IsRunning = false;
+                CommandManager.InvalidateRequerySuggested();
             });
         }
 
         private void Cancel()
         {
+            if (!IsRunning || _isCancelling) return;
+            _isCancelling = true;
+            // Cancellation lands between families; a heavy one can take a while to finish.
+            CurrentFileName = "Cancelling — finishing the current family…";
             _cts?.Cancel();
         }
     }

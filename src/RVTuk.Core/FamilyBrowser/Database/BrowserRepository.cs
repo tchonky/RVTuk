@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
+using System.Linq;
 using RVTuk.Core.FamilyBrowser.Models;
 using RVTuk.Core.FamilyBrowser.Util;
 using Microsoft.Data.Sqlite;
@@ -44,55 +45,41 @@ namespace RVTuk.Core.FamilyBrowser.Database
                 try
                 {
                     using var init = OpenWrite();
-                    EnsureSchema(init);
+                    IndexRepository.EnsureSchema(init);
                 }
                 catch { /* read-only share or locked */ }
             }
 
             _connection = OpenRead();
-            ExecuteOn(_connection, "PRAGMA busy_timeout=5000;");
-            ExecuteOn(_connection, "PRAGMA foreign_keys=ON;");
 
-            // Migrate only when the schema is actually behind. The everyday open of a current
-            // DB must never take a write handle on the shared file — one user's Revit holding
-            // write locks is what blocked the whole office (backlog "Read Only DB").
-            if (!SchemaIsCurrent(_connection))
+            // A throw below (locked/corrupt DB) never reaches Dispose: close here.
+            try
             {
-                try
+                ExecuteOn(_connection, "PRAGMA busy_timeout=5000;");
+                ExecuteOn(_connection, "PRAGMA foreign_keys=ON;");
+
+                // Migrate only when the schema is actually behind. The everyday open of a current
+                // DB must never take a write handle on the shared file — one user's Revit holding
+                // write locks is what blocked the whole office (backlog "Read Only DB").
+                if (!IndexRepository.SchemaIsCurrent(_connection))
                 {
-                    using var init = OpenWrite();
-                    EnsureSchema(init);
+                    try
+                    {
+                        using var init = OpenWrite();
+                        IndexRepository.EnsureSchema(init);
+                    }
+                    catch { /* read-only share or locked; reads degrade via _hasVersionColumns */ }
                 }
-                catch { /* read-only share or locked; reads degrade via _hasVersionColumns */ }
+
+                _hasVersionColumns = IndexRepository.ColumnExists(_connection, "Families", "Version")
+                                  && IndexRepository.ColumnExists(_connection, "Families", "ParametersExtracted");
+                _hasParameterInfo  = IndexRepository.ColumnExists(_connection, "Parameters", "IsInstance");
             }
-
-            _hasVersionColumns = ColumnExists(_connection, "Families", "Version")
-                              && ColumnExists(_connection, "Families", "ParametersExtracted");
-            _hasParameterInfo  = ColumnExists(_connection, "Parameters", "IsInstance");
-        }
-
-        // One probe per table (its newest migrated column), so a DB that predates any of the
-        // ALTERs — or lacks a table outright — reports "behind" and triggers the write-open
-        // migration above. Mirrors what EnsureSchema creates; keep the two in sync.
-        private static bool SchemaIsCurrent(SQLiteConnection c) =>
-            ColumnExists(c, "Families", "ParametersExtracted")
-            && ColumnExists(c, "Families", "Version")
-            && ColumnExists(c, "Families", "IsFavorite")
-            && ColumnExists(c, "Families", "Tags")
-            && ColumnExists(c, "Families", "RevitYear")
-            && ColumnExists(c, "Families", "InstructionsXaml")
-            && ColumnExists(c, "Parameters", "Formula")
-            && ColumnExists(c, "Parameters", "Guid")
-            && ColumnExists(c, "Parameters", "Kind")
-            && ColumnExists(c, "Parameters", "ParamGroup")
-            && ColumnExists(c, "Thumbnail", "PngData")
-            && ColumnExists(c, "CustomThumbnail", "OleSynced");
-
-        private static bool ColumnExists(SQLiteConnection c, string table, string column)
-        {
-            using var cmd = c.CreateCommand();
-            cmd.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name='{column}'";
-            return (long)(cmd.ExecuteScalar() ?? 0L) > 0;
+            catch
+            {
+                _connection.Dispose();
+                throw;
+            }
         }
 
         // Persistent read-only connection for all Get* methods. Pooling off: pooled
@@ -120,12 +107,20 @@ namespace RVTuk.Core.FamilyBrowser.Database
                 Mode = SqliteOpenMode.ReadWriteCreate,
                 Pooling = false
             }.ToString());
-            c.Open();
-            ExecuteOn(c, "PRAGMA busy_timeout=5000;");
-            ExecuteOn(c, "PRAGMA journal_mode=DELETE;");
-            ExecuteOn(c, "PRAGMA synchronous=NORMAL;");
-            ExecuteOn(c, "PRAGMA foreign_keys=ON;");
-            return c;
+            try
+            {
+                c.Open();
+                ExecuteOn(c, "PRAGMA busy_timeout=5000;");
+                ExecuteOn(c, "PRAGMA journal_mode=DELETE;");
+                ExecuteOn(c, "PRAGMA synchronous=NORMAL;");
+                ExecuteOn(c, "PRAGMA foreign_keys=ON;");
+                return c;
+            }
+            catch
+            {
+                c.Dispose(); // a locked DB must not leave the file open until GC
+                throw;
+            }
         }
 
         // Runs a write action against a fresh read-write connection, then closes it.
@@ -148,84 +143,13 @@ namespace RVTuk.Core.FamilyBrowser.Database
             cmd.ExecuteNonQuery();
         }
 
-        private void EnsureSchema(SQLiteConnection c)
-        {
-            ExecuteOn(c, @"
-                CREATE TABLE IF NOT EXISTS Families (
-                    Id INTEGER PRIMARY KEY,
-                    RelativePath TEXT UNIQUE NOT NULL,
-                    FileName TEXT NOT NULL,
-                    ModifiedDate DATETIME NOT NULL,
-                    FileSize INTEGER NOT NULL,
-                    Category TEXT,
-                    IndexedDate DATETIME DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS Parameters (
-                    Id INTEGER PRIMARY KEY,
-                    FamilyId INTEGER NOT NULL,
-                    ParameterName TEXT NOT NULL,
-                    DataType TEXT NOT NULL,
-                    IsInstance INTEGER NOT NULL,
-                    FOREIGN KEY (FamilyId) REFERENCES Families(Id) ON DELETE CASCADE
-                );
-                CREATE TABLE IF NOT EXISTS Thumbnail (
-                    Id INTEGER PRIMARY KEY,
-                    FamilyId INTEGER UNIQUE NOT NULL,
-                    PngData BLOB NOT NULL,
-                    FOREIGN KEY (FamilyId) REFERENCES Families(Id) ON DELETE CASCADE
-                );
-                CREATE TABLE IF NOT EXISTS CustomThumbnail (
-                    Id       INTEGER PRIMARY KEY,
-                    FamilyId INTEGER UNIQUE NOT NULL,
-                    PngData  BLOB    NOT NULL,
-                    OleSynced INTEGER NOT NULL DEFAULT 1,
-                    FOREIGN KEY (FamilyId) REFERENCES Families(Id) ON DELETE CASCADE
-                );");
-
-            using var checkCmd = c.CreateCommand();
-            checkCmd.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='InstructionsXaml'";
-            if ((long)(checkCmd.ExecuteScalar() ?? 0L) == 0)
-                ExecuteOn(c, "ALTER TABLE Families ADD COLUMN InstructionsXaml TEXT");
-
-            foreach (var col in new[] { "ParamGroup", "Kind", "Guid", "Formula" })
-            {
-                using var pc = c.CreateCommand();
-                pc.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('Parameters') WHERE name='{col}'";
-                if ((long)(pc.ExecuteScalar() ?? 0L) == 0)
-                    ExecuteOn(c, $"ALTER TABLE Parameters ADD COLUMN {col} TEXT");
-            }
-
-            // Add RevitYear column to Families if missing
-            using var yearCheck = c.CreateCommand();
-            yearCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='RevitYear'";
-            if ((long)(yearCheck.ExecuteScalar() ?? 0L) == 0)
-                ExecuteOn(c, "ALTER TABLE Families ADD COLUMN RevitYear INTEGER NOT NULL DEFAULT 0");
-
-            using var tagsCheck = c.CreateCommand();
-            tagsCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='Tags'";
-            if ((long)(tagsCheck.ExecuteScalar() ?? 0L) == 0)
-                ExecuteOn(c, "ALTER TABLE Families ADD COLUMN Tags TEXT");
-
-            using var favCheck = c.CreateCommand();
-            favCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='IsFavorite'";
-            if ((long)(favCheck.ExecuteScalar() ?? 0L) == 0)
-                ExecuteOn(c, "ALTER TABLE Families ADD COLUMN IsFavorite INTEGER NOT NULL DEFAULT 0");
-
-            using var versionCheck = c.CreateCommand();
-            versionCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='Version'";
-            if ((long)(versionCheck.ExecuteScalar() ?? 0L) == 0)
-                ExecuteOn(c, "ALTER TABLE Families ADD COLUMN Version TEXT");
-
-            // Owned by the deep scan (IndexRepository) but probed by _hasVersionColumns, so the
-            // browser must be able to create it on a DB no deep scan has touched yet.
-            using var paramsExtractedCheck = c.CreateCommand();
-            paramsExtractedCheck.CommandText = "SELECT COUNT(*) FROM pragma_table_info('Families') WHERE name='ParametersExtracted'";
-            if ((long)(paramsExtractedCheck.ExecuteScalar() ?? 0L) == 0)
-                ExecuteOn(c, "ALTER TABLE Families ADD COLUMN ParametersExtracted INTEGER NOT NULL DEFAULT 0");
-        }
-
         // Returns all families with thumbnail resolved (CustomThumbnail ?? OLE Thumbnail)
-        public List<FamilyBrowserItem> GetAllFamilies() => WithRead(() =>
+        public List<FamilyBrowserItem> GetAllFamilies() => ReadFamilies(null);
+
+        // One family, read exactly like GetAllFamilies; null when the id doesn't exist.
+        public FamilyBrowserItem? GetFamily(long familyId) => ReadFamilies(familyId).FirstOrDefault();
+
+        private List<FamilyBrowserItem> ReadFamilies(long? familyId) => WithRead(() =>
         {
             var result = new List<FamilyBrowserItem>();
             using var cmd = _connection.CreateCommand();
@@ -244,7 +168,9 @@ namespace RVTuk.Core.FamilyBrowser.Database
                 FROM Families f
                 LEFT JOIN Thumbnail t ON t.FamilyId = f.Id
                 LEFT JOIN CustomThumbnail ct ON ct.FamilyId = f.Id
+                {(familyId == null ? "" : "WHERE f.Id = @id")}
                 ORDER BY f.FileName";
+            if (familyId != null) AddParam(cmd, "@id", familyId.Value);
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
@@ -267,17 +193,6 @@ namespace RVTuk.Core.FamilyBrowser.Database
                 });
             }
             return result;
-        });
-
-        public List<string?> GetCategories() => WithRead(() =>
-        {
-            var cats = new List<string?> { null }; // null = "All"
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "SELECT DISTINCT Category FROM Families WHERE Category IS NOT NULL ORDER BY Category";
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
-                cats.Add(reader.GetString(0));
-            return cats;
         });
 
         public string? GetInstructionsXaml(long familyId) => WithRead(() =>
@@ -428,6 +343,7 @@ namespace RVTuk.Core.FamilyBrowser.Database
             cmd.Parameters.Add(p);
         }
 
-        public void Dispose() => _connection.Dispose();
+        // Under the gate: a pool-thread read may still be running on this connection.
+        public void Dispose() { lock (_readGate) _connection.Dispose(); }
     }
 }

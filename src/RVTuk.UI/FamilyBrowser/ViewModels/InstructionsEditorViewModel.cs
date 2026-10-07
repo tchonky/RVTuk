@@ -49,15 +49,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             private set => SetProperty(ref _thumbStatus, value);
         }
 
-        public bool OleSynced
-        {
-            get => _oleSynced;
-            private set { SetProperty(ref _oleSynced, value); OnPropertyChanged(nameof(CanUpdateOle)); }
-        }
-
         public bool CanUpdateOle => _customThumbPng != null && !_oleSynced;
 
-        public ICommand SaveCommand { get; }
         public ICommand CancelCommand { get; }
         public ICommand ReplaceThumbnailCommand { get; }
         public ICommand ResetThumbnailCommand { get; }
@@ -69,17 +62,15 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             long familyId,
             string familyFileName,
             string rfaFullPath,
-            string? currentXaml,
             BrowserRepository repo)
         {
             _repo = repo;
             _familyId = familyId;
             _rfaFullPath = rfaFullPath;
             FamilyDisplayName = FamilyFileName.WithoutRfaExtension(familyFileName);
-            _instructionsXaml = currentXaml;
+            _instructionsXaml = repo.GetInstructionsXaml(familyId);
             _tagsText = repo.GetTags(familyId) ?? string.Empty;
 
-            SaveCommand             = new RelayCommand(() => { }); // actual save goes through ExecuteSave
             CancelCommand           = new RelayCommand(() => CloseRequested?.Invoke());
             ReplaceThumbnailCommand = new RelayCommand(ReplaceThumbnail);
             ResetThumbnailCommand   = new RelayCommand(ResetThumbnail);
@@ -153,7 +144,9 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             {
                 _oleSynced = true;
                 ThumbStatus = "● Custom thumbnail";
-                _repo.SetOleSynced(_familyId, true);
+                // Store the thumbnail too, not just the flag: a newly picked one has no row yet,
+                // and Save skips thumbnails that are already in sync.
+                _repo.SaveCustomThumbnail(_familyId, _customThumbPng, true);
                 OnPropertyChanged(nameof(CanUpdateOle));
             }
             else
@@ -169,21 +162,21 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             _repo.SaveInstructionsXaml(_familyId, xamlFromEditor);
             _repo.SaveTags(_familyId, string.IsNullOrWhiteSpace(_tagsText) ? null : _tagsText.Trim());
 
-            if (_customThumbPng != null)
-            {
-                bool oleOk = ThumbnailWriter.WriteThumbnailToRfa(_rfaFullPath, _customThumbPng);
-                _repo.SaveCustomThumbnail(_familyId, _customThumbPng, oleOk);
-            }
-            else
+            if (_customThumbPng == null)
             {
                 // Reset was clicked — delete custom thumbnail from DB
                 _repo.DeleteCustomThumbnail(_familyId);
             }
-
-            CloseRequested?.Invoke();
+            else if (!_oleSynced)
+            {
+                // Only when the .rfa lacks this thumbnail: rewriting the shared library file bumps
+                // its date (Revit re-extraction, cloud re-upload) for nothing.
+                bool oleOk = ThumbnailWriter.WriteThumbnailToRfa(_rfaFullPath, _customThumbPng);
+                _repo.SaveCustomThumbnail(_familyId, _customThumbPng, oleOk);
+            }
         }
 
-        private static byte[] ConvertToPng(byte[] rawBytes)
+        internal static byte[] ConvertToPng(byte[] rawBytes)
         {
             using var ms = new MemoryStream(rawBytes);
             using var bmp = System.Drawing.Image.FromStream(ms);

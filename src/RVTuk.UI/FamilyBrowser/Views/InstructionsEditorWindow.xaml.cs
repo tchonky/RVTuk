@@ -1,6 +1,7 @@
 ﻿// RVTuk.UI/Views/InstructionsEditorWindow.xaml.cs
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -10,6 +11,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
 using RVTuk.Core.FamilyBrowser.Database;
 using RVTuk.UI.Shared.Controls;
 using RVTuk.UI.Shared.Helpers;
@@ -30,6 +32,11 @@ namespace RVTuk.UI.FamilyBrowser.Views
 
         // ── Preview / Raw state ──────────────────────────────────────────────────
         private bool _isRawMode;
+        private string? _rawSnapshot; // Markdown as generated on entering Raw
+
+        // ── Unsaved-changes tracking (see OnClosing) ─────────────────────────────
+        private string? _baseline; // Snapshot() once loaded
+        private bool _thumbChanged, _saved;
 
         // Image targeted by the right-click context menu.
         private Image? _menuTargetImage;
@@ -44,18 +51,22 @@ namespace RVTuk.UI.FamilyBrowser.Views
 
         public InstructionsEditorWindow(
             FamilyBrowserItemViewModel item,
-            string? currentXaml,
             string rfaFullPath,
             BrowserRepository repo)
         {
             InitializeComponent();
 
             ViewModel = new InstructionsEditorViewModel(
-                item.Id, item.FileName, rfaFullPath, currentXaml, repo);
+                item.Id, item.FileName, rfaFullPath, repo);
 
             ViewModel.CloseRequested += () => Dispatcher.Invoke(Close);
+            ViewModel.PropertyChanged += (s, e) =>
+                _thumbChanged |= e.PropertyName == nameof(InstructionsEditorViewModel.ThumbnailSource);
 
             DataContext = ViewModel;
+
+            // Ctrl+Click on a link in the (editable) editor raises RequestNavigate.
+            AddHandler(Hyperlink.RequestNavigateEvent, new RequestNavigateEventHandler(RichTextBoxHelper.OpenLink));
 
             // Fix 3: handle Ctrl+V paste into the editor body
             Editor.PreviewKeyDown += Editor_PreviewKeyDown;
@@ -76,9 +87,31 @@ namespace RVTuk.UI.FamilyBrowser.Views
             Editor.PreviewDragOver += Editor_PreviewDragOver;
             Editor.PreviewDrop     += Editor_PreviewDrop;
 
-            // Wire up any images that arrived from stored XAML.
-            Loaded += (s, e) => { WireExistingImages(); UpdateToggleButtons(); };
+            // Wire up any images that arrived from stored XAML, then remember the loaded state.
+            // Requery: the toolbar's commands asked CanExecute before CommandTarget had resolved.
+            Loaded += (s, e) =>
+            {
+                WireExistingImages(); UpdateToggleButtons(); _baseline = Snapshot();
+                CommandManager.InvalidateRequerySuggested();
+            };
         }
+
+        // Any close but a successful Save (Cancel, Esc, title-bar X, the browser switching family)
+        // asks before throwing changes away.
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            base.OnClosing(e);
+            if (!e.Cancel && !_saved && IsDirty() &&
+                MessageBox.Show(this, $"Discard your unsaved changes to '{ViewModel.FamilyDisplayName}'?",
+                    "RVTuk", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                e.Cancel = true;
+        }
+
+        private bool IsDirty() =>
+            _thumbChanged || (_isRawMode && RawEditor.Text != _rawSnapshot) || Snapshot() != _baseline;
+
+        // Document (as it would be saved) + tags.
+        private string Snapshot() => RichTextBoxHelper.SerializeDocument(Editor) + "\0" + ViewModel.TagsText;
 
         private void ThumbMenuButton_Click(object sender, RoutedEventArgs e)
         {
@@ -154,11 +187,13 @@ namespace RVTuk.UI.FamilyBrowser.Views
             return false;
         }
 
-        // The RichTextBox's internal editor vetoes drops in its own DragOver; handling the
+        // The RichTextBox's internal editor vetoes image drops in its own DragOver; handling the
         // tunnelling Preview events (and marking them handled) is what makes image drops work.
+        // Everything else (moving text, text from other apps) is left to the editor.
         private void Editor_PreviewDragOver(object sender, DragEventArgs e)
         {
-            e.Effects = HasImagePayload(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+            if (!HasImagePayload(e.Data)) return;
+            e.Effects = DragDropEffects.Copy;
             e.Handled = true;
         }
 
@@ -195,7 +230,7 @@ namespace RVTuk.UI.FamilyBrowser.Views
             try
             {
                 var bytes = File.ReadAllBytes(path);
-                ViewModel.SetThumbnailFromBytes(ConvertToPng(bytes));
+                ViewModel.SetThumbnailFromBytes(InstructionsEditorViewModel.ConvertToPng(bytes));
             }
             catch (Exception ex) { MessageBox.Show($"Could not load image: {ex.Message}"); }
         }
@@ -214,8 +249,8 @@ namespace RVTuk.UI.FamilyBrowser.Views
             {
                 // Raw mode shows/edits Markdown, not the serialized XAML — the document is still
                 // SAVED as XAML (see Save_Click); this only changes the human-editable view.
-                RawEditor.Text            = MarkdownConverter.ToMarkdown(
-                                                Editor.Document, RichTextBoxHelper.GetImageData) ?? string.Empty;
+                RawEditor.Text            = _rawSnapshot = MarkdownConverter.ToMarkdown(
+                                                Editor.Document, RichTextBoxHelper.GetImageData);
                 RawEditor.Visibility      = Visibility.Visible;
                 Editor.Visibility         = Visibility.Collapsed;
                 FormattingButtons.IsEnabled = false;
@@ -237,6 +272,9 @@ namespace RVTuk.UI.FamilyBrowser.Views
         // RichTextBoxHelper.ImageData so the images persist on Save, then WireExistingImages wraps them.
         private void SyncRawToEditor()
         {
+            // Raw text untouched: keep the document. Markdown can't carry image widths, RTL
+            // paragraphs, underline or line breaks, so a rebuild would lose them.
+            if (RawEditor.Text == _rawSnapshot) return;
             Editor.Document = MarkdownConverter.Build(RawEditor.Text);
             HydrateImageDataFromTags();
             WireExistingImages();
@@ -264,12 +302,13 @@ namespace RVTuk.UI.FamilyBrowser.Views
             RawBtn.Background     = _isRawMode ? AccentBrush  : ControlBrush;
         }
 
-        // Insert an inline image wrapped in a hover Border and tagged with its PNG bytes (base64)
-        // so it survives the XAML save/load round-trip.
-        private void InsertImageIntoEditor(byte[] pngData)
+        // Insert an inline image (any format; stored as PNG) wrapped in a hover Border and tagged
+        // with its PNG bytes (base64) so it survives the XAML save/load round-trip.
+        private void InsertImageIntoEditor(byte[] imageData)
         {
             try
             {
+                var pngData = InstructionsEditorViewModel.ConvertToPng(imageData);
                 var bmp = DecodePng(pngData);
 
                 var image = new Image
@@ -296,28 +335,15 @@ namespace RVTuk.UI.FamilyBrowser.Views
 
             var xaml = RichTextBoxHelper.SerializeDocument(Editor);
             ViewModel.ExecuteSave(xaml);
+            _saved = true;
+            Close();
         }
 
-        // Formatting toolbar handlers
-        private void Bold_Click(object sender, RoutedEventArgs e) =>
-            Editor.Selection.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Bold);
-        private void Italic_Click(object sender, RoutedEventArgs e) =>
-            Editor.Selection.ApplyPropertyValue(TextElement.FontStyleProperty, FontStyles.Italic);
-        private void Underline_Click(object sender, RoutedEventArgs e) =>
-            Editor.Selection.ApplyPropertyValue(Inline.TextDecorationsProperty, TextDecorations.Underline);
+        // Formatting toolbar handlers (B/I/U and List use the native EditingCommands in XAML)
         private void H1_Click(object sender, RoutedEventArgs e) =>
             Editor.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, 22.0);
         private void H2_Click(object sender, RoutedEventArgs e) =>
             Editor.Selection.ApplyPropertyValue(TextElement.FontSizeProperty, 16.0);
-        private void List_Click(object sender, RoutedEventArgs e)
-        {
-            var para = Editor.CaretPosition.Paragraph;
-            if (para != null)
-            {
-                var list = new List(new ListItem(para));
-                Editor.Document.Blocks.Add(list);
-            }
-        }
         private void AddImage_Click(object sender, RoutedEventArgs e)
         {
             var dlg = new Microsoft.Win32.OpenFileDialog
@@ -479,7 +505,7 @@ namespace RVTuk.UI.FamilyBrowser.Views
             if (dlg.ShowDialog() != true) return;
             try
             {
-                var png = ConvertToPng(File.ReadAllBytes(dlg.FileName));
+                var png = InstructionsEditorViewModel.ConvertToPng(File.ReadAllBytes(dlg.FileName));
                 _menuTargetImage.Source = DecodePng(png);
                 RichTextBoxHelper.SetImageData(_menuTargetImage, Convert.ToBase64String(png));
             }
@@ -530,9 +556,17 @@ namespace RVTuk.UI.FamilyBrowser.Views
                 double delta = e.GetPosition(Editor).X - _resizeStart.X;
                 img.Width = Math.Max(40, Math.Min(2000, _resizeStartWidth + delta));
                 e.Handled = true;
-                return;
             }
-            img.Cursor = InGripZone(img, e.GetPosition(img)) ? Cursors.SizeNWSE : null;
+        }
+
+        // Resize cursor over the grip and while dragging. QueryCursor, not the Cursor property:
+        // a property value is saved with the document, so a mere hover would count as an edit.
+        private void Image_QueryCursor(object sender, QueryCursorEventArgs e)
+        {
+            var img = (Image)sender;
+            if (!ReferenceEquals(_resizeImage, img) && !InGripZone(img, e.GetPosition(img))) return;
+            e.Cursor  = Cursors.SizeNWSE;
+            e.Handled = true;
         }
 
         private void Image_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -564,6 +598,9 @@ namespace RVTuk.UI.FamilyBrowser.Views
         private void WireImage(Image img)
         {
             img.ToolTip = ImageTip;
+            img.ClearValue(CursorProperty); // older saves stored the hover cursor
+            img.QueryCursor         -= Image_QueryCursor;
+            img.QueryCursor         += Image_QueryCursor;
             img.MouseMove           -= Image_MouseMove;
             img.MouseMove           += Image_MouseMove;
             img.MouseLeftButtonDown -= Image_MouseLeftButtonDown;
@@ -633,15 +670,6 @@ namespace RVTuk.UI.FamilyBrowser.Views
             bmp.EndInit();
             bmp.Freeze();
             return bmp;
-        }
-
-        private static byte[] ConvertToPng(byte[] rawBytes)
-        {
-            using var ms = new MemoryStream(rawBytes);
-            using var bmp = System.Drawing.Image.FromStream(ms);
-            using var pngMs = new MemoryStream();
-            bmp.Save(pngMs, System.Drawing.Imaging.ImageFormat.Png);
-            return pngMs.ToArray();
         }
 
         private static byte[] BitmapSourceToPng(BitmapSource bmpSrc)

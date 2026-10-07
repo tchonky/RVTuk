@@ -4,12 +4,24 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
 [`../../BACKLOG.md`](../../BACKLOG.md).
 
 ## 🐞 Bugs
-  - [ ] open family button stop working
-  - [ ] logic 
 
+- [ ] **Old-format instructions crash the editor.** Found 2026-10-04: instructions stored with
+  a bare `Image` in an `InlineUIContainer` (the dev-era format, before images were wrapped in a
+  `Border`) make `WireExistingImages` throw from the editor's `Loaded` handler. Current saves
+  always wrap images, so only instructions written during development are affected. The office
+  DB had none on 2026-10-04 (3 families with instructions, 0 bare images), so this is low
+  priority; make `WireExistingImages` tolerate them if one ever turns up.
 
 ## ✨ Improvements
 
+- [ ] **Decide: keep or delete "write this thumbnail into the .rfa".** Found in the
+  2026-10-04 review: `ThumbnailWriter` writes the custom thumbnail into the legacy
+  `\x05SummaryInformation` stream, but the tool's own reader prefers `RevitPreview4.0`, stock
+  2024 families have no SummaryInformation stream, and the next scan re-extracts Revit's
+  preview anyway — so "custom thumbnail synced to the .rfa" claims more than it does. The
+  browser already shows the DB's custom thumbnail. Either delete `ThumbnailWriter` and the
+  `UpdateOle`/`OleSynced` plumbing (thumbnails become DB-only), or write the stream Revit and
+  Explorer actually read. (The same review stopped every Save from rewriting the .rfa.)
 - [ ] **"Database is locked" UX.** While another user's scan holds the DB, opening the browser
   (or saving an edit) past the 5 s `busy_timeout` surfaces a raw SqliteException dialog. Show a
   friendly "library is being scanned — try again shortly" message instead, and audit the edit
@@ -33,10 +45,12 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
   can't be migrated (user lacks write permission) still crashes `GetAllFamilies`. Rare (one
   admin scan anywhere fixes the schema), but the browser could degrade those columns too.
 - [ ] **Scan staleness compare mismatch.** `FamilyIndexer` treats a file as unchanged within a
-  1-second `ModifiedDate` tolerance, but `UpsertFamilyFileInfo`'s SQL CASE uses exact string
-  equality — a sub-second timestamp drift (SMB/filesystem granularity) can needlessly clear
-  `Version`/`ParametersExtracted` for an unchanged family. Self-heals on the next parameter
-  scan; align the two comparisons.
+  1-second `ModifiedDate` tolerance, but the SQL CASE in `UpsertFamilyFileInfo` and
+  `UpdateThumbnailOnly` uses exact string equality — a sub-second timestamp drift
+  (SMB/filesystem granularity) can needlessly clear `Version`/`ParametersExtracted` for an
+  unchanged family. Self-heals on the next parameter scan; align the two comparisons.
+  *(Narrowed 2026-10-04: an unchanged family no longer gets a write at all, so only the
+  thumbnail-only path — an unchanged file missing its thumbnail — can still hit it.)*
 - [ ] **Deep-scan re-entrancy.** The embedded Settings panel exposes one **Scan** button; a
   user can still click it twice in a row while a scan is in progress. Both runs would share
   `IndexingHandler` / `IndexingEvent` and race. Disable the Scan button (or guard
@@ -58,6 +72,23 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
 
 ## ✅ Done
 
+- [x] **"Open family button stop working"** (2026-10-04). Two causes. (1) Open in Family
+  Editor was the only action whose Revit-side error was thrown away: a file moved or renamed
+  since the last Scan, a family already open, a locked or newer-version file all looked like a
+  dead button. It now reports the reason. (2) Every action ignored `ExternalEvent.Raise()`'s
+  result and waited forever; one refused raise wedged the load lock, so Load, Open and Save to
+  Library all went dead for the session. A refused raise now fails with a message. Also: after
+  Open in Family Editor the family stays the active document, and Load used to nest the
+  library family into it — it now asks you to switch to the project window.
+- [x] **"logic" bug — the detail pane kept vanishing** (2026-10-04). Every list rebuild
+  (each search keystroke, toggle, category tick, tag click, and starring a family) cleared the
+  selection, so the detail pane disappeared. The selection is now kept unless the family is
+  filtered out. Same review round (55 verified findings, all fixed): Settings edits no longer
+  revert other tools' saved settings, ignore-list edits refresh the list, a failed Sync keeps
+  the list, Update All's count stays right, the Load button reads "Update", the category popup
+  scrolls, the Raw view no longer rewrites `Door_Single_90.rfa`, the editor asks before
+  discarding unsaved changes, and the scan no longer deletes rows of over-long paths or aborts
+  when a file vanishes mid-scan. See design.md *Deviations* (2026-10-04).
 - [x] **Rescan said "Could not rescan this family" with no reason** (2026-07-16). Root cause:
   `IndexRepository` opens the DB read-write, but SQLite silently degrades to a read-only open
   when the file denies writes (Desktop Connector had flagged `RVTuk.db` ReadOnly), and the
@@ -91,7 +122,8 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
 - [x] Fix: editor crash on open — `ContextMenu` parented in a Grid (`958f614`).
 - [x] Gallery: UNC-safe image `Uri` + confirm before deleting an image (`fd60009`).
 - [x] **Ignore subfolders** in deep scan + sync (configurable in Settings) (`534a6f5`).
-- [x] Fix: ignored-folder list **now updates** the browser view when changed (`bd5ec13`).
+- [x] Fix: ignored-folder list **now updates** the browser view when changed (`bd5ec13`;
+  lost again in `e3bcb6e` when the setting moved to `ConfigViewModel`, restored 2026-10-04).
 - [x] Filter by **Revit version** — RevitYear column + version dropdown (`e08ce65`)
   *(filter later removed in the 2026-07-07 redesign)*.
 - [x] Gallery: **reorder images** with ◀/▶ buttons in the editor (`bb87e65`).

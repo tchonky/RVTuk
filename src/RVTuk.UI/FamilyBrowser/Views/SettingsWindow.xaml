@@ -6,6 +6,16 @@
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize">
 
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/RVTuk.UI;component/Shared/Themes/DarkTheme.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Window.Background><StaticResource ResourceKey="Brush.Bg"/></Window.Background>
+    <Window.Foreground><StaticResource ResourceKey="Brush.Text"/></Window.Foreground>
+
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -28,7 +38,7 @@
         </Grid>
 
         <!-- Derived DB path hint -->
-        <TextBlock Grid.Row="2" Margin="0,0,0,12" Foreground="#888" FontSize="11"
+        <TextBlock Grid.Row="2" Margin="0,0,0,12" Foreground="{StaticResource Brush.TextMuted}" FontSize="11"
                    TextTrimming="CharacterEllipsis">
             <TextBlock.Style>
                 <Style TargetType="TextBlock">
@@ -51,7 +61,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="{Binding ValidationMessage}"
-                       Foreground="Red" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                       Foreground="{StaticResource Brush.Warning}" VerticalAlignment="Center" TextWrapping="Wrap"/>
             <Button Grid.Column="1" Content="Save" Width="70" Margin="6,0,0,0"
                     Command="{Binding SaveCommand}" IsDefault="True"/>
             <Button Grid.Column="2" Content="Cancel" Width="70" Margin="6,0,0,0"

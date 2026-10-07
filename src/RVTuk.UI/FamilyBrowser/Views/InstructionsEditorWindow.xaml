@@ -88,7 +88,7 @@
                             <MenuItem Header="&#x1F5BC; Replace&#x2026;"                   Command="{Binding ReplaceThumbnailCommand}"/>
                             <MenuItem Header="&#x21BA; Reset to system original"    Command="{Binding ResetThumbnailCommand}"/>
                             <Separator/>
-                            <MenuItem Header="&#x2191; Update .rfa with DB image"
+                            <MenuItem Header="&#x2191; Write this thumbnail into the .rfa file"
                                       Command="{Binding UpdateOleCommand}"
                                       IsEnabled="{Binding CanUpdateOle}"/>
                         </ContextMenu>
@@ -121,14 +121,14 @@
 
                 <!-- Formatting buttons; disabled as a group while in Raw mode -->
                 <WrapPanel x:Name="FormattingButtons" VerticalAlignment="Center">
-                    <Button Content="B" FontWeight="Bold"  Click="Bold_Click"   Width="26" Padding="2,3" Margin="0,0,2,0"/>
-                    <Button Content="I" FontStyle="Italic" Click="Italic_Click" Width="26" Padding="2,3" Margin="0,0,2,0"/>
-                    <Button Click="Underline_Click" Width="26" Padding="2,3" Margin="0,0,6,0">
+                    <Button Content="B" FontWeight="Bold"  Command="EditingCommands.ToggleBold"   CommandTarget="{Binding ElementName=Editor}" Width="26" Padding="2,3" Margin="0,0,2,0"/>
+                    <Button Content="I" FontStyle="Italic" Command="EditingCommands.ToggleItalic" CommandTarget="{Binding ElementName=Editor}" Width="26" Padding="2,3" Margin="0,0,2,0"/>
+                    <Button Command="EditingCommands.ToggleUnderline" CommandTarget="{Binding ElementName=Editor}" Width="26" Padding="2,3" Margin="0,0,6,0">
                         <TextBlock Text="U" TextDecorations="Underline"/>
                     </Button>
                     <Button Content="H1" Click="H1_Click" Width="34" Padding="2,3" Margin="0,0,2,0"/>
                     <Button Content="H2" Click="H2_Click" Width="34" Padding="2,3" Margin="0,0,6,0"/>
-                    <Button Content="&#x2261; List" Click="List_Click" Margin="0,0,6,0"/>
+                    <Button Content="&#x2261; List" Command="EditingCommands.ToggleBullets" CommandTarget="{Binding ElementName=Editor}" Margin="0,0,6,0"/>
                     <Button Content="&#x1F5BC; Add Image" Click="AddImage_Click" Margin="0,0,2,0"/>
                     <Button x:Name="TableButton" Content="&#x229E; Table" Click="TableButton_Click"/>
                 </WrapPanel>
@@ -155,7 +155,7 @@
         <!-- FOOTER -->
         <Grid Grid.Row="3" Margin="8,4,8,8">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="Cancel" Command="{Binding CancelCommand}" Width="70" Margin="0,0,8,0"/>
+                <Button Content="Cancel" Command="{Binding CancelCommand}" IsCancel="True" Width="70" Margin="0,0,8,0"/>
                 <Button Content="Save"   Click="Save_Click"                Width="70"/>
             </StackPanel>
         </Grid>

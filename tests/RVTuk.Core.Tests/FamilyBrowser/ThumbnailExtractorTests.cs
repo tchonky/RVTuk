@@ -1,4 +1,8 @@
-﻿using System.Linq;
+﻿using System;
+using System.IO;
+using System.Linq;
+using System.Text;
+using OpenMcdf;
 using RVTuk.Core.FamilyBrowser.Extraction;
 using Xunit;
 
@@ -72,6 +76,57 @@ namespace RVTuk.Core.Tests.FamilyBrowser
         {
             Assert.Null(ThumbnailExtractor.ExtractEmbeddedPng(null));
             Assert.Null(ThumbnailExtractor.ExtractEmbeddedPng(new byte[0]));
+        }
+
+        // A real compound file laid out like a Revit 2023-2026 family: "RevitPreview4.0" holds the
+        // PNG between a binary prefix and postfix, and "BasicFileInfo" holds UTF-16LE lines starting
+        // at an odd byte offset. Returns the embedded PNG.
+        internal static byte[] WriteRfa(string path, bool basicFileInfo = true)
+        {
+            var png = MakePng(new byte[] { 1, 2, 3 });
+            using var root = RootStorage.Create(path);
+            using (var preview = root.CreateStream("RevitPreview4.0"))
+            {
+                var bytes = new byte[] { 0x62, 0x19, 0x22, 0x05 }.Concat(png).Concat(new byte[] { 0x80, 0, 0, 0 }).ToArray();
+                preview.Write(bytes, 0, bytes.Length);
+            }
+            if (basicFileInfo)
+            {
+                using var info = root.CreateStream("BasicFileInfo");
+                var bytes = new byte[] { 0x0E }.Concat(Encoding.Unicode.GetBytes(
+                    "Central Model Path: \r\nFormat: 2024\r\nBuild: 20230121_1515(x64)\r\n")).ToArray();
+                info.Write(bytes, 0, bytes.Length);
+            }
+            return png;
+        }
+
+        [Fact]
+        public void ExtractFromRfa_ReadsPreviewPng_AndYearFromFormatLine()
+        {
+            var path = Path.Combine(Path.GetTempPath(), "rvtuk_rfa_" + Guid.NewGuid().ToString("N") + ".rfa");
+            try
+            {
+                var png = WriteRfa(path);
+                var (thumb, year) = ThumbnailExtractor.ExtractFromRfa(path);
+                Assert.Equal(png, thumb);
+                Assert.Equal(2024, year);
+
+                WriteRfa(path, basicFileInfo: false);
+                Assert.Equal(0, ThumbnailExtractor.ExtractFromRfa(path).RevitYear);
+            }
+            finally { File.Delete(path); }
+        }
+
+        // A file that isn't a compound file (0-byte, truncated, mid-save) must not stay open:
+        // a lingering handle blocks Revit from saving the family.
+        [Fact]
+        public void ExtractFromRfa_NonCompoundFile_ReturnsNothing_AndReleasesTheFile()
+        {
+            var path = Path.Combine(Path.GetTempPath(), "rvtuk_rfa_" + Guid.NewGuid().ToString("N") + ".rfa");
+            File.WriteAllText(path, "not a compound file");
+
+            Assert.Equal((null, 0), ThumbnailExtractor.ExtractFromRfa(path));
+            File.Delete(path); // throws IOException on Windows while a handle is open
         }
     }
 }

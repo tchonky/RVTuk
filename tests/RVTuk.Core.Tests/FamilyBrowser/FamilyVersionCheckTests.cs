@@ -21,6 +21,8 @@ public class FamilyVersionCheckTests
     [InlineData("10", "9", true)]   // would be false under string comparison
     [InlineData("2", "3", false)]   // project ahead of library is not an update
     [InlineData("2.1", "2.0", true)]
+    [InlineData("1.10", "1.9", true)]  // dotted parts compare as integers, not as decimals
+    [InlineData("1.9", "1.10", false)]
     // Non-numeric values: any difference means the library copy differs → update.
     [InlineData("B", "A", true)]
     [InlineData("A", "B", true)]

@@ -20,7 +20,6 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         public string DisplayName => FamilyFileName.WithoutRfaExtension(Model.FileName);
         public string? Category => Model.Category;
         public string RelativePath => Model.RelativePath;
-        public int RevitYear => Model.RevitYear;
         public string? Tags => Model.Tags;
 
         // Value of the _Version shared parameter — from the library index for indexed rows,
@@ -74,18 +73,54 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         // (load, favourite, edit info, rescan, open in editor) must be disabled for it.
         public bool IsModelOnly => _versionStatus == VersionStatus.ModelOnly;
 
+        // Decoded on first bind, not when the list loads: the row list is virtualised, so most
+        // rows are never drawn. A bad PNG decodes to null once rather than on every bind.
         private BitmapSource? _thumbnail;
+        private bool _thumbnailDecoded;
         public BitmapSource? Thumbnail
         {
-            get => _thumbnail;
-            private set => SetProperty(ref _thumbnail, value);
+            get
+            {
+                if (!_thumbnailDecoded)
+                {
+                    _thumbnailDecoded = true;
+                    _thumbnail = Model.ThumbnailPng != null ? LoadBitmap(Model.ThumbnailPng) : null;
+                }
+                return _thumbnail;
+            }
         }
+
+        // The copy loaded in the project, as of the last Sync — kept so a Rescan can re-judge.
+        private ProjectFamilyInfo? _inProject;
 
         public FamilyBrowserItemViewModel(FamilyBrowserItem model)
         {
             Model = model;
             _versionStatus = model.VersionStatus;
-            _thumbnail = model.ThumbnailPng != null ? LoadBitmap(model.ThumbnailPng) : null;
+        }
+
+        /// <summary>Judges this library row against the copy loaded in the project (Sync).</summary>
+        public void CompareWithProject(ProjectFamilyInfo loaded)
+        {
+            _inProject = loaded;
+            VersionStatus = FamilyVersionCheck.IsUpdateAvailable(Model.Version, loaded.Version)
+                ? VersionStatus.UpdateAvailable : VersionStatus.UpToDate;
+            // Red flag if *either* copy still carries _Version at instance level — the library
+            // flag comes from the index (deep scan), the loaded copy's from Sync's fallback.
+            if (loaded.VersionIsInstance) VersionIsInstance = true;
+        }
+
+        /// <summary>Takes the re-read DB row after a single-family Rescan.</summary>
+        public void Refresh(FamilyBrowserItem fresh)
+        {
+            Model.Category = fresh.Category;
+            Model.Version = fresh.Version;
+            VersionIsInstance = fresh.VersionIsInstance;
+            OnPropertyChanged(nameof(Category));
+            OnPropertyChanged(nameof(Version));
+            OnPropertyChanged(nameof(HasVersion));
+            UpdateThumbnail(fresh.ThumbnailPng);
+            if (_inProject != null) CompareWithProject(_inProject);
         }
 
         /// <summary>
@@ -95,7 +130,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         public void UpdateThumbnail(byte[]? pngData)
         {
             Model.ThumbnailPng = pngData;
-            Thumbnail = pngData != null ? LoadBitmap(pngData) : null;
+            _thumbnailDecoded = false;
+            OnPropertyChanged(nameof(Thumbnail));
         }
 
         private static BitmapSource? LoadBitmap(byte[] pngData)

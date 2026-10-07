@@ -70,6 +70,52 @@ public class BrowserRepositoryVersionTests : IDisposable
         Assert.Equal(expected, item.VersionIsInstance);
     }
 
+    // A custom thumbnail wins over the OLE one until it is deleted (design §2).
+    [Fact]
+    public void GetAllFamilies_ResolvesCustomThumbnailOverOle()
+    {
+        long id;
+        using (var index = new IndexRepository(_dbPath))
+        {
+            id = index.InsertFamily("Doors/B.rfa", "B.rfa");
+            index.UpdateFamilyMetadata(id, "Doors", new List<ParameterModel>(), thumbnailPng: new byte[] { 1 },
+                revitYear: 0, modifiedDate: _modified, fileSize: 10);
+        }
+        using var repo = new BrowserRepository(_dbPath);
+
+        repo.SaveCustomThumbnail(id, new byte[] { 2 }, oleSynced: true);
+        repo.SaveCustomThumbnail(id, new byte[] { 3 }, oleSynced: false); // upsert, not a second row
+        var item = Assert.Single(repo.GetAllFamilies(), i => i.Id == id);
+        Assert.Equal(new byte[] { 3 }, item.ThumbnailPng);
+        Assert.True(item.HasCustomThumbnail);
+        Assert.False(item.OleSynced);
+
+        repo.DeleteCustomThumbnail(id);
+        item = Assert.Single(repo.GetAllFamilies(), i => i.Id == id);
+        Assert.Equal(new byte[] { 1 }, item.ThumbnailPng);
+        Assert.False(item.HasCustomThumbnail);
+        Assert.True(item.OleSynced);
+    }
+
+    [Fact]
+    public void GetFamily_ReturnsThatRow_OrNullForUnknownId()
+    {
+        long id;
+        using (var index = new IndexRepository(_dbPath))
+        {
+            id = index.InsertFamily("Windows/B.rfa", "B.rfa");
+            index.UpdateFamilyMetadata(id, "Windows", new List<ParameterModel>(), null,
+                revitYear: 0, modifiedDate: _modified, fileSize: 10, familyVersion: "5");
+        }
+        using var repo = new BrowserRepository(_dbPath);
+
+        var item = repo.GetFamily(id)!; // A.rfa sorts first, so a missing WHERE would return it
+        Assert.Equal("B.rfa", item.FileName);
+        Assert.Equal("Windows", item.Category);
+        Assert.Equal("5", item.Version);
+        Assert.Null(repo.GetFamily(id + 1000));
+    }
+
     // The browser's schema migration is best-effort by design (read-only share, DB locked by
     // another user → silently skipped). Reads must therefore tolerate a DB that predates the
     // Version/ParametersExtracted columns instead of crashing on "no such column: f.Version".

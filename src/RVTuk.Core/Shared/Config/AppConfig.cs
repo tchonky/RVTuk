@@ -60,18 +60,15 @@ namespace RVTuk.Core.Shared.Config
         public DwgExporter.TransmittalMode DwgExportZipMode { get; set; }
 
         /// <summary>Topo Tools: distance between generated toposolid points, in centimetres.
-        /// Reads back as 0 from any config file written before this property existed — net48's
-        /// DataContractJsonSerializer skips property initializers (same trap the DWG format
-        /// checkboxes below dodge by inverting their meaning). A spacing has no usable zero, so
-        /// the pane treats anything &lt;= 0 as "use the default" instead. That also absorbs the
-        /// rename from the millimetre key this started as: the old key is simply not read, and the
-        /// default takes over.</summary>
+        /// A spacing has no usable zero, so the pane treats anything &lt;= 0 as "use the
+        /// default". A config file without this key reads back the default: both serializers
+        /// run AppConfig's constructor, so initializers apply (AppConfigTests checks this). The
+        /// millimetre key this started as is simply not read.</summary>
         public double TopoPointSpacingCentimetres { get; set; } = 100;
 
         /// <summary>Last-used format checkboxes, stored inverted/additive (false = the
-        /// out-of-box state "DWG on, PDF off"): net48's DataContractJsonSerializer skips
-        /// property initializers, so a true-default property would flip to false when
-        /// loading a config file written before this feature existed.</summary>
+        /// out-of-box state "DWG on, PDF off"), so a config file without these keys reads as
+        /// today's behaviour.</summary>
         public bool DwgExportDwgOff { get; set; }
         public bool DwgExportPdfOn { get; set; }
 
@@ -129,9 +126,9 @@ namespace RVTuk.Core.Shared.Config
             return entry != null && !string.IsNullOrWhiteSpace(entry.Folder) ? entry.Folder : null;
         }
 
-        /// <summary>MRU upsert. Takes and returns the list because net48's
-        /// DataContractJsonSerializer skips property initializers: a list absent from an older
-        /// config file arrives null, and dereferencing it would throw before the dialog opens.</summary>
+        /// <summary>MRU upsert. Takes and returns the list because a list written as null (or
+        /// nulled by hand) arrives null, and dereferencing it would throw before the dialog
+        /// opens. A missing key is fine: the serializers run the constructor.</summary>
         private static List<DwgExportFolderEntry> Upsert(
             List<DwgExportFolderEntry>? entries, string modelKey, string folder)
         {
