@@ -5,7 +5,10 @@ KKarea 2023 host. Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.
 
 ## 🐞 Bugs
 
-*(none tracked)*
+- [ ] Validation warnings are never shown: `RishuiZaminExporter.Export` drops
+  `ValidationResult.Warnings` and the UI never reads them, so the frame-cap, outside-frame
+  and missing-number/name warnings are computed and discarded. The validator's page-1 length
+  cap (14,500 mm) is also looser than the live robot's 14,000 mm (rules.md §4.4).
 
 ## ✨ Improvements
 
@@ -22,3 +25,6 @@ KKarea 2023 host. Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.
   (see [specs/2026-07-06-kkarea-revit2023-design.md](specs/2026-07-06-kkarea-revit2023-design.md)).
 - [x] Window UI redesign
   (see [specs/2026-07-05-area-submission-ui-redesign-design.md](specs/2026-07-05-area-submission-ui-redesign-design.md)).
+- [x] `.dat` wrote the plot scale (`DWFX_SCALE 100` at 1:100) once the scale became
+  auto-detected; the robot rejected it as error #41. It now always writes `10`
+  (2026-10-12, rules.md §8).

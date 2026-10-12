@@ -388,6 +388,9 @@ Reverse-engineered from three real sample files in `tests/Examples Autoarea/`
 - **[MINOR UNKNOWN]** Why the value is `10` (not 100 for 1:100) — likely a mm-vs-cm or
   page-unit factor. Confirm the value for a non-1:100 job before hard-coding; the *format* is
   certain, the *meaning of the number* is inferred.
+- **[CONFIRMED BY THE ROBOT, 2026-10-12]** Writing the plot scale (`100`) for a 1:100 job is
+  wrong: the robot rejected it with error #41 (frame over 14000x910 mm), and the identical
+  DXF with `10` passed (job 338000-1). See rules.md §8.
 
 ### 5d. Output product [OFFICIAL]
 The robot returns a **DWFX** product combining the DWFX background + computed & coloured areas
@@ -433,7 +436,8 @@ Secondary / community (context only, NOT authoritative for formats):
 
 **Still open:**
 1. **`DWFX_SCALE` value semantics.** Format is certain; the number was `10` in every sample
-   (all 1:100 jobs). Confirm what to write for a different output scale before hard-coding.
+   (all 1:100 jobs), and the robot confirmed `10` (not `100`) for 1:100 on 2026-10-12. Confirm
+   what to write for a different output scale before relying on it.
 2. **DXF ↔ DWFX registration.** In the 3-file form there is no xref; confirm the robot aligns
    the DXF geometry to the DWFX purely via shared drawing coordinates + `DWFX_SCALE` (the
    samples imply yes, since both share the same 1:1 cm coordinate space).
