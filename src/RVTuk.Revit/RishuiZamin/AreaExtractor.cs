@@ -161,8 +161,8 @@ namespace RVTuk.Revit.RishuiZamin
         /// (Revit 2023+), which place a point exactly where Revit draws it whatever the viewport's
         /// rotation, annotation crop, or annotations outside the crop. The earlier mapping pinned
         /// the crop box's corner to <see cref="Viewport.GetBoxOutline"/>'s corner — but that box
-        /// also encloses annotations, so every area shifted down/left by the gap (~585 cm, i.e.
-        /// 58 mm on paper, on job 338000-1). A split crop region would need a per-point region
+        /// also encloses annotations, so every area shifted down/left by the gap (27 x 554 cm, i.e.
+        /// 3 x 55 mm on paper, on job 338000-1). A split crop region would need a per-point region
         /// pick; it uses the first region.
         /// </remarks>
         private readonly struct ViewportMapper
