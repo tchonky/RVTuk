@@ -33,4 +33,4 @@ KKarea 2023 host. Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.
 - [x] Areas exported in the wrong sheet position (27 cm left, 554 cm down, i.e. 55 mm on paper, off the DWFX on job
   338000-1): the mapper anchored the crop box to the viewport's box outline, which also
   encloses annotations. It now uses Revit's model→sheet transforms (2026-10-12, rules.md 4.6a;
-  awaiting in-Revit verification).
+  verified in Revit on job 338000-1).
