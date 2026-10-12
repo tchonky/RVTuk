@@ -11,12 +11,16 @@ namespace RVTuk.Core.RishuiZamin
         /// <summary>
         /// Builds the byte representation of a DWFX_SCALE data file.
         /// </summary>
-        /// <param name="scaleValue">The numeric scale value (e.g., 10 for 1:100).</param>
-        /// <returns>The ASCII-encoded bytes: "DWFX_SCALE\t{scaleValue}\n".</returns>
-        public static byte[] Build(int scaleValue)
+        /// <remarks>
+        /// The value is always 10, whatever the sheet scale. It is not the sheet scale: every
+        /// real 1:100 sample writes 10, and writing 100 for a 1:100 sheet made the robot reject
+        /// the frame as oversized (error #41, verified 2026-10-12). Only 1:100 has been
+        /// confirmed — see docs/tools/rishui-zamin/rules.md §8.
+        /// </remarks>
+        /// <returns>The ASCII-encoded bytes: "DWFX_SCALE\t10\n".</returns>
+        public static byte[] Build()
         {
-            var content = $"DWFX_SCALE\t{scaleValue}\n";
-            return Encoding.ASCII.GetBytes(content);
+            return Encoding.ASCII.GetBytes("DWFX_SCALE\t10\n");
         }
     }
 }

@@ -40,7 +40,7 @@ namespace RVTuk.Core.RishuiZamin
                 var dxfText = DxfWriter.Build(areas, cfg);
                 File.WriteAllText(dxfPath, dxfText);
 
-                var datBytes = DatWriter.Build(cfg.Scale);
+                var datBytes = DatWriter.Build();
                 File.WriteAllBytes(datPath, datBytes);
 
                 return (true, $"Wrote {dxfPath} and {datPath}.");

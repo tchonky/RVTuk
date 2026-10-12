@@ -37,10 +37,10 @@ namespace RVTuk.Revit.RishuiZamin
     /// active sheet, converting each into an <see cref="AreaRecord"/> (feet -> centimetres for
     /// boundary geometry; feet^2 -> metres^2 for area) plus its Revit <see cref="ElementId"/>.
     ///
-    /// Boundary points are mapped through each viewport's own crop-box/scale/placement, so a
-    /// polygon lands at the same position on the DXF sheet as its viewport occupies on the Revit
-    /// sheet — not at the area's raw (and possibly huge, shared-coordinate) model position. The
-    /// sheet's own title block corner is the (0,0) reference.
+    /// Boundary points are mapped through Revit's own model-to-sheet transforms, so a polygon
+    /// lands at the same position on the DXF sheet as Revit draws it on the Revit sheet — not
+    /// at the area's raw (and possibly huge, shared-coordinate) model position. The sheet's own
+    /// title block corner is the (0,0) reference.
     ///
     /// NOTE: this touches Revit API surface directly and can only be runtime-verified inside Revit.
     /// </summary>
@@ -156,30 +156,29 @@ namespace RVTuk.Revit.RishuiZamin
         /// the sheet's title-block origin and scaled back up by the view's plot scale so the
         /// exported geometry keeps its true real-world size (not shrunk to paper size).
         /// </summary>
+        /// <remarks>
+        /// Model → view projection (paper distances) → sheet, through the API's own transforms
+        /// (Revit 2023+), which place a point exactly where Revit draws it whatever the viewport's
+        /// rotation, annotation crop, or annotations outside the crop. The earlier mapping pinned
+        /// the crop box's corner to <see cref="Viewport.GetBoxOutline"/>'s corner — but that box
+        /// also encloses annotations, so every area shifted down/left by the gap (27 x 554 cm, i.e.
+        /// 3 x 55 mm on paper, on job 338000-1). A split crop region would need a per-point region
+        /// pick; it uses the first region.
+        /// </remarks>
         private readonly struct ViewportMapper
         {
-            private readonly Transform _worldToLocal;
-            private readonly UV _cropMin;
-            private readonly UV _outlineMin;
+            private readonly Transform _modelToProjection;
+            private readonly Transform _projectionToSheet;
             private readonly int _scale;
             private readonly UV _sheetOrigin;
-            private readonly ViewportRotation _rotation;
 
             public ViewportMapper(ViewPlan plan, Viewport viewport, UV sheetOrigin)
             {
-                var cropBox = plan.CropBox;
-                _worldToLocal = cropBox.Transform.Inverse;
-                _cropMin = new UV(cropBox.Min.X, cropBox.Min.Y);
-                var cropMax = new UV(cropBox.Max.X, cropBox.Max.Y);
-                var outline = viewport.GetBoxOutline();
-                _outlineMin = new UV(outline.MinimumPoint.X, outline.MinimumPoint.Y);
+                _modelToProjection = plan.GetModelToProjectionTransforms()[0].GetModelToProjectionTransform();
+                _projectionToSheet = viewport.GetProjectionToSheetTransform();
                 _scale = Math.Max(plan.Scale, 1);
                 _sheetOrigin = sheetOrigin;
-                _rotation = viewport.Rotation;
-                CropExtent = new UV(cropMax.U - _cropMin.U, cropMax.V - _cropMin.V);
             }
-
-            private UV CropExtent { get; }
 
             /// <summary>The view's plot scale (e.g. 100 for 1:100), exposed so callers can
             /// stamp it onto each <see cref="AreaRecord"/> built through this mapper.</summary>
@@ -187,33 +186,10 @@ namespace RVTuk.Revit.RishuiZamin
 
             public Point2D Map(XYZ modelPoint)
             {
-                var local = _worldToLocal.OfPoint(modelPoint);
-                var u = local.X - _cropMin.U;
-                var v = local.Y - _cropMin.V;
+                var onSheet = _projectionToSheet.OfPoint(_modelToProjection.OfPoint(modelPoint));
 
-                // The viewport can be rotated 90 degrees on the sheet independent of the view's
-                // own orientation; swap/flip the local axes to match (best-effort — only the
-                // None case is verified against a real sample; Clockwise/Counterclockwise follow
-                // the standard 90-degree rotation convention but haven't been runtime-checked).
-                double sheetU, sheetV;
-                switch (_rotation)
-                {
-                    case ViewportRotation.Clockwise:
-                        sheetU = _outlineMin.U + (CropExtent.V - v) / _scale;
-                        sheetV = _outlineMin.V + u / _scale;
-                        break;
-                    case ViewportRotation.Counterclockwise:
-                        sheetU = _outlineMin.U + v / _scale;
-                        sheetV = _outlineMin.V + (CropExtent.U - u) / _scale;
-                        break;
-                    default:
-                        sheetU = _outlineMin.U + u / _scale;
-                        sheetV = _outlineMin.V + v / _scale;
-                        break;
-                }
-
-                var realX = (sheetU - _sheetOrigin.U) * _scale;
-                var realY = (sheetV - _sheetOrigin.V) * _scale;
+                var realX = (onSheet.X - _sheetOrigin.U) * _scale;
+                var realY = (onSheet.Y - _sheetOrigin.V) * _scale;
 
                 return new Point2D { X = realX * FeetToCm, Y = realY * FeetToCm };
             }

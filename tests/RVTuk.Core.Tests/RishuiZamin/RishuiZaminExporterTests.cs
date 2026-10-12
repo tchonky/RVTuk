@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using RVTuk.Core.RishuiZamin;
 using Xunit;
 
@@ -34,7 +35,7 @@ public class RishuiZaminExporterTests : IDisposable
     {
         OutputFolder = _outputFolder,
         FileBaseName = "submission",
-        Scale = 10,
+        Scale = 100,
         BuildingNo = 1,
     };
 
@@ -60,7 +61,25 @@ public class RishuiZaminExporterTests : IDisposable
         Assert.Contains("RZ_AREA", dxfContent);
 
         var datBytes = File.ReadAllBytes(datPath);
-        Assert.Equal(DatWriter.Build(config.Scale), datBytes);
+        Assert.Equal(Encoding.ASCII.GetBytes("DWFX_SCALE\t10\n"), datBytes);
+    }
+
+    // The .dat value is not the sheet scale: a 1:100 sheet must still write 10 — writing 100
+    // made the robot reject the frame (error #41, job 338000-1, 2026-10-12).
+    [Theory]
+    [InlineData(50)]
+    [InlineData(100)]
+    [InlineData(200)]
+    public void Export_DatDoesNotFollowSheetScale(int scale)
+    {
+        var config = ValidConfig();
+        config.Scale = scale;
+
+        var (ok, message) = RishuiZaminExporter.Export(new List<AreaRecord> { ValidArea() }, config);
+
+        Assert.True(ok, message);
+        Assert.Equal(Encoding.ASCII.GetBytes("DWFX_SCALE\t10\n"),
+            File.ReadAllBytes(Path.Combine(_outputFolder, "submission.dat")));
     }
 
     [Fact]

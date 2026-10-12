@@ -15,6 +15,7 @@
 > `tests/Examples Autoarea/` ·
 > `[TEKENPLUS]` measured from a tekenplus-generated file (`tests/output/Export_example.dxf`) ·
 > `[ACAD]` established by AutoCAD 2025/2026 `DXFIN` acceptance testing ·
+> `[ROBOT]` established by a live robot submission (accept/reject) ·
 > `[RVTUK]` our implementation's choice where the robot allows several ·
 > `[OPEN]` unresolved — see §13.
 
@@ -58,9 +59,10 @@
 | 4.1 | Every frame/floor/area polygon is a **closed `LWPOLYLINE`** (group 70 = 1, group 90 = vertex count) on its layer. Any closed shape is allowed for floors/areas (incl. curved); samples reach 30+ vertices. | [OFFICIAL] [SAMPLE] |
 | 4.2 | **Containment hierarchy:** frame ⊃ floor polygons ⊃ area polygons. A frame must not cross a floor polygon; floors must not overlap each other; areas must not overlap each other. | [OFFICIAL] |
 | 4.3 | **`RZ_FRAME` is a rectangle only**, bottom-left at (0,0) in every observed file. It represents the **physical sheet**: e.g. 40000 × 9000 cm = 4.00 m × 0.90 m of paper at 1:100 (tekenplus), 27000 × 9000 (Garmoshka). | [OFFICIAL] [SAMPLE] [TEKENPLUS] |
-| 4.4 | Frame print-size caps at output scale: **height ≤ 910 mm; length ≤ 15,000 mm; the PAGE_NO=1 sheet ≤ 14,500 mm**. Long submissions split into several frames. | [OFFICIAL] |
+| 4.4 | Frame print-size caps at output scale: **height ≤ 910 mm; length ≤ 15,000 mm; the PAGE_NO=1 sheet ≤ 14,500 mm**. Long submissions split into several frames. The live robot's error #41 message cites **14000x910 mm** for a single PAGE_NO=1 frame (2026-10-12), so treat 14,000 mm as the safe page-1 length. | [OFFICIAL] [ROBOT] |
 | 4.5 | Multi-frame drawings read **right-to-left: the main frame (PAGE_NO = 1) must be the right-most**. | [OFFICIAL] |
 | 4.6 | Floors are laid out side-by-side inside the frame (the old garmoshka strip); tekenplus orders them **ascending elevation right-to-left**. Exact gaps/margins are free — only containment and non-overlap are enforced. RVTuk uses the arrangement of the Revit sheet's viewports verbatim. | [TEKENPLUS] [RVTUK] |
+| 4.6a | **The DXF must line up with the DWFX sheet:** DXF cm = DWFX paper mm × `DWFX_SCALE` (10), both measured from the sheet's lower-left corner (Garmoshka: a 2700 × 900 mm DWFX ↔ a 27000 × 9000 cm frame). RVTuk places areas with Revit's model→sheet transforms (`View.GetModelToProjectionTransforms` + `Viewport.GetProjectionToSheetTransform`). Do not anchor to `Viewport.GetBoxOutline()`: that box also encloses annotations outside the crop, and doing so shifted job 338000-1 by 27 cm left and 554 cm down, about 55 mm on paper (2026-10-12). | [SAMPLE] [ROBOT] [RVTUK] |
 | 4.7 | Each polygon carries **exactly one marker** (block insert or TEXT, §5) whose anchor point lies **strictly inside** the polygon — the robot matches marker→polygon by point-in-polygon. Beware: a concave polygon's centroid/vertex-average can fall outside. | [OFFICIAL] [TEKENPLUS] |
 | 4.8 | `RZ_LANDCOVER`: closed polygon per relevant level, contained in the floor polygon, **no marker**; only its perimeter is used. | [OFFICIAL] |
 | 4.9 | `RZ_ANCHOR`: if used, **exactly one anchor point inside each floor boundary**. | [OFFICIAL] |
@@ -183,8 +185,15 @@ DWFX_SCALE→10⏎        (bytes: 44 57 46 58 5F 53 43 41 4C 45 09 31 30 0A)
 ```
 
 `DWFX_SCALE` relates DXF drawing units to the DWFX sheet; value `10` in every 1:100 sample.
-Its meaning for other scales is unconfirmed (`[OPEN]` — verify before submitting a non-1:100
-job).
+**It is not the plot scale** `[ROBOT]`: a 1:100 job exported with `DWFX_SCALE→100` was
+rejected with error #41 ("frames on the layer RZ_FRAME exceed the maximum 14000x910 mm"),
+and the same DXF with `10` passed (job 338000-1, 2026-10-12). So the robot's frame paper
+size grows with this number. RVTuk always writes `10` (`DatWriter`).
+
+Its meaning for other scales is unconfirmed (`[OPEN]`). The evidence fits either a fixed
+cm→mm unit factor (`10` at every scale, the robot taking the scale from its UI) or paper-mm per
+real metre (`1000 / scale`: 20 at 1:50). Check the robot product carefully on the first
+non-1:100 job.
 
 ## 9. DWFX file `[OFFICIAL]` `[SAMPLE]`
 
@@ -261,7 +270,8 @@ the floor tag (multi-building floor-splitting is future work; config Building nu
 
 ## 13. Open questions `[OPEN]`
 
-1. `DWFX_SCALE` semantics at scales other than 1:100.
+1. `DWFX_SCALE` semantics at scales other than 1:100 (§8: `10` confirmed at 1:100; it is
+   not the plot scale).
 2. DXF↔DWFX registration: presumed shared coordinates + `DWFX_SCALE` only; unverified.
 3. Whether the robot itself is stricter or looser than AutoCAD's DXF reader (§2.4–2.5 are
    proven necessary for AutoCAD-based tooling; the robot may add checks of its own — final

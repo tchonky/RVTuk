@@ -140,8 +140,9 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         /// 1" rule.</summary>
         public bool BuildingNoInvalid => !int.TryParse(_buildingNoText, out var n) || n < 1;
 
-        /// <summary>The DWFX_SCALE value (e.g. 100 for 1:100), read automatically off the open
-        /// sheet's area-plan viewport(s) during <see cref="Refresh"/> — no longer user-entered.</summary>
+        /// <summary>The sheet's plot scale (e.g. 100 for 1:100), read automatically off the open
+        /// sheet's area-plan viewport(s) during <see cref="Refresh"/> — no longer user-entered.
+        /// Not the .dat's DWFX_SCALE, which is fixed (see <c>DatWriter</c>).</summary>
         public int DetectedScale => Config.Scale;
 
         /// <summary>True when the open sheet's area-plan viewports don't all share the same plot
