@@ -82,6 +82,13 @@ dotnet test tests\RVTuk.Core.Tests\RVTuk.Core.Tests.csproj
 
 On a non-Windows SDK (CI, cloud agents) add `-p:EnableWindowsTargeting=true` — the suite builds and runs fine on Linux. The WPF/Revit projects (`RVTuk.UI`, `RVTuk.Revit`, `KKarea.Revit`) can only be compiled on Windows.
 
+`tests\RVTuk.UI.Tests` holds WPF tests that run without Revit (instruction XAML read/write). It follows the configuration — `-c Release2024` tests net48, `-c Release2025` tests net8 — and both must pass before committing a change to instruction reading or writing:
+```powershell
+dotnet test tests\RVTuk.UI.Tests\RVTuk.UI.Tests.csproj -c Release2024
+dotnet test tests\RVTuk.UI.Tests\RVTuk.UI.Tests.csproj -c Release2025
+```
+Its fixtures are sanitized (`FamilyBrowser\Fixtures\sanitize_instructions.py`): never commit a real database row. Tests that open a database are net8-only (`#if !NETFRAMEWORK`), because `e_sqlite3.dll` does not load in the net48 test host.
+
 ## Deployment
 
 `Deploy.ps1` (must run as Administrator) builds/copies the right binary set per Revit version, strips the net48 BCL polyfill DLLs Revit already preloads, and generates the `.addin` manifest XML:
