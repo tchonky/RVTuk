@@ -1,0 +1,99 @@
+#if !NETFRAMEWORK
+using System;
+using System.IO;
+using RVTuk.Core.FamilyBrowser.Database;
+using RVTuk.UI.FamilyBrowser.ViewModels;
+using RVTuk.UI.Shared.Controls;
+using Xunit;
+
+namespace RVTuk.UI.Tests.FamilyBrowser
+{
+    // The editor must never overwrite stored instructions it could not read, and a failed
+    // serialisation must write nothing. Net8 only: SQLite's native DLL does not load in the
+    // net48 test host.
+    public class InstructionsEditorViewModelTests : IDisposable
+    {
+        private const string Broken =
+            "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><NoSuchElement /></FlowDocument>";
+
+        private readonly string _folder;
+
+        public InstructionsEditorViewModelTests()
+        {
+            _folder = Path.Combine(Path.GetTempPath(), "rvtuk_editor_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_folder);
+        }
+
+        public void Dispose()
+        {
+            try { if (Directory.Exists(_folder)) Directory.Delete(_folder, true); } catch { /* best effort */ }
+        }
+
+        private static string Good() => RichTextBoxHelper.SerializeDocument(InstructionFixtures.SampleDocument())!;
+
+        private (BrowserRepository Repo, long Id, InstructionsEditorViewModel Vm) Arrange(string? stored, string? tags = null)
+        {
+            var db = Path.Combine(_folder, Guid.NewGuid().ToString("N") + ".db");
+            long id;
+            using (var index = new IndexRepository(db))
+                id = index.InsertFamily("Doors/A.rfa", "A.rfa");
+            var repo = new BrowserRepository(db);
+            repo.SaveInstructionsXaml(id, stored);
+            if (tags != null) repo.SaveTags(id, tags);
+            var vm = new InstructionsEditorViewModel(id, "A.rfa", Path.Combine(_folder, "A.rfa"), repo);
+            return (repo, id, vm);
+        }
+
+        [Fact]
+        public void UnreadableRow_IsFlagged() => Sta.Run(() =>
+        {
+            foreach (var stored in new string?[] { Good(), null, "" })
+            {
+                var (repo, _, vm) = Arrange(stored);
+                using (repo) Assert.False(vm.InstructionsUnreadable);
+            }
+            var (brokenRepo, _, brokenVm) = Arrange(Broken);
+            using (brokenRepo) Assert.True(brokenVm.InstructionsUnreadable);
+        });
+
+        [Fact]
+        public void UnreadableRow_SaveKeepsTheTextAndSavesTheTags() => Sta.Run(() =>
+        {
+            var (repo, id, vm) = Arrange(Broken);
+            using (repo)
+            {
+                vm.TagsText = "door";
+                Assert.True(vm.ExecuteSave(Good()));
+                Assert.Equal(Broken, repo.GetInstructionsXaml(id));
+                Assert.Equal("door", repo.GetTags(id));
+            }
+        });
+
+        [Fact]
+        public void ReadableRow_SaveWritesTheEditorsText() => Sta.Run(() =>
+        {
+            var (repo, id, vm) = Arrange(null);
+            using (repo)
+            {
+                var good = Good();
+                Assert.True(vm.ExecuteSave(good));
+                Assert.Equal(good, repo.GetInstructionsXaml(id));
+            }
+        });
+
+        [Fact]
+        public void EditorCouldNotSerialise_NothingIsWritten() => Sta.Run(() =>
+        {
+            var good = Good();
+            var (repo, id, vm) = Arrange(good, "old");
+            using (repo)
+            {
+                vm.TagsText = "new";
+                Assert.False(vm.ExecuteSave(null));
+                Assert.Equal(good, repo.GetInstructionsXaml(id));
+                Assert.Equal("old", repo.GetTags(id));
+            }
+        });
+    }
+}
+#endif

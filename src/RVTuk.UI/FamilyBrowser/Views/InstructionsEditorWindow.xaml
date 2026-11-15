@@ -144,6 +144,7 @@
                          VerticalScrollBarVisibility="Auto"
                          AllowDrop="True"
                          IsDocumentEnabled="True"
+                         IsReadOnly="{Binding InstructionsUnreadable, Mode=OneTime}"
                          ctrl:RichTextBoxHelper.DocumentXaml="{Binding InstructionsXaml}"/>
             <TextBox x:Name="RawEditor" Margin="8" Visibility="Collapsed"
                      FontFamily="Consolas" FontSize="12"
@@ -154,6 +155,10 @@
 
         <!-- FOOTER -->
         <Grid Grid.Row="3" Margin="8,4,8,8">
+            <TextBlock Visibility="{Binding InstructionsUnreadable, Converter={StaticResource BoolVis}}"
+                       Foreground="OrangeRed" TextWrapping="Wrap" Margin="0,0,160,0"
+                       VerticalAlignment="Center"
+                       Text="The instructions could not be read, so they are locked. Save keeps them as they are and saves only the tags and the thumbnail."/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="Cancel" Command="{Binding CancelCommand}" IsCancel="True" Width="70" Margin="0,0,8,0"/>
                 <Button Content="Save"   Click="Save_Click"                Width="70"/>

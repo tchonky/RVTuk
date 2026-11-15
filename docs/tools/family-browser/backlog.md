@@ -72,6 +72,13 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
 
 ## ✅ Done
 
+- [x] **Instructions with images opened empty, and Save wrote the empty text back** (fixed in the
+  add-in split's phase 0). Two causes: rows saved before the namespace move declare the old
+  `RVTuk.UI.Controls` namespace, and rows saved from Revit 2025+ declare `System.Private.CoreLib`,
+  which Revit 2024 cannot parse. Both are now rewritten on read and write; a row that still cannot
+  be parsed opens with a notice, is locked, and Save keeps its stored text (tags and thumbnail
+  still save). See the spec section "Family Browser specifics" in
+  `docs/toolkit/specs/2026-11-12-addin-split-design.md`.
 - [x] **"Open family button stop working"** (2026-10-04). Two causes. (1) Open in Family
   Editor was the only action whose Revit-side error was thrown away: a file moved or renamed
   since the last Scan, a family already open, a locked or newer-version file all looked like a

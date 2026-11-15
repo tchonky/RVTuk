@@ -6,6 +6,7 @@ using RVTuk.Core.FamilyBrowser.Database;
 using RVTuk.Core.FamilyBrowser.Extraction;
 using RVTuk.Core.FamilyBrowser.Util;
 
+using RVTuk.UI.Shared.Controls;
 using RVTuk.UI.Shared.ViewModels;
 
 namespace RVTuk.UI.FamilyBrowser.ViewModels
@@ -24,6 +25,9 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         private string _thumbStatus = string.Empty;
 
         public string FamilyDisplayName { get; }
+
+        // The stored instructions are not blank and could not be parsed.
+        public bool InstructionsUnreadable { get; }
 
         public string? InstructionsXaml
         {
@@ -69,6 +73,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             _rfaFullPath = rfaFullPath;
             FamilyDisplayName = FamilyFileName.WithoutRfaExtension(familyFileName);
             _instructionsXaml = repo.GetInstructionsXaml(familyId);
+            InstructionsUnreadable = !RichTextBoxHelper.TryParseDocumentXaml(_instructionsXaml, out _);
             _tagsText = repo.GetTags(familyId) ?? string.Empty;
 
             CancelCommand           = new RelayCommand(() => CloseRequested?.Invoke());
@@ -157,9 +162,13 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             }
         }
 
-        public void ExecuteSave(string? xamlFromEditor)
+        // false = nothing was written (the editor could not serialise the document).
+        public bool ExecuteSave(string? xamlFromEditor)
         {
-            _repo.SaveInstructionsXaml(_familyId, xamlFromEditor);
+            if (xamlFromEditor == null && !InstructionsUnreadable) return false;
+            // An unreadable row stays as it is; the editor only shows a notice in its place.
+            if (!InstructionsUnreadable)
+                _repo.SaveInstructionsXaml(_familyId, xamlFromEditor);
             _repo.SaveTags(_familyId, string.IsNullOrWhiteSpace(_tagsText) ? null : _tagsText.Trim());
 
             if (_customThumbPng == null)
@@ -174,6 +183,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 bool oleOk = ThumbnailWriter.WriteThumbnailToRfa(_rfaFullPath, _customThumbPng);
                 _repo.SaveCustomThumbnail(_familyId, _customThumbPng, oleOk);
             }
+            return true;
         }
 
         internal static byte[] ConvertToPng(byte[] rawBytes)

@@ -65,6 +65,14 @@ namespace RVTuk.UI.FamilyBrowser.Views
 
             DataContext = ViewModel;
 
+            // Unreadable stored text: the editor shows a notice and must not edit or insert anything.
+            if (ViewModel.InstructionsUnreadable)
+            {
+                FormattingButtons.IsEnabled = false;
+                RawBtn.IsEnabled            = false;
+                Editor.AllowDrop            = false;
+            }
+
             // Ctrl+Click on a link in the (editable) editor raises RequestNavigate.
             AddHandler(Hyperlink.RequestNavigateEvent, new RequestNavigateEventHandler(RichTextBoxHelper.OpenLink));
 
@@ -306,6 +314,7 @@ namespace RVTuk.UI.FamilyBrowser.Views
         // with its PNG bytes (base64) so it survives the XAML save/load round-trip.
         private void InsertImageIntoEditor(byte[] imageData)
         {
+            if (ViewModel.InstructionsUnreadable) return;
             try
             {
                 var pngData = InstructionsEditorViewModel.ConvertToPng(imageData);
@@ -334,7 +343,12 @@ namespace RVTuk.UI.FamilyBrowser.Views
             if (_isRawMode) SyncRawToEditor();
 
             var xaml = RichTextBoxHelper.SerializeDocument(Editor);
-            ViewModel.ExecuteSave(xaml);
+            if (!ViewModel.ExecuteSave(xaml))
+            {
+                MessageBox.Show(this, "The instructions could not be saved. Nothing was changed.",
+                    "RVTuk", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             _saved = true;
             Close();
         }
