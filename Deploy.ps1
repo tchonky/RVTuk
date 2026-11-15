@@ -3,7 +3,8 @@
 .SYNOPSIS
     Builds-output deployer for RVTuk (2024 / 2025) and KKarea (2023 / 2026 / 2027).
 .DESCRIPTION
-    Copies each version's build output into the per-year Revit Addins folder and
+    Copies each version's build output into the per-year Revit Addins folder
+    (ProgramData up to Revit 2026, Program Files from 2027) and
     writes the .addin manifest. 2023, 2026 and 2027 deploy the KKarea add-in (Area Calc
     only); 2024/2025 deploy the full RVTuk add-in. Each version deploys independently: if
     one year's Revit is open (locking its DLLs) or its build output is missing,
@@ -51,7 +52,13 @@ $versions = [ordered]@{
                 ClientId = "9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC" }
 }
 
-$addinsBase = "C:\ProgramData\Autodesk\Revit\Addins"
+# Machine-wide Addins root: ProgramData up to Revit 2026, Program Files from 2027 on
+# (Revit 2027 no longer reads machine-wide add-ins from ProgramData). The setup exe
+# (installer\RVTuk.Setup\Program.cs, MachineAddinsBase) implements the same rule.
+function Get-AddinsBase([string]$year) {
+    if ([int]$year -ge 2027) { return "C:\Program Files\Autodesk\Revit\Addins" }
+    return "C:\ProgramData\Autodesk\Revit\Addins"
+}
 
 # --- helpers ---------------------------------------------------------------
 
@@ -154,7 +161,7 @@ foreach ($ver in $targets) {
         continue
     }
 
-    $addinsDir = "$addinsBase\$ver"
+    $addinsDir = "$(Get-AddinsBase $ver)\$ver"
     $dllDir    = "$addinsDir\$addinName"
     $addinFile = "$addinsDir\$addinName.addin"
 

@@ -7,7 +7,8 @@
     .addin manifest, zips it into installer\RVTuk.Setup\payload.zip, and compiles the
     RVTuk.Setup console exe with that zip embedded. The resulting exe is copied to
     dist\RVTukSetup.exe and can be run on any machine — it self-elevates, detects the
-    installed Revit versions, and copies the add-in into ProgramData.
+    installed Revit versions, and copies the add-in into the machine-wide Addins folder
+    of each year (ProgramData up to Revit 2026, Program Files from 2027).
 
     NOTE: the version table and staging rules below must stay in sync with Deploy.ps1.
 .EXAMPLE
