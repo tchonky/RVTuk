@@ -72,6 +72,12 @@ namespace RVTuk.Core.Shared.Config
         public bool DwgExportDwgOff { get; set; }
         public bool DwgExportPdfOn { get; set; }
 
+        /// <summary>Round Positions' grid step, stored inverted (false = the default, half
+        /// centimetres allowed) for the same reason as <see cref="DwgExportDwgOff"/>: net48's
+        /// DataContractJsonSerializer skips property initializers, so a true-default property
+        /// would flip to false when a config file written before this feature existed is loaded.</summary>
+        public bool RoundPositionsWholeCentimetresOnly { get; set; }
+
         /// <summary>Per-model output folders, most-recently-used last, capped at
         /// <see cref="DwgExportFolderCap"/> so the config file can't grow unbounded.</summary>
         public System.Collections.Generic.List<DwgExportFolderEntry> DwgExportFolders { get; set; } =

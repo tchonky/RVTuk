@@ -177,6 +177,7 @@ public class AppConfigTests : IDisposable
 
         Assert.False(loaded.DwgExportDwgOff);
         Assert.False(loaded.DwgExportPdfOn);
+        Assert.False(loaded.RoundPositionsWholeCentimetresOnly);
     }
 
     [Fact]

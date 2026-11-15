@@ -16,6 +16,11 @@ using RVTuk.Revit.DwgExporter.Commands;
 using RVTuk.Revit.FamilyBrowser.Commands;
 using RVTuk.Revit.NeoProperties.Commands;
 using RVTuk.Revit.RishuiZamin.Commands;
+using RVTuk.Revit.RoundPositions;
+using RVTuk.Revit.RoundPositions.Commands;
+using RVTuk.Revit.RoundPositions.ExternalEvents;
+using RVTuk.Core.RoundPositions;
+using RVTuk.Core.Shared.Config;
 using RVTuk.Revit.FamilyBrowser.ExternalEvents;
 using RVTuk.Revit.RishuiZamin.ExternalEvents;
 using RVTuk.Revit.NeoProperties;
@@ -98,6 +103,19 @@ namespace RVTuk.Revit
         /// separate project; recover the code from git history if ever needed.)
         /// </summary>
         private static readonly bool RegisterNeoProperties = false;
+
+        /// <summary>Round Positions ships on the RVTuk panel. Its single entry point is the
+        /// dockable pane — the one-click button it replaced could not be stopped once started.</summary>
+        private static readonly bool RegisterRoundPositions = true;
+
+        public static ScanEventHandler RoundScanHandler { get; private set; } = null!;
+        public static ExternalEvent RoundScanEvent { get; private set; } = null!;
+        public static FixEventHandler RoundFixHandler { get; private set; } = null!;
+        public static ExternalEvent RoundFixEvent { get; private set; } = null!;
+        public static SelectEventHandler RoundSelectHandler { get; private set; } = null!;
+        public static ExternalEvent RoundSelectEvent { get; private set; } = null!;
+        public static RVTuk.UI.RoundPositions.ViewModels.RoundPositionsPaneViewModel? RoundPositionsPaneViewModel
+        { get; private set; }
 
         private static string? _addinDir;
 
@@ -275,6 +293,82 @@ namespace RVTuk.Revit
                     new TopoToolsPaneProvider(topoView));
             }
 
+            if (RegisterRoundPositions)
+            {
+                RoundScanHandler   = new ScanEventHandler();
+                RoundScanEvent     = ExternalEvent.Create(RoundScanHandler);
+                RoundFixHandler    = new FixEventHandler();
+                RoundFixEvent      = ExternalEvent.Create(RoundFixHandler);
+                RoundSelectHandler = new SelectEventHandler();
+                RoundSelectEvent   = ExternalEvent.Create(RoundSelectHandler);
+
+                // The pane (UI project) only ever sees these delegates — no Revit type crosses
+                // over. All three block on WaitForCompletion, so the view model calls them from
+                // the pool.
+                // Bounded waits: an external event Revit never runs would otherwise leave the pane
+                // blocked with nothing on screen to say so. A fix gets longer than a scan because
+                // it legitimately takes longer.
+                var scanTimeout = TimeSpan.FromMinutes(5);
+                var fixTimeout = TimeSpan.FromMinutes(30);
+                const string NoResponse =
+                    "Revit did not run the request. It may be busy with another command, or " +
+                    "waiting on a dialog — close anything open and try again.";
+
+                Func<bool, System.Threading.CancellationToken, ScanResult> scan = (allowHalf, cancellation) =>
+                {
+                    RoundScanHandler.Prepare(allowHalf, cancellation);
+                    RoundScanEvent.Raise();
+                    if (!RoundScanHandler.WaitForCompletion(scanTimeout))
+                        throw new TimeoutException(NoResponse);
+                    if (RoundScanHandler.Error != null) throw RoundScanHandler.Error;
+                    return RoundScanHandler.Result;
+                };
+
+                Func<bool, IReadOnlyList<long>, System.Threading.CancellationToken, RoundingReport> fix =
+                    (allowHalf, ids, cancellation) =>
+                {
+                    RoundFixHandler.Prepare(allowHalf, new HashSet<long>(ids), cancellation);
+                    RoundFixEvent.Raise();
+                    if (!RoundFixHandler.WaitForCompletion(fixTimeout))
+                        throw new TimeoutException(NoResponse);
+                    if (RoundFixHandler.Error != null) throw RoundFixHandler.Error;
+                    return RoundFixHandler.Report;
+                };
+
+                // Raise and return — deliberately no wait. The pane's WPF thread IS Revit's main
+                // thread, so blocking here would block the very thread that has to run the event:
+                // it would sit until the timeout and only then select. Nothing needs the result,
+                // and Revit runs the event the moment it is idle, which is immediately.
+                Action<IReadOnlyList<long>> selectInModel = ids =>
+                {
+                    RoundSelectHandler.Prepare(ids);
+                    RoundSelectEvent.Raise();
+                };
+
+                // Stored inverted: the config default (false) is "half centimetres allowed".
+                var roundConfig = ConfigManager.LoadConfig();
+                Action<bool> persistRoundSetting = allowHalf =>
+                {
+                    var current = ConfigManager.LoadConfig();
+                    current.RoundPositionsWholeCentimetresOnly = !allowHalf;
+                    ConfigManager.SaveConfig(current);
+                };
+
+                RoundPositionsPaneViewModel =
+                    new RVTuk.UI.RoundPositions.ViewModels.RoundPositionsPaneViewModel(
+                        scan, fix, selectInModel,
+                        !roundConfig.RoundPositionsWholeCentimetresOnly, persistRoundSetting);
+
+                var roundView = new RVTuk.UI.RoundPositions.Views.RoundPositionsPaneView
+                {
+                    DataContext = RoundPositionsPaneViewModel
+                };
+                application.RegisterDockablePane(
+                    RoundPositionsPaneProvider.PaneId,
+                    "Round Positions",
+                    new RoundPositionsPaneProvider(roundView));
+            }
+
             try
             {
                 CreateRibbon(application);
@@ -348,6 +442,19 @@ namespace RVTuk.Revit
             dwgBtn.Image      = CreateDwgExportIcon(16);
 
             panel.AddItem(dwgBtn);
+
+            var roundBtn = new PushButtonData(
+                "RoundPositions",
+                "Round\nPositions",
+                assemblyPath,
+                typeof(RoundPositionsCommand).FullName!)
+            {
+                ToolTip = "Move every eligible element onto a whole-centimetre grid (lengths and angles are never changed)"
+            };
+            roundBtn.LargeImage = CreateRoundPositionsIcon(32);
+            roundBtn.Image      = CreateRoundPositionsIcon(16);
+
+            panel.AddItem(roundBtn);
 
             if (RegisterAutoDimensions)
             {
@@ -574,6 +681,41 @@ namespace RVTuk.Revit
                 ctx.DrawLine(pen, new WpfPoint(s * 0.24, s * 0.78), new WpfPoint(s * 0.72, s * 0.78));
                 ctx.DrawLine(pen, new WpfPoint(s * 0.60, s * 0.67), new WpfPoint(s * 0.72, s * 0.78));
                 ctx.DrawLine(pen, new WpfPoint(s * 0.60, s * 0.89), new WpfPoint(s * 0.72, s * 0.78));
+            }
+            var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            bmp.Freeze();
+            return bmp;
+        }
+
+        private static BitmapSource CreateRoundPositionsIcon(int size)
+        {
+            var dv = new DrawingVisual();
+            using (var ctx = dv.RenderOpen())
+            {
+                double s = size;
+                ctx.DrawRectangle(new SolidColorBrush(WpfColor.FromRgb(0x25, 0x25, 0x26)), null,
+                    new Rect(0, 0, s, s));
+
+                // A faint grid with one element snapped onto an intersection.
+                var gridPen = new Pen(new SolidColorBrush(WpfColor.FromRgb(0x5A, 0x5A, 0x5A)),
+                    Math.Max(1, s * 0.04));
+                gridPen.Freeze();
+                foreach (var f in new[] { 0.30, 0.55, 0.80 })
+                {
+                    ctx.DrawLine(gridPen, new WpfPoint(s * 0.12, s * f), new WpfPoint(s * 0.88, s * f));
+                    ctx.DrawLine(gridPen, new WpfPoint(s * f, s * 0.12), new WpfPoint(s * f, s * 0.88));
+                }
+
+                var arrowPen = new Pen(new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00)),
+                    Math.Max(1, s * 0.07));
+                arrowPen.Freeze();
+                ctx.DrawLine(arrowPen, new WpfPoint(s * 0.72, s * 0.24), new WpfPoint(s * 0.58, s * 0.38));
+                ctx.DrawLine(arrowPen, new WpfPoint(s * 0.58, s * 0.38), new WpfPoint(s * 0.58, s * 0.28));
+                ctx.DrawLine(arrowPen, new WpfPoint(s * 0.58, s * 0.38), new WpfPoint(s * 0.68, s * 0.38));
+
+                ctx.DrawEllipse(new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00)), null,
+                    new WpfPoint(s * 0.55, s * 0.55), s * 0.09, s * 0.09);
             }
             var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
             bmp.Render(dv);
