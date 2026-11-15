@@ -21,6 +21,10 @@ namespace RVTuk.UI.Tests.FamilyBrowser
         private static string TextOf(FlowDocument document) =>
             new TextRange(document.ContentStart, document.ContentEnd).Text;
 
+        // XamlWriter cannot write an instance of a non-public type, so a document holding one
+        // makes SerializeDocument fail.
+        private sealed class NotSerialisable { }
+
         [Fact]
         public void Serialize_WritesTheStoredDeclaration() => Sta.Run(() =>
         {
@@ -28,6 +32,40 @@ namespace RVTuk.UI.Tests.FamilyBrowser
 
             Assert.Contains(StoredDeclaration, xaml);
             Assert.DoesNotContain("System.Private.CoreLib", xaml);
+        });
+
+        [Fact]
+        public void Serialize_ASystemValue_IsDeclaredAsMscorlib() => Sta.Run(() =>
+        {
+            // A System value in an object-typed property makes net8's XamlWriter declare
+            // System.Private.CoreLib, which Revit 2024 cannot read; only the write-side rewrite
+            // turns it into mscorlib. net48's XamlWriter writes mscorlib itself.
+            FlowDocument document = InstructionFixtures.SampleDocument();
+            Assert.IsType<Paragraph>(document.Blocks.FirstBlock).Tag = true;
+
+            string xaml = Serialize(document);
+
+            Assert.DoesNotContain("System.Private.CoreLib", xaml);
+            Assert.Contains("assembly=mscorlib", xaml);
+            Assert.True(RichTextBoxHelper.TryParseDocumentXaml(xaml, out _));
+        });
+
+        [Fact]
+        public void Serialize_Failure_ReturnsNullAndPutsStyleAndSourceBack() => Sta.Run(() =>
+        {
+            FlowDocument document = InstructionFixtures.SampleDocument();
+            RichTextBoxHelper.RehydrateImages(document);
+            Image image = Assert.Single(InstructionFixtures.Images(document));
+            Border border = Assert.IsType<Border>(image.Parent);
+            ImageSource? source = image.Source;
+            Style style = border.Style;
+            Assert.NotNull(source);
+            Assert.NotNull(style);
+            Assert.IsType<Paragraph>(document.Blocks.FirstBlock).Tag = new NotSerialisable();
+
+            Assert.Null(RichTextBoxHelper.SerializeDocument(document));
+            Assert.Same(source, image.Source);
+            Assert.Same(style, border.Style);
         });
 
         [Fact]

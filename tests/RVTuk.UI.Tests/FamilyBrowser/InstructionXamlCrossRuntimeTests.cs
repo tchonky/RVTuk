@@ -37,5 +37,16 @@ namespace RVTuk.UI.Tests.FamilyBrowser
             Assert.DoesNotContain("System.Private.CoreLib", xaml);
             Assert.DoesNotContain("<Style", xaml);
         }
+
+        [Fact]
+        public void SavedFixture_SavedAgain_IsByteIdentical() => Sta.Run(() =>
+        {
+            // The stored form must come through the split unchanged: what this runtime saved,
+            // opened and saved again, is the same text to the last byte.
+            string stored = InstructionFixtures.Read($"saved-{InstructionFixtures.Runtime}.txt");
+            Assert.True(RichTextBoxHelper.TryParseDocumentXaml(stored, out FlowDocument document));
+
+            Assert.Equal(stored, RichTextBoxHelper.SerializeDocument(document));
+        });
     }
 }

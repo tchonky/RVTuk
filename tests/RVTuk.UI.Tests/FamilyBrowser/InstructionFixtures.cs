@@ -21,8 +21,10 @@ namespace RVTuk.UI.Tests.FamilyBrowser
         public const string Runtime = "net8";
 #endif
 
-        public static string Read(string name) =>
-            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "FamilyBrowser", "Fixtures", name));
+        // The fixtures as copied next to the test assembly.
+        public static string Folder => Path.Combine(AppContext.BaseDirectory, "FamilyBrowser", "Fixtures");
+
+        public static string Read(string name) => File.ReadAllText(Path.Combine(Folder, name));
 
         // The shape the editor produces: text, then an image inside a hover-styled border.
         public static FlowDocument SampleDocument()

@@ -79,7 +79,13 @@ public class InstructionXamlRewriterTests
     [Fact]
     public void TextBetweenTagsIsNeverRewritten()
     {
-        var body = "<Paragraph>xmlns:a=\"clr-namespace:RVTuk.UI.Controls;assembly=RVTuk.UI\" and assembly=System.Private.CoreLib\"</Paragraph>";
+        // Every declaration either direction rewrites, typed as text: none of it may change.
+        var body = "<Paragraph>" +
+            "xmlns:a=\"clr-namespace:RVTuk.UI.Controls;assembly=RVTuk.UI\" " +
+            "xmlns:b=\"clr-namespace:RVTuk.UI.Shared.Controls;assembly=RVTuk.UI\" " +
+            "xmlns:s=\"clr-namespace:System;assembly=System.Private.CoreLib\" " +
+            $"and \"clr-namespace:{Ns};assembly={Asm}\"" +
+            "</Paragraph>";
         var x = Doc("", body);
         Assert.Equal(x, InstructionXamlRewriter.ForRead(x, Ns, Asm));
         Assert.Equal(x, InstructionXamlRewriter.ForWrite(x, Ns, Asm));

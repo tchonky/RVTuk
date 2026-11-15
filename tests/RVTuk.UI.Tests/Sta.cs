@@ -25,6 +25,9 @@ namespace RVTuk.UI.Tests
                 }
             });
             thread.SetApartmentState(ApartmentState.STA);
+            // A test that times out leaves its thread running; a foreground thread would keep the
+            // test host alive and dotnet test would hang instead of reporting the timeout.
+            thread.IsBackground = true;
             thread.Start();
             if (!thread.Join(TimeSpan.FromSeconds(30)))
                 throw new TimeoutException("The test didn't finish within 30 seconds.");
