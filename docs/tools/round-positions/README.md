@@ -24,7 +24,7 @@ gate, pane view model, pane view and handlers). Tasks 8-14 are not on `master`: 
 lines, levels, grids and reference planes, point families, wall-hosted openings, base points, and
 the tool's backlog. `RegisterRoundPositions` (on) in `src/RVTuk.Revit/Application.cs` gates the
 pane and its external events; the ribbon button is always added, and with the flag off it shows a
-message instead of the pane. Not in KKarea (2023/2026/2027). Merged into `master` in
+message instead of the pane. Not in KKarea (2023/2026). Merged into `master` in
 November 2026 after sitting on its own branch since August; not yet re-verified in Revit since
 the merge.
 

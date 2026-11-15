@@ -11,7 +11,7 @@ using WpfColor = System.Windows.Media.Color;
 namespace KKarea.Revit
 {
     /// <summary>
-    /// KKarea: standalone Revit 2023/2026/2027 host for the Area Calc (Rishui Zamin) tool. The area
+    /// KKarea: standalone Revit 2023/2026 host for the Area Calc (Rishui Zamin) tool. The area
     /// logic is shared source with RVTuk (linked compile items in the csproj); this class is
     /// only the thin host: external events, assembly-resolve hook, crash logging, and a
     /// one-button ribbon.

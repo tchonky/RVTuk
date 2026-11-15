@@ -14,24 +14,34 @@ namespace RVTuk.Setup
     /// Self-contained installer for the RVTuk / KKarea Revit add-ins.
     /// Build-Installer.ps1 embeds payload.zip (per-year add-in DLLs + .addin manifests);
     /// this program extracts it into the per-year Revit Addins folders — the same layout
-    /// Deploy.ps1 produces on a dev machine.
+    /// Deploy.ps1 produces on a dev machine (ProgramData up to Revit 2026, Program Files
+    /// from 2027; see <see cref="MachineAddinsBase"/>).
     ///
     /// Zip layout, one top-level folder per Revit year:
     ///   2023/KKarea.addin   2023/KKarea/...dlls...
     ///   2024/RVTuk.addin    2024/RVTuk/...dlls...
     ///   2025/RVTuk.addin    2025/RVTuk/...dlls...
     ///   2026/KKarea.addin   2026/KKarea/...dlls...
-    ///   2027/KKarea.addin   2027/KKarea/...dlls...
+    ///   2027/RVTuk.addin    2027/RVTuk/...dlls...
     ///   version.txt         (source commit + build date, shown in the banner)
     ///
     /// Flags: --uninstall  remove the add-in instead of installing
     ///        --all        don't skip years whose Addins folder is missing
-    ///        --target X   install under folder X instead of ProgramData (testing)
+    ///        --target X   install every year under folder X instead of the machine-wide
+    ///                     Addins folders (testing)
     ///        --no-pause   don't wait for Enter at the end
     /// </summary>
     internal static class Program
     {
-        private const string DefaultAddinsBase = @"C:\ProgramData\Autodesk\Revit\Addins";
+        /// <summary>
+        /// Machine-wide Addins root for a Revit year: ProgramData up to 2026, Program Files
+        /// from 2027 on (Revit 2027 no longer reads machine-wide add-ins from ProgramData).
+        /// Deploy.ps1 (Get-AddinsBase) implements the same rule.
+        /// </summary>
+        private static string MachineAddinsBase(string year) =>
+            int.Parse(year) >= 2027
+                ? @"C:\Program Files\Autodesk\Revit\Addins"
+                : @"C:\ProgramData\Autodesk\Revit\Addins";
 
         private static int Main(string[] args)
         {
@@ -39,17 +49,15 @@ namespace RVTuk.Setup
             bool allYears = args.Contains("--all");
             bool noPause = args.Contains("--no-pause");
             string target = GetOption(args, "--target");
-            bool customTarget = target != null;
-            string addinsBase = target ?? DefaultAddinsBase;
 
-            // Installing under ProgramData needs admin; relaunch elevated if we aren't.
-            if (!customTarget && !IsElevated())
+            // Installing into the machine-wide folders needs admin; relaunch elevated if we aren't.
+            if (target == null && !IsElevated())
                 return RelaunchElevated(args);
 
             int exit = 1;
             try
             {
-                exit = Run(uninstall, allYears, customTarget, addinsBase);
+                exit = Run(uninstall, allYears, target);
             }
             catch (Exception ex)
             {
@@ -66,8 +74,9 @@ namespace RVTuk.Setup
             return exit;
         }
 
-        private static int Run(bool uninstall, bool allYears, bool customTarget, string addinsBase)
+        private static int Run(bool uninstall, bool allYears, string target)
         {
+            bool customTarget = target != null;
             using (var zip = OpenPayload())
             {
                 Banner(zip, uninstall);
@@ -85,6 +94,7 @@ namespace RVTuk.Setup
                 foreach (var year in years)
                 {
                     string addinName = ManifestName(zip, year);
+                    string addinsBase = target ?? MachineAddinsBase(year);
                     Console.WriteLine($"  Revit {year}  [{addinName}]");
 
                     if (!allYears && !Directory.Exists(Path.Combine(addinsBase, year)))
@@ -235,7 +245,7 @@ namespace RVTuk.Setup
             }
             catch (System.ComponentModel.Win32Exception) // UAC prompt declined
             {
-                Console.WriteLine("Administrator rights are required to install into " + DefaultAddinsBase);
+                Console.WriteLine("Administrator rights are required to install into the machine-wide Revit Addins folders.");
                 return 1;
             }
         }

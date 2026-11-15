@@ -117,10 +117,10 @@ namespace RVTuk.Revit.TopoTools
 
                     try
                     {
-#if REVIT2025
-                        editor.AddSplitLine(start, end);
-#else
+#if REVIT2024
                         editor.DrawSplitLine(start, end);
+#else
+                        editor.AddSplitLine(start, end);
 #endif
                     }
                     catch (Exception)
@@ -137,6 +137,8 @@ namespace RVTuk.Revit.TopoTools
         /// Points on an edge, drawn onto the flat top one at a time. <c>AddPoints</c> refuses
         /// them, and so does 2025's <c>AddPoint</c>, which is why the deprecated
         /// <c>DrawPoint</c> is used. Each call regenerates, but only edge points pay that.
+        /// The 2027 API no longer has <c>DrawPoint</c>, so there <c>AddPoint</c> is tried; whether
+        /// 2027's takes edge points is not yet checked in Revit — a refused point counts as lost.
         /// Returns how many could not be drawn.
         /// </summary>
         private static int DrawEdgePoints(SlabShapeEditor editor, IReadOnlyList<XyzPoint> points, double topZ)
@@ -146,9 +148,13 @@ namespace RVTuk.Revit.TopoTools
             {
                 try
                 {
+#if REVIT2027
+                    if (editor.AddPoint(new XYZ(point.X, point.Y, topZ)) == null) lost++;
+#else
 #pragma warning disable CS0618
                     if (editor.DrawPoint(new XYZ(point.X, point.Y, topZ)) == null) lost++;
 #pragma warning restore CS0618
+#endif
                 }
                 catch (Exception)
                 {

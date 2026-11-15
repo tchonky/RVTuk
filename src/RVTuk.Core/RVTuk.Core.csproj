@@ -20,7 +20,8 @@
     <DefineConstants>REVIT2024</DefineConstants>
   </PropertyGroup>
 
-  <!-- Revit 2026 / 2027 build Core only for the KKarea host (Area Calc). 2026 builds net8
+  <!-- Revit 2026 builds Core only for the KKarea host (Area Calc); 2027 builds it for the
+       full RVTuk add-in. 2026 builds net8
        (Revit 2026.0-2026.4 run .NET 8, 2026.5+ run .NET 10 and still load net8 add-ins);
        2027 is .NET 10 (the Revit 2027 API targets net10.0-windows). -->
   <PropertyGroup Condition="'$(Configuration)'=='Release2026'">

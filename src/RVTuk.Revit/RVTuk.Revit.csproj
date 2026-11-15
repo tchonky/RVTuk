@@ -9,47 +9,49 @@
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)'=='Release2024'">
-    <TargetFramework>net48</TargetFramework>
-    <OutputPath>bin\2024\Release2024\</OutputPath>
-    <DefineConstants>REVIT2024</DefineConstants>
+  <!-- One Revit year per configuration: Release2024 -> 2024 (net48), Release2025 -> 2025
+       (net8), Release2027 -> 2027 (net10). RVTuk does not build for 2023 or 2026 — KKarea
+       serves those years. -->
+  <PropertyGroup>
+    <RevitYear>2025</RevitYear>
+    <RevitYear Condition="'$(Configuration)'=='Release2024'">2024</RevitYear>
+    <RevitYear Condition="'$(Configuration)'=='Release2027'">2027</RevitYear>
+    <OutputPath>bin\$(RevitYear)\Release$(RevitYear)\</OutputPath>
+    <DefineConstants>REVIT$(RevitYear)</DefineConstants>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)'!='Release2024'">
+  <PropertyGroup Condition="'$(RevitYear)'=='2024'">
+    <TargetFramework>net48</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RevitYear)'=='2025'">
     <TargetFramework>net8.0-windows</TargetFramework>
-    <OutputPath>bin\2025\Release2025\</OutputPath>
-    <DefineConstants>REVIT2025</DefineConstants>
-    <!-- net8 libraries don't copy NuGet deps to bin by default (they rely on deps.json
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RevitYear)'=='2027'">
+    <TargetFramework>net10.0-windows</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RevitYear)'!='2024'">
+    <!-- net8/net10 libraries don't copy NuGet deps to bin by default (they rely on deps.json
          resolution). A Revit add-in is loaded by Revit.exe, so it must carry its own
          dependency closure — including runtimes\win-x64\native\e_sqlite3.dll — into bin
          for Deploy.ps1 to pick up. (net48 already copies deps, so this only matters here.) -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
-  <!-- Revit 2024 API packages (net48) -->
-  <ItemGroup Condition="'$(Configuration)'=='Release2024'">
+  <!-- Revit API packages for the configured year: compile-time only, the real DLLs come
+       from the Revit install. -->
+  <ItemGroup>
     <PackageReference Include="Nice3point.Revit.Api.RevitAPI"
-                      Version="2024.*"
+                      Version="$(RevitYear).*"
                       IncludeAssets="compile;build;native;contentfiles;analyzers;buildtransitive"
                       ExcludeAssets="runtime" />
     <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI"
-                      Version="2024.*"
+                      Version="$(RevitYear).*"
                       IncludeAssets="compile;build;native;contentfiles;analyzers;buildtransitive"
                       ExcludeAssets="runtime" />
   </ItemGroup>
-
-  <!-- Revit 2025 API packages (net8.0-windows) -->
-  <ItemGroup Condition="'$(Configuration)'!='Release2024'">
-    <PackageReference Include="Nice3point.Revit.Api.RevitAPI"
-                      Version="2025.*"
-                      IncludeAssets="compile;build;native;contentfiles;analyzers;buildtransitive"
-                      ExcludeAssets="runtime" />
-    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI"
-                      Version="2025.*"
-                      IncludeAssets="compile;build;native;contentfiles;analyzers;buildtransitive"
-                      ExcludeAssets="runtime" />
-  </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\RVTuk.Core\RVTuk.Core.csproj" />
     <ProjectReference Include="..\RVTuk.UI\RVTuk.UI.csproj" />

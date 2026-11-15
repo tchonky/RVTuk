@@ -1,9 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- KKarea: standalone host for the Area Calc (Rishui Zamin) tool on the Revit years RVTuk
-       does not ship for — 2023 (net48), 2026 (net8 — Revit 2026.5+ runs
-       .NET 10 but loads net8 add-ins, and net8 keeps 2026.0-2026.4 working) and 2027 (net10). It is built only via
-       the Release2023 / Release2026 / Release2027 configurations (see RVTuk.sln mappings). The
+       does not ship for — 2023 (net48) and 2026 (net8 — Revit 2026.5+ runs
+       .NET 10 but loads net8 add-ins, and net8 keeps 2026.0-2026.4 working). Revit 2027 gets
+       the full RVTuk add-in instead. It is built only via
+       the Release2023 / Release2026 configurations (see RVTuk.sln mappings). The
        area logic is linked shared source from RVTuk.Revit, compiled here against each year's
        API, with the REVIT2023 constant switching the 2023 ElementId shims. -->
   <PropertyGroup>
@@ -15,7 +16,6 @@
     <PlatformTarget>x64</PlatformTarget>
     <RevitYear>2023</RevitYear>
     <RevitYear Condition="'$(Configuration)'=='Release2026'">2026</RevitYear>
-    <RevitYear Condition="'$(Configuration)'=='Release2027'">2027</RevitYear>
     <OutputPath>bin\$(RevitYear)\Release$(RevitYear)\</OutputPath>
     <DefineConstants>REVIT$(RevitYear)</DefineConstants>
   </PropertyGroup>
@@ -26,10 +26,6 @@
 
   <PropertyGroup Condition="'$(RevitYear)'=='2026'">
     <TargetFramework>net8.0-windows</TargetFramework>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(RevitYear)'=='2027'">
-    <TargetFramework>net10.0-windows</TargetFramework>
   </PropertyGroup>
 
   <!-- .NET (Core) libraries don't copy NuGet deps to bin by default. Revit.exe loads the
