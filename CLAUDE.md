@@ -18,11 +18,11 @@ RVTuk is a Revit add-in toolkit for Knafo Klimor Architects LTD. It supports Rev
 | **Host** | A project that loads into Revit: `RVTuk.Revit` (2024/25) and `KKarea.Revit` (2023/2026/2027, ships only the Rishui Zamin tool). |
 
 Canonical tool names in code and folders: `FamilyBrowser`, `RishuiZamin`,
-`AutoDimensions`, `TopoTools`, `RoomFloors`, `RoundPositions`, `NeoProperties`. Inside every project (and the test project) the
+`AutoDimensions`, `TopoTools`, `RoomFloors`, `RoundPositions`, `NeoProperties`. Inside every project (and each test project) the
 structure is one folder per tool plus `Shared/`, and **namespace = root namespace +
 folder path, exactly**. A file lives in a tool folder iff only that tool uses it.
 
-**v1 launch surface:** the **Family Browser**, **Rishui Zamin** (ribbon "Area Calc"), **DWG Exporter** (ribbon "DWG Export"), and **Auto Dimensions** are registered on the single "RVTuk" ribbon panel. **Topo Tools** joins them on that panel, gated by `RegisterTopoTools` (on). It was intended for Revit's **Massing & Site** tab; that is impossible and was verified in Revit 2024 — the API places a custom panel only on **Add-Ins**, on **Analyze**, or on a tab the add-in creates itself, and the string overload does not resolve built-in tabs. The undocumented `Autodesk.Windows` ribbon can reach them but is unsupported and may break on any update, so it was declined. **Don't retry this**; if the placement ever matters, the supported move is a top-level `RVTuk` tab for the whole toolkit. **Room Floors** (ribbon "Room Floor") sits on the same panel, gated by `RegisterRoomFloors` (on), and so does **Round Positions** (ribbon "Round Positions"), gated by `RegisterRoundPositions` (on). Neo Properties is code-complete but hidden behind the `RegisterNeoProperties` flag in `src\RVTuk.Revit\Application.cs` (`RegisterAutoDimensions`, next to it, gates Auto Dimensions and is on). The Project Comparator was stripped from this repo entirely in July 2026 — code, tests, and specs — and continues as its own separate project; recover the pre-strip sources from git history (the `family-browser-polish` branch history) if the new project needs them.
+**v1 launch surface:** the **Family Browser**, **Rishui Zamin** (ribbon "Area Calc"), **DWG Exporter** (ribbon "DWG Export"), and **Auto Dimensions** are registered on the single "RVTuk" ribbon panel. **Topo Tools** joins them on that panel, gated by `RegisterTopoTools` (on). It was intended for Revit's **Massing & Site** tab; that is impossible and was verified in Revit 2024 — the API places a custom panel only on **Add-Ins**, on **Analyze**, or on a tab the add-in creates itself, and the string overload does not resolve built-in tabs. The undocumented `Autodesk.Windows` ribbon can reach them but is unsupported and may break on any update, so it was declined. **Don't retry this**; if the placement ever matters, the supported move is a top-level `RVTuk` tab for the whole toolkit. **Room Floors** (ribbon "Room Floor") sits on the same panel, gated by `RegisterRoomFloors` (on), and so does **Round Positions** (ribbon "Round Positions"): `RegisterRoundPositions` (on) gates its pane and external events, not its button, which is always added and, with the flag off, shows a message instead of the pane. Neo Properties is code-complete but hidden behind the `RegisterNeoProperties` flag in `src\RVTuk.Revit\Application.cs` (`RegisterAutoDimensions`, next to it, gates Auto Dimensions and is on). The Project Comparator was stripped from this repo entirely in July 2026 — code, tests, and specs — and continues as its own separate project; recover the pre-strip sources from git history (the `family-browser-polish` branch history) if the new project needs them.
 
 Features:
 
@@ -88,7 +88,7 @@ On a non-Windows SDK (CI, cloud agents) add `-p:EnableWindowsTargeting=true` —
 dotnet test tests\RVTuk.UI.Tests\RVTuk.UI.Tests.csproj -c Release2024
 dotnet test tests\RVTuk.UI.Tests\RVTuk.UI.Tests.csproj -c Release2025
 ```
-Its fixtures are sanitized (`FamilyBrowser\Fixtures\sanitize_instructions.py`): never commit a real database row. Tests that open a database are net8-only (`#if !NETFRAMEWORK`), because `e_sqlite3.dll` does not load in the net48 test host.
+Its fixtures are sanitized (`FamilyBrowser\Fixtures\sanitize_instructions.py`): never commit a real database row. Tests that open a database are net8-only (`#if !NETFRAMEWORK`), because SQLite does not initialise in the net48 test host: opening a connection throws a `FileLoadException` for `System.Memory` inside `SQLitePCL.Batteries_V2.DoDynamic_cdecl`. The cause is not settled yet (copying `e_sqlite3.dll` flat does not help); see "Phase 0 record" in [`docs/toolkit/specs/2026-11-12-addin-split-design.md`](docs/toolkit/specs/2026-11-12-addin-split-design.md).
 
 ## Deployment
 
@@ -127,7 +127,7 @@ RVTuk.Revit       — Revit add-in host: IExternalApplication entry point,
                           src\RVTuk.Revit
 ```
 
-Inside each project (and `tests\RVTuk.Core.Tests`) the structure is **one folder per
+Inside each project (and `tests\RVTuk.Core.Tests` and `tests\RVTuk.UI.Tests`) the structure is **one folder per
 tool** (`FamilyBrowser/`, `RishuiZamin/`, `AutoDimensions/`, `TopoTools/`, `RoomFloors/`, `RoundPositions/`, `NeoProperties/`, …) plus
 `Shared/` for genuinely cross-tool code (`AppConfig`/`ConfigManager`, `PathUtil`, the
 UI's `ViewModelBase`/`RelayCommand`/converters/theme). Namespaces follow folders
