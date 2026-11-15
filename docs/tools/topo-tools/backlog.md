@@ -75,8 +75,40 @@ round-trips through `Get<double>(field, UnitTypeId.Feet)` on a detail line.
       sources of truth wired together and a guard flag between them; this is the sequence most
       likely to expose a loop or a stuck highlight.
 
+## To check: floor ⇄ toposolid converter (2026-09-29)
+
+Work through the checklist in [README.md](README.md#in-revit-checklist-floor--toposolid). The
+two unknowns the design leans on are cases 1 and 8: whether Revit answers
+`GetDefaultFamilyTypeId` for toposolids, and whether `AddPoints` takes points on a boundary edge.
+Case 6 is the most important: a round trip must not break Apply Points' idempotence.
+
+Also unverified, and only visible in Revit:
+- whether an `Entity` read from an element stays usable for `SetEntity` after that element is
+  deleted (cases 6 and 12 cover it);
+- whether `Sketch.Profile` of a sloped floor includes the slope arrow (case 9);
+- in 2025, split lines go through `AddSplitLine`, since `DrawSplitLine` is deprecated there, and
+  edge points still use the deprecated `DrawPoint` (cases 7 and 8, 2025 column).
+
 ## Next
 
+- **Deferred from the converter's final review (2026-09-29), all minor:**
+  - A flat toposolid converted to a floor comes back with shape editing enabled, because a
+    toposolid always reports its corner vertices and `Replay` enables the floor's editor even for
+    an empty plan. Fix: `ResetSlabShape()` on a floor target that was not enabled and got nothing.
+  - `ShapeReplayPlanner.Plan` de-duplicates with a linear scan (O(n²)); bucket on an XY grid if
+    survey toposolids of tens of thousands of points turn out slow (checklist 5/8b).
+  - A convert summary is lost if the refresh after it fails ("Could not read this view…").
+  - Losses the docs do not list yet: walls and columns attached to the floor detach; global
+    parameter associations are lost (only the value copies); the span-direction symbol is lost.
+  - A Revit or exception message ending in "." gives ".." in a skip line.
+  - The spec still says `Uri.EscapeDataString` and "2 hosted families, 1 slab edge"; the code
+    escapes only `% | ;` and says "hosted elements / tags or dimensions / parts". Sync the spec.
+  - The unverified list should name that `AddPoints` Z is absolute on a **floor** too; so far it is
+    only proven on toposolids (checklist 4 covers it).
+- **▶ Apply's and a height commit's summaries vanish at once.** Both set the status line and then
+  call `Refresh()`, whose `Populate` overwrites it with the view's scope message. Found while
+  building the converter, which avoids it with `RefreshCore(summary)`. The fix is to pass the
+  summary the same way from `RunApply` and `CommitElevation`.
 - **Coincident points should average, not race.** Two points landing on the same XY should become
   one at the mean Z rather than both being handed to `AddPoints` for Revit to reconcile however it
   sees fit. Two contours crossing in plan is not an error — it is what a saddle or a steep bank

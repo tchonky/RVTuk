@@ -12,7 +12,7 @@
 
     <DockPanel Background="{StaticResource Brush.Bg}" LastChildFill="True">
 
-        <!-- Settings on the left, the two verbs on the right: the run button sits beside what it
+        <!-- Settings on the left, the verbs on the right: the run button sits beside what it
              will use rather than at the far end of the pane. -->
         <Grid DockPanel.Dock="Top" Margin="10,10,10,8">
             <Grid.ColumnDefinitions>
@@ -62,6 +62,10 @@
                         Width="40" Height="40" FontSize="17"
                         Content="&#x27F3;" Margin="6,0,0,0"
                         ToolTip="Refresh — re-read this view's topo lines"/>
+                <Button Command="{Binding ConvertCommand}"
+                        Width="40" Height="40" FontSize="17"
+                        Content="&#x21C4;" Margin="6,0,0,0"
+                        ToolTip="Convert selected floors &#x21C4; toposolids"/>
             </StackPanel>
         </Grid>
 
