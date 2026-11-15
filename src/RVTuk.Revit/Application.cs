@@ -494,6 +494,9 @@ namespace RVTuk.Revit
                 panel.AddItem(topoBtn);
             }
 
+            // TEMPORARY: throwaway probe, remove together with TopoProbeCommand.cs
+            panel.AddItem(new PushButtonData("TopoProbe", "Topo\nProbe", assemblyPath, typeof(TopoProbeCommand).FullName!));
+
             if (RegisterRoomFloors)
             {
                 var roomFloorBtn = new PushButtonData(
