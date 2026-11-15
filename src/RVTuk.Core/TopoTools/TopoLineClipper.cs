@@ -66,13 +66,32 @@ namespace RVTuk.Core.TopoTools
 
             foreach (var run in Clip(polyline, loops))
             {
+                // The sampler may drop a run's last vertex when it sits close to the previous point,
+                // so a run endpoint on the outline goes to Edge directly and samples duplicating it are skipped.
+                var start = run[0];
+                var end = run[run.Count - 1];
+                bool startOnEdge = PolygonContainment.IsNearEdge(loops, start, edgeTolerance);
+                bool endOnEdge = PolygonContainment.IsNearEdge(loops, end, edgeTolerance);
+
+                if (startOnEdge) edge.Add(start);
+
                 foreach (var point in TopoLineSampler.Sample(run, spacing))
                 {
+                    if (startOnEdge && Near(point, start, edgeTolerance)) continue;
+                    if (endOnEdge && Near(point, end, edgeTolerance)) continue;
                     if (PolygonContainment.IsNearEdge(loops, point, edgeTolerance)) edge.Add(point);
                     else interior.Add(point);
                 }
+
+                if (endOnEdge && !(startOnEdge && Near(start, end, edgeTolerance))) edge.Add(end);
             }
             return new TopoLinePoints(interior, edge);
+        }
+
+        private static bool Near(XyPoint a, XyPoint b, double tolerance)
+        {
+            double dx = a.X - b.X, dy = a.Y - b.Y;
+            return Math.Sqrt(dx * dx + dy * dy) <= tolerance;
         }
 
         /// <summary>Sorted parameters along p to q (always including 0 and 1) where it meets a loop edge.</summary>

@@ -92,7 +92,18 @@ public class TopoLineClipperTests
         Assert.NotEmpty(points.Interior);
         foreach (var edge in points.Edge)
             Assert.DoesNotContain(points.Interior,
-                p => System.Math.Abs(p.X - edge.X) < Tolerance && System.Math.Abs(p.Y - edge.Y) < Tolerance);
+                p => System.Math.Sqrt((p.X - edge.X) * (p.X - edge.X) + (p.Y - edge.Y) * (p.Y - edge.Y)) <= 0.001);
+    }
+
+    [Fact]
+    public void ACrossingIsKeptWhenACornerSitsJustInsideTheEdge()
+    {
+        // Corner 0.05 inside the outline, under spacing/10: the sampler would drop the crossing.
+        var line = Line((5, 5), (0.05, 5), (-1, 5));
+
+        var points = TopoLineClipper.Points(line, Square(), 1, 0.001);
+
+        Assert.Contains(points.Edge, p => System.Math.Abs(p.X) < Tolerance && System.Math.Abs(p.Y - 5) < Tolerance);
     }
 
     [Fact]
