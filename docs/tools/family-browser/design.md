@@ -278,6 +278,27 @@ The DB may live on `\\server\share\…`, browsed by many users, written only by 
   deleted, flag changed) is solely the Scan's job — its filenames-only mode (both checkboxes
   off) does exactly that with no extraction.
 
+### 6a. Library on Autodesk Docs (2026-11-15)
+
+The office library lives in Autodesk Docs (ACC), reached through **Desktop Connector** at
+`%USERPROFILE%\DC\ACCDocs\KKarc\_KKarc Cloud\Project Files` — the default library folder when
+none is set (`AppConfig.DefaultLibraryFolderPath`). A sync folder is not a file share: the
+client uploads whole files, so the "1 writer / many readers" rule is enforced by **ACC
+permissions** — the maintainer has Edit, everyone else View + Download.
+- `LibraryCache.CanWrite` decides the mode per open: a view-only user gets the DB from Desktop
+  Connector with the ReadOnly attribute, so they are a reader. No setting.
+- **Maintainer:** works on the DB in place, exactly as above.
+- **Readers** browse a local copy in `%LOCALAPPDATA%\RVTuk\FamilyBrowser\Libraries\<hash>\DatabaseCopy`.
+  It is opened at once and refreshed in the background (`LibraryCache.Refresh`): copied when
+  the source's last-write time/size changes, kept only if the source did not change mid-copy
+  and `PRAGMA quick_check` passes, so a half-synced file never replaces a good copy. Each copy
+  has its own file name, so a copy still open in another Revit session never blocks a newer
+  one. The footer shows the copy's date ("Offline copy" when the source could not be read).
+  Scan, Rescan, Edit Info and Save to Library are off for readers.
+- **Favourites are personal** (`PersonalFavorites`, `favorites.txt` in the same local folder),
+  since readers cannot write the DB. The `Families.IsFavorite` column is no longer used.
+- Loading a family uses the Desktop Connector path, so only that `.rfa` downloads.
+
 > **Note:** the per-family image gallery that previously lived in this section of the doc was
 > removed on 2026-07-07 — pictures now live only as images embedded inline in the rich-text
 > Instructions body (§4), a capability that already existed and made the separate gallery

@@ -28,18 +28,6 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
   paths (tags, instructions save) for catch/retry — favourites already degrade gracefully.
   *(Partially done 2026-07-16: scan/rescan now fail fast with a clear "library database is
   read-only" message — see the read-only-DB entry in Done. Browser-open and edit paths remain.)*
-- [ ] **Library on Autodesk Desktop Connector (ACC Docs) is fragile.** Discovered 2026-07-16:
-  the office library lives under `C:\Users\<user>\DC\ACCDocs\...`, so every user gets a local
-  replica and DC syncs whole files. DC flagged `RVTuk.db` with the Windows **ReadOnly attribute**
-  (it does this while the cloud copy is held/locked elsewhere), which silently blocks every scan
-  and rescan — and because the DB is also one schema migration behind (`Families.Version`
-  missing), nobody can migrate it, so the browser runs without version data (no ✓/Update
-  badges, no version display). Two-user scans on DC would also conflict wholesale (last writer
-  wins) — the shared-DB design assumes a real SMB share (`\\server\share`). **To unblock now:**
-  clear the read-only attribute on `...\.DB\RVTuk.db` (right-click → Properties, or
-  `attrib -r`) while nobody else has the browser open, then run a Scan once (migrates the
-  schema and captures `_Version`). **Decide longer-term:** move the DB (or the whole library)
-  off Desktop Connector.
 - [ ] **Old-schema DB on a no-write share.** The degraded-read fallback only covers the
   `Version`/`ParametersExtracted` columns; a DB predating `Tags`/`IsFavorite`/`RevitYear` that
   can't be migrated (user lacks write permission) still crashes `GetAllFamilies`. Rare (one
@@ -57,6 +45,10 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
   `RunDeepScan`) while a scan is in progress.
 
 ## 🚀 Ideas
+- [ ] **Suggest a family / a change.** Users with view-only access upload a suggestion (a short
+  note, plus an optional `.rfa`) into an ACC `.Suggestions` folder where everyone has Upload
+  permission. One file per suggestion means no sync conflicts; the maintainer reviews them in
+  the browser. Follows the 2026-11-15 view-only design (design.md §6a).
 
 - [ ] **Tags follow-ups** (base `c742a9b`, clickable chips `c625502`): a tag auto-complete /
   pick-from-existing list so spelling stays consistent.
@@ -79,6 +71,23 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
   be parsed opens with a notice, is locked, and Save keeps its stored text (tags and thumbnail
   still save). See the spec section "Family Browser specifics" in
   `docs/toolkit/specs/2026-11-12-addin-split-design.md`.
+- [x] **Library on Autodesk Desktop Connector (ACC Docs) was fragile** (2026-11-15). Fixed by
+  making ACC permissions the "one writer" rule: the maintainer edits in place, view-only users
+  browse a verified local copy and keep personal favourites (design.md §6a). The original
+  report:
+  **Library on Autodesk Desktop Connector (ACC Docs) is fragile.** Discovered 2026-07-16:
+    the office library lives under `C:\Users\<user>\DC\ACCDocs\...`, so every user gets a local
+    replica and DC syncs whole files. DC flagged `RVTuk.db` with the Windows **ReadOnly attribute**
+    (it does this while the cloud copy is held/locked elsewhere), which silently blocks every scan
+    and rescan — and because the DB is also one schema migration behind (`Families.Version`
+    missing), nobody can migrate it, so the browser runs without version data (no ✓/Update
+    badges, no version display). Two-user scans on DC would also conflict wholesale (last writer
+    wins) — the shared-DB design assumes a real SMB share (`\\server\share`). **To unblock now:**
+    clear the read-only attribute on `...\.DB\RVTuk.db` (right-click → Properties, or
+    `attrib -r`) while nobody else has the browser open, then run a Scan once (migrates the
+    schema and captures `_Version`). **Decide longer-term:** move the DB (or the whole library)
+    off Desktop Connector.
+
 - [x] **"Open family button stop working"** (2026-10-04). Two causes. (1) Open in Family
   Editor was the only action whose Revit-side error was thrown away: a file moved or renamed
   since the last Scan, a family already open, a locked or newer-version file all looked like a

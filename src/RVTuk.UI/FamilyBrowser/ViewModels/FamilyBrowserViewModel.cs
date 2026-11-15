@@ -30,6 +30,9 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         private readonly AppConfig _config;
         private readonly BrowserRepository _repo;
+        private readonly PersonalFavorites? _favorites;
+        private string _libraryStatus = string.Empty;
+        private string? _libraryStatusDetail;
         private readonly Func<IReadOnlyList<ProjectFamilyInfo>> _getProjectFamilies;
         private readonly Func<string, (bool Success, string? Error)> _loadFamily;
         private readonly Func<long, string, (bool Success, string? Error)> _rescanFamily;
@@ -279,6 +282,23 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         public BrowserRepository Repo => _repo;
 
+        /// <summary>False for users with view-only access to the library: they browse a local
+        /// copy, so scan, rescan, Edit Info and Save to Library are off.</summary>
+        public bool CanEdit { get; }
+
+        /// <summary>Footer note on which copy of the library is shown (empty for the maintainer).</summary>
+        public string LibraryStatus
+        {
+            get => _libraryStatus;
+            set => SetProperty(ref _libraryStatus, value);
+        }
+
+        public string? LibraryStatusDetail
+        {
+            get => _libraryStatusDetail;
+            set => SetProperty(ref _libraryStatusDetail, value);
+        }
+
         // Right panel: family detail (default), embedded settings, or the help/about page.
         public FamilyBrowserRightView RightView
         {
@@ -350,10 +370,14 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             Func<string, (bool Success, string? Error)> openModelFamilyInEditor,
             Func<string, string, (bool Success, string? Error)> saveFamilyToLibrary,
             Func<IReadOnlyList<string>, IReadOnlyDictionary<string, byte[]>> getFamilyPreviews,
-            Action? onLibraryFolderChanged = null)
+            Action? onLibraryFolderChanged = null,
+            bool canEdit = true,
+            PersonalFavorites? favorites = null)
         {
             _config = config;
             _repo = repo;
+            CanEdit = canEdit;
+            _favorites = favorites;
             _getProjectFamilies = getProjectFamilies;
             _loadFamily = loadFamily;
             _rescanFamily = rescanFamily;
@@ -363,7 +387,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             _getFamilyPreviews = getFamilyPreviews;
             _dispatcher = Dispatcher.CurrentDispatcher;
 
-            Settings = new ConfigViewModel(config, scan, onLibraryFolderChanged);
+            Settings = new ConfigViewModel(config, scan, onLibraryFolderChanged) { IsReadOnlyLibrary = !canEdit };
             // Editing the ignore lists hides/shows families right away (both share _config).
             Settings.PropertyChanged += (_, e) =>
             {
@@ -379,12 +403,12 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             // (OpenFamilyEditorCommand) and Save to Library (below). Load also serves as
             // Update — the button just relabels itself when a newer version exists.
             LoadFamilyCommand      = new RelayCommand(LoadSelected,  () => SelectedItem != null && !SelectedItem.IsModelOnly && !IsLoading);
-            EditInfoCommand        = new RelayCommand(RequestEditInfo, () => SelectedItem != null && !SelectedItem.IsModelOnly);
-            RescanFamilyCommand    = new RelayCommand(RescanSelected, () => SelectedItem != null && !SelectedItem.IsModelOnly && !IsRescanning);
+            EditInfoCommand        = new RelayCommand(RequestEditInfo, () => CanEdit && SelectedItem != null && !SelectedItem.IsModelOnly);
+            RescanFamilyCommand    = new RelayCommand(RescanSelected, () => CanEdit && SelectedItem != null && !SelectedItem.IsModelOnly && !IsRescanning);
             // Open-in-editor works for model-only rows too (via EditFamily on the loaded family).
             OpenFamilyEditorCommand= new RelayCommand(OpenInFamilyEditor, () => SelectedItem != null && !IsLoading);
             SaveToLibraryCommand   = new RelayCommand(SaveToLibrary,
-                () => SelectedItem != null && SelectedItem.IsModelOnly && !IsSavingToLibrary);
+                () => CanEdit && SelectedItem != null && SelectedItem.IsModelOnly && !IsSavingToLibrary);
             FilterByTagCommand     = new RelayCommand<string>(t => { if (!string.IsNullOrWhiteSpace(t)) SearchText = t.Trim(); });
             ToggleFavoriteCommand  = new RelayCommand<FamilyBrowserItemViewModel>(ToggleFavorite);
             ToggleSettingsCommand  = new RelayCommand(() => RightView = RightView == FamilyBrowserRightView.Settings
@@ -394,6 +418,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             ClearSearchCommand     = new RelayCommand(() => SearchText = string.Empty);
 
             _allItems = _repo.GetAllFamilies().Select(f => new FamilyBrowserItemViewModel(f)).ToList();
+            ApplyFavorites(_allItems);
             LoadCategories();
             ApplyFilter();
         }
@@ -547,6 +572,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                     var items = _repo.GetAllFamilies()
                         .Select(f => new FamilyBrowserItemViewModel(f))
                         .ToList();
+                    ApplyFavorites(items);
 
                     // Version check compares the _Version shared parameter: the library value is
                     // captured into the index by the deep scan, the project value is read off the
@@ -707,12 +733,24 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 EditInfoRequested?.Invoke(SelectedItem);
         }
 
+        // Favourites are personal: the row's shared IsFavorite column is replaced by this
+        // user's own list when one is in use.
+        private void ApplyFavorites(IEnumerable<FamilyBrowserItemViewModel> items)
+        {
+            if (_favorites == null) return;
+            foreach (var i in items) i.IsFavorite = _favorites.Contains(i.RelativePath);
+        }
+
         private void ToggleFavorite(FamilyBrowserItemViewModel? item)
         {
             if (item == null || item.IsModelOnly) return; // no DB row to persist a favourite on
             item.IsFavorite = !item.IsFavorite;
-            try { _repo.SetFavorite(item.Id, item.IsFavorite); }
-            catch { /* read-only share; favourite stays in-memory only */ }
+            if (_favorites != null) _favorites.Set(item.RelativePath, item.IsFavorite); // false: this session only
+            else
+            {
+                try { _repo.SetFavorite(item.Id, item.IsFavorite); }
+                catch { /* read-only share; favourite stays in-memory only */ }
+            }
             if (_showFavoriteFamilies) ApplyFilter(); // only the ⭐ filter cares
         }
 
