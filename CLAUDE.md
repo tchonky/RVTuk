@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RVTuk is a Revit add-in toolkit for Knafo Klimor Architects LTD. It supports Revit 2024 and 2025 simultaneously via separate build configurations. Revit 2023 is served by **KKarea**, a separate minimal add-in in this repo (`src\KKarea.Revit`) that hosts only the Rishui Zamin (Area Calc) tool — RVTuk itself was dropped from 2023.
+RVTuk is a Revit add-in toolkit for Knafo Klimor Architects LTD. It supports Revit 2024 and 2025 simultaneously via separate build configurations. Revit 2023, 2026 and 2027 are served by **KKarea**, a separate minimal add-in in this repo (`src\KKarea.Revit`) that hosts only the Rishui Zamin (Area Calc) tool — RVTuk itself was dropped from 2023 and does not ship for 2026/2027.
 
 > **Product vision, audience, and roadmap live in [`VISION.md`](VISION.md).** This file is the technical reference (build, architecture, threading, deploy).
 
@@ -15,7 +15,7 @@ RVTuk is a Revit add-in toolkit for Knafo Klimor Architects LTD. It supports Rev
 | **Toolkit** | RVTuk itself: one add-in, one ribbon, one install. |
 | **Tool** | A user-facing feature with its own button/pane and UI: **Family Browser**, **Rishui Zamin** (ribbon label "Area Calc"), **Auto Dimensions**, **Topo Tools**, **Room Floors** (ribbon label "Room Floor"), **Neo Properties**. |
 | **Layer** | A C# project: `RVTuk.Core` (logic) → `RVTuk.UI` (WPF) → `RVTuk.Revit` (Revit host). A tool is a vertical slice across the layers. |
-| **Host** | A project that loads into Revit: `RVTuk.Revit` (2024/25) and `KKarea.Revit` (2023, ships only the Rishui Zamin tool). |
+| **Host** | A project that loads into Revit: `RVTuk.Revit` (2024/25) and `KKarea.Revit` (2023/2026/2027, ships only the Rishui Zamin tool). |
 
 Canonical tool names in code and folders: `FamilyBrowser`, `RishuiZamin`,
 `AutoDimensions`, `TopoTools`, `RoomFloors`, `NeoProperties`. Inside every project (and the test project) the
@@ -28,7 +28,7 @@ Features:
 
 - **Family Library Indexer** — scans a folder of `.rfa` files, extracts metadata (category, parameters, thumbnails) via the Revit API, and stores it in a shared database.
 - **Family Browser** — a searchable/filterable window over that index, with per-family rich-text instructions, tags, favourites, and custom thumbnails, plus a merged "Load/Update family into the active project" button. Settings (library root folder, ignored subfolders, ignored file patterns, deep scan) and a Help/About panel are accessed from within the Family Browser itself, toggled via footer buttons — there is no separate ribbon Config window.
-- **Rishui Zamin** (ribbon button "Area Calc") — reads the Areas on the open sheet and exports the paired `.dxf` + `.dat` files the רישוי זמין area-calculation robot expects (`RZ_FRAME`/`RZ_FLOOR`/`RZ_AREA` layers + attribute blocks). The window's "Setup Usage Keys" action binds the `RZ_*` shared parameters to Areas and creates/tops-up the usage key schedules (`UsageKeyScheduleBuilder`) — no separate ribbon command needed. Also shipped as **KKarea**, a standalone Revit 2023 add-in (see Project Overview). See [`docs/tools/rishui-zamin/notes.md`](docs/tools/rishui-zamin/notes.md).
+- **Rishui Zamin** (ribbon button "Area Calc") — reads the Areas on the open sheet and exports the paired `.dxf` + `.dat` files the רישוי זמין area-calculation robot expects (`RZ_FRAME`/`RZ_FLOOR`/`RZ_AREA` layers + attribute blocks). The window's "Setup Usage Keys" action binds the `RZ_*` shared parameters to Areas and creates/tops-up the usage key schedules (`UsageKeyScheduleBuilder`) — no separate ribbon command needed. Also shipped as **KKarea**, a standalone add-in for Revit 2023, 2026 and 2027 (see Project Overview). See [`docs/tools/rishui-zamin/notes.md`](docs/tools/rishui-zamin/notes.md).
 - **DWG Exporter** (ribbon "DWG Export") — batch-exports a view/sheet set to DWG with filenames produced by the naming rules of the document's saved PDF export setups (so DWG names match the PDF export's names exactly), plus a native DWG export setup for layers/lines. Sheets and non-sheet views take separate naming rules, chosen per item. One run can span several open models (extra models match the active model's set and setups by name; a missing setup either skips that model or is created in it) and can write PDFs to their own folder. An optional eTransmit-style zip bundles the run's DWGs with the images, xrefs and SHX fonts they need — contents found by snapshotting the output folder before/after, since there is no DWG reader. Modal dialog shown inside the command's API context — no external events. Revit 2024/25 only. See [`docs/tools/dwg-exporter/README.md`](docs/tools/dwg-exporter/README.md).
 - **Auto Dimensions** (ribbon "Auto Dimensions") — draw a detail line on `_DP-Dim Outer` or `_DP-Dim Inner` as a positional reference (outer strings outrank inner ones when both can see the same opening), plus `_DP-Dim Ref` lines drawn from a wall end to a string to mark ends the automatic pass cannot see; the tool dimensions every wall, door and window crossing it — in the host model and in loaded Revit links — re-runnable after model changes without re-picking references. Its only entry point is a dockable pane: tick the reference categories and, per level, which views receive the dimensions (a single-view run is just that one view ticked). See [`docs/tools/auto-dimensions/specs/2026-07-04-auto-dimensions-design.md`](docs/tools/auto-dimensions/specs/2026-07-04-auto-dimensions-design.md) [`docs/tools/auto-dimensions/specs/2026-07-23-auto-dimensions-scope-pane-design.md`](docs/tools/auto-dimensions/specs/2026-07-23-auto-dimensions-scope-pane-design.md) and [`docs/tools/auto-dimensions/specs/2026-07-29-auto-dimensions-opening-references-design.md`](docs/tools/auto-dimensions/specs/2026-07-29-auto-dimensions-opening-references-design.md).
 - **Topo Tools** (ribbon "Topo Tools", on the RVTuk panel — the **Massing & Site** tab is unreachable from the API; see the v1 launch surface above) — draw detail lines on the dedicated "_DP-Topo Line" style in a plan view, give each a height (a shared/survey elevation) in the pane, and the tool puts points at that height along each line on the toposolids beneath them — re-runnable after the lines move, change height or are deleted. Its only entry point is a dockable pane. Revit 2024/2025 only: `Toposolid` does not exist in 2023, so KKarea never ships it. Two API limits shape the whole tool: **the Lines category cannot take a visible parameter** (`AllowsBoundParameters == false`, so heights live in the tool's own Extensible Storage and are typed in the pane, not in Properties), and **there is no `Toposolid.AddPoints`** — points go through `GetSlabShapeEditor()`, whose `SlabShapeVertex` is a position rather than an element, so each toposolid carries an Extensible Storage ledger of source-line-id → owned points. See [`docs/tools/topo-tools/README.md`](docs/tools/topo-tools/README.md). All four line styles (three for Auto Dimensions, one for Topo Tools) are created by `RVTuk.Revit/Shared/LineStyleCreator` on each pane's first refresh — there is no setup button.
@@ -42,12 +42,14 @@ Features:
 
 ## Build
 
-A solution file (`RVTuk.sln`) is present with three solution configurations — `Release2023`, `Release2024`, `Release2025` (there is no standard `Debug`/`Release`). Build the whole solution per config:
+A solution file (`RVTuk.sln`) is present with five solution configurations — `Release2023` through `Release2027` (there is no standard `Debug`/`Release`). Build the whole solution per config:
 
 ```powershell
 dotnet build RVTuk.sln -c Release2023
 dotnet build RVTuk.sln -c Release2024
 dotnet build RVTuk.sln -c Release2025
+dotnet build RVTuk.sln -c Release2026
+dotnet build RVTuk.sln -c Release2027
 ```
 
 Or build a single project (its project references are built transitively). The projects live under `src\`:
@@ -63,10 +65,12 @@ Each config maps to a target framework and a per-year `DefineConstants` symbol (
 | `Release2024` | `net48`           | `REVIT2024` | `Microsoft.Data.Sqlite`   | `DataContractJsonSerializer` |
 | `Release2025` | `net8.0-windows`  | `REVIT2025` | `Microsoft.Data.Sqlite`   | `System.Text.Json`        |
 | `Release2023` | `net48`           | `REVIT2023` | `Microsoft.Data.Sqlite`   | `DataContractJsonSerializer` |
+| `Release2026` | `net8.0-windows`  | `REVIT2026` | `Microsoft.Data.Sqlite`   | `System.Text.Json`        |
+| `Release2027` | `net10.0-windows` | `REVIT2027` | `Microsoft.Data.Sqlite`   | `System.Text.Json` (in-box) |
 
-All three configs use `Microsoft.Data.Sqlite`. Build outputs land in each project's `bin\{2023|2024|2025}\Release{...}\{tfm}\`, e.g. `src\RVTuk.Revit\bin\2024\Release2024\net48\`.
+All configs use `Microsoft.Data.Sqlite`. Build outputs land in each project's `bin\{year}\Release{year}\{tfm}\`, e.g. `src\RVTuk.Revit\bin\2024\Release2024\net48\`.
 
-`Release2023` builds only `RVTuk.Core`, `RVTuk.UI`, and `KKarea.Revit` (the Revit 2023 host); `RVTuk.Revit` does not build for 2023. The net48-vs-net8 code split (JSON serializer choice, and the native `e_sqlite3.dll` pre-load on net48) is gated on the compiler-provided `NETFRAMEWORK` symbol, not on `REVIT2024`; the `REVIT<year>` constants are for year-specific Revit API differences only (e.g. the `ElementId` shims in the shared area sources).
+`Release2023`, `Release2026` and `Release2027` build only `RVTuk.Core`, `RVTuk.UI`, and `KKarea.Revit`; `RVTuk.Revit` does not build for those years. Revit 2027 runs on .NET 10 (its API package targets `net10.0-windows`), so that config needs the .NET 10 SDK. The net48-vs-net8 code split (JSON serializer choice, and the native `e_sqlite3.dll` pre-load on net48) is gated on the compiler-provided `NETFRAMEWORK` symbol, not on `REVIT2024`; the `REVIT<year>` constants are for year-specific Revit API differences only (e.g. the `ElementId` shims in the shared area sources).
 
 ## Tests
 
@@ -88,7 +92,7 @@ On a non-Windows SDK (CI, cloud agents) add `-p:EnableWindowsTargeting=true` —
 .\Deploy.ps1 2024       # only Revit 2024 (optional version filter)
 ```
 
-Deploys to `C:\ProgramData\Autodesk\Revit\Addins\{2024|2025}\RVTuk\`. Restart Revit after deploying. Each version deploys independently: a year whose Revit is currently open (DLLs locked) or whose build output is missing is skipped with a warning while the others proceed. 2023 deploys **KKarea** (entry class `KKarea.Revit.Application`, its own stable ClientId `9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC`) to `...\Addins\2023\KKarea\`; 2024/2025 deploy RVTuk as before.
+Deploys to `C:\ProgramData\Autodesk\Revit\Addins\{year}\{RVTuk|KKarea}\`. Restart Revit after deploying. Each version deploys independently: a year whose Revit is currently open (DLLs locked) or whose build output is missing is skipped with a warning while the others proceed. 2023, 2026 and 2027 deploy **KKarea** (entry class `KKarea.Revit.Application`, its own stable ClientId `9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC`, the same for every year) to `...\Addins\{year}\KKarea\`; 2024/2025 deploy RVTuk as before.
 
 `Deploy.ps1` copies the build output flat plus the native `e_sqlite3.dll` (from `runtimes\win-x64\native`). For this to work the build output must actually contain the dependency closure: net48 copies NuGet deps to `bin` automatically, but **net8 libraries do not** — so `RVTuk.Revit` (net8) sets `<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>` to pull `Microsoft.Data.Sqlite` + `e_sqlite3.dll` into `bin`. Without it, the Revit 2025 deploy would contain only the three project DLLs and fail to load.
 
@@ -123,11 +127,12 @@ exactly (e.g. `RVTuk.Core.FamilyBrowser.Database`, `RVTuk.UI.RishuiZamin.Views`,
 `RVTuk.Core.Shared.Config`). `RVTuk.Revit.Application` stays at the project root —
 it is the `.addin` entry class.
 
-**KKarea.Revit** (`src\KKarea.Revit`) is a fourth project: a standalone Revit 2023 add-in hosting only Rishui Zamin. It references Core + UI and compiles the Revit-side area sources (`AreaExtractor`, `UsageKeyScheduleBuilder`, the three area external-event handlers from `RVTuk.Revit\RishuiZamin\`) as **linked shared source** from `RVTuk.Revit` against the 2023 API — it must never reference `RVTuk.Revit` itself. `#if REVIT2023` branches in those shared files cover the 2023 API gaps (`ElementId.IntegerValue` vs `.Value`, int-only `ElementId` ctor).
+**KKarea.Revit** (`src\KKarea.Revit`) is a fourth project: a standalone add-in for Revit 2023 (net48), 2026 (net8) and 2027 (net10) hosting only Rishui Zamin; a `RevitYear` property in its csproj picks the TFM, API package and `REVIT<year>` constant from the configuration. It references Core + UI and compiles the Revit-side area sources (`AreaExtractor`, `UsageKeyScheduleBuilder`, the three area external-event handlers from `RVTuk.Revit\RishuiZamin\`) as **linked shared source** from `RVTuk.Revit` against each year's API — it must never reference `RVTuk.Revit` itself. `#if REVIT2023` branches in those shared files cover the 2023 API gaps (`ElementId.IntegerValue` vs `.Value`, int-only `ElementId` ctor).
 
-**RVTuk.Core** holds data models, the SQLite schema/repositories, OLE thumbnail read/write, metadata-XML parsing, and config. Keep it free of Revit API and WPF types so it can be reasoned about in isolation. It multi-targets `net48` (Release2024) and `net8.0-windows` (Release2025) and **does** carry NuGet dependencies, which differ per target:
+**RVTuk.Core** holds data models, the SQLite schema/repositories, OLE thumbnail read/write, metadata-XML parsing, and config. Keep it free of Revit API and WPF types so it can be reasoned about in isolation. It multi-targets `net48` (Release2023/2024), `net8.0-windows` (Release2025/2026) and `net10.0-windows` (Release2027) and **does** carry NuGet dependencies, which differ per target:
 - net48: `Microsoft.Data.Sqlite`, GAC `System.Drawing`. No `System.Text.Json` (its transitive polyfills clash with Revit's preloaded assemblies — JSON uses `DataContractJsonSerializer`).
 - net8: `Microsoft.Data.Sqlite`, `System.Text.Json`, `System.Drawing.Common`.
+- net10: `Microsoft.Data.Sqlite`, `System.Drawing.Common` 10.x (`System.Text.Json` is in-box).
 - both: `OpenMCDF` pinned to `3.1.2` (matches the version other Revit add-ins preload).
 
 **SQLite provider:** all configs use `Microsoft.Data.Sqlite`. `System.Data.SQLite` was dropped because its native win32 VFS **cannot open databases over some UNC shares** (`\\server\share`) — it throws `unable to open database file` even when the file is readable, while `Microsoft.Data.Sqlite`'s bundled `e_sqlite3` opens the same file fine. The repositories alias `SQLiteConnection`/`SQLiteCommand` to the `Microsoft.Data.Sqlite` types. `FamilyBrowser/Database/SqliteNative.EnsureLoaded()` (called by every repository ctor) pre-loads `e_sqlite3.dll` by full path on net48, because Revit resolves native libs relative to `Revit.exe`, not the add-in folder; `Deploy.ps1` copies `e_sqlite3.dll` flat into the add-in folder. Keep SQL portable (e.g. one statement per `ExecuteScalar`).

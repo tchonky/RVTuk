@@ -1,10 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- KKarea: standalone Revit 2023 host for the Area Calc (Rishui Zamin) tool.
-       Revit 2023 is net48-only, so this project has a single fixed target; it is built
-       exclusively via the Release2023 configuration (see RVTuk.sln mappings). The area
-       logic is linked shared source from RVTuk.Revit, compiled here against the 2023 API
-       with the REVIT2023 constant switching the ElementId shims. -->
+  <!-- KKarea: standalone host for the Area Calc (Rishui Zamin) tool on the Revit years RVTuk
+       does not ship for — 2023 (net48), 2026 (net8 — Revit 2026.5+ runs
+       .NET 10 but loads net8 add-ins, and net8 keeps 2026.0-2026.4 working) and 2027 (net10). It is built only via
+       the Release2023 / Release2026 / Release2027 configurations (see RVTuk.sln mappings). The
+       area logic is linked shared source from RVTuk.Revit, compiled here against each year's
+       API, with the REVIT2023 constant switching the 2023 ElementId shims. -->
   <PropertyGroup>
     <AssemblyName>KKarea.Revit</AssemblyName>
     <RootNamespace>KKarea.Revit</RootNamespace>
@@ -12,19 +13,41 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <PlatformTarget>x64</PlatformTarget>
-    <TargetFramework>net48</TargetFramework>
-    <OutputPath>bin\2023\Release2023\</OutputPath>
-    <DefineConstants>REVIT2023</DefineConstants>
+    <RevitYear>2023</RevitYear>
+    <RevitYear Condition="'$(Configuration)'=='Release2026'">2026</RevitYear>
+    <RevitYear Condition="'$(Configuration)'=='Release2027'">2027</RevitYear>
+    <OutputPath>bin\$(RevitYear)\Release$(RevitYear)\</OutputPath>
+    <DefineConstants>REVIT$(RevitYear)</DefineConstants>
   </PropertyGroup>
 
-  <!-- Revit 2023 API packages: compile-time only, the real DLLs come from the Revit install. -->
+  <PropertyGroup Condition="'$(RevitYear)'=='2023'">
+    <TargetFramework>net48</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RevitYear)'=='2026'">
+    <TargetFramework>net8.0-windows</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RevitYear)'=='2027'">
+    <TargetFramework>net10.0-windows</TargetFramework>
+  </PropertyGroup>
+
+  <!-- .NET (Core) libraries don't copy NuGet deps to bin by default. Revit.exe loads the
+       add-in, so it must carry its own dependency closure — including
+       runtimes\win-x64\native\e_sqlite3.dll — for Deploy.ps1 to pick up. net48 already does. -->
+  <PropertyGroup Condition="'$(RevitYear)'!='2023'">
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <!-- Revit API packages for the configured year: compile-time only, the real DLLs come
+       from the Revit install. -->
   <ItemGroup>
     <PackageReference Include="Nice3point.Revit.Api.RevitAPI"
-                      Version="2023.*"
+                      Version="$(RevitYear).*"
                       IncludeAssets="compile;build;native;contentfiles;analyzers;buildtransitive"
                       ExcludeAssets="runtime" />
     <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI"
-                      Version="2023.*"
+                      Version="$(RevitYear).*"
                       IncludeAssets="compile;build;native;contentfiles;analyzers;buildtransitive"
                       ExcludeAssets="runtime" />
   </ItemGroup>
