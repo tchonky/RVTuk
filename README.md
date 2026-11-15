@@ -16,6 +16,8 @@ Properties exist in the codebase but are hidden until release.)
 | Release2024   | 2024         | net48           | RVTuk |
 | Release2025   | 2025         | net8.0-windows  | RVTuk |
 | Release2023   | 2023         | net48           | KKarea (Area Calc only) |
+| Release2026   | 2026         | net8.0-windows  | KKarea (Area Calc only) |
+| Release2027   | 2027         | net10.0-windows | KKarea (Area Calc only) |
 
 ## 📁 Project Structure
 
@@ -25,7 +27,7 @@ RVTuk/
 │   ├── RVTuk.Core/          # Business logic per tool + Shared (SQLite, config) — no Revit/WPF deps
 │   ├── RVTuk.UI/            # WPF windows and view models, one folder per tool + Shared
 │   ├── RVTuk.Revit/         # Revit add-in host (ribbon, external events, commands), per-tool folders
-│   └── KKarea.Revit/        # Standalone Revit 2023 host for Rishui Zamin (Area Calc) only
+│   └── KKarea.Revit/        # Standalone Revit 2023/2026/2027 host for Rishui Zamin (Area Calc) only
 ├── tests/
 │   └── RVTuk.Core.Tests/    # xunit suite for Core, mirrors the per-tool folders
 ├── installer/
@@ -63,7 +65,7 @@ Build the standalone installer once, then hand out the exe:
 .\Build-Installer.ps1        # produces dist\RVTukSetup.exe
 ```
 
-On the target computer just double-click `RVTukSetup.exe` — it asks for admin rights, detects which Revit versions are installed (2023 gets KKarea, 2024/2025 get RVTuk), and installs for each of them. Skips any Revit that is currently running; close it and re-run. `RVTukSetup.exe --uninstall` removes the add-ins again. No other software is needed on the target machine.
+On the target computer just double-click `RVTukSetup.exe` — it asks for admin rights, detects which Revit versions are installed (2023, 2026 and 2027 get KKarea; 2024/2025 get RVTuk), and installs for each of them. Skips any Revit that is currently running; close it and re-run. `RVTukSetup.exe --uninstall` removes the add-ins again. No other software is needed on the target machine.
 
 ## ✨ Family Browser Features
 

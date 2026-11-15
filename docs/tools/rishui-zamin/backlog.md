@@ -1,7 +1,7 @@
 # Rishui Zamin — Backlog
 
 Bugs, improvements, and ideas for the Rishui Zamin (Area Calc) tool, including its
-KKarea 2023 host. Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
+KKarea host (Revit 2023/2026/2027). Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
 
 ## 🐞 Bugs
 
@@ -25,6 +25,8 @@ KKarea 2023 host. Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.
 - [x] v1: DXF+DAT export, usage-key schedules, marker forms (branch history: `RZarea`).
 - [x] KKarea standalone Revit 2023 host
   (see [specs/2026-07-06-kkarea-revit2023-design.md](specs/2026-07-06-kkarea-revit2023-design.md)).
+- [x] KKarea builds and deploys for Revit 2026 (net8) and 2027 (net10): `Release2026` /
+  `Release2027` configs, Deploy.ps1 and the installer (2026-11-15). Not yet loaded in Revit.
 - [x] Window UI redesign
   (see [specs/2026-07-05-area-submission-ui-redesign-design.md](specs/2026-07-05-area-submission-ui-redesign-design.md)).
 - [x] `.dat` wrote the plot scale (`DWFX_SCALE 100` at 1:100) once the scale became

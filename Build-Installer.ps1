@@ -19,7 +19,7 @@ $root = Split-Path $MyInvocation.MyCommand.Path -Parent
 $vendorId   = "KnafoKlimor"
 $vendorDesc = "Knafo Klimor Architects LTD"
 
-# Same table as Deploy.ps1 — 2023 ships KKarea (Area Calc only), 2024/2025 ship RVTuk.
+# Same table as Deploy.ps1 — 2023/2026/2027 ship KKarea (Area Calc only), 2024/2025 ship RVTuk.
 # ClientIds must never change once deployed.
 $versions = [ordered]@{
     "2023" = @{ Config = "Release2023"; Tfm = "net48"
@@ -34,6 +34,14 @@ $versions = [ordered]@{
                 Addin = "RVTuk"; Project = "RVTuk.Revit"
                 ClassName = "RVTuk.Revit.Application"
                 ClientId = "D71D7480-4A21-474E-A47E-3E8DF8C1BDA5" }
+    "2026" = @{ Config = "Release2026"; Tfm = "net8.0-windows"
+                Addin = "KKarea"; Project = "KKarea.Revit"
+                ClassName = "KKarea.Revit.Application"
+                ClientId = "9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC" }
+    "2027" = @{ Config = "Release2027"; Tfm = "net10.0-windows"
+                Addin = "KKarea"; Project = "KKarea.Revit"
+                ClassName = "KKarea.Revit.Application"
+                ClientId = "9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC" }
 }
 
 $staging  = "$root\installer\payload-staging"
