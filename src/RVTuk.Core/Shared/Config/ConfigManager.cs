@@ -20,6 +20,16 @@ namespace RVTuk.Core.Shared.Config
 
         public static AppConfig LoadConfig()
         {
+            var config = LoadSaved();
+            // No library chosen yet: fall back to the office library when Desktop Connector has it.
+            if (string.IsNullOrWhiteSpace(config.LibraryFolderPath)
+                && Directory.Exists(AppConfig.DefaultLibraryFolderPath))
+                config.LibraryFolderPath = AppConfig.DefaultLibraryFolderPath;
+            return config;
+        }
+
+        private static AppConfig LoadSaved()
+        {
             if (!File.Exists(ConfigFilePath))
                 return new AppConfig();
 

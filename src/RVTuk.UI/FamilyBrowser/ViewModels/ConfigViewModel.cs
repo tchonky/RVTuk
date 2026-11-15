@@ -47,7 +47,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             _onLibraryFolderChanged = onLibraryFolderChanged;
 
             BrowseLibraryCommand = new RelayCommand(BrowseLibraryFolder);
-            ScanCommand = new RelayCommand(() => _scan(ScanThumbnails, ScanParameters), () => IsConfigured);
+            ScanCommand = new RelayCommand(() => _scan(ScanThumbnails, ScanParameters), () => IsConfigured && !IsReadOnlyLibrary);
         }
 
         public string LibraryFolderPath
@@ -68,6 +68,9 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 : _config.DatabasePath;
 
         public bool IsConfigured => !string.IsNullOrWhiteSpace(_config.LibraryFolderPath);
+
+        /// <summary>True when this user has view-only access to the library: Scan is off.</summary>
+        public bool IsReadOnlyLibrary { get; set; }
 
         public bool ScanThumbnails
         {
