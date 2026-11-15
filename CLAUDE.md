@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-RVTuk is a Revit add-in toolkit for Knafo Klimor Architects LTD. It supports Revit 2024, 2025 and 2027 simultaneously via separate build configurations (2027 builds and deploys since November 2026; its tools have not yet been checked one by one in Revit 2027). Revit 2023 and 2026 are served by **KKarea**, a separate minimal add-in in this repo (`src\KKarea.Revit`) that hosts only the Rishui Zamin (Area Calc) tool — RVTuk itself was dropped from 2023 and does not ship for 2026.
+RVTuk is a Revit add-in toolkit for Knafo Klimor Architects LTD. It supports Revit 2024, 2025 and 2027 simultaneously via separate build configurations (2027 since November 2026: checked in Revit 2027 on 2026-11-15 that the add-in loads and every ribbon button shows; the tools themselves have not yet been checked one by one there). Revit 2023 and 2026 are served by **KKarea**, a separate minimal add-in in this repo (`src\KKarea.Revit`) that hosts only the Rishui Zamin (Area Calc) tool — RVTuk itself was dropped from 2023 and does not ship for 2026.
 
 > **Product vision, audience, and roadmap live in [`VISION.md`](VISION.md).** This file is the technical reference (build, architecture, threading, deploy).
 
