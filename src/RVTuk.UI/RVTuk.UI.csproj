@@ -20,7 +20,7 @@
     <OutputPath>bin\2024\Release2024\</OutputPath>
   </PropertyGroup>
 
-  <!-- Revit 2026 (net8; 2026.5+ hosts it on .NET 10) / 2027 (net10): KKarea host only. -->
+  <!-- Revit 2026 (net8; 2026.5+ hosts it on .NET 10) / 2027 (net10): 2026 for the KKarea host only, 2027 for RVTuk.Revit. -->
   <PropertyGroup Condition="'$(Configuration)'=='Release2026'">
     <TargetFramework>net8.0-windows</TargetFramework>
     <OutputPath>bin\2026\Release2026\</OutputPath>
