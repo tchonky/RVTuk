@@ -10,14 +10,19 @@ dropped.
 "Allow half centimetres" checkbox (default on) picks the step; the choice is remembered in the
 settings key `RoundPositionsWholeCentimetresOnly`.
 
-**Moves things, never reshapes them.** Point-positioned family instances (columns, furniture,
-casework, generic models), exactly-orthogonal straight lines (walls, framing, grids, reference
-planes, model and detail lines — moved parallel to themselves), wall-hosted doors and windows
-(along their wall only) and level elevations are snapped. No length changes, no angle changes
-(a wall at 89.97° is reported, not fixed). Sketch-based elements (floors, roofs, ceilings), arcs,
-stairs and railings are v2.
+**Moves things, never reshapes them.** Today the only category the tool handles is **Walls**:
+exactly-orthogonal straight walls are snapped, moved parallel to themselves. No length changes, no
+angle changes (a wall at 89.97° is reported, not fixed). The design also covers structural
+framing, model and detail lines, levels, grids, reference planes, point-positioned families
+and wall-hosted doors and windows; those are planned but not built (see Status). Sketch-based
+elements, arcs, stairs and railings are v2.
 
-**Status:** v1, Revit 2024/2025. Behind `RegisterRoundPositions` (on) in
+**Status:** partly built, Revit 2024/2025. The scan-and-fix pane works end to end, but
+`PassRegistry.All` holds Walls only, with `LineReader` as the sole reader. Tasks 1-7 of the v2
+plan are done (scan result and tree, batching, offset verdict and wall reader, runner, timing
+gate, pane view model, pane view and handlers). Tasks 8-14 are not on `master`: framing and
+lines, levels, grids and reference planes, point families, wall-hosted openings, base points, and
+the tool's backlog. Behind `RegisterRoundPositions` (on) in
 `src/RVTuk.Revit/Application.cs`. Not in KKarea (2023/2026/2027). Merged into `master` in
 November 2026 after sitting on its own branch since August; not yet re-verified in Revit since
 the merge.
