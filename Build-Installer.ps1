@@ -86,7 +86,6 @@ foreach ($ver in $versions.Keys) {
     Copy-Item "$srcDir\*.dll" $dllDir -Force
     Copy-Item "$srcDir\*.pdb" $dllDir -Force -ErrorAction SilentlyContinue
     Copy-Item "$srcDir\*.json" $dllDir -Force -ErrorAction SilentlyContinue
-    Copy-Item "$srcDir\*.txt" $dllDir -Force -ErrorAction SilentlyContinue   # shared-parameter files
     if (Test-Path "$srcDir\x64") { Copy-Item "$srcDir\x64\*.dll" $dllDir -Force }
     $nativeSqlite = "$srcDir\runtimes\win-x64\native\e_sqlite3.dll"
     if (Test-Path $nativeSqlite) { Copy-Item $nativeSqlite $dllDir -Force }

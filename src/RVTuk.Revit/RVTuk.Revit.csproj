@@ -62,15 +62,4 @@
     <Reference Include="System.Drawing" />
   </ItemGroup>
 
-  <!-- Shared-parameter definition file used by SetupRishuiZaminParamsCommand. Must land flat in
-       bin\ next to RVTuk.Revit.dll (resolved at runtime via the executing assembly's folder), and
-       Deploy.ps1 copies *.txt from bin\ into the deployed add-in folder alongside it. -->
-  <ItemGroup>
-    <None Include="RishuiZamin\Resources\RZ_AreaParams.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>RZ_AreaParams.txt</Link>
-      <TargetPath>RZ_AreaParams.txt</TargetPath>
-    </None>
-  </ItemGroup>
-
 </Project>

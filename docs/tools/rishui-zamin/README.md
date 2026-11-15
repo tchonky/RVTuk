@@ -19,7 +19,7 @@ from 2023 and does not ship for 2026/2027).
 |-------|--------|
 | Core  | `src/RVTuk.Core/RishuiZamin/` (writers, validator, usage catalog, DXF templates) |
 | UI    | `src/RVTuk.UI/RishuiZamin/` (Views, ViewModels) |
-| Revit | `src/RVTuk.Revit/RishuiZamin/` (Commands, ExternalEvents, extractor, schedule builder, `RZ_AreaParams.txt`) |
+| Revit | `src/RVTuk.Revit/RishuiZamin/` (Commands, ExternalEvents, extractor, schedule builder) |
 | KKarea host (2023/2026/2027) | `src/KKarea.Revit/` (links the Revit-layer sources; must never reference `RVTuk.Revit` itself) |
 | Tests | `tests/RVTuk.Core.Tests/RishuiZamin/` |
 
