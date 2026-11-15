@@ -9,6 +9,7 @@ using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
+using RVTuk.Core.FamilyBrowser.Util;
 
 namespace RVTuk.UI.Shared.Controls
 {
@@ -83,24 +84,46 @@ namespace RVTuk.UI.Shared.Controls
             }
         }
 
-        // Parse a XAML string into a FlowDocument (rehydrating inline image sources from their
-        // ImageData), returning an empty document on null/empty/parse-failure. Shared by the
-        // DocumentXaml attached-property callback and the editor's Raw→Preview toggle so both use
-        // identical parse-and-rehydrate semantics.
-        public static FlowDocument ParseDocumentXaml(string? xaml)
+        public const string UnreadableNotice =
+            "These instructions cannot be shown: they were saved in a format this version cannot read. " +
+            "The stored text has not been changed.";
+
+        // The stored XAML names this class by where it lived when written; the rewriter maps
+        // that to wherever it lives now, so these come from the type itself, never a literal.
+        private static readonly string HelperNamespace = typeof(RichTextBoxHelper).Namespace!;
+        private static readonly string HelperAssembly = typeof(RichTextBoxHelper).Assembly.GetName().Name!;
+
+        // Parse stored XAML into a FlowDocument, rehydrating inline image sources from their
+        // ImageData. Returns false only when the XAML is not blank and could not be parsed; the
+        // document is then a single paragraph holding UnreadableNotice. Blank XAML gives true and
+        // an empty document.
+        public static bool TryParseDocumentXaml(string? xaml, out FlowDocument document)
         {
             if (string.IsNullOrWhiteSpace(xaml))
-                return new FlowDocument();
+            {
+                document = new FlowDocument();
+                return true;
+            }
             try
             {
-                var doc = (FlowDocument)XamlReader.Parse(xaml);
-                RehydrateImages(doc);
-                return doc;
+                document = (FlowDocument)XamlReader.Parse(
+                    InstructionXamlRewriter.ForRead(xaml, HelperNamespace, HelperAssembly)!);
+                RehydrateImages(document);
+                return true;
             }
             catch
             {
-                return new FlowDocument();
+                document = new FlowDocument(new Paragraph(new Run(UnreadableNotice)));
+                return false;
             }
+        }
+
+        // TryParseDocumentXaml's document, for the DocumentXaml attached-property callback, so the
+        // viewer and the editor both show the notice when stored XAML cannot be read.
+        public static FlowDocument ParseDocumentXaml(string? xaml)
+        {
+            TryParseDocumentXaml(xaml, out FlowDocument document);
+            return document;
         }
 
         private static bool _updatingMarkdown;
@@ -124,29 +147,45 @@ namespace RVTuk.UI.Shared.Controls
 
         // Call this to read the current document back as a XAML string
         public static string? SerializeDocument(RichTextBox rtb)
-        {
-            if (rtb.Document == null) return null;
+            => rtb.Document == null ? null : SerializeDocument(rtb.Document);
 
+        // The document as stored XAML, or null when XamlWriter fails.
+        public static string? SerializeDocument(FlowDocument document)
+        {
             // BitmapImage sources built from a stream are not XAML-serializable, so temporarily
-            // null them (the bytes live on in ImageData) and restore them afterward so the live
-            // editor is left untouched.
+            // null them (the bytes live on in ImageData). The editor's hover style on each image's
+            // Border is cleared too: the editor reapplies it on load, and serialised it carries a
+            // runtime-specific mscorlib/System.Private.CoreLib declaration. Both are restored
+            // afterward so the live editor is left untouched.
             var images = new List<Image>();
-            CollectImages(rtb.Document, images);
+            CollectImages(document, images);
             var savedSources = new ImageSource?[images.Count];
+            var styledBorders = new List<(Border Border, object Style)>();
             for (int i = 0; i < images.Count; i++)
             {
                 savedSources[i] = images[i].Source;
                 images[i].Source = null;
+                if (images[i].Parent is Border border)
+                {
+                    var style = border.ReadLocalValue(FrameworkElement.StyleProperty);
+                    if (style != DependencyProperty.UnsetValue)
+                    {
+                        styledBorders.Add((border, style));
+                        border.ClearValue(FrameworkElement.StyleProperty);
+                    }
+                }
             }
             try
             {
-                return XamlWriter.Save(rtb.Document);
+                return InstructionXamlRewriter.ForWrite(XamlWriter.Save(document), HelperNamespace, HelperAssembly);
             }
             catch { return null; }
             finally
             {
                 for (int i = 0; i < images.Count; i++)
                     images[i].Source = savedSources[i];
+                foreach (var (border, style) in styledBorders)
+                    border.SetValue(FrameworkElement.StyleProperty, style);
             }
         }
 
