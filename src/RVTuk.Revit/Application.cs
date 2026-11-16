@@ -73,8 +73,8 @@ namespace RVTuk.Revit
 
         /// <summary>
         /// Topo Tools ships on the RVTuk panel alongside the other tools. It was intended for
-        /// Revit's Massing &amp; Site tab, which the API cannot reach — see CreateRibbon. Its single
-        /// entry point is the dockable pane.
+        /// Revit's Massing &amp; Site tab, which the API cannot reach — see CreateRibbon. Its
+        /// button opens a Topo Edit session; Floor ⇄ Topo sits next to it.
         /// </summary>
         private static readonly bool RegisterTopoTools = true;
 
@@ -279,8 +279,9 @@ namespace RVTuk.Revit
                 TaskDialog.Show("RVTuk", $"Failed to create ribbon: {ex.Message}");
             }
 
-            // Topo Tools also on "Modify | Toposolid" (unsupported Autodesk.Windows ribbon).
-            // Never throws; on any failure it logs one line and switches itself off.
+            // Topo Tools and Floor ⇄ Topo also on the contextual Modify tab of a selected toposolid
+            // or floor (unsupported Autodesk.Windows ribbon). Never throws; on any failure it logs
+            // one line and switches itself off.
             if (RegisterTopoTools) ContextualTopoButton.Install(application);
 
             if (RegisterTopoTools)
@@ -353,6 +354,10 @@ namespace RVTuk.Revit
         /// <summary>Internal name of the Topo Tools push button. It is part of the button's
         /// command id, which the contextual Topo Tools button posts (see ContextualTopoButton).</summary>
         internal const string TopoToolsButtonName = "TopoTools";
+
+        /// <summary>Internal name of the Floor ⇄ Topo push button, part of its command id like
+        /// <see cref="TopoToolsButtonName"/>: the contextual Floor ⇄ Topo button posts it.</summary>
+        internal const string FloorTopoConvertButtonName = "FloorTopoConvert";
 
         private static Assembly? ResolveAddinAssembly(object? sender, ResolveEventArgs args)
         {
@@ -455,20 +460,24 @@ namespace RVTuk.Revit
                 {
                     ToolTip = "Select a toposolid or floor, then press: draw topo lines and set their heights on the lines"
                 };
-                topoBtn.LargeImage = CreateTopoToolsIcon(32);
-                topoBtn.Image      = CreateTopoToolsIcon(16);
+                topoBtn.LargeImage = TopoIcons.TopoTools(32);
+                topoBtn.Image      = TopoIcons.TopoTools(16);
 
                 panel.AddItem(topoBtn);
 
                 // The converter that used to be the pane's ⇄ button; acts on the selection.
-                panel.AddItem(new PushButtonData(
-                    "FloorTopoConvert",
+                var convertBtn = new PushButtonData(
+                    FloorTopoConvertButtonName,
                     "Floor ⇄\nTopo",
                     assemblyPath,
                     typeof(FloorTopoConvertCommand).FullName!)
                 {
                     ToolTip = "Convert the selected floors to toposolids and the selected toposolids to floors, keeping their shape"
-                });
+                };
+                convertBtn.LargeImage = TopoIcons.FloorTopo(32);
+                convertBtn.Image      = TopoIcons.FloorTopo(16);
+
+                panel.AddItem(convertBtn);
             }
 
             if (RegisterRoomFloors)
@@ -506,33 +515,6 @@ namespace RVTuk.Revit
             neoBtn.Image      = CreateNeoPropertiesIcon(16);
 
             neoPanel.AddItem(neoBtn);
-        }
-
-        internal static BitmapSource CreateTopoToolsIcon(int size)
-        {
-            var dv = new DrawingVisual();
-            using (var ctx = dv.RenderOpen())
-            {
-                double s = size;
-                ctx.DrawRectangle(new SolidColorBrush(WpfColor.FromRgb(0x25, 0x25, 0x26)), null,
-                    new Rect(0, 0, s, s));
-
-                // Three nested contour lines, with a point sitting on the middle one.
-                var pen = new Pen(new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00)),
-                    Math.Max(1, s * 0.06));
-                pen.Freeze();
-
-                ctx.DrawEllipse(null, pen, new WpfPoint(s * 0.5, s * 0.55), s * 0.36, s * 0.24);
-                ctx.DrawEllipse(null, pen, new WpfPoint(s * 0.5, s * 0.55), s * 0.23, s * 0.15);
-                ctx.DrawEllipse(null, pen, new WpfPoint(s * 0.5, s * 0.55), s * 0.10, s * 0.07);
-
-                ctx.DrawEllipse(new SolidColorBrush(Colors.White), null,
-                    new WpfPoint(s * 0.5, s * 0.31), s * 0.07, s * 0.07);
-            }
-            var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
-            bmp.Render(dv);
-            bmp.Freeze();
-            return bmp;
         }
 
         private static BitmapSource CreateRoomFloorsIcon(int size)
