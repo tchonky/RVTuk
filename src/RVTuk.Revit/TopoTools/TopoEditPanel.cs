@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Windows.Media.Imaging;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
 using RVTuk.Core.Shared.Config;
@@ -23,8 +24,28 @@ namespace RVTuk.Revit.TopoTools
         private static TextBox? _spacingBox;
         private static double _spacingCentimetres = 100;
 
-        /// <summary>The point spacing set in the panel, in Revit's internal feet.</summary>
-        public static double SpacingFeet => _spacingCentimetres / CentimetresPerFoot;
+        /// <summary>
+        /// The point spacing set in the panel, in Revit's internal feet. Revit's TextBox has no
+        /// focus-lost event, so a value typed without Enter is read here, when Update or Accept
+        /// asks: a valid new value is kept (and saved) as Enter would; an invalid one is replaced
+        /// in the box by the stored value.
+        /// </summary>
+        public static double SpacingFeet
+        {
+            get
+            {
+                try
+                {
+                    if (TryReadBox(out double centimetres) && centimetres != _spacingCentimetres)
+                        Adopt(centimetres);
+                }
+                catch (Exception ex)
+                {
+                    Application.LogDiagnostic($"Topo Edit spacing failed: {ex}");
+                }
+                return _spacingCentimetres / CentimetresPerFoot;
+            }
+        }
 
         public static void Create(UIControlledApplication app, string assemblyPath)
         {
@@ -33,19 +54,25 @@ namespace RVTuk.Revit.TopoTools
             var panel = app.CreateRibbonPanel(PanelName);
 
             panel.AddItem(Button<DrawTopoLinesCommand>("TopoDrawLines", "Draw\nLines", assemblyPath,
-                "Start Revit's Detail Line tool: every line drawn in this view becomes a topo line with a height text"));
+                "Start Revit's Detail Line tool: every line drawn in this view becomes a topo line with a height text",
+                TopoIcons.DrawLines));
             panel.AddItem(Button<HeightLabelsCommand>("TopoHeightLabels", "Height\nLabels", assemblyPath,
-                "Give every topo line in the view a height text at its middle, and re-centre the existing ones"));
+                "Give every topo line in the view a height text at its middle, and re-centre the existing ones",
+                TopoIcons.HeightLabels));
             panel.AddItem(Button<TopoUpdateCommand>("TopoUpdate", "Update", assemblyPath,
-                "Apply the topo lines and their heights to the selected element, and stay in the session"));
+                "Apply the topo lines and their heights to the selected element, and stay in the session",
+                TopoIcons.Update));
             panel.AddItem(Button<TopoAcceptCommand>("TopoAccept", "Accept", assemblyPath,
-                "Apply the topo lines and close the session; lines and heights stay in the view"));
+                "Apply the topo lines and close the session; lines and heights stay in the view",
+                TopoIcons.Accept));
             panel.AddItem(Button<TopoCancelCommand>("TopoCancel", "Cancel", assemblyPath,
-                "Close the session: delete the lines and texts it made and put changed heights back"));
+                "Close the session: delete the lines and texts it made and put changed heights back",
+                TopoIcons.Cancel));
 
             var spacing = (TextBox)panel.AddItem(new TextBoxData("TopoSpacing")
             {
-                ToolTip = "Distance between points along each topo line, in centimetres. Press Enter to keep it.",
+                ToolTip = "Distance between points along each topo line, in centimetres. " +
+                          "Press Enter, or Update or Accept, to keep it.",
             });
             spacing.PromptText = "Spacing (cm)";
             spacing.ShowImageAsButton = false;
@@ -75,21 +102,7 @@ namespace RVTuk.Revit.TopoTools
         {
             try
             {
-                if (_spacingBox == null) return;
-
-                var typed = Convert.ToString(_spacingBox.Value, CultureInfo.InvariantCulture)?.Trim() ?? "";
-                if (!TryParsePositive(typed, out double centimetres))
-                {
-                    _spacingBox.Value = Format(_spacingCentimetres);
-                    return;
-                }
-
-                _spacingCentimetres = centimetres;
-                _spacingBox.Value = Format(centimetres);
-
-                var config = ConfigManager.LoadConfig();
-                config.TopoPointSpacingCentimetres = centimetres;
-                ConfigManager.SaveConfig(config);
+                if (TryReadBox(out double centimetres)) Adopt(centimetres);
             }
             catch (Exception ex)
             {
@@ -97,21 +110,65 @@ namespace RVTuk.Revit.TopoTools
             }
         }
 
+        /// <summary>
+        /// Reads the spacing box. False when there is no box or its text is not a positive number;
+        /// in the second case the stored value is put back in the box.
+        /// </summary>
+        private static bool TryReadBox(out double centimetres)
+        {
+            centimetres = 0;
+            if (_spacingBox == null) return false;
+
+            var typed = Convert.ToString(_spacingBox.Value, CultureInfo.InvariantCulture)?.Trim() ?? "";
+            if (TryParsePositive(typed, out centimetres)) return true;
+
+            _spacingBox.Value = Format(_spacingCentimetres);
+            return false;
+        }
+
+        /// <summary>Makes <paramref name="centimetres"/> (already rounded) the spacing, shows it in
+        /// the box, and saves it to the config.</summary>
+        private static void Adopt(double centimetres)
+        {
+            _spacingCentimetres = centimetres;
+            if (_spacingBox != null) _spacingBox.Value = Format(centimetres);
+
+            var config = ConfigManager.LoadConfig();
+            config.TopoPointSpacingCentimetres = centimetres;
+            ConfigManager.SaveConfig(config);
+        }
+
+        /// <summary>Parses a typed spacing, rounded to what <see cref="Format"/> shows, so the box
+        /// read back by <see cref="SpacingFeet"/> never differs from the stored value.</summary>
         private static bool TryParsePositive(string text, out double value)
         {
             // Either decimal separator: the office types both.
             var normalised = text.Replace(',', '.');
-            return double.TryParse(normalised, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
-                && value > 0 && !double.IsInfinity(value);
+            if (!double.TryParse(normalised, NumberStyles.Float, CultureInfo.InvariantCulture, out value)) return false;
+            value = Round(value);
+            return value > 0 && !double.IsInfinity(value);
         }
 
-        private static double ValidOrDefault(double centimetres) =>
-            centimetres > 0 && !double.IsNaN(centimetres) && !double.IsInfinity(centimetres) ? centimetres : 100;
+        /// <summary>The configured spacing, rounded as the box shows it; 100 when it is not usable.</summary>
+        private static double ValidOrDefault(double centimetres)
+        {
+            centimetres = Round(centimetres);
+            return centimetres > 0 && !double.IsNaN(centimetres) && !double.IsInfinity(centimetres) ? centimetres : 100;
+        }
+
+        /// <summary>Rounds to the two decimals <see cref="Format"/> shows.</summary>
+        private static double Round(double centimetres) => Math.Round(centimetres, 2, MidpointRounding.AwayFromZero);
 
         private static string Format(double centimetres) =>
             centimetres.ToString("0.##", CultureInfo.InvariantCulture);
 
-        private static PushButtonData Button<TCommand>(string name, string text, string assemblyPath, string toolTip) =>
-            new PushButtonData(name, text, assemblyPath, typeof(TCommand).FullName!) { ToolTip = toolTip };
+        private static PushButtonData Button<TCommand>(string name, string text, string assemblyPath, string toolTip,
+            Func<int, BitmapSource> icon) =>
+            new PushButtonData(name, text, assemblyPath, typeof(TCommand).FullName!)
+            {
+                ToolTip = toolTip,
+                LargeImage = icon(32),
+                Image = icon(16),
+            };
     }
 }

@@ -113,6 +113,33 @@ public class TopoSessionReportTests
     }
 
     [Fact]
+    public void SaysHowManyCrossingPointsTookTheHigherHeight()
+    {
+        var report = new TopoSessionReport { LinesApplied = 2, PointsAdded = 7, PointsDroppedAtCrossings = 3 };
+
+        Assert.Equal(
+            "2 lines applied: 7 points added, 0 replaced. 3 points where lines cross took the higher line's height.",
+            report.Summarise());
+        Assert.False(report.HasProblems);
+    }
+
+    [Fact]
+    public void SingularCrossingSentence()
+    {
+        var report = new TopoSessionReport { LinesApplied = 2, PointsAdded = 3, PointsDroppedAtCrossings = 1 };
+
+        Assert.Contains("1 point where lines cross took the higher line's height.", report.Summarise());
+    }
+
+    [Fact]
+    public void NoCrossingSentenceWhenNoneWasDropped()
+    {
+        var report = new TopoSessionReport { LinesApplied = 2, PointsAdded = 3 };
+
+        Assert.DoesNotContain("cross", report.Summarise());
+    }
+
+    [Fact]
     public void CleanRunHasNoProblems()
     {
         var report = new TopoSessionReport { LinesApplied = 2, PointsAdded = 4, PointsReplaced = 1 };

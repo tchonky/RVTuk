@@ -36,7 +36,7 @@ namespace RVTuk.Core.TopoTools
             sentences.Add(converted.Count > 0 ? string.Join(", ", converted) + "." : "Nothing converted.");
 
             if (Skipped.Count > 0)
-                sentences.Add($"Skipped {Skipped.Count}: {string.Join("; ", Skipped)}.");
+                sentences.Add($"Skipped {Skipped.Count}: {string.Join("; ", Skipped.Select(Sentence.WithoutFullStop))}.");
 
             var lost = new List<string>();
             if (PointsLost > 0) lost.Add(Count(PointsLost, "shape point", "shape points"));

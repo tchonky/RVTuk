@@ -13,17 +13,25 @@ using AwRibbonTab = Autodesk.Windows.RibbonTab;
 namespace RVTuk.Revit.TopoTools
 {
     /// <summary>
-    /// Puts the Topo Tools button on Revit's contextual Modify tab while exactly one toposolid
-    /// (not a subdivision) is selected — what the user sees as "Modify | Toposolid".
+    /// Puts the Topo Tools and Floor ⇄ Topo buttons on Revit's contextual Modify tab — what the
+    /// user sees as "Modify | Toposolid" or "Modify | Floors":
+    /// <list type="bullet">
+    /// <item>Topo Tools while exactly one element is selected and it is a floor or a toposolid
+    /// (not a subdivision). A floor the session cannot take (sloped, say) still shows it; the
+    /// command refuses with the reason.</item>
+    /// <item>Floor ⇄ Topo while the selection is not empty and every selected element is a floor
+    /// or a toposolid (not a subdivision).</item>
+    /// </list>
     ///
     /// The supported API cannot reach that tab, so this goes through the unsupported
     /// Autodesk.Windows ribbon. Per the probe (topo edit-session spec, "Probe results"), that
     /// "tab" is the one shared contextual tab with Id <c>Modify</c>, whose title and panels Revit
-    /// swaps per selection: our panel is added to it once and shown/hidden on SelectionChanged.
-    /// The title is localised, so it is never matched.
+    /// swaps per selection: our panel is added to it once and shown/hidden on SelectionChanged,
+    /// and each button shown/hidden by its own rule. The title is localised, so it is never
+    /// matched. The probe was on a toposolid; a floor's tab is assumed to be the same one.
     ///
-    /// The button does not run anything itself: it posts the RVTuk-panel Topo Tools button's
-    /// command, so it always does exactly what that button does.
+    /// The buttons do not run anything themselves: each posts its RVTuk-panel button's command,
+    /// so it always does exactly what that button does.
     ///
     /// Fail-safe: any failure writes one line to the crash log and switches this off for the rest
     /// of the session; the add-in otherwise behaves exactly as without it.
@@ -38,17 +46,22 @@ namespace RVTuk.Revit.TopoTools
 
         private const string PanelId = "RVTuk_ContextualTopoTools";
 
+        private const string LogPrefix = "Contextual Topo Tools buttons";
+
         private static UIControlledApplication? _app;
         private static ExternalEvent? _postEvent;
-        private static PostTopoToolsHandler? _postHandler;
+        private static PostCommandEventHandler? _postHandler;
         private static AwRibbonPanel? _panel;
+        private static AwRibbonButton? _topoToolsButton;
+        private static AwRibbonButton? _convertButton;
         private static bool _disabled;
-        private static bool _wanted;
+        private static bool _topoToolsWanted;
+        private static bool _convertWanted;
         private static bool _idleRetryPending;
 
-        /// <summary>The command id Revit gives the RVTuk-panel Topo Tools push button.</summary>
-        private static string TopoToolsCommandName =>
-            $"CustomCtrl_%CustomCtrl_%{AddInsTabId}%{Application.RibbonPanelName}%{Application.TopoToolsButtonName}";
+        /// <summary>The command id Revit gives a push button on the RVTuk panel.</summary>
+        private static string CommandNameOf(string buttonName) =>
+            $"CustomCtrl_%CustomCtrl_%{AddInsTabId}%{Application.RibbonPanelName}%{buttonName}";
 
         /// <summary>Call from OnStartup after the ribbon is built. Never throws.</summary>
         public static void Install(UIControlledApplication app)
@@ -58,7 +71,7 @@ namespace RVTuk.Revit.TopoTools
                 _app = app;
                 // PostCommand goes through an external event: its handler runs in a valid API
                 // context and is handed the UIApplication, so none has to be captured and kept.
-                _postHandler = new PostTopoToolsHandler();
+                _postHandler = new PostCommandEventHandler();
                 _postEvent = ExternalEvent.Create(_postHandler);
                 app.SelectionChanged += OnSelectionChanged;
             }
@@ -73,7 +86,7 @@ namespace RVTuk.Revit.TopoTools
             if (_disabled) return;
             try
             {
-                _wanted = IsSingleToposolid(e);
+                ReadSelection(e, out _topoToolsWanted, out _convertWanted);
             }
             catch (Exception ex)
             {
@@ -84,9 +97,9 @@ namespace RVTuk.Revit.TopoTools
         }
 
         /// <summary>
-        /// Brings the panel in line with <see cref="_wanted"/>. The panel is created lazily, the
-        /// first time a toposolid is selected; the tab's presence is checked every time, since
-        /// Revit may rebuild it.
+        /// Brings the panel and its buttons in line with what is wanted. The panel is created
+        /// lazily, the first time a button applies; the tab's presence is checked every time,
+        /// since Revit may rebuild it.
         /// </summary>
         private static void Apply()
         {
@@ -96,7 +109,7 @@ namespace RVTuk.Revit.TopoTools
                 // Hiding needs no tab: the panel object is enough, whether or not the tab is in
                 // the ribbon right now (otherwise a stale panel could show on the next element's
                 // Modify tab).
-                if (!_wanted)
+                if (!_topoToolsWanted && !_convertWanted)
                 {
                     if (_panel != null) _panel.IsVisible = false;
                     return;
@@ -120,6 +133,8 @@ namespace RVTuk.Revit.TopoTools
                 if (!tab.Panels.Contains(_panel))
                     tab.Panels.Add(_panel);
 
+                _topoToolsButton!.IsVisible = _topoToolsWanted;
+                _convertButton!.IsVisible = _convertWanted;
                 _panel.IsVisible = true;
             }
             catch (Exception ex)
@@ -150,26 +165,38 @@ namespace RVTuk.Revit.TopoTools
                 return;
             }
             // One retry only: if the tab is still missing, the next selection change tries again.
-            // Logged once per session, so a Revit year whose contextual tab is not "Modify"
-            // (the Id was probed only in 2024) leaves a trace instead of a silently absent button.
+            // Logged once per session, so a Revit year (or a floor) whose contextual tab is not
+            // "Modify" (the Id was probed only on a toposolid in 2024) leaves a trace instead of
+            // a silently absent button.
             if (FindModifyTabSafe() != null) Apply();
             else if (!_missingTabLogged)
             {
                 _missingTabLogged = true;
                 Application.LogDiagnostic(
-                    $"Contextual Topo Tools button: no contextual tab with Id \"{ModifyTabId}\" found after a toposolid was selected.");
+                    $"{LogPrefix}: no contextual tab with Id \"{ModifyTabId}\" found after a toposolid or floor was selected.");
             }
         }
 
-        private static bool IsSingleToposolid(SelectionChangedEventArgs e)
+        /// <summary>
+        /// Topo Tools: exactly one element, a floor or a toposolid. Floor ⇄ Topo: at least one,
+        /// all floors or toposolids. Stops at the first element that is neither.
+        /// </summary>
+        private static void ReadSelection(SelectionChangedEventArgs e, out bool topoTools, out bool convert)
         {
+            topoTools = convert = false;
             var ids = e.GetSelectedElements();
-            if (ids == null || ids.Count != 1) return false;
+            if (ids == null || ids.Count == 0) return;
             var doc = e.GetDocument();
-            if (doc == null) return false;
-            return doc.GetElement(ids.First()) is Toposolid topo
-                   && topo.HostTopoId == ElementId.InvalidElementId;
+            if (doc == null) return;
+            foreach (var id in ids)
+                if (!IsFloorOrToposolid(doc.GetElement(id))) return;
+            convert = true;
+            topoTools = ids.Count == 1;
         }
+
+        private static bool IsFloorOrToposolid(Element? element) =>
+            element is Floor
+            || element is Toposolid topo && topo.HostTopoId == ElementId.InvalidElementId;
 
         private static AwRibbonTab? FindModifyTab()
         {
@@ -186,41 +213,55 @@ namespace RVTuk.Revit.TopoTools
 
         private static AwRibbonPanel? CreatePanel()
         {
-            string commandName = TopoToolsCommandName;
-            var commandId = RevitCommandId.LookupCommandId(commandName);
-            if (commandId == null)
-            {
-                Fail($"command '{commandName}' not found", null);
-                return null;
-            }
-            _postHandler!.CommandId = commandId;
+            var topoToolsId = LookUp(Application.TopoToolsButtonName);
+            if (topoToolsId == null) return null; // disabled inside
+            var convertId = LookUp(Application.FloorTopoConvertButtonName);
+            if (convertId == null) return null; // disabled inside
 
-            var button = new AwRibbonButton
+            _topoToolsButton = Button("_TopoTools", "Topo\nTools", topoToolsId,
+                TopoIcons.TopoTools(32), TopoIcons.TopoTools(16),
+                "Open Topo Tools — the same as the Topo Tools button on the RVTuk panel");
+            _convertButton = Button("_FloorTopoConvert", "Floor ⇄\nTopo", convertId,
+                TopoIcons.FloorTopo(32), TopoIcons.FloorTopo(16),
+                "Convert the selected floors and toposolids — the same as the Floor ⇄ Topo button on the RVTuk panel");
+
+            var source = new AwRibbonPanelSource { Id = PanelId, Title = Application.RibbonPanelName };
+            source.Items.Add(_topoToolsButton);
+            source.Items.Add(_convertButton);
+            return new AwRibbonPanel { Source = source };
+        }
+
+        private static RevitCommandId? LookUp(string buttonName)
+        {
+            string commandName = CommandNameOf(buttonName);
+            var commandId = RevitCommandId.LookupCommandId(commandName);
+            if (commandId == null) Fail($"command '{commandName}' not found", null);
+            return commandId;
+        }
+
+        private static AwRibbonButton Button(string idSuffix, string text, RevitCommandId commandId,
+            System.Windows.Media.ImageSource largeImage, System.Windows.Media.ImageSource image, string toolTip) =>
+            new AwRibbonButton
             {
-                Id = PanelId + "_TopoTools",
-                Text = "Topo\nTools",
+                Id = PanelId + idSuffix,
+                Text = text,
                 ShowText = true,
                 ShowImage = true,
                 Size = AwRibbonItemSize.Large,
                 Orientation = System.Windows.Controls.Orientation.Vertical,
-                LargeImage = Application.CreateTopoToolsIcon(32),
-                Image = Application.CreateTopoToolsIcon(16),
-                ToolTip = "Open Topo Tools — the same as the Topo Tools button on the RVTuk panel",
-                CommandHandler = new PostCommandHandler(),
+                LargeImage = largeImage,
+                Image = image,
+                ToolTip = toolTip,
+                CommandHandler = new PostCommandHandler(commandId),
             };
 
-            var source = new AwRibbonPanelSource { Id = PanelId, Title = Application.RibbonPanelName };
-            source.Items.Add(button);
-            return new AwRibbonPanel { Source = source };
-        }
-
-        /// <summary>Logs one line and switches the contextual button off for the session.</summary>
+        /// <summary>Logs one line and switches the contextual buttons off for the session.</summary>
         private static void Fail(string step, Exception? ex)
         {
             _disabled = true;
             Application.LogDiagnostic(ex == null
-                ? $"Contextual Topo Tools button disabled: {step}"
-                : $"Contextual Topo Tools button disabled ({step}): {ex.GetType().FullName}: {ex.Message}");
+                ? $"{LogPrefix} disabled: {step}"
+                : $"{LogPrefix} disabled ({step}): {ex.GetType().FullName}: {ex.Message}");
 
             // Best effort: do not leave a half-working button on screen.
             try
@@ -232,9 +273,16 @@ namespace RVTuk.Revit.TopoTools
             catch { /* already disabled; nothing more to do */ }
         }
 
-        /// <summary>Ribbon click: raise the event that posts the RVTuk-panel command.</summary>
+        /// <summary>
+        /// Ribbon click: hand the event this button's command, then raise it. Clicks are serial on
+        /// Revit's main thread, so a coalesced raise still posts the last command clicked.
+        /// </summary>
         private sealed class PostCommandHandler : ICommand
         {
+            private readonly RevitCommandId _commandId;
+
+            public PostCommandHandler(RevitCommandId commandId) => _commandId = commandId;
+
 #pragma warning disable CS0067 // never raised: the button is always executable
             public event EventHandler? CanExecuteChanged;
 #pragma warning restore CS0067
@@ -243,9 +291,10 @@ namespace RVTuk.Revit.TopoTools
 
             public void Execute(object? parameter)
             {
-                if (_disabled) return;
+                if (_disabled || _postHandler == null) return;
                 try
                 {
+                    _postHandler.CommandId = _commandId;
                     _postEvent?.Raise();
                 }
                 catch (Exception ex)
@@ -255,8 +304,9 @@ namespace RVTuk.Revit.TopoTools
             }
         }
 
-        private sealed class PostTopoToolsHandler : IExternalEventHandler
+        private sealed class PostCommandEventHandler : IExternalEventHandler
         {
+            /// <summary>The command to post next; set by the button clicked.</summary>
             public RevitCommandId? CommandId { get; set; }
 
             private bool _refusalLogged;
@@ -265,29 +315,31 @@ namespace RVTuk.Revit.TopoTools
             {
                 try
                 {
-                    if (CommandId == null) return;
+                    var commandId = CommandId;
+                    CommandId = null;
+                    if (commandId == null) return;
 
                     // Revit refuses a post now and then (another command still running, say): that
                     // is not a broken button, so log it once and ignore the click instead of Fail.
-                    if (!app.CanPostCommand(CommandId))
+                    if (!app.CanPostCommand(commandId))
                     {
                         if (!_refusalLogged)
                         {
                             _refusalLogged = true;
-                            Application.LogDiagnostic("Contextual Topo Tools button: Revit refused to post the command; click ignored.");
+                            Application.LogDiagnostic($"{LogPrefix}: Revit refused to post the command; click ignored.");
                         }
                         return;
                     }
 
-                    app.PostCommand(CommandId);
+                    app.PostCommand(commandId);
                 }
                 catch (Exception ex)
                 {
-                    Fail("posting the Topo Tools command", ex);
+                    Fail("posting the command", ex);
                 }
             }
 
-            public string GetName() => "RVTuk: post Topo Tools command";
+            public string GetName() => "RVTuk: post a contextual Topo Tools command";
         }
     }
 }

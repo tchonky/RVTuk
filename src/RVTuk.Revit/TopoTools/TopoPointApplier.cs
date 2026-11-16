@@ -13,9 +13,6 @@ namespace RVTuk.Revit.TopoTools
     /// <param name="Lost">Points that could not be placed, or not at their height.</param>
     public sealed record ApplyOutcome(int Added, int Removed, int Missing, int Lost);
 
-    /// <summary>A line's points with their internal Z: inside the outline, and on it.</summary>
-    public sealed record LinePointsZ(IReadOnlyList<XyzPoint> Interior, IReadOnlyList<XyzPoint> Edge);
-
     /// <summary>
     /// Writes one toposolid's or floor's points, and the only place that copes with a point having
     /// no identity: <c>SlabShapeVertex</c> is a position, not an element, so the ledger stores
@@ -36,7 +33,11 @@ namespace RVTuk.Revit.TopoTools
         /// <summary>0.1 mm, in Revit's internal feet.</summary>
         public const double MatchToleranceFeet = 0.1 / 304.8;
 
-        /// <summary>Caller must already be inside a transaction.</summary>
+        /// <summary>
+        /// Caller must already be inside a transaction. <paramref name="newPointsByLine"/> must
+        /// put at most one point on any plan spot (<see cref="TopoPointDeduper"/>): every point
+        /// given is placed.
+        /// </summary>
         public static ApplyOutcome Apply(
             SlabTarget target,
             IReadOnlyCollection<long> lineIdsInView,
@@ -124,16 +125,12 @@ namespace RVTuk.Revit.TopoTools
                 lost += result.Lost;
             }
 
-            // Then the edge points, each on the surface as it now stands, and each plan position
-            // once per run: chained lines meeting on the outline share one, and the first line
-            // keeps it. The reference that ModifySubElement measures from is learnt on the first
-            // raise and reused.
-            var edgeByLine = TopoEdgePointDeduper.Dedupe(newPointsByLine.Select(entry =>
-                new KeyValuePair<long, IReadOnlyList<XyzPoint>>(entry.Key, entry.Value.Edge)));
+            // Then the edge points, each on the surface as it now stands. The reference that
+            // ModifySubElement measures from is learnt on the first raise and reused.
             double? reference = null;
-            foreach (var entry in edgeByLine)
+            foreach (var entry in newPointsByLine)
             {
-                foreach (var point in entry.Value)
+                foreach (var point in entry.Value.Edge)
                 {
                     int index = ShapeReplayPlanner.IndexOfXy(preexisting, point);
                     XyzPoint? existing = index >= 0 ? preexisting[index] : null;

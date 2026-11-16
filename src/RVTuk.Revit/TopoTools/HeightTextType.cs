@@ -7,9 +7,16 @@ namespace RVTuk.Revit.TopoTools
     /// The text type ("_DP-Topo Height") that marks a text note as a topo line's height. Created
     /// from the document's default text type with an opaque background, so a text centred on its
     /// line masks the line under it, like a contour label.
+    ///
+    /// The type is found by this name and nothing else. Renaming it in the project disconnects
+    /// every height text already drawn: they stop counting as height texts, so the next session
+    /// creates a new type and gives every line a second text at the last typed height, which the
+    /// next Update then applies instead of the heights typed before.
     /// </summary>
     public static class HeightTextType
     {
+        /// <summary>The type's name, and the only way it is found: renaming the type in the project
+        /// disconnects every height text already drawn.</summary>
         public const string Name = "_DP-Topo Height";
 
         public static bool IsHeightText(TextNote text) => text.TextNoteType?.Name == Name;
