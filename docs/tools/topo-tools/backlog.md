@@ -82,6 +82,17 @@ Also unverified, and only visible in Revit:
   Decide whether averaging is the whole rule, or whether a large enough Z gap means "wall" and
   should keep both points, or warn.
 
+- **A pre-existing vertex raised by Update keeps its height.** An edge point that lands on a vertex
+  the tool did not create (an outline corner, a hand-placed point) is raised but not recorded, so it is
+  never deleted by mistake. The cost: when the line moves away or is deleted, that vertex keeps the
+  line's height. Fix if it matters: record the vertex's original Z in the ledger and put it back.
+- **Two views sharing an outline point on one element:** raising a vertex for this view's line changes
+  the Z another view's line recorded, so that view's next Update reports one false "moved by hand".
+- **Cancel: `TopoSessionUpdater.Disable()` runs before `tx.Start()`, outside the `try`.** If `Start`
+  throws, the session stays open with the updater off. Move both inside the `try`.
+- **Interior points:** the edge-point dedupe does not cover two lines putting interior points on the
+  same XY (see averaging above); a vertex merged into an existing one still counts as "added".
+
 ## Ideas (deliberately out of v1)
 
 - Read contours from an imported survey DWG — the sampler and router are reused untouched; only a

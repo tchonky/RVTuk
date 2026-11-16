@@ -42,7 +42,9 @@ hidden texts still count: both are found by owner view, not by what is visible.
 **Update** reads each text and skips a line whose text is not a height (the summary names it, e.g.
 "1 line skipped: '42,7x' is not a height", and that line's earlier points are removed). It writes
 only to the selected element. Points held by lines that no longer take part (deleted, moved off the
-element, unreadable) are removed; other toposolids and floors are never touched. A line partly over
+element, unreadable) are removed; other toposolids and floors are never touched. The one exception: a
+vertex that was already there (an outline corner) is raised but never recorded, so it keeps the
+height when its line goes away — the tool never deletes a point it did not create. A line partly over
 the element counts only for the part over it, with a point on the outline at the line's height so
 neighbouring toposolids meet at the same height; the drawn line is never split. One transaction per
 Update, so one Ctrl+Z undoes it.
