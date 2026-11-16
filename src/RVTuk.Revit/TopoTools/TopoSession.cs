@@ -61,12 +61,13 @@ namespace RVTuk.Revit.TopoTools
             if (Current != null)
                 throw new InvalidOperationException("A Topo Edit session is already open.");
 
-            // Document-wide, filtered by owner view, like HeightTexts: a view collector would miss
-            // texts hidden in the view. Grouped texts are left out, as HeightTexts leaves them.
+            // Document-wide, narrowed by owner view, like HeightTexts: the collector's view
+            // constructor would miss texts hidden in the view. Grouped texts are left out, as
+            // HeightTexts leaves them.
             var snapshot = new FilteredElementCollector(document)
                 .OfClass(typeof(TextNote))
+                .WherePasses(new ElementOwnerViewFilter(view.Id))
                 .Cast<TextNote>()
-                .Where(note => note.OwnerViewId == view.Id)
                 .Where(note => note.GroupId == ElementId.InvalidElementId)
                 .Where(HeightTextType.IsHeightText)
                 .ToDictionary(note => note.Id, note => note.Text ?? "");

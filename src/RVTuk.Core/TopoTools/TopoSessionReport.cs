@@ -6,8 +6,8 @@ namespace RVTuk.Core.TopoTools
     /// What one Topo Edit session did, in the words the pane's status line uses. Kept in Core
     /// and tested, as the only text the session shows after each run.
     ///
-    /// Sentences are joined by a single space, in this order: applied, skipped, moved by hand,
-    /// lost, unlinked.
+    /// Sentences are joined by a single space, in this order: applied, crossings, skipped, moved by
+    /// hand, lost, unlinked.
     /// </summary>
     public sealed class TopoSessionReport
     {
@@ -18,6 +18,10 @@ namespace RVTuk.Core.TopoTools
         public int PointsReplaced { get; set; }
         public int PointsMovedByHand { get; set; }
         public int PointsLost { get; set; }
+
+        /// <summary>Points dropped because a higher line's point stood at the same spot
+        /// (<see cref="TopoPointDeduper"/>). The rule, not a problem: no warning.</summary>
+        public int PointsDroppedAtCrossings { get; set; }
 
         /// <summary>The raw text of each height that could not be read.</summary>
         public List<string> UnreadableHeights { get; } = new List<string>();
@@ -41,6 +45,12 @@ namespace RVTuk.Core.TopoTools
             else if (!HasProblems)
             {
                 return NothingOverTarget;
+            }
+
+            if (PointsDroppedAtCrossings > 0)
+            {
+                sentences.Add(Count(PointsDroppedAtCrossings, "point", "points") +
+                    " where lines cross took the higher line's height.");
             }
 
             if (UnreadableHeights.Count > 0)

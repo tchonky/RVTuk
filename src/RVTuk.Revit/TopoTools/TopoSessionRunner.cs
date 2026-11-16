@@ -9,7 +9,8 @@ namespace RVTuk.Revit.TopoTools
     /// One Update: collect the view's topo lines, clip each to the selected element, read its
     /// height, apply. Only the selected element is written to. A line that does not cross it is
     /// ignored — not applied and not reported — though, being in the view, its earlier points on
-    /// this element (if it has since moved off it) are still cleaned by the applier.
+    /// this element (if it has since moved off it) are still cleaned by the applier. Where lines
+    /// put points on one plan spot, the highest is kept (<see cref="TopoPointDeduper"/>).
     /// </summary>
     public static class TopoSessionRunner
     {
@@ -52,10 +53,14 @@ namespace RVTuk.Revit.TopoTools
                     points.Edge.Select(xy => new XyzPoint(xy.X, xy.Y, z)).ToList());
             }
 
+            // One point per plan spot, the highest, before anything reaches the element: where
+            // lines cross (or chain on the outline) the rule is ours, not whatever Revit merges.
+            var deduped = TopoPointDeduper.Dedupe(newPointsByLine);
+
             var outcome = TopoPointApplier.Apply(
                 target,
                 lineIdsInView,
-                newPointsByLine,
+                deduped.Kept,
                 lineId => doc.GetElement(new ElementId(lineId)) != null);
 
             report.LinesApplied = newPointsByLine.Count;
@@ -63,6 +68,7 @@ namespace RVTuk.Revit.TopoTools
             report.PointsReplaced = outcome.Removed;
             report.PointsMovedByHand = outcome.Missing;
             report.PointsLost = outcome.Lost;
+            report.PointsDroppedAtCrossings = deduped.DroppedForHigher;
             return report;
         }
     }

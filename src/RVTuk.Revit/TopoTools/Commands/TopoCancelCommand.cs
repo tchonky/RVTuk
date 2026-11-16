@@ -4,6 +4,7 @@ using System.Linq;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RVTuk.Core.TopoTools;
 
 namespace RVTuk.Revit.TopoTools.Commands
 {
@@ -29,18 +30,19 @@ namespace RVTuk.Revit.TopoTools.Commands
                 return Result.Cancelled;
             }
 
-            // The updater goes off first: the deletes and restores below must not be restyled,
-            // labelled or taken as typed heights. The session itself ends only after the commit.
-            TopoSessionUpdater.Disable();
-
             var doc = session.Document;
             int linesDeleted, pointsRemoved = 0, textsDeleted, textsRestored = 0;
 
             using (var tx = new Transaction(doc, "Topo Cancel"))
             {
-                tx.Start();
                 try
                 {
+                    // The updater goes off first: the deletes and restores below must not be
+                    // restyled, labelled or taken as typed heights. Inside the try, so a Start that
+                    // throws still switches it back on. The session ends only after the commit.
+                    TopoSessionUpdater.Disable();
+                    tx.Start();
+
                     // 1. The session's new topo lines that still exist (the user may have undone some).
                     // Created keeps ids across an undo (updaters do not run on undo) and Revit may
                     // give an undone id to a new element, so each id must still be a topo detail
