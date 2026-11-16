@@ -11,4 +11,9 @@ $summary = foreach ($c in 'Release2024', 'Release2025', 'Release2027') {
     if (@($lines).Count -lt $projects) { throw "Not every test project ran: $c" }
     $lines | ForEach-Object { "$c  $($_.Line.Trim())" }
 }
+dotnet test installer\RVTuk.Setup.Tests\RVTuk.Setup.Tests.csproj -c Release | Tee-Object -Variable out | Out-Host
+if ($LASTEXITCODE) { throw "Tests failed: Setup" }
+$lines = $out | Select-String '(Passed|Failed)!'
+if (-not $lines) { throw "No tests ran: Setup" }
+$summary += $lines | ForEach-Object { "Setup  $($_.Line.Trim())" }
 $summary

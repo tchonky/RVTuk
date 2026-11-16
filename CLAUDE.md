@@ -93,6 +93,8 @@ dotnet test tests\RVTuk.UI.Tests\RVTuk.UI.Tests.csproj -c Release2027
 ```
 Its fixtures are sanitized (`FamilyBrowser\Fixtures\sanitize_instructions.py`): never commit a real database row. Database tests run on every framework: each test project carries an xunit.runner.json that switches shadow copy off, because the shadow folder has no e_sqlite3.dll.
 
+The setup exe's tests (`installer\RVTuk.Setup.Tests`, net48, outside `RVTuk.sln`) run at the end of `Test-All.ps1`; alone: `dotnet test installer\RVTuk.Setup.Tests\RVTuk.Setup.Tests.csproj -c Release`.
+
 ## Deployment
 
 `Deploy.ps1` (must run as Administrator) builds/copies the right binary set per Revit version, strips the net48 BCL polyfill DLLs Revit already preloads, and generates the `.addin` manifest XML:
