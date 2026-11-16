@@ -77,18 +77,38 @@ namespace RVTuk.Revit.TopoTools
                 if (session == null || !session.IsFor(doc)) return;
                 if (doc.GetElement(session.ViewId) is not View view) return;
 
-                // Texts made here show up as added, not modified, but are skipped explicitly too:
-                // their text is the last typed height already, never something the user typed.
-                var createdHere = new HashSet<ElementId>();
+                var added = data.GetAddedElementIds();
+
+                // Height texts added in this call alongside lines are copies (copy/paste, array,
+                // mirror-copy): the copied lines keep the copied heights, so no new text is made
+                // for them; the next Height Labels/Update relinks each copy to its line.
+                var addedTexts = new List<TextNote>();
+                foreach (var id in added)
+                {
+                    if (doc.GetElement(id) is TextNote note
+                        && note.OwnerViewId == session.ViewId
+                        && note.GroupId == ElementId.InvalidElementId
+                        && HeightTextType.IsHeightText(note))
+                        addedTexts.Add(note);
+                }
+                foreach (var note in addedTexts)
+                {
+                    session.Created.Add(note.Id);
+                    session.LastSeenTexts[note.Id] = (note.Text ?? "").Trim();
+                }
+                bool linesCameWithTexts = addedTexts.Count > 0;
 
                 GraphicsStyle? topoStyle = null;
                 bool styleLookedUp = false;
-                foreach (var id in data.GetAddedElementIds())
+                foreach (var id in added)
                 {
                     try
                     {
                         if (doc.GetElement(id) is not CurveElement line) continue;
                         if (line.CurveElementType != CurveElementType.DetailCurve) continue;
+                        // Sketch curves (filled/masking region boundaries) are view-owned detail
+                        // curves too, but in the Sketch Lines category.
+                        if (line.Category?.BuiltInCategory != BuiltInCategory.OST_Lines) continue;
                         if (line.OwnerViewId != session.ViewId) continue;
                         if (line.GroupId != ElementId.InvalidElementId) continue;
 
@@ -96,14 +116,19 @@ namespace RVTuk.Revit.TopoTools
                         {
                             topoStyle = FindTopoLineStyle(doc);
                             styleLookedUp = true;
+                            if (topoStyle == null)
+                                Application.LogDiagnostic(
+                                    $"TopoSessionUpdater: line style \"{TopoLineStyle.LineStyleName}\" is missing; new lines left as drawn.");
                         }
                         if (topoStyle == null) break;
 
                         line.LineStyle = topoStyle;
-                        var text = HeightTexts.CreateFor(doc, view, line, LastTypedHeights.Get(doc));
-                        createdHere.Add(text.Id);
                         session.Created.Add(line.Id);
+                        if (linesCameWithTexts) continue;
+
+                        var text = HeightTexts.CreateFor(doc, view, line, LastTypedHeights.Get(doc));
                         session.Created.Add(text.Id);
+                        session.LastSeenTexts[text.Id] = (text.Text ?? "").Trim();
                     }
                     catch (Exception ex)
                     {
@@ -111,16 +136,25 @@ namespace RVTuk.Revit.TopoTools
                     }
                 }
 
+                // A text change counts as typed only when its text differs from the last one seen:
+                // moves, re-centring, relinking and Cancel's restores leave the stored text equal.
+                // Texts created above are in the map already, so they never count either.
                 foreach (var id in data.GetModifiedElementIds())
                 {
                     try
                     {
-                        if (createdHere.Contains(id)) continue;
                         if (doc.GetElement(id) is not TextNote note) continue;
                         if (note.OwnerViewId != session.ViewId) continue;
                         if (!HeightTextType.IsHeightText(note)) continue;
 
-                        if (TopoHeightParser.TryParse(doc, note.Text, out double sharedFeet))
+                        var current = (note.Text ?? "").Trim();
+                        bool known = session.LastSeenTexts.TryGetValue(id, out var lastSeen);
+                        session.LastSeenTexts[id] = current;
+                        // A text not seen before (grouped at the start, or just switched to the
+                        // height type) is only recorded: there is no earlier text to compare with.
+                        if (!known || current == lastSeen) continue;
+
+                        if (TopoHeightParser.TryParse(doc, current, out double sharedFeet))
                             LastTypedHeights.Set(doc, sharedFeet);
                     }
                     catch (Exception ex)

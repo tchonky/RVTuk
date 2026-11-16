@@ -33,6 +33,13 @@ namespace RVTuk.Revit.TopoTools
         /// <summary>Each height text in the view at the start, by id, with its text as it was.</summary>
         public IReadOnlyDictionary<ElementId, string> TextSnapshot { get; }
 
+        /// <summary>
+        /// The last text the updater saw on each height text in the view, trimmed. A text change
+        /// counts as typed (and becomes the last typed height) only when it differs from this, so
+        /// moves, re-centring and relinking never pass for typing. Seeded from the snapshot.
+        /// </summary>
+        internal Dictionary<ElementId, string> LastSeenTexts { get; }
+
         private TopoSession(Document document, ElementId viewId, ElementId targetId,
             IReadOnlyDictionary<ElementId, string> textSnapshot)
         {
@@ -40,6 +47,8 @@ namespace RVTuk.Revit.TopoTools
             ViewId = viewId;
             TargetId = targetId;
             TextSnapshot = textSnapshot;
+            LastSeenTexts = new Dictionary<ElementId, string>();
+            foreach (var pair in textSnapshot) LastSeenTexts[pair.Key] = pair.Value.Trim();
         }
 
         /// <summary>
