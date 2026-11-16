@@ -10,32 +10,6 @@
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)'=='Release2023'">
-    <TargetFramework>net48</TargetFramework>
-    <OutputPath>bin\2023\Release2023\</OutputPath>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)'=='Release2024'">
-    <TargetFramework>net48</TargetFramework>
-    <OutputPath>bin\2024\Release2024\</OutputPath>
-  </PropertyGroup>
-
-  <!-- Revit 2026 (net8; 2026.5+ hosts it on .NET 10) / 2027 (net10): 2026 for the KKarea host only, 2027 for RVTuk.Revit. -->
-  <PropertyGroup Condition="'$(Configuration)'=='Release2026'">
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <OutputPath>bin\2026\Release2026\</OutputPath>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)'=='Release2027'">
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <OutputPath>bin\2027\Release2027\</OutputPath>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)'!='Release2024' and '$(Configuration)'!='Release2023' and '$(Configuration)'!='Release2026' and '$(Configuration)'!='Release2027'">
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <OutputPath>bin\2025\Release2025\</OutputPath>
-  </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\RVTuk.Core\RVTuk.Core.csproj" />
   </ItemGroup>

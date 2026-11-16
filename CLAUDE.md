@@ -53,6 +53,8 @@ dotnet build RVTuk.sln -c Release2026
 dotnet build RVTuk.sln -c Release2027
 ```
 
+The matrix lives in the root Directory.Build.props; a configuration outside the five (or none) fails the build. NuGet assets are per configuration, in obj\Release{year}\.
+
 Or build a single project (its project references are built transitively). The projects live under `src\`:
 
 ```powershell
@@ -71,17 +73,17 @@ Each config maps to a target framework and a per-year `DefineConstants` symbol (
 
 All configs use `Microsoft.Data.Sqlite`. Build outputs land in each project's `bin\{year}\Release{year}\{tfm}\`, e.g. `src\RVTuk.Revit\bin\2024\Release2024\net48\`.
 
-`Release2023` and `Release2026` build only `RVTuk.Core`, `RVTuk.UI`, and `KKarea.Revit`; `RVTuk.Revit` does not build for those years. `Release2027` builds `RVTuk.Core`, `RVTuk.UI` and `RVTuk.Revit` (KKarea does not build for 2027). Revit 2027 runs on .NET 10 (its API package targets `net10.0-windows`), so that config needs the .NET 10 SDK. The 2027 API dropped `SlabShapeEditor.DrawPoint` and `DrawSplitLine`; `RVTuk.Revit\TopoTools\SlabShape.cs` uses `AddPoint`/`AddSplitLine` there (`#if REVIT2027`), and whether 2027's `AddPoint` accepts points on an edge is not yet checked in Revit. The net48-vs-net8 code split (JSON serializer choice, and the native `e_sqlite3.dll` pre-load on net48) is gated on the compiler-provided `NETFRAMEWORK` symbol, not on `REVIT2024`; the `REVIT<year>` constants are for year-specific Revit API differences only (e.g. the `ElementId` shims in the shared area sources).
+Release2023 builds RVTuk.Core, RVTuk.UI and KKarea.Revit. Release2024 to Release2027 build RVTuk.Core, RVTuk.UI and RVTuk.Revit; Release2026 also builds KKarea.Revit, which is what Revit 2026 gets (the RVTuk.Revit build for 2026 is not deployed yet). The test projects build under Release2024, Release2025 and Release2027. Revit 2027 runs on .NET 10 (its API package targets `net10.0-windows`), so that config needs the .NET 10 SDK. The 2026 API dropped `SlabShapeEditor.DrawPoint` and `DrawSplitLine`; `RVTuk.Revit\TopoTools\SlabShape.cs` uses `AddPoint` from 2026 (`#if REVIT2026 || REVIT2027`) and `AddSplitLine` after 2024, and whether that `AddPoint` accepts points on an edge is not yet checked in Revit. The net48-vs-net8 code split (JSON serializer choice, and the native `e_sqlite3.dll` pre-load on net48) is gated on the compiler-provided `NETFRAMEWORK` symbol, not on `REVIT2024`; the `REVIT<year>` constants are for year-specific Revit API differences only (e.g. the `ElementId` shims in the shared area sources).
 
 ## Tests
 
 Core's xunit suite lives in `tests\RVTuk.Core.Tests` (repositories, indexer, config/migration, Rishui Zamin writers/validator), mirroring the per-tool folders. Run it before committing Core changes:
 
 ```powershell
-dotnet test tests\RVTuk.Core.Tests\RVTuk.Core.Tests.csproj
+dotnet test tests\RVTuk.Core.Tests\RVTuk.Core.Tests.csproj -c Release2025
 ```
 
-On a non-Windows SDK (CI, cloud agents) add `-p:EnableWindowsTargeting=true` — the suite builds and runs fine on Linux. The WPF/Revit projects (`RVTuk.UI`, `RVTuk.Revit`, `KKarea.Revit`) can only be compiled on Windows.
+On a non-Windows SDK (CI, cloud agents) add `-c Release2025 -p:EnableWindowsTargeting=true` — the suite builds and runs fine on Linux. The WPF/Revit projects (`RVTuk.UI`, `RVTuk.Revit`, `KKarea.Revit`) can only be compiled on Windows.
 
 `tests\RVTuk.UI.Tests` holds WPF tests that run without Revit (instruction XAML read/write). It follows the configuration — `-c Release2024` tests net48, `-c Release2025` tests net8 — and both must pass before committing a change to instruction reading or writing:
 ```powershell
@@ -135,11 +137,11 @@ exactly (e.g. `RVTuk.Core.FamilyBrowser.Database`, `RVTuk.UI.RishuiZamin.Views`,
 `RVTuk.Core.Shared.Config`). `RVTuk.Revit.Application` stays at the project root —
 it is the `.addin` entry class.
 
-**KKarea.Revit** (`src\KKarea.Revit`) is a fourth project: a standalone add-in for Revit 2023 (net48) and 2026 (net8) hosting only Rishui Zamin; a `RevitYear` property in its csproj picks the TFM, API package and `REVIT<year>` constant from the configuration. It references Core + UI and compiles the Revit-side area sources (`AreaExtractor`, `UsageKeyScheduleBuilder`, the three area external-event handlers from `RVTuk.Revit\RishuiZamin\`) as **linked shared source** from `RVTuk.Revit` against each year's API — it must never reference `RVTuk.Revit` itself. `#if REVIT2023` branches in those shared files cover the 2023 API gaps (`ElementId.IntegerValue` vs `.Value`, int-only `ElementId` ctor).
+**KKarea.Revit** (`src\KKarea.Revit`) is a fourth project: a standalone add-in for Revit 2023 (net48) and 2026 (net8) hosting only Rishui Zamin; the root `Directory.Build.props` picks its year (`RevitYear`, hence the API package), TFM and `REVIT<year>` constant from the configuration. It references Core + UI and compiles the Revit-side area sources (`AreaExtractor`, `UsageKeyScheduleBuilder`, the three area external-event handlers from `RVTuk.Revit\RishuiZamin\`) as **linked shared source** from `RVTuk.Revit` against each year's API — it must never reference `RVTuk.Revit` itself. `#if REVIT2023` branches in those shared files cover the 2023 API gaps (`ElementId.IntegerValue` vs `.Value`, int-only `ElementId` ctor).
 
 **RVTuk.Core** holds data models, the SQLite schema/repositories, OLE thumbnail read/write, metadata-XML parsing, and config. Keep it free of Revit API and WPF types so it can be reasoned about in isolation. It multi-targets `net48` (Release2023/2024), `net8.0-windows` (Release2025/2026) and `net10.0-windows` (Release2027) and **does** carry NuGet dependencies, which differ per target:
 - net48: `Microsoft.Data.Sqlite`, GAC `System.Drawing`. No `System.Text.Json` (its transitive polyfills clash with Revit's preloaded assemblies — JSON uses `DataContractJsonSerializer`).
-- net8: `Microsoft.Data.Sqlite`, `System.Text.Json`, `System.Drawing.Common`.
+- net8: `Microsoft.Data.Sqlite`, `System.Drawing.Common` 8.x (`System.Text.Json` is in-box).
 - net10: `Microsoft.Data.Sqlite`, `System.Drawing.Common` 10.x (`System.Text.Json` is in-box).
 - both: `OpenMCDF` pinned to `3.1.2` (chosen to match what other Revit add-ins preloaded; that no longer holds — pyRevit now preloads 3.1.4 — see the thumbnail bug in `docs/tools/family-browser/backlog.md`).
 
@@ -147,7 +149,7 @@ it is the `.addin` entry class.
 
 **RVTuk.UI** multi-targets the same frameworks, uses WPF (`UseWPF`) and WinForms (`UseWindowsForms`), and contains all user-facing windows/controls. Depends on Core only — it must not reference any Revit type. Revit interactions are passed in as plain `Func<>`/`Action` delegates from the Revit project.
 
-**RVTuk.Revit** is the only project that references the Revit API (`Nice3point.Revit.Api.RevitAPI` / `RevitAPIUI`, pinned `2024.*` / `2025.*` / `2027.*` by the csproj's `RevitYear`, `compile`-only with `ExcludeAssets="runtime"`). It hosts the ribbon, commands, and the `ExternalEvent` handlers, and wires UI delegates to that API.
+**RVTuk.Revit** is the only project that references the Revit API (`Nice3point.Revit.Api.RevitAPI` / `RevitAPIUI`, pinned to the configuration's year (`2024.*`–`2027.*`) by `RevitYear` from `Directory.Build.props`, `compile`-only with `ExcludeAssets="runtime"`). It hosts the ribbon, commands, and the `ExternalEvent` handlers, and wires UI delegates to that API.
 
 ### Docs layout
 

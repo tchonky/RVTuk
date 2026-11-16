@@ -1,0 +1,23 @@
+<Project>
+  <!-- Build matrix: one Revit year per configuration. An unknown or empty configuration
+       evaluates as 2025, so restore and an IDE keep working, and fails before compiling. -->
+  <PropertyGroup>
+    <Configurations>Release2023;Release2024;Release2025;Release2026;Release2027</Configurations>
+    <RVTukKnownConfiguration>$([System.Text.RegularExpressions.Regex]::IsMatch('$(Configuration)', '^Release202[3-7]$'))</RVTukKnownConfiguration>
+    <RevitYear>2025</RevitYear>
+    <RevitYear Condition="'$(RVTukKnownConfiguration)'=='True'">$(Configuration.Substring(7))</RevitYear>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(RevitYear)'=='2023' or '$(RevitYear)'=='2024'">net48</TargetFramework>
+    <TargetFramework Condition="'$(RevitYear)'=='2027'">net10.0-windows</TargetFramework>
+    <DefineConstants>$(DefineConstants);REVIT$(RevitYear)</DefineConstants>
+    <OutputPath>bin\$(RevitYear)\Release$(RevitYear)\</OutputPath>
+    <!-- One NuGet assets file per configuration: 2023/2024 share net48 and 2025/2026 share
+         net8, so one shared obj\project.assets.json compiles against the other year's API. -->
+    <MSBuildProjectExtensionsPath>obj\$(Configuration)\</MSBuildProjectExtensionsPath>
+  </PropertyGroup>
+
+  <Target Name="RVTukRejectConfiguration" BeforeTargets="CoreCompile"
+          Condition="'$(RVTukKnownConfiguration)'!='True' and '$(DesignTimeBuild)'!='true'">
+    <Error Text="Configuration '$(Configuration)' is not in the build matrix: use -c Release2023, Release2024, Release2025, Release2026 or Release2027." />
+  </Target>
+</Project>

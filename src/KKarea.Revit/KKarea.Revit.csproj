@@ -14,24 +14,12 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <PlatformTarget>x64</PlatformTarget>
-    <RevitYear>2023</RevitYear>
-    <RevitYear Condition="'$(Configuration)'=='Release2026'">2026</RevitYear>
-    <OutputPath>bin\$(RevitYear)\Release$(RevitYear)\</OutputPath>
-    <DefineConstants>REVIT$(RevitYear)</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(RevitYear)'=='2023'">
-    <TargetFramework>net48</TargetFramework>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(RevitYear)'=='2026'">
-    <TargetFramework>net8.0-windows</TargetFramework>
   </PropertyGroup>
 
   <!-- .NET (Core) libraries don't copy NuGet deps to bin by default. Revit.exe loads the
        add-in, so it must carry its own dependency closure — including
        runtimes\win-x64\native\e_sqlite3.dll — for Deploy.ps1 to pick up. net48 already does. -->
-  <PropertyGroup Condition="'$(RevitYear)'!='2023'">
+  <PropertyGroup Condition="'$(TargetFramework)'!='net48'">
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 

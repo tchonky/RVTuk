@@ -9,30 +9,9 @@
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
-  <!-- One Revit year per configuration: Release2024 -> 2024 (net48), Release2025 -> 2025
-       (net8), Release2027 -> 2027 (net10). RVTuk does not build for 2023 or 2026 — KKarea
-       serves those years. -->
-  <PropertyGroup>
-    <RevitYear>2025</RevitYear>
-    <RevitYear Condition="'$(Configuration)'=='Release2024'">2024</RevitYear>
-    <RevitYear Condition="'$(Configuration)'=='Release2027'">2027</RevitYear>
-    <OutputPath>bin\$(RevitYear)\Release$(RevitYear)\</OutputPath>
-    <DefineConstants>REVIT$(RevitYear)</DefineConstants>
-  </PropertyGroup>
+  <!-- Year, framework and REVIT<year> come from Directory.Build.props. Built for 2024-2027 (RVTuk.sln); the 2026 build is not deployed, KKarea serves that year. -->
 
-  <PropertyGroup Condition="'$(RevitYear)'=='2024'">
-    <TargetFramework>net48</TargetFramework>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(RevitYear)'=='2025'">
-    <TargetFramework>net8.0-windows</TargetFramework>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(RevitYear)'=='2027'">
-    <TargetFramework>net10.0-windows</TargetFramework>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(RevitYear)'!='2024'">
+  <PropertyGroup Condition="'$(TargetFramework)'!='net48'">
     <!-- net8/net10 libraries don't copy NuGet deps to bin by default (they rely on deps.json
          resolution). A Revit add-in is loaded by Revit.exe, so it must carry its own
          dependency closure — including runtimes\win-x64\native\e_sqlite3.dll — into bin

@@ -8,63 +8,18 @@
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)'=='Release2023'">
-    <TargetFramework>net48</TargetFramework>
-    <OutputPath>bin\2023\Release2023\</OutputPath>
-    <DefineConstants>REVIT2023</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)'=='Release2024'">
-    <TargetFramework>net48</TargetFramework>
-    <OutputPath>bin\2024\Release2024\</OutputPath>
-    <DefineConstants>REVIT2024</DefineConstants>
-  </PropertyGroup>
-
-  <!-- Revit 2026 builds Core only for the KKarea host (Area Calc); 2027 builds it for the
-       full RVTuk add-in. 2026 builds net8
-       (Revit 2026.0-2026.4 run .NET 8, 2026.5+ run .NET 10 and still load net8 add-ins);
-       2027 is .NET 10 (the Revit 2027 API targets net10.0-windows). -->
-  <PropertyGroup Condition="'$(Configuration)'=='Release2026'">
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <OutputPath>bin\2026\Release2026\</OutputPath>
-    <DefineConstants>REVIT2026</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)'=='Release2027'">
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <OutputPath>bin\2027\Release2027\</OutputPath>
-    <DefineConstants>REVIT2027</DefineConstants>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)'!='Release2024' and '$(Configuration)'!='Release2023' and '$(Configuration)'!='Release2026' and '$(Configuration)'!='Release2027'">
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <OutputPath>bin\2025\Release2025\</OutputPath>
-    <DefineConstants>REVIT2025</DefineConstants>
-  </PropertyGroup>
-
-  <!-- net48 (Revit 2023/2024): Microsoft.Data.Sqlite — same engine as net8. Unlike
-       System.Data.SQLite, its bundled e_sqlite3 can open databases over UNC shares
-       (\\server\share); System.Data.SQLite's win32 VFS fails ("unable to open database
-       file") against some SMB servers even though the file is readable.
-       No System.Text.Json on net48 — its transitive polyfills (System.Memory,
-       System.Runtime.CompilerServices.Unsafe, etc.) conflict with Revit's preloaded
-       versions; JSON uses DataContractJsonSerializer instead. The native e_sqlite3.dll
-       and any polyfill DLLs are handled by Deploy.ps1 (copied / stripped). -->
-  <!-- Microsoft.Data.Sqlite pinned to 8.0.29 (both targets): 8.0.30+ pulls SQLitePCLRaw 2.1.12,
+  <!-- Microsoft.Data.Sqlite on every framework. Unlike System.Data.SQLite, its bundled
+       e_sqlite3 can open databases over UNC shares (\\server\share); System.Data.SQLite's
+       win32 VFS fails ("unable to open database file") against some SMB servers even though
+       the file is readable.
+       No System.Text.Json package: in-box on net8 and net10; on net48 its transitive polyfills
+       (System.Memory, System.Runtime.CompilerServices.Unsafe, etc.) conflict with Revit's
+       preloaded versions, so JSON uses DataContractJsonSerializer there. The native
+       e_sqlite3.dll and any polyfill DLLs are handled by Deploy.ps1 (copied / stripped). -->
+  <!-- Microsoft.Data.Sqlite pinned to 8.0.29: 8.0.30+ pulls SQLitePCLRaw 2.1.12,
        whose net461 build targets copy runtimes\win-arm\native\e_sqlite3.dll, a file that
        package does not ship, so every net48 build fails with MSB3030. 8.0.29 brings 2.1.6. -->
-  <ItemGroup Condition="'$(TargetFramework)'=='net48'">
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.29" />
-  </ItemGroup>
-
-  <!-- net8.0-windows (Revit 2025/2026): Microsoft.Data.Sqlite + System.Text.Json are fine here -->
-  <ItemGroup Condition="'$(TargetFramework)'=='net8.0-windows'">
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.29" />
-    <PackageReference Include="System.Text.Json" Version="8.0.*" />
-  </ItemGroup>
-
-  <!-- net10.0-windows (Revit 2027): System.Text.Json is in-box on .NET 10, so no package. -->
-  <ItemGroup Condition="'$(TargetFramework)'=='net10.0-windows'">
+  <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.29" />
   </ItemGroup>
 
@@ -100,14 +55,10 @@
     <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
 
-  <!-- net8.0: System.Drawing.Common NuGet provides GDI+ access on non-Windows or without WPF -->
-  <ItemGroup Condition="'$(TargetFramework)'=='net8.0-windows'">
-    <PackageReference Include="System.Drawing.Common" Version="8.0.*" />
-  </ItemGroup>
-
-  <!-- net10.0-windows (Revit 2027): match the System.Drawing.Common of the .NET 10 runtime. -->
-  <ItemGroup Condition="'$(TargetFramework)'=='net10.0-windows'">
-    <PackageReference Include="System.Drawing.Common" Version="10.0.*" />
+  <!-- Everything but net48: the System.Drawing.Common of the runtime's own version
+       (8.0.* on net8, 10.0.* on net10). net48 takes System.Drawing from the GAC. -->
+  <ItemGroup Condition="'$(TargetFramework)'!='net48'">
+    <PackageReference Include="System.Drawing.Common" Version="$([MSBuild]::GetTargetFrameworkVersion('$(TargetFramework)', 2)).*" />
   </ItemGroup>
 
 </Project>

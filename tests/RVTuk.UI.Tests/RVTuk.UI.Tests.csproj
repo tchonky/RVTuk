@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- WPF tests without Revit: -c Release2024 tests net48; -c Release2025 tests net8. -->
+  <!-- WPF tests without Revit; the framework follows the configuration (Directory.Build.props). -->
   <PropertyGroup>
     <RootNamespace>RVTuk.UI.Tests</RootNamespace>
     <UseWPF>true</UseWPF>
@@ -9,12 +9,6 @@
     <PlatformTarget>x64</PlatformTarget>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <Configurations>Release2024;Release2025</Configurations>
-    <TargetFramework>net8.0-windows</TargetFramework>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)'=='Release2024'">
-    <TargetFramework>net48</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
