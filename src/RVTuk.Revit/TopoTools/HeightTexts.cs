@@ -40,8 +40,18 @@ namespace RVTuk.Revit.TopoTools
             var texts = CollectTexts(doc, view);
             var plan = Plan(texts, spotByLine);
 
-            if (plan.DeleteTexts.Count > 0)
-                doc.Delete(plan.DeleteTexts.Select(id => new ElementId(id)).ToList());
+            // A text is deleted only when its line is really gone. A line that still exists but is
+            // no longer a collectable topo line (restyled, grouped) keeps its text, counted unlinked.
+            var lineIdByText = texts.ToDictionary(text => text.Note.Id.Value, text => text.LineId);
+            var toDelete = new List<ElementId>();
+            int keptOrphans = 0;
+            foreach (var textId in plan.DeleteTexts)
+            {
+                var lineId = lineIdByText[textId];
+                if (lineId.HasValue && doc.GetElement(new ElementId(lineId.Value)) != null) keptOrphans++;
+                else toDelete.Add(new ElementId(textId));
+            }
+            if (toDelete.Count > 0) doc.Delete(toDelete);
 
             var textById = texts.ToDictionary(text => text.Note.Id.Value, text => text.Note);
             foreach (var textId in plan.Relinked)
@@ -61,7 +71,7 @@ namespace RVTuk.Revit.TopoTools
                 }
             }
 
-            return plan.UnlinkedTexts.Count;
+            return plan.UnlinkedTexts.Count + keptOrphans;
         }
 
         /// <summary>
@@ -112,7 +122,9 @@ namespace RVTuk.Revit.TopoTools
 
         private static List<HeightText> CollectTexts(Document doc, View view)
         {
-            return new FilteredElementCollector(doc, view.Id)
+            // Document-wide, filtered by owner view: a view collector misses hidden texts (Text
+            // Notes off, a filter), and every run would then give their lines another text.
+            return new FilteredElementCollector(doc)
                 .OfClass(typeof(TextNote))
                 .Cast<TextNote>()
                 .Where(note => note.OwnerViewId == view.Id)
@@ -142,6 +154,13 @@ namespace RVTuk.Revit.TopoTools
         /// </summary>
         private static void Recentre(Document doc, TextNote note, LabelSpot spot)
         {
+            // A text placed with the plain Text tool is left/top aligned; centre it on its anchor
+            // first (only when it differs, so a settled text is not touched), then read Coord.
+            if (note.HorizontalAlignment != HorizontalTextAlignment.Center)
+                note.HorizontalAlignment = HorizontalTextAlignment.Center;
+            if (note.VerticalAlignment != VerticalTextAlignment.Middle)
+                note.VerticalAlignment = VerticalTextAlignment.Middle;
+
             var coord = note.Coord;
             double dx = spot.Point.X - coord.X;
             double dy = spot.Point.Y - coord.Y;
