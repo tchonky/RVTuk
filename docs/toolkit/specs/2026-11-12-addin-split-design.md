@@ -1,5 +1,21 @@
 # RVTuk → separately installable add-ins — design
 
+> **STOPPED on 2026-11-16 (Daniel's decision): RVTuk stays one add-in.** After the first split step was installed (a second add-in, "Tools", holding Room Floor), Revit asked "Always Load" once for each add-in, and the records below (S4) show it asks again after an update of an unsigned add-in. Six add-ins would mean up to six such prompts per update, per user and per Revit year; one bundle means one. So the split is not continued.
+>
+> **What stays** (phases 0–2, all on `master`; none of it splits the add-in): the instruction fixes; the one build matrix for Revit 2023–2027 and the full toolkit on Revit 2026 and 2027; every test on three frameworks (`build\Test-All.ps1`), the frozen-identifier test and the view smoke test; the install engine in the setup exe (`Deploy.ps1` and `Build-Installer.ps1` on top of it), the staging function and the staging check. They work with one add-in — and more are possible later without new plumbing.
+>
+> **What was undone:** phase 3's first step (the Tools add-in, the `Shared/Revit` folder, the per-add-in crash log). It was never uploaded; it is kept on the local branch `parked/addin-split-tools-step` (five commits on top of `cf96c36`), with its plan `docs/toolkit/plans/2026-11-16-addin-split-phase-3-tools-room-floor.md`.
+>
+> **Findings worth keeping**, wherever the toolkit goes next:
+> - *The load prompt.* Revit stores "Always Load" per add-in ClientId, per Revit year and per Windows user, and an unsigned add-in can prompt again after its files change (S4). The way to remove the prompt — for one add-in or for many — is to sign the DLLs with a certificate the PCs trust; that was a non-goal here and was never tried.
+> - *A custom ribbon tab works.* A split add-in created the top-level "RVTuk" tab through the supported API (`CreateRibbonTab`); an add-in's own tab is the only way off the Add-Ins tab.
+> - *Detecting an open Revit.* Renaming an add-in's folder fails under Revit 2024 (.NET Framework) but succeeds under a .NET 8 host; what works on both is asking for the Revit process and probing each DLL for exclusive access. A real Revit 2026 answered `LOCKED` to that probe.
+> - *The Addins folders are user-writable.* `C:\ProgramData\Autodesk\Revit\Addins\<year>` lets ordinary users create files, so an installer that runs elevated there must check links and owners (see "Known risks carried forward").
+> - *One process, one copy of a DLL name.* The reason shared code would have been linked source, not a shared DLL (see "Why shared code is source, not a binary").
+> - *Tests on .NET Framework* need xunit's shadow copy off, or SQLite's native DLL is not found.
+>
+> Everything below is the design as it stood, with its phase records. Read it as history, except where it describes what phases 0–2 built.
+
 > "(yours)" = decided by Daniel in the brainstorm. "(my call)" = decided by Claude, open to veto. "(builder)" = left to whoever writes the implementation plans.
 > Approved by Daniel on 2026-11-15. Each phase gets its own plan in `docs/toolkit/plans/` (superpowers:writing-plans).
 > Updated 2026-11-15 after PR #12 (KKarea for Revit 2026 and 2027) was merged: the design is unchanged; statements about what exists today were brought up to date. Line references and counts were re-checked in phase 0 (its plan, task 9); the measured values are in "Phase 0 record" at the end.
