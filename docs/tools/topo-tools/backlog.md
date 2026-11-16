@@ -2,85 +2,38 @@
 
 ## Verification
 
-Exercised in Revit 2024 on 2026-07-30. **Most of the list passes, including the geometry path and
-idempotence; two checks are still open, and the two that failed had root causes worth keeping** —
-they are recorded inline rather than deleted, because both invalidated a design decision.
+The Topo Edit session (2026-11) has not been exercised in Revit yet. Its checklist, and the
+Floor ⇄ Topo checklist, are in [README.md](README.md#in-revit-checklist-topo-edit-session). The
+pane-era checks (rows, selection round trip, height boxes, status line) are gone with the pane.
 
-Deploy with `.\Deploy.ps1 2024` from an elevated shell, Revit closed.
+Settled earlier and kept for the record:
 
-- [x] **Ribbon placement** — **answered 2026-07-30: Massing & Site is unreachable.** The button
-      appeared on the RVTuk panel on Add-Ins, i.e. the fallback ran. The API only places custom
-      panels on Add-Ins, on Analyze, or on a tab the add-in creates itself; the `Autodesk.Windows`
-      route that could reach the real tab is unsupported and may break on any Revit update, so it
-      was declined. The dead attempt-and-fall-back code has been removed. **Do not retry this** —
-      if the placement ever matters enough, the supported move is a top-level `RVTuk` tab for the
-      whole toolkit, not a hack for one button.
-- [x] **Setup** — **failed 2026-07-30, root cause found and fixed.** *Set up this project* reported
-      success while the banner stayed, because `TOPO_Elevation` can never bind: `OST_Lines` has
-      `AllowsBoundParameters == false`, so `ParameterBindings.Insert` returned false — and
-      `EnsureBound` was discarding that return value, so a total failure was reported as "Ready".
-      Heights moved to Extensible Storage edited in the pane (`TopoElevationStore`), and the
-      parameter binder is gone. **Re-check:** *Set up this project* creates the `Topo_Line` style
-      (Manage → Object Styles → Lines) and the banner then disappears.
-- [x] **Setup button removed; the style creates itself.** `_DP-Topo Line` is made on the pane's
-      first refresh. The helper only opens a transaction when the style is actually missing, so
-      later refreshes stay read-only and don't mark the document modified. (2026-08-03)
-- [x] **Setting a height** — type into a row's height box; the status line confirms it, and the row
-      changes from *no height set* to a point count. Clearing the box un-sets it. Check that a value
-      typed the way this office writes survey elevations is accepted by `UnitFormatUtils.TryParse`.
-- [X] **Selection, both ways** — selecting one or more topo lines in the view highlights exactly
-      their rows; a row's *Select* button selects that line in the view without moving the camera.
-      Check the highlight survives editing a height (which rebuilds the rows).
-- [x] **The height survives** — set a height, close and reopen the project: it is still there. Copy
-      a topo line: the copy carries the same height.
-- [x] **A first run** — two detail lines on `Topo_Line` over a toposolid in a floor plan, each with
-      a different `TOPO_Elevation`; Refresh lists both as *ready* with a point count; *Apply Points*
-      deforms the toposolid, with points at the elevations given.
-- [x] **Idempotence** — *Apply Points* again with nothing changed: the summary reports the same
-      number added and that number replaced, and the toposolid is unchanged. **The single most
-      important check.**
-- [x] **A moved line** — drag one line, re-run: old points gone, new ones in place.
-- [ ] **A cleared elevation** — clear one line's `TOPO_Elevation`, re-run: reported as skipped for
-      having no elevation, **and its points from the previous run are gone.**
-- [x] **A deleted line** — delete a line, re-run: its points are gone.
-- [ ] **Undo** — one Ctrl+Z takes the whole run back.
-- [x] **A section view** — with a section active, the pane says topo lines are read from plan views
-      only.
-- [ ] **`AddPoints` on a coincident point** — put a line's point directly over an existing toposolid
-      vertex and re-run twice; the summary must not accumulate "moved by hand" counts, which would
-      mean Revit merged the point and the ledger recorded something that is not there.
-      **Superseded in intent by "coincident points should average" below** — the check still says
-      what today's code does, but the answer is meant to change.
+- **Ribbon placement** — answered 2026-07-30: Massing & Site is unreachable; the API only places
+  custom panels on Add-Ins, on Analyze, or on a tab the add-in creates itself. For the panel,
+  **do not retry**; if it ever matters, the supported move is a top-level `RVTuk` tab for the whole
+  toolkit. The one exception is the Topo Tools shortcut on the Modify tab, through `Autodesk.Windows`
+  (decided 2026-11-16, see the README).
+- **Heights cannot be a parameter on the line** — `OST_Lines` has `AllowsBoundParameters == false`
+  and `ParameterBindings.Insert` returns false (the old setup silently discarded that return value).
+  That is why the height is a text note.
+- **The line style creates itself** — no setup button; a transaction is opened only when something
+  is missing.
+- **A first run, idempotence, a moved line, a deleted line, a section view** all passed in the
+  pane-era tool on 2026-07-30; the apply path (sample, route, ledger, applier) is unchanged.
 
-Also unverified by anything automated: `SlabShapeEditor.Enable()` on a toposolid that already has
+Still unverified by anything automated: `SlabShapeEditor.Enable()` on a toposolid that already has
 points; whether a `SlabShapeVertex` wrapper stays usable after a sibling vertex is deleted
 (`TopoPointApplier` snapshots the vertex list once and guards each `DeletePoint` with
-`IsValidObject`); and whether an Extensible Storage double field with `SetSpec(SpecTypeId.Length)`
-round-trips through `Get<double>(field, UnitTypeId.Feet)` on a detail line.
+`IsValidObject`); and **`AddPoints` on a coincident point** — put a line's point directly over an
+existing vertex and run Update twice; the summary must not accumulate "moved by hand" counts.
+(Superseded in intent by "coincident points should average" below.)
 
-## To check after the 2026-08-02 UI round
+## To check: Floor ⇄ Topo converter (2026-09-29)
 
-- [ ] **Enter commits a height**, on both the height boxes and the spacing box.
-- [ ] **Trailing zeros are gone** — heights and lengths read "42750", not "42750.0". This is the
-      second attempt: Revit's own `SuppressTrailingZeros` did nothing and failed silently, so the
-      numbers are now converted and formatted by `TopoLengthFormatter` instead.
-- [ ] **The active view's name** is green when the view has topo lines, red when it has none.
-- [ ] **Spacing reads centimetres** and the remembered value survives a restart. The config key was
-      renamed from the millimetre one, so the first run after this change starts at the 100 cm
-      default rather than carrying the old number across.
-- [ ] **Committing a height while clicking straight onto another row's box.** A commit triggers a
-      refresh that rebuilds every row, so the rebuild races the click — watch for focus landing
-      somewhere unexpected, or the second box clearing itself.
-- [ ] **Ctrl-click several rows, then click a wall in the view.** The selection round trip has two
-      sources of truth wired together and a guard flag between them; this is the sequence most
-      likely to expose a loop or a stuck highlight.
-
-## To check: floor ⇄ toposolid converter (2026-09-29)
-
-Work through the checklist in [README.md](README.md#in-revit-checklist-floor--toposolid). The
-two unknowns the design leans on are cases 1 and 8: whether Revit answers
-`GetDefaultFamilyTypeId` for toposolids, and whether `AddPoints` takes points on a boundary edge.
-Case 6 is the most important: a round trip must not break Apply Points' idempotence.
+Work through the checklist in [README.md](README.md#in-revit-checklist-floor--topo). The two
+unknowns the design leans on are cases 1 and 8: whether Revit answers `GetDefaultFamilyTypeId` for
+toposolids, and whether `AddPoints` takes points on a boundary edge. Case 6 is the most important:
+a round trip must not break Update's idempotence.
 
 Also unverified, and only visible in Revit:
 - whether an `Entity` read from an element stays usable for `SetEntity` after that element is
@@ -91,30 +44,46 @@ Also unverified, and only visible in Revit:
 
 ## Next
 
+- **Follow-ups from the edit-session reviews (2026-11-16)**, none blocking:
+  - **A failed Cancel cannot be retried.** The session is ended before the undo runs, so when the
+    undo fails the user is told nothing was undone but has no session to press Cancel in again.
+  - **Cancel deletes the `TextNote`s in `Created` with no type or owner-view check.** A recycled id
+    or a text the user retyped to another type would be deleted. Check `HeightTextType.IsHeightText`
+    and `OwnerViewId` first.
+  - **Spacing typed without Enter is ignored.** Clicking away from the box keeps the old value;
+    commit on focus loss too, or say so in the tooltip.
+  - **Height Labels and Start lack try/catch and logging.** Update and Cancel have it; the other
+    two commands let an exception reach Revit's own error dialog.
+  - **No icons** on the Topo Edit buttons or on Floor ⇄ Topo.
+  - **A line grouped or restyled after being applied leaves its points.** Such a line is no longer
+    collectable, so Update neither cleans nor reports its points on the element.
+  - **`DrawPoint` landing on an existing corner is reported "moved by hand" forever.** The ledger
+    records a position that Revit merged into the corner vertex.
+  - **The collectors could use `ElementOwnerViewFilter`** instead of filtering every `CurveElement`
+    and `TextNote` in the document by owner view in C#.
+  - **Dead Core types:** `TopoScope`, `TopoLineInfo` and `TopoLineStatus` were pane types and have
+    no users left. Delete them with their tests.
+  - **Renaming `_DP-Topo Height` disconnects every text** (and renaming `_DP-Topo Line` every line),
+    since both are found by name. Say so in the type's name comment, or find them by a stored id.
+  - **A refused `PostCommand` disables the Modify-tab button for the whole session.** Check
+    `CanPostCommand` first and only log, instead of calling `Fail`.
 - **Deferred from the converter's final review (2026-09-29), all minor:**
   - A flat toposolid converted to a floor comes back with shape editing enabled, because a
     toposolid always reports its corner vertices and `Replay` enables the floor's editor even for
     an empty plan. Fix: `ResetSlabShape()` on a floor target that was not enabled and got nothing.
   - `ShapeReplayPlanner.Plan` de-duplicates with a linear scan (O(n²)); bucket on an XY grid if
     survey toposolids of tens of thousands of points turn out slow (checklist 5/8b).
-  - A convert summary is lost if the refresh after it fails ("Could not read this view…").
   - Losses the docs do not list yet: walls and columns attached to the floor detach; global
     parameter associations are lost (only the value copies); the span-direction symbol is lost.
   - A Revit or exception message ending in "." gives ".." in a skip line.
   - The spec still says `Uri.EscapeDataString` and "2 hosted families, 1 slab edge"; the code
     escapes only `% | ;` and says "hosted elements / tags or dimensions / parts". Sync the spec.
-  - The unverified list should name that `AddPoints` Z is absolute on a **floor** too; so far it is
-    only proven on toposolids (checklist 4 covers it).
-- **▶ Apply's and a height commit's summaries vanish at once.** Both set the status line and then
-  call `Refresh()`, whose `Populate` overwrites it with the view's scope message. Found while
-  building the converter, which avoids it with `RefreshCore(summary)`. The fix is to pass the
-  summary the same way from `RunApply` and `CommitElevation`.
 - **Coincident points should average, not race.** Two points landing on the same XY should become
   one at the mean Z rather than both being handed to `AddPoints` for Revit to reconcile however it
   sees fit. Two contours crossing in plan is not an error — it is what a saddle or a steep bank
   looks like — so the rule needs to be ours and deterministic.
 
-  Belongs in the **sample or route stage**, before anything reaches the toposolid: done there it is
+  Belongs in the **sample or route stage**, before anything reaches the element: done there it is
   pure Core logic with a unit test, and the ledger then records one point where one point exists.
   Done inside the applier we would be reconciling against whatever Revit had already merged.
 
@@ -130,6 +99,6 @@ Also unverified, and only visible in Revit:
   new collector is needed. This is the obvious next feature.
 - Create a toposolid from the topo lines when none exists yet.
 - Subdivisions and split lines/creases (`SlabShapeEditor.DrawSplitLine`).
-- Multi-view scope, as Auto Dimensions has for levels and views.
-- A toposolid hidden in the scanned view keeps stale points: nothing in the run can reach its
-  ledger. Only matters on phased or design-option sites.
+- Multi-view sessions, as Auto Dimensions has for levels and views.
+- The Topo Tools shortcut on a floor's contextual tab (trivial to add; not asked for).
+- A session on several elements at once.
