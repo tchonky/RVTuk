@@ -129,6 +129,13 @@ namespace RVTuk.Setup.Tests
             Engine.IsTrustedFile = p => !string.Equals(p, json, StringComparison.OrdinalIgnoreCase) && trusted(p);
             try { Assert.Equal(Outcome.Updated, Assert.Single(Install(Of(a))).Outcome); }
             finally { Engine.IsTrustedFile = trusted; }
+
+            // Only the manifest is untrusted.
+            Installed("A", "2024", "1.2.0");
+            string manifest = M("2024", "A.addin");
+            Engine.IsTrustedFile = p => !string.Equals(p, manifest, StringComparison.OrdinalIgnoreCase) && trusted(p);
+            try { Assert.Equal(Outcome.Updated, Assert.Single(Install(Of(a))).Outcome); }
+            finally { Engine.IsTrustedFile = trusted; }
         }
 
         [Fact]
@@ -151,6 +158,56 @@ namespace RVTuk.Setup.Tests
             using (new FileStream(Path.Combine(outside, "keep.dll"), FileMode.Open, FileAccess.Read, FileShare.Read))
                 Assert.Equal(Outcome.Updated, Assert.Single(Install(Of(a))).Outcome);
             Assert.True(File.Exists(Path.Combine(outside, "keep.dll")));
+        }
+
+        private static bool Junction(string link, string target)
+        {
+            var mk = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe",
+                $"/c mklink /J \"{link}\" \"{target}\"") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true });
+            mk.WaitForExit();
+            if (mk.ExitCode == 0 && Directory.Exists(link)) return true;
+            Console.WriteLine("Skip: a junction could not be created on this machine.");
+            return false;
+        }
+
+        [Fact]
+        public void DeleteTree_OnAJunction_RemovesOnlyTheLink()
+        {
+            string outside = Path.Combine(_dir, "outside"), file = Path.Combine(outside, "sub", "r.dll"), link = Path.Combine(_dir, "link");
+            Directory.CreateDirectory(Path.Combine(outside, "sub"));
+            File.WriteAllText(file, "x");
+            File.SetAttributes(file, FileAttributes.ReadOnly);
+            try
+            {
+                if (!Junction(link, outside)) return;
+                Engine.DeleteTree(link);
+                Assert.False(Directory.Exists(link));
+                Assert.True(File.Exists(file));
+                Assert.True((File.GetAttributes(file) & FileAttributes.ReadOnly) != 0);
+            }
+            finally { if (File.Exists(file)) File.SetAttributes(file, FileAttributes.Normal); }
+        }
+
+        [Fact]
+        public void Install_OldInstallFolderIsAJunction_FailsAndLeavesItsTarget()
+        {
+            var a = Cat("A");
+            a.Replaces.Add(new OldInstall { Manifest = "Old.addin", Folder = "Old" });
+            string outside = Path.Combine(_dir, "outside");
+            Directory.CreateDirectory(outside);
+            File.WriteAllText(Path.Combine(outside, "x.dll"), "x");
+            Directory.CreateDirectory(M("2024"));
+            if (!Junction(M("2024", "Old"), outside)) return;
+            try
+            {
+                File.WriteAllText(M("2024", "Old.addin"), "<RevitAddIns/>");
+                var r = Assert.Single(Install(Of(a)));
+                Assert.Equal(Outcome.Failed, r.Outcome);
+                Assert.Contains("is a link", r.Message);
+                Assert.True(File.Exists(Path.Combine(outside, "x.dll")));
+                Assert.False(Directory.Exists(M("2024", "A")));
+            }
+            finally { if (Directory.Exists(M("2024", "Old"))) Directory.Delete(M("2024", "Old")); }   // net48's recursive delete fails on a junction
         }
 
         [Fact]
@@ -319,12 +376,36 @@ namespace RVTuk.Setup.Tests
         {
             var a = Cat("A");
             Installed("A", "2024");
-            File.Delete(M("2024", "A.addin"));
-            Directory.CreateDirectory(M("2024", "A.addin"));
-            Assert.Equal(Outcome.Failed, Assert.Single(Install(Of(a))).Outcome);
+            // Held exclusively: File.Replace in step 8 throws, and the engine cannot repair that.
+            using (new FileStream(M("2024", "A.addin"), FileMode.Open, FileAccess.Read, FileShare.None))
+                Assert.Equal(Outcome.Failed, Assert.Single(Install(Of(a))).Outcome);
             Assert.True(File.Exists(M("2024", "A", "stale.dll")));
             NoLeftovers();
             Assert.False(File.Exists(M("2024", "A.addin.tmp")));
+        }
+
+        [Fact]
+        public void Install_ManifestPathIsADirectory_IsReplaced()
+        {
+            var a = Cat("A");
+            Installed("A", "2024");
+            File.Delete(M("2024", "A.addin"));
+            Directory.CreateDirectory(M("2024", "A.addin"));
+            File.WriteAllText(M("2024", "A.addin", "x.txt"), "x");
+            Assert.Equal(Outcome.Updated, Assert.Single(Install(Of(a))).Outcome);
+            Assert.True(File.Exists(M("2024", "A.addin")));
+            Assert.Equal(Engine.ManifestXml(a), File.ReadAllText(M("2024", "A.addin")));
+        }
+
+        [Fact]
+        public void Remove_ReadOnlyManifest_IsRemoved()
+        {
+            var a = Cat("A");
+            Installed("A", "2024");
+            File.SetAttributes(M("2024", "A.addin"), FileAttributes.ReadOnly);
+            Assert.Equal(Outcome.Removed, Assert.Single(Remove(Of(a))).Outcome);
+            Assert.False(File.Exists(M("2024", "A.addin")));
+            Assert.False(Directory.Exists(M("2024", "A")));
         }
 
         [Fact]
@@ -467,8 +548,8 @@ namespace RVTuk.Setup.Tests
             File.WriteAllText(M("2024", "Foreign2", "addin.json"), "{\"key\":\"Foreign2\",\"manifest\":\"Foreign2.addin\"}");
             File.WriteAllText(M("2024", "Foreign2.addin"), "<RevitAddIns><AddIn><VendorId>Other</VendorId></AddIn></RevitAddIns>");
             Directory.CreateDirectory(M("2024", "Foreign3"));   // its key is not its folder's name
-            File.WriteAllText(M("2024", "Foreign3", "addin.json"), "{\"key\":\"A\",\"manifest\":\"A.addin\"}");
-            File.WriteAllText(M("2024", "A.addin"), Engine.ManifestXml(a));
+            File.WriteAllText(M("2024", "Foreign3", "addin.json"), "{\"key\":\"Other\",\"manifest\":\"Other.addin\"}");
+            File.WriteAllText(M("2024", "Other.addin"), Engine.ManifestXml(Entry("Other")));
             Directory.CreateDirectory(M("2024", "Foreign4"));   // its manifest is not a plain name
             File.WriteAllText(M("2024", "Foreign4", "addin.json"), "{\"key\":\"Foreign4\",\"manifest\":\"..\\\\X.addin\"}");
             File.WriteAllText(M("X.addin"), Engine.ManifestXml(a));
@@ -477,6 +558,7 @@ namespace RVTuk.Setup.Tests
             Assert.True(Directory.Exists(M("2024", "Foreign2")));
             Assert.True(File.Exists(M("2024", "Foreign2.addin")));
             Assert.True(File.Exists(M("2024", "Foreign3", "addin.json")));
+            Assert.True(File.Exists(M("2024", "Other.addin")));
             Assert.True(File.Exists(M("2024", "Foreign4", "addin.json")));
             Assert.True(File.Exists(M("X.addin")));
             Assert.DoesNotContain(results, r => r.AddIn.StartsWith("Foreign"));
@@ -488,15 +570,20 @@ namespace RVTuk.Setup.Tests
         {
             var a = Cat("A");
             Installed("Gone", "2024");
-            string gone = M("2024", "Gone") + Path.DirectorySeparatorChar;
+            Installed("Gone2", "2024");
+            string gone = M("2024", "Gone") + Path.DirectorySeparatorChar, gone2 = M("2024", "Gone2.addin");
             var trusted = Engine.IsTrustedFile;
-            Engine.IsTrustedFile = p => !p.StartsWith(gone, StringComparison.OrdinalIgnoreCase) && trusted(p);
+            Engine.IsTrustedFile = p => !p.StartsWith(gone, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(p, gone2, StringComparison.OrdinalIgnoreCase) && trusted(p);
             List<Result> results;
             try { results = Remove(Of(a)); }
             finally { Engine.IsTrustedFile = trusted; }
             Assert.True(File.Exists(M("2024", "Gone", "Host.dll")));
             Assert.True(File.Exists(M("2024", "Gone.addin")));
             Assert.DoesNotContain(results, r => r.AddIn == "Gone");
+            Assert.True(File.Exists(M("2024", "Gone2", "Host.dll")));
+            Assert.True(File.Exists(gone2));
+            Assert.DoesNotContain(results, r => r.AddIn == "Gone2");
         }
 
         [Fact]

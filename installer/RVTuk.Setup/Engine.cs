@@ -105,7 +105,7 @@ namespace RVTuk.Setup
                 yf = m.YearFolder(year);
                 string target = Path.Combine(yf, a.Key), fresh = target + ".new", old = target + ".old";
                 string manifest = Path.Combine(yf, a.Manifest), tmp = manifest + ".tmp";
-                string link = Link(yf, target, fresh, old, manifest, tmp);
+                string link = Link(new[] { yf, target, fresh, old, manifest, tmp }.Concat(OldInstallPaths(yf, a.Replaces)).ToArray());
                 if (link != null) return R(a.Key, year, Outcome.Failed, link + " is a link");
 
                 // 1
@@ -150,6 +150,9 @@ namespace RVTuk.Setup
                     if (existed) Retry(() => Directory.Move(target, old));
                     Retry(() => Directory.Move(fresh, target));
                     moved = true;
+                    if (Directory.Exists(manifest)) DeleteTree(manifest);
+                    else if (File.Exists(manifest) && (File.GetAttributes(manifest) & FileAttributes.ReadOnly) != 0)
+                        File.SetAttributes(manifest, File.GetAttributes(manifest) & ~FileAttributes.ReadOnly);
                     File.WriteAllText(tmp, ManifestXml(a), new UTF8Encoding(false));
                     if (File.Exists(manifest)) File.Replace(tmp, manifest, null); else File.Move(tmp, manifest);
                 }
@@ -189,7 +192,7 @@ namespace RVTuk.Setup
                 yf = m.YearFolder(year);
                 string target = Path.Combine(yf, key), fresh = target + ".new", old = target + ".old";
                 string manifest = Path.Combine(yf, manifestName);
-                string link = Link(yf, target, fresh, old, manifest, manifest + ".tmp");
+                string link = Link(new[] { yf, target, fresh, old, manifest, manifest + ".tmp" }.Concat(OldInstallPaths(yf, replaces)).ToArray());
                 if (link != null) return R(key, year, Outcome.Failed, link + " is a link");
 
                 if (m.IsRunning(year)) return R(key, year, Outcome.SkippedRevitOpen, $"Revit {year} is open");
@@ -205,7 +208,7 @@ namespace RVTuk.Setup
                 DeleteTree(fresh);
                 DeleteTree(old);
                 if (Directory.Exists(target)) Retry(() => Directory.Move(target, old));
-                if (File.Exists(manifest)) File.Delete(manifest);
+                DeleteTree(manifest);
                 TryDelete(old);
                 RemoveOldInstalls(yf, replaces);
                 return R(key, year, Outcome.Removed, "removed");
@@ -224,13 +227,16 @@ namespace RVTuk.Setup
                 {
                     DeleteTree(folderOld);
                     if (Directory.Exists(folder)) { Retry(() => Directory.Move(folder, folderOld)); removed = true; }
-                    if (File.Exists(mf)) { File.Delete(mf); removed = true; }
+                    if (File.Exists(mf) || Directory.Exists(mf)) { DeleteTree(mf); removed = true; }
                     TryDelete(folderOld);
                 }
                 catch (Exception e) { throw new IOException($"the old install {r.Folder} could not be removed: {e.Message}", e); }
             }
             return removed;
         }
+
+        private static IEnumerable<string> OldInstallPaths(string yf, List<OldInstall> replaces) =>
+            replaces.SelectMany(r => new[] { Path.Combine(yf, r.Folder), Path.Combine(yf, r.Folder + ".old"), Path.Combine(yf, r.Manifest) });
 
         private static bool OldInstallsLeft(string yf, List<OldInstall> replaces) =>
             replaces.Any(r => Directory.Exists(Path.Combine(yf, r.Folder)) || File.Exists(Path.Combine(yf, r.Manifest)));
@@ -284,17 +290,19 @@ namespace RVTuk.Setup
             return null;
         }
 
-        // Deletes a file or a folder tree, read-only entries included; never enters a link (only the link is deleted).
-        private static void DeleteTree(string path)
+        // Deletes a file or a folder tree, read-only entries included; never enters a link, the path itself
+        // included (only the link is deleted).
+        internal static void DeleteTree(string path)
         {
-            if (File.Exists(path)) { File.SetAttributes(path, FileAttributes.Normal); File.Delete(path); return; }
-            if (!Directory.Exists(path)) return;
-            foreach (var e in new DirectoryInfo(path).EnumerateFileSystemInfos())
-            {
-                if ((e.Attributes & FileAttributes.ReadOnly) != 0) e.Attributes &= ~FileAttributes.ReadOnly;
-                if ((e.Attributes & FileAttributes.ReparsePoint) == 0 && e is DirectoryInfo) DeleteTree(e.FullName);
-            }
-            Directory.Delete(path, true);
+            FileAttributes attr;
+            try { attr = File.GetAttributes(path); }
+            catch (Exception e) when (e is FileNotFoundException || e is DirectoryNotFoundException) { return; }
+            bool dir = (attr & FileAttributes.Directory) != 0;
+            if ((attr & FileAttributes.ReparsePoint) != 0) { if (dir) Directory.Delete(path); else File.Delete(path); return; }
+            if ((attr & FileAttributes.ReadOnly) != 0) File.SetAttributes(path, attr & ~FileAttributes.ReadOnly);
+            if (!dir) { File.Delete(path); return; }
+            foreach (var e in new DirectoryInfo(path).EnumerateFileSystemInfos()) DeleteTree(e.FullName);
+            Directory.Delete(path);
         }
 
         private static void Copy(string from, string to)
