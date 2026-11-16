@@ -12,7 +12,7 @@
 
 ## Not in this plan
 
-- The install engine, `addin.props`, the staging function and the staging check, and `Deploy.ps1` on top of them: the second phase 2 plan. `Deploy.ps1` and `Build-Installer.ps1` are **not edited here**.
+- The install engine, `addin.props`, the staging function and the staging check, and `Deploy.ps1` on top of them: the second phase 2 plan. `Deploy.ps1` and `Build-Installer.ps1` were **not to be edited here**; Task 8 (added 2026-11-16, see the last bullet) changed their 2026 row only.
 - The generic settings store: phase 3, Round Positions step (spec header note of 2026-11-16).
 - Since Daniel's decision of 2026-11-16 Revit 2026 gets the full RVTuk add-in (Task 8, added after the plan was written), so the monolith in Revit 2026.5 and the 2024 ↔ 2026.5 instruction round trip are checked in Task 7.
 

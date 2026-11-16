@@ -56,7 +56,7 @@ an explicit action was the wrong shape.
 **Status:** registered on the RVTuk panel on the Add-Ins tab, gated by `RegisterTopoTools` in
 `src/RVTuk.Revit/Application.cs` (on). It was intended for the Massing & Site tab — impossible, and
 verified so in Revit 2024: the API places custom panels only on Add-Ins, on Analyze, or on a tab the
-add-in creates itself. Revit 2024/2025 only — `Toposolid` does not exist in 2023, so KKarea never
+add-in creates itself. Revit 2024–2027 — `Toposolid` does not exist in 2023, so KKarea never
 ships it. **In-Revit verification of the run itself is still outstanding** (see
 [backlog.md](backlog.md)); so far only setup and ribbon placement have been exercised, and both
 found design faults.
