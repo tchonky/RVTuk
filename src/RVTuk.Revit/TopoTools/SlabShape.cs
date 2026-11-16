@@ -294,7 +294,7 @@ namespace RVTuk.Revit.TopoTools
             return positions;
         }
 
-        private static SlabShapeVertex? VertexAt(SlabShapeEditor editor, XyzPoint at)
+        internal static SlabShapeVertex? VertexAt(SlabShapeEditor editor, XyzPoint at)
         {
             foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
             {

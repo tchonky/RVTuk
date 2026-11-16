@@ -47,13 +47,11 @@ namespace RVTuk.Revit.TopoTools
             var report = new ConvertReport();
             var floorTypeId = DefaultTypes.FloorTypeId(doc);
             var toposolidTypeId = DefaultTypes.ToposolidTypeId(doc);
-            var activeOptionId = DesignOption.GetActiveDesignOptionId(doc);
-
             var candidates = new List<Candidate>();
             foreach (var element in selected)
             {
                 var label = Label(element);
-                var refusal = RefusalOf(doc, element, activeOptionId, floorTypeId, toposolidTypeId);
+                var refusal = RefusalOf(doc, element, floorTypeId, toposolidTypeId);
                 if (refusal != null)
                 {
                     report.Skipped.Add($"{label}: {refusal}");
@@ -83,28 +81,16 @@ namespace RVTuk.Revit.TopoTools
             return report.Summarise();
         }
 
+        /// <summary>
+        /// The refusals shared with the edit session (<see cref="SlabRefusals.Common"/> — not
+        /// <see cref="SlabRefusals.Of"/>, whose shape-point refusal would turn away the sloped
+        /// floors this converter handles on purpose), then the converter's own type checks.
+        /// </summary>
         private static string? RefusalOf(
-            Document doc, Element element, ElementId activeOptionId, ElementId floorTypeId, ElementId toposolidTypeId)
+            Document doc, Element element, ElementId floorTypeId, ElementId toposolidTypeId)
         {
-            if (element is Toposolid toposolid &&
-                toposolid.HostTopoId != null && toposolid.HostTopoId != ElementId.InvalidElementId)
-                return "it is a subdivision";
-
-            if (element.GroupId != ElementId.InvalidElementId) return "it is in a model group";
-
-            // The replacement is created in the option being edited (or the main model), so
-            // anything elsewhere would change option on the way through.
-            var optionId = element.DesignOption?.Id ?? ElementId.InvalidElementId;
-            if (optionId != activeOptionId)
-            {
-                return optionId == ElementId.InvalidElementId
-                    ? "it is in the main model while a design option is being edited"
-                    : "it is in a design option that is not being edited";
-            }
-
-            if (doc.IsWorkshared &&
-                WorksharingUtils.GetCheckoutStatus(doc, element.Id, out string owner) == CheckoutStatus.OwnedByOtherUser)
-                return $"it is borrowed by {Isolate(owner)}";
+            var common = SlabRefusals.Common(doc, element);
+            if (common != null) return common;
 
             if (element is Floor && toposolidTypeId == ElementId.InvalidElementId)
                 return "the project has no toposolid types";
