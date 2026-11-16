@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Windows.Input;
 using Autodesk.Revit.DB;
@@ -135,6 +135,8 @@ namespace RVTuk.Revit.TopoTools
             _app.Idling += OnIdling;
         }
 
+        private static bool _missingTabLogged;
+
         private static void OnIdling(object? sender, IdlingEventArgs e)
         {
             try
@@ -148,7 +150,15 @@ namespace RVTuk.Revit.TopoTools
                 return;
             }
             // One retry only: if the tab is still missing, the next selection change tries again.
+            // Logged once per session, so a Revit year whose contextual tab is not "Modify"
+            // (the Id was probed only in 2024) leaves a trace instead of a silently absent button.
             if (FindModifyTabSafe() != null) Apply();
+            else if (!_missingTabLogged)
+            {
+                _missingTabLogged = true;
+                Application.LogDiagnostic(
+                    $"Contextual Topo Tools button: no contextual tab with Id \"{ModifyTabId}\" found after a toposolid was selected.");
+            }
         }
 
         private static bool IsSingleToposolid(SelectionChangedEventArgs e)
