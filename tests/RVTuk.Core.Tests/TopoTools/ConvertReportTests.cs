@@ -45,6 +45,18 @@ public class ConvertReportTests
             report.Summarise());
     }
 
+    [Fact]
+    public void ASkipReasonEndingInAFullStopIsNotDoubled()
+    {
+        var report = new ConvertReport();
+        report.Skipped.Add("Floor 1: Revit could not create the toposolid.");
+        report.Skipped.Add("Floor 2: Its sketch is invalid. ");
+
+        Assert.Equal(
+            "Nothing converted. Skipped 2: Floor 1: Revit could not create the toposolid; Floor 2: Its sketch is invalid.",
+            report.Summarise());
+    }
+
     [Theory]
     [InlineData(2, 0, 0, 0, "2 hosted elements")]
     [InlineData(0, 1, 0, 0, "1 tag or dimension")]

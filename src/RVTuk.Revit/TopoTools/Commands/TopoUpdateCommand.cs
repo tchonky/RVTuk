@@ -37,7 +37,7 @@ namespace RVTuk.Revit.TopoTools.Commands
             var refusal = SlabRefusals.Of(doc, element);
             if (refusal != null)
             {
-                TaskDialog.Show(TopoSessionCommands.Title, $"{label}: {refusal}. Nothing was applied.");
+                TaskDialog.Show(TopoSessionCommands.Title, $"{label}: {Sentence.WithoutFullStop(refusal)}. Nothing was applied.");
                 return false;
             }
 
