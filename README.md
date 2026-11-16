@@ -6,8 +6,8 @@ growing set of tools for managing the family library and automating repetitive w
 - 🗂️ **Family Browser** — search, browse, load, and manage your Revit family library from a dark-themed side panel. Syncs the library database on demand and supports deep-scan indexing (category, parameters, thumbnail) using the Revit engine.
 - 📐 **Rishui Zamin** (ribbon button "Area Calc") — reads the Areas on the open sheet and exports the paired `.dxf` + `.dat` files the רישוי זמין area-calculation robot expects.
 
-(The Project Comparator moved to its own separate project. Auto Dimensions and Neo
-Properties exist in the codebase but are hidden until release.)
+(The Project Comparator moved to its own separate project. Neo Properties exists
+in the codebase but is hidden until release; CLAUDE.md lists every tool.)
 
 ## 🧩 Supported Revit Versions
 

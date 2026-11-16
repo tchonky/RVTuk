@@ -53,7 +53,7 @@ dotnet build RVTuk.sln -c Release2026
 dotnet build RVTuk.sln -c Release2027
 ```
 
-The matrix lives in the root Directory.Build.props; a configuration outside the five (or none) fails the build. NuGet assets are per configuration, in obj\Release{year}\.
+The matrix lives in the root Directory.Build.props; a project built with a configuration outside the five (or none) fails the build, but `RVTuk.sln` without `-c` silently picks Release2023, which builds no tests, so always pass `-c` (or run `.\build\Test-All.ps1`). Tool projects opt out: `installer\` has an empty Directory.Build.props, so RVTuk.Setup still builds with `-c Release`. NuGet assets are per configuration, in obj\Release{year}\.
 
 Or build a single project (its project references are built transitively). The projects live under `src\`:
 
@@ -73,18 +73,17 @@ Each config maps to a target framework and a per-year `DefineConstants` symbol (
 
 All configs use `Microsoft.Data.Sqlite`. Build outputs land in each project's `bin\{year}\Release{year}\{tfm}\`, e.g. `src\RVTuk.Revit\bin\2024\Release2024\net48\`.
 
-Release2023 builds RVTuk.Core, RVTuk.UI and KKarea.Revit. Release2024 to Release2027 build RVTuk.Core, RVTuk.UI and RVTuk.Revit; Release2026 also builds KKarea.Revit, which is what Revit 2026 gets (the RVTuk.Revit build for 2026 is not deployed yet). The test projects build under Release2024, Release2025 and Release2027. Revit 2027 runs on .NET 10 (its API package targets `net10.0-windows`), so that config needs the .NET 10 SDK. The 2026 API dropped `SlabShapeEditor.DrawPoint` and `DrawSplitLine`; `RVTuk.Revit\TopoTools\SlabShape.cs` uses `AddPoint` from 2026 (`#if REVIT2026 || REVIT2027`) and `AddSplitLine` after 2024, and whether that `AddPoint` accepts points on an edge is not yet checked in Revit. The net48-vs-net8 code split (JSON serializer choice, and the native `e_sqlite3.dll` pre-load on net48) is gated on the compiler-provided `NETFRAMEWORK` symbol, not on `REVIT2024`; the `REVIT<year>` constants are for year-specific Revit API differences only (e.g. the `ElementId` shims in the shared area sources).
+Release2023 builds RVTuk.Core, RVTuk.UI and KKarea.Revit. Release2024 to Release2027 build RVTuk.Core, RVTuk.UI and RVTuk.Revit; Release2026 also builds KKarea.Revit, which is what Revit 2026 gets (the RVTuk.Revit build for 2026 is not deployed yet). The test projects build under Release2024, Release2025 and Release2027. global.json pins the .NET 10 SDK (10.0.x) for every configuration; Revit 2027 itself runs on .NET 10 (its API package targets `net10.0-windows`). The 2026 API dropped `SlabShapeEditor.DrawPoint` and `DrawSplitLine`; `RVTuk.Revit\TopoTools\SlabShape.cs` uses `AddPoint` from 2026 (`#if REVIT2026 || REVIT2027`) and `AddSplitLine` after 2024, and whether that `AddPoint` accepts points on an edge is not yet checked in Revit. The net48-vs-net8 code split (JSON serializer choice, and the native `e_sqlite3.dll` pre-load on net48) is gated on the compiler-provided `NETFRAMEWORK` symbol, not on `REVIT2024`; the `REVIT<year>` constants are for year-specific Revit API differences only (e.g. the `ElementId` shims in the shared area sources).
 
 ## Tests
 
 Core's xunit suite lives in `tests\RVTuk.Core.Tests` (repositories, indexer, config/migration, Rishui Zamin writers/validator), mirroring the per-tool folders. Run everything before committing: `.\build\Test-All.ps1` — every test on net48 (Release2024), net8 (Release2025) and net10 (Release2027); it also refuses untracked .dxf/.dat/.dwfx/.rfa files. One project:
 
 ```powershell
-.\build\Test-All.ps1
 dotnet test tests\RVTuk.Core.Tests\RVTuk.Core.Tests.csproj -c Release2025
 ```
 
-On a non-Windows SDK (CI, cloud agents) add `-c Release2025 -p:EnableWindowsTargeting=true` — the suite builds and runs fine on Linux. The WPF/Revit projects (`RVTuk.UI`, `RVTuk.Revit`, `KKarea.Revit`) can only be compiled on Windows.
+On a non-Windows .NET 10 SDK (CI, cloud agents) add `-c Release2025 -p:EnableWindowsTargeting=true` — the suite builds and runs fine on Linux. The WPF/Revit projects (`RVTuk.UI`, `RVTuk.Revit`, `KKarea.Revit`) can only be compiled on Windows.
 
 `tests\RVTuk.UI.Tests` holds WPF tests that run without Revit (instruction XAML read/write). It follows the configuration like every project — `-c Release2024` tests net48, `-c Release2025` net8, `-c Release2027` net10 — and all must pass before committing a change to instruction reading or writing:
 ```powershell

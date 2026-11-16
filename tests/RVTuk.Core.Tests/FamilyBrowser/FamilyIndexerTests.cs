@@ -23,7 +23,7 @@ public class FamilyIndexerTests : IDisposable
 
     public void Dispose()
     {
-        try { if (Directory.Exists(_root)) Directory.Delete(_root, true); } catch { /* best effort */ }
+        try { if (Directory.Exists(_root)) Directory.Delete((Path.DirectorySeparatorChar == '\\' ? @"\\?\" : "") + _root, true); } catch { /* best effort */ }
     }
 
     // Writes a fake .rfa under the library root. Content is irrelevant: ThumbnailExtractor
