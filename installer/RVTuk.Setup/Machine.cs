@@ -17,7 +17,7 @@ namespace RVTuk.Setup
     /// <summary>This PC: the machine-wide Addins folders, the registry, the running processes. Reads only.</summary>
     internal sealed class RealMachine : IMachine
     {
-        // ProgramData up to 2026, Program Files from 2027 (same rule as Program.MachineAddinsBase and Deploy.ps1).
+        // ProgramData up to 2026, Program Files from 2027 (same rule as Deploy.ps1's Get-AddinsBase).
         public string YearFolder(string year) =>
             Path.Combine(int.Parse(year) >= 2027
                 ? @"C:\Program Files\Autodesk\Revit\Addins"
