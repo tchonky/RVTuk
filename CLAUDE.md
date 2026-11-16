@@ -99,17 +99,20 @@ The setup exe's tests (`installer\RVTuk.Setup.Tests`, net48, outside `RVTuk.sln`
 
 ## Deployment
 
-`Deploy.ps1` (must run as Administrator) builds/copies the right binary set per Revit version, strips the net48 BCL polyfill DLLs Revit already preloads, and generates the `.addin` manifest XML:
+`Deploy.ps1` (must run as Administrator) builds and stages the add-ins from the working tree with `build\Staging.ps1` into `installer\payload-staging`, then hands that folder to the setup exe's install engine (`RVTukSetup.exe --install … --source …`), which copies the files and writes the `.addin` manifests:
 
 ```powershell
 # From the RVTuk folder, in an elevated shell:
-.\Deploy.ps1            # all versions
-.\Deploy.ps1 2024       # only Revit 2024 (optional version filter)
+.\Deploy.ps1                # every add-in, every Revit year found on the PC
+.\Deploy.ps1 2024           # only Revit 2024
+.\Deploy.ps1 2024 2027      # only Revit 2024 and 2027
+.\Deploy.ps1 -AddIn KKarea  # only KKarea
+.\Deploy.ps1 -Clean 2025    # remove the add-ins from Revit 2025
 ```
 
-Deploys to `C:\ProgramData\Autodesk\Revit\Addins\{year}\{RVTuk|KKarea}\` for Revit up to 2026 and to `C:\Program Files\Autodesk\Revit\Addins\{year}\RVTuk\` from 2027 — Revit 2027 no longer reads machine-wide add-ins from ProgramData. The rule lives in the setup exe (`RealMachine.YearFolder`) and, until Task 7 of `docs/toolkit/plans/2026-11-16-addin-split-phase-2-engine.md`, also in `Deploy.ps1` (`Get-AddinsBase`). Restart Revit after deploying. Each version deploys independently: a year whose Revit is currently open (DLLs locked) or whose build output is missing is skipped with a warning while the others proceed. 2023 deploys **KKarea** (entry class `KKarea.Revit.Application`, its own stable ClientId `9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC`) to `...\Addins\2023\KKarea\`; 2024, 2025, 2026 and 2027 deploy RVTuk.
+It deploys for the Revit years found on the PC; a year without Revit is no longer written to, unless named. Deploys to `C:\ProgramData\Autodesk\Revit\Addins\{year}\{RVTuk|KKarea}\` for Revit up to 2026 and to `C:\Program Files\Autodesk\Revit\Addins\{year}\RVTuk\` from 2027 — Revit 2027 no longer reads machine-wide add-ins from ProgramData. The rule lives only in the setup exe (`RealMachine.YearFolder`). Restart Revit after deploying. A year is skipped, and the script exits 1, when its Revit is open or a file of the add-in is in use; a skipped year is left exactly as it was, while the others proceed. A year whose build fails is warned about and left out. `-Clean` removes the add-ins instead (`--remove`). 2023 deploys **KKarea** (entry class `KKarea.Revit.Application`, its own stable ClientId `9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC`) to `...\Addins\2023\KKarea\`; 2024, 2025, 2026 and 2027 deploy RVTuk.
 
-`Deploy.ps1` copies the build output flat plus the native `e_sqlite3.dll` (from `runtimes\win-x64\native`). For this to work the build output must actually contain the dependency closure: net48 copies NuGet deps to `bin` automatically, but **net8 libraries do not** — so `RVTuk.Revit` (net8) sets `<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>` to pull `Microsoft.Data.Sqlite` + `e_sqlite3.dll` into `bin`. Without it, the Revit 2025 deploy would contain only the three project DLLs and fail to load.
+Staging (`Copy-AddInOutput`) copies the build output flat plus the native `e_sqlite3.dll` (from `runtimes\win-x64\native`). For this to work the build output must actually contain the dependency closure: net48 copies NuGet deps to `bin` automatically, but **net8 libraries do not** — so `RVTuk.Revit` (net8) sets `<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>` to pull `Microsoft.Data.Sqlite` + `e_sqlite3.dll` into `bin`. Without it, the Revit 2025 deploy would contain only the three project DLLs and fail to load.
 
 The `.addin` manifest registers the add-in with:
 - **Entry class**: `RVTuk.Revit.Application`
@@ -178,7 +181,7 @@ for tools not yet built; `docs/archive/` holds retired/superseded docs, kept ver
 ## Revit Add-in Notes
 
 - The Revit API NuGet packages (Nice3point wrappers) are compile-time references only; the actual DLLs come from the Revit installation at runtime. Do not copy Revit API DLLs into the output.
-- Changes to the `ClientId` GUID in `Deploy.ps1` will break existing installations — it must stay stable.
-- The `Manifests/` folder is reserved for hand-edited `.addin` files if needed; `Deploy.ps1` generates them dynamically.
+- Changes to the ClientId GUID in an addin.props will break existing installations — it must stay stable (FrozenIdentifierTests pins both).
+- The `Manifests/` folder is reserved for hand-edited `.addin` files if needed; the setup exe's engine writes the manifests from the catalog (`Engine.ManifestXml`).
 - Dates are persisted as UTC ISO-8601 (`DateTime.ToString("o")`); read them back through `DbConvert.ParseUtc` so the instant is preserved regardless of the machine's local time zone.
 - Relative-path DB keys go through `PathUtil.GetRelativePath` (no framework-conditional logic) so net48 and net8 produce identical keys for the shared database.

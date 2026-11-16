@@ -55,10 +55,14 @@ dotnet build src\RVTuk.Revit\RVTuk.Revit.csproj -c Release2024
 Run as Administrator from the repo root:
 
 ```powershell
-.\Deploy.ps1
+.\Deploy.ps1                # every add-in, every Revit year found on the PC
+.\Deploy.ps1 2024           # only Revit 2024
+.\Deploy.ps1 2024 2027      # only Revit 2024 and 2027
+.\Deploy.ps1 -AddIn KKarea  # only KKarea
+.\Deploy.ps1 -Clean 2025    # remove the add-ins from Revit 2025
 ```
 
-Copies DLLs to `C:\ProgramData\Autodesk\Revit\Addins\{year}\{RVTuk|KKarea}\` (Revit 2027: `C:\Program Files\Autodesk\Revit\Addins\2027\RVTuk\`) and writes the `.addin` manifest. Restart Revit after deploying.
+Stages the add-ins from the working tree with `build\Staging.ps1` and hands them to the setup exe's install engine, which copies them to `C:\ProgramData\Autodesk\Revit\Addins\{year}\{RVTuk|KKarea}\` (Revit 2027: `C:\Program Files\Autodesk\Revit\Addins\2027\RVTuk\`) and writes the `.addin` manifests from the catalog. Only Revit years found on the PC are written to, unless named. A year whose Revit is open or whose files are in use is skipped and left exactly as it was, and the script exits 1. `-Clean` removes. Restart Revit after deploying.
 
 ## 📦 Installing on other computers
 
