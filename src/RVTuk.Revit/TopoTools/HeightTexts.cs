@@ -122,12 +122,13 @@ namespace RVTuk.Revit.TopoTools
 
         private static List<HeightText> CollectTexts(Document doc, View view)
         {
-            // Document-wide, filtered by owner view: a view collector misses hidden texts (Text
-            // Notes off, a filter), and every run would then give their lines another text.
+            // Document-wide, narrowed by owner view: the collector's view constructor misses hidden
+            // texts (Text Notes off, a filter), and every run would then give their lines another
+            // text. ElementOwnerViewFilter keeps hidden elements.
             return new FilteredElementCollector(doc)
                 .OfClass(typeof(TextNote))
+                .WherePasses(new ElementOwnerViewFilter(view.Id))
                 .Cast<TextNote>()
-                .Where(note => note.OwnerViewId == view.Id)
                 .Where(note => note.GroupId == ElementId.InvalidElementId)
                 .Where(HeightTextType.IsHeightText)
                 .Select(note => new HeightText(

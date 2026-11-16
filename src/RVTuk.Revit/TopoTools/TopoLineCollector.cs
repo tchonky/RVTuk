@@ -23,13 +23,14 @@ namespace RVTuk.Revit.TopoTools
         {
             var candidates = new List<TopoLineCandidate>();
 
-            // Document-wide, filtered by owner view: a view collector returns only what is visible,
-            // and a topo line hidden in the view (Hide in View, a filter, its style turned off) is
-            // still a topo line of the view — missing it would delete its height text.
+            // Document-wide, narrowed by owner view: the collector's view constructor returns only
+            // what is visible, and a topo line hidden in the view (Hide in View, a filter, its
+            // style turned off) is still a topo line of the view — missing it would delete its
+            // height text. ElementOwnerViewFilter keeps hidden elements.
             var lines = new FilteredElementCollector(doc)
                 .OfClass(typeof(CurveElement))
+                .WherePasses(new ElementOwnerViewFilter(view.Id))
                 .Cast<CurveElement>()
-                .Where(curveElement => curveElement.OwnerViewId == view.Id)
                 .Where(curveElement => curveElement.CurveElementType == CurveElementType.DetailCurve)
                 .Where(curveElement => curveElement.GroupId == ElementId.InvalidElementId)
                 .Where(TopoLineStyle.IsTopoLine);
