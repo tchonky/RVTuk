@@ -4,11 +4,17 @@ namespace RVTuk.Revit.TopoTools
 {
     /// <summary>
     /// The dedicated line subcategory ("_DP-Topo Line") that marks a detail line as a topo
-    /// contour — the same arrangement Auto Dimensions uses for its own styles. Created on the
-    /// pane's first refresh, because you cannot draw the line before the style exists.
+    /// contour — the same arrangement Auto Dimensions uses for its own styles. Created when a
+    /// session starts, because the session's updater gives new lines this style.
+    ///
+    /// The style is found by this name and nothing else. Renaming it in the project disconnects
+    /// every topo line already drawn: none counts as a topo line any more, so Update ignores them
+    /// (their points stay on the element, unreported) and the next session creates a new style.
     /// </summary>
     public static class TopoLineStyle
     {
+        /// <summary>The style's name, and the only way it is found: renaming the style in the
+        /// project disconnects every topo line already drawn.</summary>
         public const string LineStyleName = "_DP-Topo Line";
 
         public static bool IsTopoLine(CurveElement curveElement)
