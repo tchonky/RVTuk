@@ -283,6 +283,10 @@ namespace RVTuk.Revit
             // Never throws; on any failure it logs one line and switches itself off.
             if (RegisterTopoTools) ContextualTopoButton.Install(application);
 
+            // A closing document's last typed topo height goes with it.
+            if (RegisterTopoTools)
+                application.ControlledApplication.DocumentClosing += (_, e) => LastTypedHeights.Forget(e.Document);
+
             return Result.Succeeded;
         }
 
