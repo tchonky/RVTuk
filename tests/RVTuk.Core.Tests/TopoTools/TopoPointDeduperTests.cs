@@ -71,6 +71,34 @@ public class TopoPointDeduperTests
         Assert.Equal(1, result.DroppedForHigher);
     }
 
+    // The deduper looks for a kept point in a grid of 1 mm cells: the point's own cell and the
+    // eight around it. 5 ft is 1524 mm, so the lower point sits in the middle of a cell, and the
+    // higher one is 0.6 mm away (0.85 mm on a diagonal) in each of the eight neighbours in turn.
+    // A lookup that misses any neighbour keeps both points.
+    [Theory]
+    [InlineData(-1, -1)]
+    [InlineData(-1, 0)]
+    [InlineData(-1, 1)]
+    [InlineData(0, -1)]
+    [InlineData(0, 1)]
+    [InlineData(1, -1)]
+    [InlineData(1, 0)]
+    [InlineData(1, 1)]
+    public void Points_under_a_millimetre_apart_in_neighbouring_grid_cells_are_one_spot(int dx, int dy)
+    {
+        var lower = P(5 + 0.5 * Mm, 5 + 0.5 * Mm, 42);
+        var higher = P(lower.X + dx * 0.6 * Mm, lower.Y + dy * 0.6 * Mm, 43);
+        var result = TopoPointDeduper.Dedupe(new[]
+        {
+            Line(1, new[] { lower }, None),
+            Line(2, new[] { higher }, None),
+        });
+
+        Assert.Empty(result.Kept[1].Interior);
+        Assert.Equal(new[] { higher }, result.Kept[2].Interior);
+        Assert.Equal(1, result.DroppedForHigher);
+    }
+
     [Fact]
     public void Points_two_millimetres_apart_are_two_spots()
     {
