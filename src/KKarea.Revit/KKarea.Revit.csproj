@@ -1,10 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- KKarea: standalone host for the Area Calc (Rishui Zamin) tool on the Revit years RVTuk
-       does not ship for — 2023 (net48) and 2026 (net8 — Revit 2026.5+ runs
-       .NET 10 but loads net8 add-ins, and net8 keeps 2026.0-2026.4 working). Revit 2027 gets
-       the full RVTuk add-in instead. It is built only via
-       the Release2023 / Release2026 configurations (see RVTuk.sln mappings). The
+  <!-- KKarea: standalone host for the Area Calc (Rishui Zamin) tool on Revit 2023 (net48),
+       the one year RVTuk does not ship for; 2024-2027 get the full RVTuk add-in. It is built
+       only via the Release2023 configuration (see RVTuk.sln mappings). The
        area logic is linked shared source from RVTuk.Revit, compiled here against each year's
        API, with the REVIT2023 constant switching the 2023 ElementId shims. -->
   <PropertyGroup>

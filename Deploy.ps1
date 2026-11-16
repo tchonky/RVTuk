@@ -1,12 +1,12 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Builds-output deployer for RVTuk (2024 / 2025 / 2027) and KKarea (2023 / 2026).
+    Builds-output deployer for RVTuk (2024 / 2025 / 2026 / 2027) and KKarea (2023).
 .DESCRIPTION
     Copies each version's build output into the per-year Revit Addins folder
     (ProgramData up to Revit 2026, Program Files from 2027) and
-    writes the .addin manifest. 2023 and 2026 deploy the KKarea add-in (Area Calc
-    only); 2024, 2025 and 2027 deploy the full RVTuk add-in. Each version deploys independently: if
+    writes the .addin manifest. 2023 deploys the KKarea add-in (Area Calc
+    only); 2024, 2025, 2026 and 2027 deploy the full RVTuk add-in. Each version deploys independently: if
     one year's Revit is open (locking its DLLs) or its build output is missing,
     that year is skipped with a warning and the others still deploy.
 .PARAMETER Only
@@ -27,8 +27,8 @@ $root = Split-Path $MyInvocation.MyCommand.Path -Parent
 $vendorId     = "KnafoKlimor"
 $vendorDesc   = "Knafo Klimor Architects LTD"
 
-# 2023 and 2026 ship KKarea (Area Calc only — a separate add-in with its own stable
-# ClientId, shared across its years); 2024, 2025 and 2027 ship the full RVTuk add-in. ClientIds must never change once deployed.
+# 2023 ships KKarea (Area Calc only — a separate add-in with its own stable
+# ClientId); 2024, 2025, 2026 and 2027 ship the full RVTuk add-in. ClientIds must never change once deployed.
 $versions = [ordered]@{
     "2023" = @{ Config = "Release2023"; Tfm = "net48"
                 Addin = "KKarea"; Project = "KKarea.Revit"
@@ -43,9 +43,9 @@ $versions = [ordered]@{
                 ClassName = "RVTuk.Revit.Application"
                 ClientId = "D71D7480-4A21-474E-A47E-3E8DF8C1BDA5" }
     "2026" = @{ Config = "Release2026"; Tfm = "net8.0-windows"
-                Addin = "KKarea"; Project = "KKarea.Revit"
-                ClassName = "KKarea.Revit.Application"
-                ClientId = "9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC" }
+                Addin = "RVTuk"; Project = "RVTuk.Revit"
+                ClassName = "RVTuk.Revit.Application"
+                ClientId = "D71D7480-4A21-474E-A47E-3E8DF8C1BDA5" }
     "2027" = @{ Config = "Release2027"; Tfm = "net10.0-windows"
                 Addin = "RVTuk"; Project = "RVTuk.Revit"
                 ClassName = "RVTuk.Revit.Application"

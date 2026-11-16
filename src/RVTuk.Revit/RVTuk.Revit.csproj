@@ -9,7 +9,7 @@
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
-  <!-- Year, framework and REVIT<year> come from Directory.Build.props. Built for 2024-2027 (RVTuk.sln); the 2026 build is not deployed, KKarea serves that year. -->
+  <!-- Year, framework and REVIT<year> come from Directory.Build.props. Built and deployed for 2024-2027 (RVTuk.sln). -->
 
   <PropertyGroup Condition="'$(TargetFramework)'!='net48'">
     <!-- net8/net10 libraries don't copy NuGet deps to bin by default (they rely on deps.json

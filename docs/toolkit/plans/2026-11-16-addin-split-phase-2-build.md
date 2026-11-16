@@ -14,7 +14,7 @@
 
 - The install engine, `addin.props`, the staging function and the staging check, and `Deploy.ps1` on top of them: the second phase 2 plan. `Deploy.ps1` and `Build-Installer.ps1` are **not edited here**.
 - The generic settings store: phase 3, Round Positions step (spec header note of 2026-11-16).
-- `RVTuk.Revit` built for 2026 is not deployed: Revit 2026 keeps KKarea. So phase 2's "the monolith loads in Revit 2026.5" and the 2024 ↔ 2026.5 instruction round trip wait for the engine plan, which can put the monolith there. Task 7 checks the same two things another way: the net10 build in Revit 2027, and a net8 build on .NET 10 through KKarea in Revit 2026.5.
+- Since Daniel's decision of 2026-11-16 Revit 2026 gets the full RVTuk add-in (Task 8, added after the plan was written), so the monolith in Revit 2026.5 and the 2024 ↔ 2026.5 instruction round trip are checked in Task 7.
 
 ## Global Constraints
 
@@ -627,13 +627,13 @@ git commit -m "refactor(ui): load the dark theme through DarkThemeDictionary"
 |---|---|---|
 | Revit 2024 (net48) | Start. Open the Auto Dimensions, Topo Tools and Round Positions panes. Open the Family Browser, then Edit Info on a family with an image, then crop the image. Open DWG Export and Area Calc. | No error at start. Everything looks as it did before: dark, same colours and buttons. |
 | Revit 2027 (the net10 build) | Start. Open the three panes and the Family Browser. Open an image instruction that was saved in Revit 2024, save it, then open it again in Revit 2024. | Panes and window are dark. The instruction shows its text and image in both versions. |
-| Revit 2026.5 (a net8 build on .NET 10) | Open Area Calc. | The window is dark, as in 2024. |
+| Revit 2026.5 (the net8 build on .NET 10) | Start. Open the three panes and the Family Browser. Open an image instruction that was saved in Revit 2024, save it, then open it again in Revit 2024. | Panes and window are dark. The instruction shows its text and image in both versions. |
 
 A view that comes up white or with default grey buttons, or an error naming `DarkTheme` or `DarkThemeDictionary`: stop and report the exact text.
 
 - [ ] **Step 3: Record it in the spec**
 
-Add a section "## Phase 2 record (build half)" before "## Phase 1 record", with the date and commit, and only what was measured: the test counts per framework from the last `Test-All.ps1` run; that the shipped file lists were identical before and after the matrix (or the one difference); that `DataContractJsonSerializer` runs the constructor on .NET Framework (the test and the run); that shadow copy was the cause of the SQLite failure in net48 tests; the three Revit checks with their results; and what waits for the engine plan (the monolith in Revit 2026.5, the 2024 ↔ 2026.5 instruction round trip). In "Build", put into the past tense the sentences that describe today's state: the per-project rows ("Since PR #12 and PR #14 …"), and the `Debug` catch-all that the tests built through. In "Known risks", the Topo bullet about `AddPoint` now names 2026 as well as 2027.
+Add a section "## Phase 2 record (build half)" before "## Phase 1 record", with the date and commit, and only what was measured: the test counts per framework from the last `Test-All.ps1` run; that the shipped file lists were identical before and after the matrix (or the one difference); that `DataContractJsonSerializer` runs the constructor on .NET Framework (the test and the run); that shadow copy was the cause of the SQLite failure in net48 tests; the three Revit checks with their results; and that Revit 2026 gets the full RVTuk add-in since Task 8. In "Build", put into the past tense the sentences that describe today's state: the per-project rows ("Since PR #12 and PR #14 …"), and the `Debug` catch-all that the tests built through. In "Known risks", the Topo bullet about `AddPoint` now names 2026 as well as 2027.
 
 - [ ] **Step 4: Commit, then ask Daniel about uploading**
 
