@@ -125,7 +125,8 @@ included. The Topo Edit panel stays on our own tab.
 `src/RVTuk.Revit/Application.cs` (on). The Massing & Site tab is impossible and verified so in
 Revit 2024: the API places custom panels only on Add-Ins, on Analyze, or on a tab the add-in creates
 itself. Revit 2024/2025 only — `Toposolid` does not exist in 2023, so KKarea never ships it. **The
-edit session is code-complete but not yet exercised in Revit**: see the checklist below.
+edit session was tried in Revit 2024 on 2026-11-16 and reported working**; the rows below are not
+yet ticked one by one.
 
 **Names:** code `TopoTools`; ribbon buttons "Topo Tools" and "Floor ⇄ Topo" (RVTuk panel, internal
 names `TopoTools` and `FloorTopoConvert`); panel `Topo Edit` (`TopoDrawLines`, `TopoHeightLabels`,
