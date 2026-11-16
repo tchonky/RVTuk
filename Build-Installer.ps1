@@ -7,7 +7,8 @@
     .addin manifest, zips it into installer\RVTuk.Setup\payload.zip, and compiles the
     RVTuk.Setup console exe with that zip embedded. The resulting exe is copied to
     dist\RVTukSetup.exe and can be run on any machine — it self-elevates, detects the
-    installed Revit versions, and copies the add-in into ProgramData.
+    installed Revit versions, and copies the add-in into the machine-wide Addins folder
+    of each year (ProgramData up to Revit 2026, Program Files from 2027).
 
     NOTE: the version table and staging rules below must stay in sync with Deploy.ps1.
 .EXAMPLE
@@ -19,7 +20,7 @@ $root = Split-Path $MyInvocation.MyCommand.Path -Parent
 $vendorId   = "KnafoKlimor"
 $vendorDesc = "Knafo Klimor Architects LTD"
 
-# Same table as Deploy.ps1 — 2023/2026/2027 ship KKarea (Area Calc only), 2024/2025 ship RVTuk.
+# Same table as Deploy.ps1 — 2023 ships KKarea (Area Calc only), 2024/2025/2026/2027 ship RVTuk.
 # ClientIds must never change once deployed.
 $versions = [ordered]@{
     "2023" = @{ Config = "Release2023"; Tfm = "net48"
@@ -35,13 +36,13 @@ $versions = [ordered]@{
                 ClassName = "RVTuk.Revit.Application"
                 ClientId = "D71D7480-4A21-474E-A47E-3E8DF8C1BDA5" }
     "2026" = @{ Config = "Release2026"; Tfm = "net8.0-windows"
-                Addin = "KKarea"; Project = "KKarea.Revit"
-                ClassName = "KKarea.Revit.Application"
-                ClientId = "9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC" }
+                Addin = "RVTuk"; Project = "RVTuk.Revit"
+                ClassName = "RVTuk.Revit.Application"
+                ClientId = "D71D7480-4A21-474E-A47E-3E8DF8C1BDA5" }
     "2027" = @{ Config = "Release2027"; Tfm = "net10.0-windows"
-                Addin = "KKarea"; Project = "KKarea.Revit"
-                ClassName = "KKarea.Revit.Application"
-                ClientId = "9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC" }
+                Addin = "RVTuk"; Project = "RVTuk.Revit"
+                ClassName = "RVTuk.Revit.Application"
+                ClientId = "D71D7480-4A21-474E-A47E-3E8DF8C1BDA5" }
 }
 
 $staging  = "$root\installer\payload-staging"

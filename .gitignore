@@ -2,9 +2,9 @@
 bin/
 obj/
 
-# Test results / scratch fixtures (not the tests/RVTuk.Core.Tests source)
-tests/output/
-tests/Examples Autoarea/
+# Test results / real office drawings (never committed), at any depth
+**/tests/output/
+**/tests/Examples Autoarea/
 
 # Visual Studio
 .vs/
@@ -28,6 +28,7 @@ Manifests/*.addin
 dist/
 installer/payload-staging/
 installer/RVTuk.Setup/payload.zip
+releases/
 
 # OS
 Thumbs.db
@@ -37,7 +38,6 @@ desktop.ini
 # Secrets / local config
 *.env
 appsettings.local.json
-.gitignore
 
 # Runtime data folder (SQLite DB + gallery images live here, not source)
 .Setup/

@@ -171,8 +171,7 @@ public class AppConfigTests : IDisposable
     [Fact]
     public void DwgExportFormats_OldConfigWithoutKeys_MeansDwgOnPdfOff()
     {
-        // Uninitialized-object deserialization (net48 DCJS) must land on the same
-        // defaults, which is why the stored booleans are inverted/additive.
+        // A file without these keys must read as today's behaviour: DWG on, PDF off.
         var loaded = System.Text.Json.JsonSerializer.Deserialize<AppConfig>("{}")!;
 
         Assert.False(loaded.DwgExportDwgOff);

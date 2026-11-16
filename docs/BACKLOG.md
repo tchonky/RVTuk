@@ -32,6 +32,11 @@ Check off with `[x]` and the commit hash when shipped.
       shutdown; every RVTuk journal entry is a normal startup/command event. Fix is on
       3Dconnexion's side: update or temporarily disable the 3Dconnexion add-in /
       SpaceMouse driver. (CER dump: `…\Local\Autodesk\CER\92ed161c…\29`.)
+- [ ] NuGet restore reports known advisories for two packages (seen 2026-11-16):
+      `SQLitePCLRaw.lib.e_sqlite3` 2.1.6 (NU1903, high — comes with `Microsoft.Data.Sqlite`
+      8.0.29) and `OpenMcdf` 3.1.2 (NU1902, moderate — pinned to match what other Revit
+      add-ins preloaded, which no longer holds: pyRevit preloads 3.1.4). Decide: a newer `Microsoft.Data.Sqlite`, and whether the OpenMCDF
+      pin can move (see the add-in split spec, "Known risks carried forward").
 
 ## ✨ Improvements
 

@@ -6,9 +6,9 @@ files the רישוי זמין (Rishui Zamin) area-calculation robot expects (`RZ
 action binds the `RZ_*` shared parameters to Areas and creates/tops-up the usage-key
 schedules — no separate ribbon command.
 
-**Status:** shipped (v1 launch surface). Also shipped to Revit 2023, 2026 and 2027 as
+**Status:** shipped (v1 launch surface). Also shipped to Revit 2023 as
 **KKarea**, a standalone one-button add-in hosting only this tool (RVTuk itself was dropped
-from 2023 and does not ship for 2026/2027).
+from 2023; Revit 2026 and 2027 get the full RVTuk add-in).
 
 **Names:** code `RishuiZamin`; ribbon button displays "Area Calc" (internal id
 `AreaCalc`). Older code/docs say `AreaSubmission` / `autoarea` — same tool.
@@ -20,7 +20,7 @@ from 2023 and does not ship for 2026/2027).
 | Core  | `src/RVTuk.Core/RishuiZamin/` (writers, validator, usage catalog, DXF templates) |
 | UI    | `src/RVTuk.UI/RishuiZamin/` (Views, ViewModels) |
 | Revit | `src/RVTuk.Revit/RishuiZamin/` (Commands, ExternalEvents, extractor, schedule builder) |
-| KKarea host (2023/2026/2027) | `src/KKarea.Revit/` (links the Revit-layer sources; must never reference `RVTuk.Revit` itself) |
+| KKarea host (2023) | `src/KKarea.Revit/` (links the Revit-layer sources; must never reference `RVTuk.Revit` itself) |
 | Tests | `tests/RVTuk.Core.Tests/RishuiZamin/` |
 
 ## Docs

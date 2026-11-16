@@ -25,7 +25,7 @@ Door sills are filled by hand for now (see the backlog).
 travels with it. While it is a toposolid, though, Room Floor does not see it (`FindLinkedFloors`
 collects floors only), so clicking the room then creates a second floor. Convert it back first.
 
-**Status:** v1, Revit 2024/2025. Behind `RegisterRoomFloors` (on) in `src/RVTuk.Revit/Application.cs`.
+**Status:** v1, Revit 2024–2027. Behind `RegisterRoomFloors` (on) in `src/RVTuk.Revit/Application.cs`.
 Not in KKarea (2023).
 
 **Entry point:** `RVTuk.Revit.RoomFloors.Commands.RoomFloorCommand`, a plain external command

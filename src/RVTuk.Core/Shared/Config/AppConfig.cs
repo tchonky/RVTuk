@@ -73,9 +73,9 @@ namespace RVTuk.Core.Shared.Config
         public bool DwgExportPdfOn { get; set; }
 
         /// <summary>Round Positions' grid step, stored inverted (false = the default, half
-        /// centimetres allowed) for the same reason as <see cref="DwgExportDwgOff"/>: net48's
-        /// DataContractJsonSerializer skips property initializers, so a true-default property
-        /// would flip to false when a config file written before this feature existed is loaded.</summary>
+        /// centimetres allowed), like <see cref="DwgExportDwgOff"/>. Reading does not need the
+        /// inversion: both serializers run AppConfig's constructor, on .NET Framework too
+        /// (AppConfigTests.Config_ReadsAcrossBothSerializers). The key name is frozen.</summary>
         public bool RoundPositionsWholeCentimetresOnly { get; set; }
 
         /// <summary>Per-model output folders, most-recently-used last, capped at

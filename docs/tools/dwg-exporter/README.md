@@ -126,7 +126,7 @@ the run before anything is written, naming both.
 | Revit | `src/RVTuk.Revit/DwgExporter/` (command, naming-rule evaluator, sheet exporter) |
 | Tests | `tests/RVTuk.Core.Tests/DwgExporter/` |
 
-Revit 2024/2025 only — not hosted in KKarea (2023).
+Revit 2024–2027 — not hosted in KKarea (2023).
 
 ## Docs
 

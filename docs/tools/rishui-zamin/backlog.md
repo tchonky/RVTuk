@@ -1,7 +1,7 @@
 # Rishui Zamin — Backlog
 
 Bugs, improvements, and ideas for the Rishui Zamin (Area Calc) tool, including its
-KKarea host (Revit 2023/2026/2027). Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
+KKarea host (Revit 2023). Toolkit-wide items live in [`../../BACKLOG.md`](../../BACKLOG.md).
 
 ## 🐞 Bugs
 

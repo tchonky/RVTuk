@@ -1,4 +1,3 @@
-#if !NETFRAMEWORK
 using System;
 using System.IO;
 using RVTuk.Core.FamilyBrowser.Database;
@@ -9,10 +8,8 @@ using Xunit;
 namespace RVTuk.UI.Tests.FamilyBrowser
 {
     // The editor must never overwrite stored instructions it could not read, and a failed
-    // serialisation must write nothing. Net8 only: SQLite does not initialise in the net48 test
-    // host — opening a connection throws a FileLoadException for System.Memory inside
-    // SQLitePCL.Batteries_V2.DoDynamic_cdecl. The cause is not settled yet; see "Phase 0 record"
-    // in docs/toolkit/specs/2026-11-12-addin-split-design.md.
+    // serialisation must write nothing. Runs on every framework: xunit.runner.json switches shadow
+    // copy off, so SQLite finds e_sqlite3.dll under the test folder's runtimes\win-x64\native.
     public class InstructionsEditorViewModelTests : IDisposable
     {
         private const string Broken =
@@ -98,4 +95,3 @@ namespace RVTuk.UI.Tests.FamilyBrowser
         });
     }
 }
-#endif
