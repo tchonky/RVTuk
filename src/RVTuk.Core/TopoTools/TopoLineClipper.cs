@@ -20,7 +20,7 @@ namespace RVTuk.Core.TopoTools
             var runs = new List<IReadOnlyList<XyPoint>>();
             if (polyline == null || polyline.Count < 2 || loops == null) return runs;
 
-            List<XyPoint> current = null;
+            List<XyPoint>? current = null;
 
             void Close()
             {
