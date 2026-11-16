@@ -70,7 +70,8 @@ namespace RVTuk.Revit.TopoTools
 
             var editor = EditorOf(target)
                 ?? throw new InvalidOperationException("the new element cannot take shape points");
-            if (!editor.IsEnabled) editor.Enable();
+            bool wasEnabled = editor.IsEnabled;
+            if (!wasEnabled) editor.Enable();
             doc.Regenerate();
 
             var flat = Positions(editor);
@@ -80,6 +81,16 @@ namespace RVTuk.Revit.TopoTools
             // offsets and DrawPoint locations are measured from.
             double topZ = flat[0].Z;
             var plan = ShapeReplayPlanner.Plan(shape.Vertices, flat, Outline(loops));
+
+            // A toposolid always reports its corners, so a flat one reaches here with nothing to
+            // replay. A floor enabled above for it would come back shape-edited for no reason:
+            // reset it to a plain floor. A toposolid target is left as it is.
+            if (target is Floor && !wasEnabled && plan.Offsets.Count == 0 && plan.Additions.Count == 0 &&
+                plan.EdgePoints.Count == 0 && shape.Creases.Count == 0)
+            {
+                editor.ResetSlabShape();
+                return new ReplayOutcome(0, 0);
+            }
 
             // Edge points first, while the whole surface is still flat at topZ, so every
             // DrawPoint location is on the top face. Raising anything before this would tilt an
