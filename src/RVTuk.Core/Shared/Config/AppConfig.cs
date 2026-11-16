@@ -151,6 +151,39 @@ namespace RVTuk.Core.Shared.Config
         public string DatabasePath => Path.Combine(LibraryFolderPath, DbFolderName, "RVTuk.db");
 
         /// <summary>
+        /// The office family library as Autodesk Desktop Connector presents it on every PC. Used
+        /// when no library folder has been chosen yet, so a fresh install opens straight onto the
+        /// office families (once Desktop Connector is installed and signed in).
+        /// </summary>
+        public static string DefaultLibraryFolderPath => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "DC", "ACCDocs", "KKarc", "_KKarc Cloud", "Project Files");
+
+        /// <summary>
+        /// This user's own folder for the current library on this PC: the read-only users' copy
+        /// of the database and personal favourites. One folder per library, so switching
+        /// libraries never mixes them. Methods (not properties) so they are never serialised.
+        /// </summary>
+        public string GetLocalLibraryFolder() => GetLocalLibraryFolder(
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "RVTuk", "FamilyBrowser", "Libraries"),
+            LibraryFolderPath);
+
+        public static string GetLocalLibraryFolder(string baseDir, string libraryFolderPath)
+        {
+            var key = (libraryFolderPath ?? string.Empty).Trim().TrimEnd('\\', '/').ToUpperInvariant();
+            using var sha = System.Security.Cryptography.SHA1.Create();
+            var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(key));
+            var hex = BitConverter.ToString(hash, 0, 6).Replace("-", string.Empty).ToLowerInvariant();
+            return Path.Combine(baseDir, hex);
+        }
+
+        /// <summary>Where read-only users keep their copies of the library database.</summary>
+        public string GetDatabaseCacheFolder() => Path.Combine(GetLocalLibraryFolder(), "DatabaseCopy");
+
+        public string GetFavoritesPath() => Path.Combine(GetLocalLibraryFolder(), "favorites.txt");
+
+        /// <summary>
         /// Subfolder paths (relative to the library root, using '\' separators) that should be
         /// excluded from deep scans and fast syncs. Families under these folders are skipped during
         /// extraction but their existing DB rows are preserved (not treated as stale).

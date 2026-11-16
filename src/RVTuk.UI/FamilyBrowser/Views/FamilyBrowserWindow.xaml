@@ -439,6 +439,21 @@
                            Foreground="{StaticResource Brush.TextMuted}" FontSize="11"
                            ToolTip="Revit or the library database is busy with your last action"
                            Visibility="{Binding IsBusy, Converter={StaticResource BoolVis}}"/>
+                <!-- Read-only users browse a local copy of the library: say how fresh it is. -->
+                <TextBlock Grid.Column="1" Text="{Binding LibraryStatus}" Margin="8,0" VerticalAlignment="Center"
+                           Foreground="{StaticResource Brush.TextMuted}" FontSize="11"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding LibraryStatusDetail}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
                 <!-- Grid-view toggle (2x2 squares). Hand-drawn vector to match the other icon-only
                      buttons in this window rather than an emoji. -->
                 <ToggleButton Grid.Column="2" Width="30" Height="28" Padding="0" Margin="0,0,4,0"
@@ -609,6 +624,10 @@
                                         <DataTrigger Binding="{Binding SelectedItem.IsModelOnly}" Value="True">
                                             <Setter Property="Visibility" Value="Collapsed"/>
                                         </DataTrigger>
+                                        <!-- View-only library access: nothing to rescan or edit. -->
+                                        <DataTrigger Binding="{Binding CanEdit}" Value="False">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </Button.Style>
@@ -628,6 +647,10 @@
                                     <Style.Triggers>
                                         <!-- No DB row behind a model-only family: no info to edit. -->
                                         <DataTrigger Binding="{Binding SelectedItem.IsModelOnly}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                        <!-- View-only library access: nothing to rescan or edit. -->
+                                        <DataTrigger Binding="{Binding CanEdit}" Value="False">
                                             <Setter Property="Visibility" Value="Collapsed"/>
                                         </DataTrigger>
                                     </Style.Triggers>
@@ -782,6 +805,11 @@
                             Padding="14,7" Background="{StaticResource Brush.AccentDark}"
                             BorderBrush="{StaticResource Brush.Accent}"
                             Content="Scan"/>
+                    <TextBlock Foreground="{StaticResource Brush.TextMuted}" FontSize="10"
+                               Margin="0,5,0,0" TextWrapping="Wrap"
+                               Visibility="{Binding IsReadOnlyLibrary, Converter={StaticResource BoolVis}}">
+                        You have view-only access to this library, so only its maintainer can scan it.
+                    </TextBlock>
 
                     <Separator Margin="0,26,0,22"/>
 
