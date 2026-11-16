@@ -1,3 +1,4 @@
+using System;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
@@ -15,12 +16,22 @@ namespace RVTuk.Revit.TopoTools.Commands
             int unlinked;
             using (var tx = new Transaction(session.Document, "Topo Height Labels"))
             {
-                tx.Start();
-                unlinked = HeightTexts.Label(session.Document, view, session.Created);
-                if (tx.Commit() != TransactionStatus.Committed)
+                try
                 {
-                    TaskDialog.Show(TopoSessionCommands.Title, TopoSessionCommands.RolledBack);
-                    return Result.Cancelled;
+                    tx.Start();
+                    unlinked = HeightTexts.Label(session.Document, view, session.Created);
+                    if (tx.Commit() != TransactionStatus.Committed)
+                    {
+                        TaskDialog.Show(TopoSessionCommands.Title, TopoSessionCommands.RolledBack);
+                        return Result.Cancelled;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack();
+                    Application.LogDiagnostic($"Topo Height Labels failed: {ex}");
+                    TaskDialog.Show(TopoSessionCommands.Title, $"Height Labels failed and was undone: {ex.Message}");
+                    return Result.Failed;
                 }
             }
 

@@ -1,7 +1,9 @@
+using System;
 using System.Linq;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RVTuk.Core.TopoTools;
 using RVTuk.Revit.Shared;
 
 namespace RVTuk.Revit.TopoTools.Commands
@@ -46,32 +48,59 @@ namespace RVTuk.Revit.TopoTools.Commands
             }
 
             var elementLabel = TopoSessionCommands.LabelOf(element, element.Id);
-            var refusal = SlabRefusals.Of(doc, element);
-            if (refusal != null)
+            Transaction? tx = null;
+            try
             {
-                TaskDialog.Show(Title, $"{elementLabel}: {refusal}.");
-                return Result.Cancelled;
-            }
+                var refusal = SlabRefusals.Of(doc, element);
+                if (refusal != null)
+                {
+                    TaskDialog.Show(Title, $"{elementLabel}: {Sentence.WithoutFullStop(refusal)}.");
+                    return Result.Cancelled;
+                }
 
-            if (SlabTarget.From(doc, element) == null)
+                if (SlabTarget.From(doc, element) == null)
+                {
+                    TaskDialog.Show(Title, $"{elementLabel}: its outline cannot be read.");
+                    return Result.Cancelled;
+                }
+
+                // The styles must exist before the session: the updater restyles and labels new lines with them.
+                if (!LineStyleCreator.Exists(doc, TopoLineStyle.LineStyleName) || !HeightTextType.Exists(doc))
+                {
+                    tx = new Transaction(doc, "Topo Tools — create styles");
+                    tx.Start();
+                    LineStyleCreator.EnsureExists(doc, TopoLineStyle.LineStyleName);
+                    HeightTextType.EnsureExists(doc);
+                    if (tx.Commit() != TransactionStatus.Committed)
+                    {
+                        TaskDialog.Show(Title,
+                            "The Topo Tools line style and height text type could not be created — " +
+                            "Revit rolled the change back. No Topo Edit session was started.");
+                        return Result.Cancelled;
+                    }
+                }
+
+                TopoSession.Start(doc, view, element);
+                TopoEditPanel.Show();
+                return Result.Succeeded;
+            }
+            catch (Exception ex)
             {
-                TaskDialog.Show(Title, $"{elementLabel}: its outline cannot be read.");
-                return Result.Cancelled;
-            }
+                if (tx != null && tx.HasStarted() && !tx.HasEnded()) tx.RollBack();
 
-            // The styles must exist before the session: the updater restyles and labels new lines with them.
-            if (!LineStyleCreator.Exists(doc, TopoLineStyle.LineStyleName) || !HeightTextType.Exists(doc))
+                // No half-started session: one that started before the failure (the panel would
+                // not show, say) is closed again, so Topo Tools can simply be pressed again. A
+                // session open before this press returned early above, so this one is ours.
+                TopoSession.End();
+
+                Application.LogDiagnostic($"Topo Tools start failed: {ex}");
+                TaskDialog.Show(Title, $"{elementLabel}: the Topo Edit session could not start: {ex.Message}");
+                return Result.Failed;
+            }
+            finally
             {
-                using var tx = new Transaction(doc, "Topo Tools — create styles");
-                tx.Start();
-                LineStyleCreator.EnsureExists(doc, TopoLineStyle.LineStyleName);
-                HeightTextType.EnsureExists(doc);
-                tx.Commit();
+                tx?.Dispose();
             }
-
-            TopoSession.Start(doc, view, element);
-            TopoEditPanel.Show();
-            return Result.Succeeded;
         }
     }
 }
