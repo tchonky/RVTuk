@@ -77,18 +77,20 @@ Release2023 builds RVTuk.Core, RVTuk.UI and KKarea.Revit. Release2024 to Release
 
 ## Tests
 
-Core's xunit suite lives in `tests\RVTuk.Core.Tests` (repositories, indexer, config/migration, Rishui Zamin writers/validator), mirroring the per-tool folders. Run it before committing Core changes:
+Core's xunit suite lives in `tests\RVTuk.Core.Tests` (repositories, indexer, config/migration, Rishui Zamin writers/validator), mirroring the per-tool folders. Run everything before committing: `.\build\Test-All.ps1` — every test on net48 (Release2024), net8 (Release2025) and net10 (Release2027); it also refuses untracked .dxf/.dat/.dwfx/.rfa files. One project:
 
 ```powershell
+.\build\Test-All.ps1
 dotnet test tests\RVTuk.Core.Tests\RVTuk.Core.Tests.csproj -c Release2025
 ```
 
 On a non-Windows SDK (CI, cloud agents) add `-c Release2025 -p:EnableWindowsTargeting=true` — the suite builds and runs fine on Linux. The WPF/Revit projects (`RVTuk.UI`, `RVTuk.Revit`, `KKarea.Revit`) can only be compiled on Windows.
 
-`tests\RVTuk.UI.Tests` holds WPF tests that run without Revit (instruction XAML read/write). It follows the configuration — `-c Release2024` tests net48, `-c Release2025` tests net8 — and both must pass before committing a change to instruction reading or writing:
+`tests\RVTuk.UI.Tests` holds WPF tests that run without Revit (instruction XAML read/write). It follows the configuration like every project — `-c Release2024` tests net48, `-c Release2025` net8, `-c Release2027` net10 — and all must pass before committing a change to instruction reading or writing:
 ```powershell
 dotnet test tests\RVTuk.UI.Tests\RVTuk.UI.Tests.csproj -c Release2024
 dotnet test tests\RVTuk.UI.Tests\RVTuk.UI.Tests.csproj -c Release2025
+dotnet test tests\RVTuk.UI.Tests\RVTuk.UI.Tests.csproj -c Release2027
 ```
 Its fixtures are sanitized (`FamilyBrowser\Fixtures\sanitize_instructions.py`): never commit a real database row. Database tests run on every framework: each test project carries an xunit.runner.json that switches shadow copy off, because the shadow folder has no e_sqlite3.dll.
 

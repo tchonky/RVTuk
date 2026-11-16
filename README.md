@@ -29,12 +29,14 @@ RVTuk/
 │   ├── RVTuk.Revit/         # Revit add-in host (ribbon, external events, commands), per-tool folders
 │   └── KKarea.Revit/        # Standalone Revit 2023/2026 host for Rishui Zamin (Area Calc) only
 ├── tests/
-│   └── RVTuk.Core.Tests/    # xunit suite for Core, mirrors the per-tool folders
+│   ├── RVTuk.Core.Tests/    # xunit suite for Core, mirrors the per-tool folders
+│   └── RVTuk.UI.Tests/      # WPF tests without Revit
 ├── installer/
 │   └── RVTuk.Setup/         # Standalone installer exe (built by Build-Installer.ps1)
 ├── docs/
 │   ├── tools/<tool>/        # Per-tool README, backlog, specs, plans
 │   └── toolkit/             # Toolkit-wide specs and plans
+├── build/                         # Test-All.ps1
 ├── Deploy.ps1                     # Build + deploy to Revit add-ins directory (dev machine)
 ├── Build-Installer.ps1            # Build dist\RVTukSetup.exe for other computers
 └── CLAUDE.md                      # AI assistant instructions
@@ -45,6 +47,7 @@ RVTuk/
 ```powershell
 dotnet build src\RVTuk.Revit\RVTuk.Revit.csproj -c Release2025
 dotnet build src\RVTuk.Revit\RVTuk.Revit.csproj -c Release2024
+.\build\Test-All.ps1   # all tests: net48, net8, net10
 ```
 
 ## 🚀 Deploying
