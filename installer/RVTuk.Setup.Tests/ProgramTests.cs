@@ -92,12 +92,20 @@ namespace RVTuk.Setup.Tests
         [InlineData("--install", "A", "--remove", "A")]
         [InlineData("--years")]
         [InlineData("--years", "24")]
+        [InlineData("--years", "2024\n")]
         [InlineData("--bogus")]
         [InlineData("--install", "--quiet")]
         public void Parse_Rejects(params string[] args)
         {
             Assert.Null(Options.Parse(args, out var error));
             Assert.False(string.IsNullOrEmpty(error));
+        }
+
+        [Fact]
+        public void Quote_DoublesATrailingBackslash()
+        {
+            Assert.Equal("\"D:\\x\\\\\"", Program.Quote("D:\\x\\"));
+            Assert.Equal("\"a b\"", Program.Quote("a b"));
         }
 
         [Fact]
@@ -115,7 +123,7 @@ namespace RVTuk.Setup.Tests
         {
             Assert.Equal(2, Run(Opt(keys: new List<string> { "Nope" }), out var output));
             Assert.Contains("Unknown add-in 'Nope'", output);
-            Assert.Contains("A", output);
+            Assert.Contains("This package holds: A", output);
             Assert.False(Directory.Exists(_t));
         }
 

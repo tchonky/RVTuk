@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
+using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.RegularExpressions;
 
@@ -65,7 +66,7 @@ namespace RVTuk.Setup
                         string y = Value();
                         if (y == null) break;
                         o.Years = y.Split(',').ToList();
-                        string badYear = o.Years.FirstOrDefault(s => !Regex.IsMatch(s, @"^[0-9]{4}$"));
+                        string badYear = o.Years.FirstOrDefault(s => !Regex.IsMatch(s, @"\A[0-9]{4}\z"));
                         if (badYear != null) err = $"'{badYear}' is not a four-digit year";
                         break;
                     case "--source": o.Source = Value(); break;
@@ -102,9 +103,8 @@ namespace RVTuk.Setup
             if (o.Target == null && !elevated)
                 return RelaunchElevated(args);
 
-            string log = Path.Combine(Environment.GetFolderPath(elevated
-                ? Environment.SpecialFolder.CommonApplicationData
-                : Environment.SpecialFolder.LocalApplicationData), "RVTuk", "setup.log");
+            string log = elevated ? ElevatedLog()
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RVTuk", "setup.log");
             int exit = Run(o, Console.Out, log);
 
             if (!o.NoPause && !o.Quiet && !Console.IsOutputRedirected)
@@ -148,7 +148,9 @@ namespace RVTuk.Setup
                             Say("  FAILED: no embedded payload - this exe was built without Build-Installer.ps1.");
                             return 1;
                         }
-                        payload = temp = Path.Combine(Path.GetTempPath(), "RVTukSetup-" + Process.GetCurrentProcess().Id);
+                        string t = Path.Combine(Path.GetTempPath(), "RVTukSetup-" + Guid.NewGuid().ToString("N"));
+                        if (Directory.Exists(t) || File.Exists(t)) throw new IOException(t + " already exists");
+                        payload = temp = t;
                         using (var zip = new ZipArchive(asm.GetManifestResourceStream(name), ZipArchiveMode.Read))
                             foreach (var entry in zip.Entries.Where(e => e.Name.Length > 0))
                             {
@@ -192,6 +194,11 @@ namespace RVTuk.Setup
                 Say(failed ? "  NOT everything was done - see the lines marked SKIPPED or FAILED." : "  Done.");
                 return failed ? 1 : 0;
             }
+            catch (Exception e)
+            {
+                Say("  FAILED: " + e.Message);
+                return 1;
+            }
             finally
             {
                 if (temp != null)
@@ -216,18 +223,51 @@ namespace RVTuk.Setup
 
         // --- environment ------------------------------------------------------
 
+        // %ProgramData%\RVTuk\setup.log, unless an ordinary user could have planted the folder or the log: then null (no log).
+        private static string ElevatedLog()
+        {
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "RVTuk");
+                if (!Directory.Exists(dir))
+                {
+                    var ds = new DirectorySecurity();
+                    ds.SetAccessRuleProtection(true, false);
+                    var inherit = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
+                    foreach (var (sid, rights) in new[] {
+                        (WellKnownSidType.BuiltinAdministratorsSid, FileSystemRights.FullControl),
+                        (WellKnownSidType.LocalSystemSid, FileSystemRights.FullControl),
+                        (WellKnownSidType.BuiltinUsersSid, FileSystemRights.ReadAndExecute) })
+                        ds.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(sid, null), rights, inherit, PropagationFlags.None, AccessControlType.Allow));
+                    Directory.CreateDirectory(dir, ds);
+                }
+                // Checked also after creating it: someone may have made it in between.
+                if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0) return null;
+                var owner = Directory.GetAccessControl(dir).GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
+                if (owner == null || !(owner.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid) || owner.IsWellKnown(WellKnownSidType.LocalSystemSid)))
+                    return null;
+                string log = Path.Combine(dir, "setup.log");
+                if ((File.Exists(log) || Directory.Exists(log)) && (File.GetAttributes(log) & FileAttributes.ReparsePoint) != 0) return null;
+                return log;
+            }
+            catch (Exception) { return null; }
+        }
+
         private static bool IsElevated()
         {
             using (var id = WindowsIdentity.GetCurrent())
                 return new WindowsPrincipal(id).IsInRole(WindowsBuiltInRole.Administrator);
         }
 
+        // A trailing backslash would escape the closing quote: double it.
+        internal static string Quote(string a) => "\"" + Regex.Replace(a, @"(\\+)$", "$1$1") + "\"";
+
         private static int RelaunchElevated(string[] args)
         {
             var psi = new ProcessStartInfo
             {
                 FileName = Assembly.GetExecutingAssembly().Location,
-                Arguments = string.Join(" ", args.Select(a => "\"" + a + "\"")),
+                Arguments = string.Join(" ", args.Select(Quote)),
                 UseShellExecute = true,
                 Verb = "runas",
             };

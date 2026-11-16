@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Principal;
 using System.Text;
 using System.Threading;
 
@@ -15,6 +16,19 @@ namespace RVTuk.Setup
     internal static class Engine
     {
         private const StringComparison Ic = StringComparison.OrdinalIgnoreCase;
+
+        /// <summary>A file is trusted when its owner is the Administrators group, the system or the current user.</summary>
+        internal static Func<string, bool> IsTrustedFile = path =>
+        {
+            try
+            {
+                var owner = File.GetAccessControl(path).GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
+                using (var me = WindowsIdentity.GetCurrent())
+                    return owner != null && (owner.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid)
+                        || owner.IsWellKnown(WellKnownSidType.LocalSystemSid) || owner == me.User);
+            }
+            catch (Exception) { return false; }
+        };
 
         public static List<Result> Install(Catalog catalog, string sourceDir, IMachine machine,
                                            ICollection<string> keys, ICollection<string> years, Action<string> log)
@@ -91,6 +105,8 @@ namespace RVTuk.Setup
                 yf = m.YearFolder(year);
                 string target = Path.Combine(yf, a.Key), fresh = target + ".new", old = target + ".old";
                 string manifest = Path.Combine(yf, a.Manifest), tmp = manifest + ".tmp";
+                string link = Link(yf, target, fresh, old, manifest, tmp);
+                if (link != null) return R(a.Key, year, Outcome.Failed, link + " is a link");
 
                 // 1
                 if (m.IsRunning(year)) return R(a.Key, year, Outcome.SkippedRevitOpen, $"Revit {year} is open");
@@ -98,13 +114,13 @@ namespace RVTuk.Setup
                 // 2 Recover
                 if (!Directory.Exists(target) && Directory.Exists(old) && File.Exists(manifest))
                 {
-                    try { Directory.Move(old, target); }
+                    try { Retry(() => Directory.Move(old, target)); }
                     catch (Exception e) { return R(a.Key, year, Outcome.Failed, $"could not restore {a.Key}.old: {e.Message}"); }
                 }
 
                 // 3 Decide
-                var info = AddInInfo.TryRead(target);
-                if (info != null && File.Exists(manifest) && !OldInstallsLeft(yf, a.Replaces) && !a.Dev && !info.Dev
+                var info = IsTrustedFile(Path.Combine(target, "addin.json")) ? AddInInfo.TryRead(target) : null;
+                if (info != null && File.Exists(manifest) && IsTrustedFile(manifest) && !OldInstallsLeft(yf, a.Replaces) && !a.Dev && !info.Dev
                     && TryVersion(a.Version, out var want) && TryVersion(info.Version, out var have))
                 {
                     int c = have.CompareTo(want);
@@ -113,8 +129,8 @@ namespace RVTuk.Setup
                 }
 
                 // 4
-                if (Directory.Exists(fresh)) Directory.Delete(fresh, true);
-                if (Directory.Exists(old)) Directory.Delete(old, true);
+                DeleteTree(fresh);
+                DeleteTree(old);
                 Directory.CreateDirectory(yf);
                 string src = Path.Combine(sourceDir, a.Key, year);
                 if (!Directory.Exists(src)) return R(a.Key, year, Outcome.Failed, $"{a.Key} {year} is not in the payload");
@@ -124,7 +140,7 @@ namespace RVTuk.Setup
                 foreach (var dir in new[] { target }.Concat(a.Replaces.Select(r => Path.Combine(yf, r.Folder))).Where(Directory.Exists))
                 {
                     string busy = Probe(dir);
-                    if (busy != null) { Directory.Delete(fresh, true); return R(a.Key, year, Outcome.SkippedInUse, busy); }
+                    if (busy != null) { DeleteTree(fresh); return R(a.Key, year, Outcome.SkippedInUse, busy); }
                 }
 
                 // 6-8, 9 roll back by renames only
@@ -132,7 +148,7 @@ namespace RVTuk.Setup
                 try
                 {
                     if (existed) Retry(() => Directory.Move(target, old));
-                    Directory.Move(fresh, target);
+                    Retry(() => Directory.Move(fresh, target));
                     moved = true;
                     File.WriteAllText(tmp, ManifestXml(a), new UTF8Encoding(false));
                     if (File.Exists(manifest)) File.Replace(tmp, manifest, null); else File.Move(tmp, manifest);
@@ -143,8 +159,8 @@ namespace RVTuk.Setup
                     TryDelete(tmp);
                     try
                     {
-                        if (moved) Directory.Move(target, fresh);
-                        if (Directory.Exists(old)) Directory.Move(old, target);
+                        if (moved) Retry(() => Directory.Move(target, fresh));
+                        if (Directory.Exists(old)) Retry(() => Directory.Move(old, target));
                     }
                     catch (Exception) { msg += $"; the add-in is left at {a.Key}.old"; }
                     TryDelete(fresh);
@@ -173,6 +189,8 @@ namespace RVTuk.Setup
                 yf = m.YearFolder(year);
                 string target = Path.Combine(yf, key), fresh = target + ".new", old = target + ".old";
                 string manifest = Path.Combine(yf, manifestName);
+                string link = Link(yf, target, fresh, old, manifest, manifest + ".tmp");
+                if (link != null) return R(key, year, Outcome.Failed, link + " is a link");
 
                 if (m.IsRunning(year)) return R(key, year, Outcome.SkippedRevitOpen, $"Revit {year} is open");
                 if (!Directory.Exists(target) && !Directory.Exists(old) && !File.Exists(manifest) && !OldInstallsLeft(yf, replaces))
@@ -184,8 +202,8 @@ namespace RVTuk.Setup
                     if (busy != null) return R(key, year, Outcome.SkippedInUse, busy);
                 }
 
-                if (Directory.Exists(fresh)) Directory.Delete(fresh, true);
-                if (Directory.Exists(old)) Directory.Delete(old, true);
+                DeleteTree(fresh);
+                DeleteTree(old);
                 if (Directory.Exists(target)) Retry(() => Directory.Move(target, old));
                 if (File.Exists(manifest)) File.Delete(manifest);
                 TryDelete(old);
@@ -204,8 +222,8 @@ namespace RVTuk.Setup
                 string folder = Path.Combine(yf, r.Folder), folderOld = folder + ".old", mf = Path.Combine(yf, r.Manifest);
                 try
                 {
-                    if (Directory.Exists(folderOld)) Directory.Delete(folderOld, true);
-                    if (Directory.Exists(folder)) { Directory.Move(folder, folderOld); removed = true; }
+                    DeleteTree(folderOld);
+                    if (Directory.Exists(folder)) { Retry(() => Directory.Move(folder, folderOld)); removed = true; }
                     if (File.Exists(mf)) { File.Delete(mf); removed = true; }
                     TryDelete(folderOld);
                 }
@@ -227,19 +245,56 @@ namespace RVTuk.Setup
                 if (info == null || !string.Equals(info.Key, name, Ic) || !Catalog.IsPlainName(info.Manifest) || !info.Manifest.EndsWith(".addin", Ic))
                     return null;
                 string mf = Path.Combine(yf, info.Manifest);
-                return File.Exists(mf) && File.ReadAllText(mf).Contains("<VendorId>KnafoKlimor</VendorId>") ? info : null;
+                return IsTrustedFile(Path.Combine(yf, name, "addin.json")) && IsTrustedFile(mf) && File.ReadAllText(mf).Contains("<VendorId>KnafoKlimor</VendorId>") ? info : null;
             }
             catch (Exception) { return null; }
         }
 
+        // Walks by hand: never opens or enters a link (a junction could lead outside the add-in folder).
         private static string Probe(string dir)
         {
-            foreach (var f in Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
+            foreach (var e in new DirectoryInfo(dir).EnumerateFileSystemInfos())
             {
-                try { new FileStream(f, FileMode.Open, FileAccess.ReadWrite, FileShare.None).Dispose(); }
-                catch (Exception) { return $"{Path.GetFileName(f)} is in use or cannot be written"; }
+                if ((e.Attributes & FileAttributes.ReparsePoint) != 0) continue;
+                if (e is DirectoryInfo)
+                {
+                    string busy = Probe(e.FullName);
+                    if (busy != null) return busy;
+                    continue;
+                }
+                try
+                {
+                    if ((e.Attributes & FileAttributes.ReadOnly) != 0) e.Attributes &= ~FileAttributes.ReadOnly; // the folder is about to be replaced
+                    new FileStream(e.FullName, FileMode.Open, FileAccess.ReadWrite, FileShare.None).Dispose();
+                }
+                catch (Exception) { return $"{e.Name} is in use or cannot be written"; }
             }
             return null;
+        }
+
+        // The name of the first path that exists and is a link (junction, symbolic link), else null.
+        private static string Link(params string[] paths)
+        {
+            foreach (var p in paths)
+            {
+                FileAttributes attr;
+                try { attr = File.GetAttributes(p); } catch (Exception) { continue; }
+                if ((attr & FileAttributes.ReparsePoint) != 0) return Path.GetFileName(p);
+            }
+            return null;
+        }
+
+        // Deletes a file or a folder tree, read-only entries included; never enters a link (only the link is deleted).
+        private static void DeleteTree(string path)
+        {
+            if (File.Exists(path)) { File.SetAttributes(path, FileAttributes.Normal); File.Delete(path); return; }
+            if (!Directory.Exists(path)) return;
+            foreach (var e in new DirectoryInfo(path).EnumerateFileSystemInfos())
+            {
+                if ((e.Attributes & FileAttributes.ReadOnly) != 0) e.Attributes &= ~FileAttributes.ReadOnly;
+                if ((e.Attributes & FileAttributes.ReparsePoint) == 0 && e is DirectoryInfo) DeleteTree(e.FullName);
+            }
+            Directory.Delete(path, true);
         }
 
         private static void Copy(string from, string to)
@@ -274,11 +329,7 @@ namespace RVTuk.Setup
 
         private static void TryDelete(string path)
         {
-            try
-            {
-                if (Directory.Exists(path)) Directory.Delete(path, true);
-                else if (File.Exists(path)) File.Delete(path);
-            }
+            try { DeleteTree(path); }
             catch (Exception) { }
         }
 

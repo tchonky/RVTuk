@@ -112,9 +112,57 @@ namespace RVTuk.Setup.Tests
         {
             var a = Cat("A");
             Installed("A", "2024");
+            File.WriteAllText(M("2024", "A.addin"), "<RevitAddIns><AddIn><VendorId>KnafoKlimor</VendorId></AddIn></RevitAddIns>");
             Assert.Equal(Outcome.Updated, Assert.Single(Install(Of(a))).Outcome);
             Assert.False(File.Exists(M("2024", "A", "stale.dll")));
             Assert.Equal(Engine.ManifestXml(a), File.ReadAllText(M("2024", "A.addin")));
+            NoLeftovers();
+        }
+
+        [Fact]
+        public void Install_UntrustedInstalledInfo_IsReplaced()
+        {
+            var a = Cat("A");
+            Installed("A", "2024", "1.2.0");
+            string json = M("2024", "A", "addin.json");
+            var trusted = Engine.IsTrustedFile;
+            Engine.IsTrustedFile = p => !string.Equals(p, json, StringComparison.OrdinalIgnoreCase) && trusted(p);
+            try { Assert.Equal(Outcome.Updated, Assert.Single(Install(Of(a))).Outcome); }
+            finally { Engine.IsTrustedFile = trusted; }
+        }
+
+        [Fact]
+        public void Install_JunctionInsideTheFolder_IsNotFollowed()
+        {
+            var a = Cat("A");
+            Installed("A", "2024");
+            string outside = Path.Combine(_dir, "outside");
+            Directory.CreateDirectory(outside);
+            File.WriteAllText(Path.Combine(outside, "keep.dll"), "x");
+            var mk = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe",
+                $"/c mklink /J \"{M("2024", "A", "link")}\" \"{outside}\"") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true });
+            mk.WaitForExit();
+            if (mk.ExitCode != 0 || !Directory.Exists(M("2024", "A", "link")))
+            {
+                Console.WriteLine("Skip: a junction could not be created on this machine.");
+                return;
+            }
+            // Held open: a probe that followed the junction would answer SkippedInUse.
+            using (new FileStream(Path.Combine(outside, "keep.dll"), FileMode.Open, FileAccess.Read, FileShare.Read))
+                Assert.Equal(Outcome.Updated, Assert.Single(Install(Of(a))).Outcome);
+            Assert.True(File.Exists(Path.Combine(outside, "keep.dll")));
+        }
+
+        [Fact]
+        public void Install_WithAReadOnlyLeftover_Cleans()
+        {
+            var a = Cat("A");
+            Installed("A", "2024");
+            Directory.CreateDirectory(M("2024", "A.old"));
+            File.WriteAllText(M("2024", "A.old", "x.dll"), "x");
+            File.SetAttributes(M("2024", "A.old", "x.dll"), FileAttributes.ReadOnly);
+            File.SetAttributes(M("2024", "A", "stale.dll"), FileAttributes.ReadOnly);
+            Assert.Equal(Outcome.Updated, Assert.Single(Install(Of(a))).Outcome);
             NoLeftovers();
         }
 
@@ -245,6 +293,8 @@ namespace RVTuk.Setup.Tests
             var results = Install(Of(a));
             Assert.Equal(Outcome.Unchanged, results.Single(r => r.Year == "2024").Outcome);
             Assert.Equal(Outcome.Updated, results.Single(r => r.Year == "2026").Outcome);
+            Assert.True(File.Exists(M("2024", "A", "stale.dll")));
+            Assert.False(File.Exists(M("2026", "A", "stale.dll")));
         }
 
         [Fact]
@@ -416,12 +466,67 @@ namespace RVTuk.Setup.Tests
             Directory.CreateDirectory(M("2024", "Foreign2"));
             File.WriteAllText(M("2024", "Foreign2", "addin.json"), "{\"key\":\"Foreign2\",\"manifest\":\"Foreign2.addin\"}");
             File.WriteAllText(M("2024", "Foreign2.addin"), "<RevitAddIns><AddIn><VendorId>Other</VendorId></AddIn></RevitAddIns>");
+            Directory.CreateDirectory(M("2024", "Foreign3"));   // its key is not its folder's name
+            File.WriteAllText(M("2024", "Foreign3", "addin.json"), "{\"key\":\"A\",\"manifest\":\"A.addin\"}");
+            File.WriteAllText(M("2024", "A.addin"), Engine.ManifestXml(a));
+            Directory.CreateDirectory(M("2024", "Foreign4"));   // its manifest is not a plain name
+            File.WriteAllText(M("2024", "Foreign4", "addin.json"), "{\"key\":\"Foreign4\",\"manifest\":\"..\\\\X.addin\"}");
+            File.WriteAllText(M("X.addin"), Engine.ManifestXml(a));
             var results = Remove(Of(a));
             Assert.True(Directory.Exists(M("2024", "Foreign")));
             Assert.True(Directory.Exists(M("2024", "Foreign2")));
             Assert.True(File.Exists(M("2024", "Foreign2.addin")));
+            Assert.True(File.Exists(M("2024", "Foreign3", "addin.json")));
+            Assert.True(File.Exists(M("2024", "Foreign4", "addin.json")));
+            Assert.True(File.Exists(M("X.addin")));
             Assert.DoesNotContain(results, r => r.AddIn.StartsWith("Foreign"));
             Assert.Empty(Directory.GetDirectories(M("2024"), "*.old"));
+        }
+
+        [Fact]
+        public void Remove_All_LeavesAFolderWithAnUntrustedAddInJson()
+        {
+            var a = Cat("A");
+            Installed("Gone", "2024");
+            string gone = M("2024", "Gone") + Path.DirectorySeparatorChar;
+            var trusted = Engine.IsTrustedFile;
+            Engine.IsTrustedFile = p => !p.StartsWith(gone, StringComparison.OrdinalIgnoreCase) && trusted(p);
+            List<Result> results;
+            try { results = Remove(Of(a)); }
+            finally { Engine.IsTrustedFile = trusted; }
+            Assert.True(File.Exists(M("2024", "Gone", "Host.dll")));
+            Assert.True(File.Exists(M("2024", "Gone.addin")));
+            Assert.DoesNotContain(results, r => r.AddIn == "Gone");
+        }
+
+        [Fact]
+        public void Remove_AlsoRemovesTheOldInstall()
+        {
+            var a = Cat("A");
+            Installed("A", "2024");
+            OldInstall(a);
+            Assert.Equal(Outcome.Removed, Assert.Single(Remove(Of(a))).Outcome);
+            Assert.False(Directory.Exists(M("2024", "A")));
+            Assert.False(File.Exists(M("2024", "A.addin")));
+            Assert.False(Directory.Exists(M("2024", "Old")));
+            Assert.False(Directory.Exists(M("2024", "Old.old")));
+            Assert.False(File.Exists(M("2024", "Old.addin")));
+        }
+
+        [Fact]
+        public void Remove_OldInstallInUse_ChangesNothing()
+        {
+            var a = Cat("A");
+            Installed("A", "2024");
+            OldInstall(a);
+            List<Result> results;
+            using (new FileStream(M("2024", "Old", "x.dll"), FileMode.Open, FileAccess.Read, FileShare.Read))
+                results = Remove(Of(a));
+            Assert.Equal(Outcome.SkippedInUse, Assert.Single(results).Outcome);
+            foreach (var f in new[] { "Host.dll", "Lib.dll", "stale.dll" }) Assert.True(File.Exists(M("2024", "A", f)), f);
+            Assert.True(File.Exists(M("2024", "A.addin")));
+            Assert.True(File.Exists(M("2024", "Old", "x.dll")));
+            Assert.True(File.Exists(M("2024", "Old.addin")));
         }
 
         [Fact]

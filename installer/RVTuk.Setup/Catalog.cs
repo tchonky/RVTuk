@@ -54,7 +54,7 @@ namespace RVTuk.Setup
                     Manifest(r.Manifest);
                 }
                 foreach (var y in a.Years)
-                    if (y == null || !Regex.IsMatch(y, @"^[0-9]{4}$")) Fail($"{a.Key}: year '{y}' is not four digits");
+                    if (y == null || !Regex.IsMatch(y, @"\A[0-9]{4}\z")) Fail($"{a.Key}: year '{y}' is not four digits");
                 if (!keys.Add(a.Key)) Fail($"key '{a.Key}' occurs twice");
                 if (a.Key.EndsWith(".new", StringComparison.OrdinalIgnoreCase) || a.Key.EndsWith(".old", StringComparison.OrdinalIgnoreCase))
                     Fail($"key '{a.Key}' ends in .new or .old");

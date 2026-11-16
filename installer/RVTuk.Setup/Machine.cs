@@ -25,15 +25,19 @@ namespace RVTuk.Setup
 
         public bool IsInstalled(string year)
         {
-            using (var hklm = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
-            using (var revit = hklm.OpenSubKey($@"SOFTWARE\Autodesk\Revit\{year}"))
+            try
             {
-                if (revit != null)
-                    foreach (var name in revit.GetSubKeyNames())
-                        using (var sub = revit.OpenSubKey(name))
-                            if (sub?.GetValue("InstallationLocation") is string dir && File.Exists(Path.Combine(dir, "Revit.exe")))
-                                return true;
+                using (var hklm = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
+                using (var revit = hklm.OpenSubKey($@"SOFTWARE\Autodesk\Revit\{year}"))
+                {
+                    if (revit != null)
+                        foreach (var name in revit.GetSubKeyNames())
+                            using (var sub = revit.OpenSubKey(name))
+                                if (sub?.GetValue("InstallationLocation") is string dir && File.Exists(Path.Combine(dir, "Revit.exe")))
+                                    return true;
+                }
             }
+            catch (Exception) { } // a bad registry entry: fall back to the default folder
             return File.Exists($@"C:\Program Files\Autodesk\Revit {year}\Revit.exe");
         }
 
