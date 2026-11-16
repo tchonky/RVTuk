@@ -126,8 +126,8 @@ namespace RVTuk.Revit.TopoTools
             return false;
         }
 
-        /// <summary>Makes <paramref name="centimetres"/> the spacing, shows it tidied in the box,
-        /// and saves it to the config.</summary>
+        /// <summary>Makes <paramref name="centimetres"/> (already rounded) the spacing, shows it in
+        /// the box, and saves it to the config.</summary>
         private static void Adopt(double centimetres)
         {
             _spacingCentimetres = centimetres;
@@ -138,16 +138,26 @@ namespace RVTuk.Revit.TopoTools
             ConfigManager.SaveConfig(config);
         }
 
+        /// <summary>Parses a typed spacing, rounded to what <see cref="Format"/> shows, so the box
+        /// read back by <see cref="SpacingFeet"/> never differs from the stored value.</summary>
         private static bool TryParsePositive(string text, out double value)
         {
             // Either decimal separator: the office types both.
             var normalised = text.Replace(',', '.');
-            return double.TryParse(normalised, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
-                && value > 0 && !double.IsInfinity(value);
+            if (!double.TryParse(normalised, NumberStyles.Float, CultureInfo.InvariantCulture, out value)) return false;
+            value = Round(value);
+            return value > 0 && !double.IsInfinity(value);
         }
 
-        private static double ValidOrDefault(double centimetres) =>
-            centimetres > 0 && !double.IsNaN(centimetres) && !double.IsInfinity(centimetres) ? centimetres : 100;
+        /// <summary>The configured spacing, rounded as the box shows it; 100 when it is not usable.</summary>
+        private static double ValidOrDefault(double centimetres)
+        {
+            centimetres = Round(centimetres);
+            return centimetres > 0 && !double.IsNaN(centimetres) && !double.IsInfinity(centimetres) ? centimetres : 100;
+        }
+
+        /// <summary>Rounds to the two decimals <see cref="Format"/> shows.</summary>
+        private static double Round(double centimetres) => Math.Round(centimetres, 2, MidpointRounding.AwayFromZero);
 
         private static string Format(double centimetres) =>
             centimetres.ToString("0.##", CultureInfo.InvariantCulture);
