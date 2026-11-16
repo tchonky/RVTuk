@@ -5,6 +5,18 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
 
 ## 🐞 Bugs
 
+- [ ] **Thumbnails are expected to fail on a PC without ProSheets or pyRevit.** Found 2026-11-15
+  by reading, not yet seen on such a PC. The shipped `OpenMcdf.dll` 3.1.2 references
+  `System.Memory 4.0.2.0`. Revit 2024 brings 4.0.1.1 with no redirect, and `Deploy.ps1` strips
+  our own copy, so the dev PC only works because add-ins that start earlier bring newer copies
+  (ProSheets 4.0.2.0, pyRevit 4.0.5.0). `ThumbnailExtractor` returns null on every exception, so
+  the failure would be silent: families with no preview. The pin comment in `RVTuk.Core.csproj`
+  ("to match the version preloaded by other Revit addins") no longer holds either: pyRevit
+  preloads OpenMcdf 3.1.4. **Next step:** on the first Revit 2024 PC without those add-ins (the clean-PC
+  test in the add-in split's phase 4) scan a few families and check the thumbnails; if they are
+  missing, choose an OpenMcdf version whose `System.Memory` reference Revit satisfies, or ship
+  the DLL. Evidence: "Phase 1 record", S5 in
+  `docs/toolkit/specs/2026-11-12-addin-split-design.md`.
 - [ ] **Old-format instructions crash the editor.** Found 2026-10-04: instructions stored with
   a bare `Image` in an `InlineUIContainer` (the dev-era format, before images were wrapped in a
   `Border`) make `WireExistingImages` throw from the editor's `Loaded` handler. Current saves

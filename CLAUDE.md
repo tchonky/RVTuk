@@ -141,7 +141,7 @@ it is the `.addin` entry class.
 - net48: `Microsoft.Data.Sqlite`, GAC `System.Drawing`. No `System.Text.Json` (its transitive polyfills clash with Revit's preloaded assemblies — JSON uses `DataContractJsonSerializer`).
 - net8: `Microsoft.Data.Sqlite`, `System.Text.Json`, `System.Drawing.Common`.
 - net10: `Microsoft.Data.Sqlite`, `System.Drawing.Common` 10.x (`System.Text.Json` is in-box).
-- both: `OpenMCDF` pinned to `3.1.2` (matches the version other Revit add-ins preload).
+- both: `OpenMCDF` pinned to `3.1.2` (chosen to match what other Revit add-ins preloaded; that no longer holds — pyRevit now preloads 3.1.4 — see the thumbnail bug in `docs/tools/family-browser/backlog.md`).
 
 **SQLite provider:** all configs use `Microsoft.Data.Sqlite`. `System.Data.SQLite` was dropped because its native win32 VFS **cannot open databases over some UNC shares** (`\\server\share`) — it throws `unable to open database file` even when the file is readable, while `Microsoft.Data.Sqlite`'s bundled `e_sqlite3` opens the same file fine. The repositories alias `SQLiteConnection`/`SQLiteCommand` to the `Microsoft.Data.Sqlite` types. `FamilyBrowser/Database/SqliteNative.EnsureLoaded()` (called by every repository ctor) pre-loads `e_sqlite3.dll` by full path on net48, because Revit resolves native libs relative to `Revit.exe`, not the add-in folder; `Deploy.ps1` copies `e_sqlite3.dll` flat into the add-in folder. Keep SQL portable (e.g. one statement per `ExecuteScalar`).
 
