@@ -108,6 +108,8 @@ public class FrozenIdentifierTests
         1|RoundPositionsWholeCentimetresOnly { get; set; }
         1|ModelKey { get; set; }
         1|string Folder { get; set; }
+        1|<AddInClientId>D71D7480-4A21-474E-A47E-3E8DF8C1BDA5</AddInClientId>
+        1|<AddInClientId>9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC</AddInClientId>
         0|RZ_UsageType
         0|f80b9154-f0e7-4f01-82d0-3ec259872e5c
         0|RZ Usage Key Schedule
@@ -135,13 +137,14 @@ public class FrozenIdentifierTests
         Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
     }
 
-    // Every *.cs and *.csproj below dir, skipping bin, obj, tests, dot-named entries and any
+    // Every *.cs, *.csproj and *.props below dir, skipping bin, obj, tests, dot-named entries and any
     // folder holding a .git entry (a worktree or another copy of the repository).
     private static IEnumerable<string> SourceFiles(string dir) =>
         Directory.EnumerateFiles(dir)
             .Where(f => !Path.GetFileName(f).StartsWith(".")
                      && (f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
-                      || f.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)))
+                      || f.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+                      || f.EndsWith(".props", StringComparison.OrdinalIgnoreCase)))
             .Concat(Directory.EnumerateDirectories(dir)
                 .Where(d =>
                 {

@@ -68,7 +68,9 @@ Build the standalone installer once, then hand out the exe:
 .\Build-Installer.ps1        # produces dist\RVTukSetup.exe
 ```
 
-On the target computer just double-click `RVTukSetup.exe` — it asks for admin rights, detects which Revit versions are installed (2023 gets KKarea; 2024, 2025, 2026 and 2027 get RVTuk), and installs for each of them. Skips any Revit that is currently running; close it and re-run. `RVTukSetup.exe --uninstall` removes the add-ins again. No other software is needed on the target machine.
+On the target computer just double-click `RVTukSetup.exe` — it asks for admin rights, finds which Revit versions are installed (by their `Revit.exe`; 2023 gets KKarea; 2024, 2025, 2026 and 2027 get RVTuk), and installs for each of them. A year is skipped, with nothing in it changed, when its Revit is open or any file of the add-in is in use; the exe then exits 1 — close Revit and re-run. Until releases exist every package is a dev build and always replaces what is installed. No other software is needed on the target machine.
+
+Flags: `--install <names|all>` (the default: all), `--remove <names|all>`, `--uninstall` (= `--remove all`), `--years <y,y>` (these Revit years instead of the detected ones), `--source <dir>` (a payload folder instead of the embedded one), `--target <dir>` (install under another folder for testing, no admin rights), `--quiet`, `--no-pause`.
 
 ## ✨ Family Browser Features
 

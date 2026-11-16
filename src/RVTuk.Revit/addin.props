@@ -1,0 +1,14 @@
+<Project>
+  <!-- What this add-in is. Read by build\Staging.ps1 (not imported by the project). The ClientId is frozen. -->
+  <PropertyGroup>
+    <AddInKey>RVTuk</AddInKey>
+    <AddInName>RVTuk</AddInName>
+    <AddInManifest>RVTuk.addin</AddInManifest>
+    <AddInClientId>D71D7480-4A21-474E-A47E-3E8DF8C1BDA5</AddInClientId>
+    <AddInEntryClass>RVTuk.Revit.Application</AddInEntryClass>
+    <AddInVersion>1.0.0</AddInVersion>
+    <AddInYears>2024;2025;2026;2027</AddInYears>
+    <AddInAssemblies>RVTuk.Revit;RVTuk.UI;RVTuk.Core</AddInAssemblies>
+    <AddInThirdParty>true</AddInThirdParty>
+  </PropertyGroup>
+</Project>
