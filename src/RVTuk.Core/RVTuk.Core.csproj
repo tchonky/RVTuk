@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <AssemblyName>RVTuk.Core</AssemblyName>
@@ -15,7 +15,7 @@
        No System.Text.Json package: in-box on net8 and net10; on net48 its transitive polyfills
        (System.Memory, System.Runtime.CompilerServices.Unsafe, etc.) conflict with Revit's
        preloaded versions, so JSON uses DataContractJsonSerializer there. The native
-       e_sqlite3.dll and any polyfill DLLs are handled by Deploy.ps1 (copied / stripped). -->
+       e_sqlite3.dll and any polyfill DLLs are handled by Copy-AddInOutput in build\Staging.ps1 (copied / stripped). -->
   <!-- Microsoft.Data.Sqlite pinned to 8.0.29: 8.0.30+ pulls SQLitePCLRaw 2.1.12,
        whose net461 build targets copy runtimes\win-arm\native\e_sqlite3.dll, a file that
        package does not ship, so every net48 build fails with MSB3030. 8.0.29 brings 2.1.6. -->

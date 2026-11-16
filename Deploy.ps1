@@ -57,13 +57,18 @@ if ($LASTEXITCODE -ne 0) { Write-Host "  Setup exe build failed." -ForegroundCol
 if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
 $yearArgs = if ($Years) { @('--years', ($Years -join ',')) } else { @() }
 
+$buildWarnings = @()
 if ($Clean) {
-    New-Staging -StagingDir $staging -CatalogOnly -AddIn $AddIn -Years $Years | Out-Null
+    # The full catalog: the engine also removes an add-in of ours that only exists on disk.
+    New-Staging -StagingDir $staging -CatalogOnly -Years $Years | Out-Null
     $keys = if ($AddIn) { $AddIn -join ',' } else { 'all' }
     & $exe --remove $keys @yearArgs --source $staging --no-pause
 } else {
-    $staged = @(New-Staging -StagingDir $staging -Build -AddIn $AddIn -Years $Years)
+    Write-Host "  Building and staging ..."
+    $staged = @(New-Staging -StagingDir $staging -Build -AddIn $AddIn -Years $Years -WarningVariable buildWarnings)
     if ($staged.Count -eq 0) { Write-Host "  Nothing staged." -ForegroundColor Red; exit 1 }
     & $exe --install (($staged.Key | Select-Object -Unique) -join ',') @yearArgs --source $staging --no-pause
 }
-exit $LASTEXITCODE
+$code = $LASTEXITCODE
+if ($buildWarnings) { Write-Host "  Some builds failed and were not deployed - see the warnings above." -ForegroundColor Red; exit 1 }
+exit $code

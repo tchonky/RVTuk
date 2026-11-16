@@ -6,13 +6,13 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $Solution = Get-AbsolutePath $(if ($Solution) { $Solution } else { "$root\RVTuk.sln" })
 $temp = $null
-if ($StagingDir) { $StagingDir = Get-AbsolutePath $StagingDir }
-else {
-    $temp = $StagingDir = Join-Path $env:TEMP "rvtuk-staging-check-$([guid]::NewGuid().ToString('N'))"
-    New-Staging -StagingDir $StagingDir -Build -Strict | Out-Null
-}
-
 try {
+    if ($StagingDir) { $StagingDir = Get-AbsolutePath $StagingDir }
+    else {
+        $temp = $StagingDir = Join-Path $env:TEMP "rvtuk-staging-check-$([guid]::NewGuid().ToString('N'))"
+        New-Staging -StagingDir $StagingDir -Build -Strict | Out-Null
+    }
+
     $fails = [Collections.Generic.List[string]]::new()
     $addIns = @(Get-AddIns -Root $root)
     $own = @($addIns | ForEach-Object { $_.Assemblies } | ForEach-Object { "$_.dll" })
@@ -83,6 +83,15 @@ try {
                     if ($j.$f -ne $e.$f) { $fails.Add("FAIL $tag`: addin.json $f is '$($j.$f)', catalog says '$($e.$f)'") }
                 }
             } catch { $fails.Add("FAIL $tag`: addin.json does not parse") }
+        }
+    }
+
+    if ($folders -eq 0) { $fails.Add("FAIL nothing was staged") }
+    if ($temp) {   # staged here, so every add-in year must be in it
+        foreach ($a in $addIns) {
+            foreach ($y in $a.Years) {
+                if (-not ($catalog.addIns | Where-Object { $_.key -eq $a.Key -and @($_.years) -contains $y })) { $fails.Add("FAIL $($a.Key)\$y`: not staged") }
+            }
         }
     }
 

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- KKarea: standalone host for the Area Calc (Rishui Zamin) tool on Revit 2023 (net48),
        the one year RVTuk does not ship for; 2024-2027 get the full RVTuk add-in. It is built
@@ -16,7 +16,7 @@
 
   <!-- .NET (Core) libraries don't copy NuGet deps to bin by default. Revit.exe loads the
        add-in, so it must carry its own dependency closure — including
-       runtimes\win-x64\native\e_sqlite3.dll — for Deploy.ps1 to pick up. net48 already does. -->
+       runtimes\win-x64\native\e_sqlite3.dll — for Copy-AddInOutput (build\Staging.ps1) to pick up. net48 already does. -->
   <PropertyGroup Condition="'$(TargetFramework)'!='net48'">
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>

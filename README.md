@@ -32,11 +32,12 @@ RVTuk/
 │   ├── RVTuk.Core.Tests/    # xunit suite for Core, mirrors the per-tool folders
 │   └── RVTuk.UI.Tests/      # WPF tests without Revit
 ├── installer/
-│   └── RVTuk.Setup/         # Standalone installer exe (built by Build-Installer.ps1)
+│   ├── RVTuk.Setup/         # Standalone installer exe (built by Build-Installer.ps1)
+│   └── RVTuk.Setup.Tests/   # xunit tests for the installer engine and command line
 ├── docs/
 │   ├── tools/<tool>/        # Per-tool README, backlog, specs, plans
 │   └── toolkit/             # Toolkit-wide specs and plans
-├── build/                         # Test-All.ps1
+├── build/                         # Test-All.ps1, Staging.ps1, Test-Staging.ps1
 ├── Deploy.ps1                     # Build + deploy to Revit add-ins directory (dev machine)
 ├── Build-Installer.ps1            # Build dist\RVTukSetup.exe for other computers
 └── CLAUDE.md                      # AI assistant instructions

@@ -1,5 +1,5 @@
 # Staging: turns the add-ins' build outputs into a setup payload (catalog.json + <Key>\<year>\).
-# Dot-source it; runs in Windows PowerShell 5.1 and PowerShell 7. Used by Build-Installer.ps1.
+# Dot-source it; runs in Windows PowerShell 5.1 and PowerShell 7. Used by Build-Installer.ps1, Deploy.ps1 and build\Test-Staging.ps1.
 
 function Get-AbsolutePath([string]$Path) { $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path) }
 
@@ -14,13 +14,16 @@ function Get-AddIns([string]$Root = (Split-Path $PSScriptRoot -Parent)) {
     Get-ChildItem $Root -Recurse -File -Filter addin.props | Where-Object { Test-SourcePath $Root $_.FullName } | ForEach-Object {
         $p = ([xml][IO.File]::ReadAllText($_.FullName)).Project.PropertyGroup
         $dir = $_.DirectoryName
+        $years = [string[]]($p.AddInYears -split ';')
+        if (-not $years -or @($years | Where-Object { $_ -notmatch '\A\d{4}\z' }).Count) { throw "$dir`: AddInYears '$($p.AddInYears)' is not a ;-list of four-digit years" }
+        if ($p.AddInKey -notmatch '\A[A-Za-z0-9._-]+\z') { throw "$dir`: AddInKey '$($p.AddInKey)' is not a plain name" }
         $assemblies = [string[]]($p.AddInAssemblies -split ';')
         $project = @(Get-ChildItem $dir -Recurse -File -Filter "$($assemblies[0]).csproj" | Where-Object { Test-SourcePath $dir $_.FullName })
         if ($project.Count -ne 1) { throw "$dir`: expected one $($assemblies[0]).csproj, found $($project.Count)" }
         [pscustomobject]@{
             Key = $p.AddInKey; Name = $p.AddInName; Manifest = $p.AddInManifest; ClientId = $p.AddInClientId
             EntryClass = $p.AddInEntryClass; Version = $p.AddInVersion
-            Years = [string[]]($p.AddInYears -split ';'); Assemblies = $assemblies
+            Years = $years; Assemblies = $assemblies
             ThirdParty = ($p.AddInThirdParty -eq 'true'); Dir = $dir; Project = $project[0].FullName
         }
     }
