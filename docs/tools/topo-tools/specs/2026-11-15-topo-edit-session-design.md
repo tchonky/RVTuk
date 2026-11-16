@@ -87,7 +87,22 @@ or drive anything.
   reports one) is proven only on toposolids. **First step of the plan: check it in Revit 2024**; if a
   floor wants an offset from its top, floors get their own Z conversion.
 
-## Behaviour in detail
+## Probe results (Revit 2024, 2026-11-16)
+
+- **Toposolid, `AddPoints`:** Z is absolute — asked 1000.0 mm, got 1000.0 mm.
+- **Toposolid, edge point:** `DrawPoint` at the surface Z works (vertex created at 116.1 mm). But
+  `ModifySubElement(vertex, +500 mm)` left it at **500.0 mm**, not 616.1: the offset is measured from
+  the element's unshaped top (0 here), not from the vertex's current height. So an edge point is raised
+  with offset = target Z − that reference; the reference is read back after the first raise
+  (reference = resulting Z − offset used) and corrected once if needed, so nothing assumes where it is.
+- **Contextual tab:** there is no "Modify | Toposolid" tab of its own. It is the single shared
+  `Autodesk.Windows` tab **Id `Modify`**, contextual, whose title and panels Revit swaps for each
+  selection (toposolid-only panels such as `…_ToposolidShaping` appear in it). So the RVTuk panel is
+  added to tab `Modify` once and **shown only while the selection is exactly one toposolid**
+  (`SelectionChanged`) — never by matching the title, which is localised.
+- **Floors:** pending (flat floor, floor with slope arrow).
+
+
 
 **Starting a session.**
 - The selection must be exactly one `Toposolid` or `Floor`, and the active view a plan view.
