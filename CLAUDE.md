@@ -95,6 +95,8 @@ Its fixtures are sanitized (`FamilyBrowser\Fixtures\sanitize_instructions.py`): 
 
 The setup exe's tests (`installer\RVTuk.Setup.Tests`, net48, outside `RVTuk.sln`) run at the end of `Test-All.ps1`; alone: `dotnet test installer\RVTuk.Setup.Tests\RVTuk.Setup.Tests.csproj -c Release`.
 
+`.\build\Test-Staging.ps1` (PowerShell 7) stages all five years and checks every add-in folder: the exact file set, the entry class, the Revit API year, the framework, the theme, addin.json, and that RVTuk.sln builds each add-in for the years its addin.props names. Run it after any change to a project file, to an addin.props or to the staging function.
+
 ## Deployment
 
 `Deploy.ps1` (must run as Administrator) builds/copies the right binary set per Revit version, strips the net48 BCL polyfill DLLs Revit already preloads, and generates the `.addin` manifest XML:
