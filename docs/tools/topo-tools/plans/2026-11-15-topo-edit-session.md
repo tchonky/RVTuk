@@ -233,10 +233,27 @@ Three API facts are unverified and change Tasks 6–7. Build a throwaway command
 
 ---
 
+### Task 9b: Revit — Topo Tools on "Modify | Toposolid" (amended 2026-11-16)
+
+**Files:**
+- Create: `src/RVTuk.Revit/TopoTools/ContextualTopoButton.cs`
+- Modify: `src/RVTuk.Revit/Application.cs` (install it after the ribbon is built), `src/RVTuk.Revit/RVTuk.Revit.csproj` (compile-only AdWindows reference, as added by the Task 1 probe)
+
+**Interfaces:**
+- `public static class ContextualTopoButton { static void Install(UIControlledApplication app); }` — never throws.
+- Behaviour: the target tab is the contextual tab whose id the Task 1 probe recorded in the spec for "Modify | Toposolid". Revit creates contextual tabs lazily, so install on `UIControlledApplication.SelectionChanged` (Revit 2023+ API on `UIApplication`; subscribe via the `ControlledApplication`/`UIControlledApplication` equivalent available in 2024) or `ComponentManager.UIElementActivated` — whichever the probe shows works — and add an `Autodesk.Windows.RibbonPanel` titled "RVTuk" holding one large `RibbonButton` "Topo
+Tools" (same icon) only if the tab exists and does not already have it. The button's `CommandHandler` posts the existing RVTuk-panel command: `uiApp.PostCommand(RevitCommandId.LookupCommandId("CustomCtrl_%CustomCtrl_%Add-Ins%RVTuk%TopoTools"))` (pattern `CustomCtrl_%CustomCtrl_%{tab}%{panel}%{button name}`; after the add-in split the tab becomes `RVTuk` and the panel Topo's own — build the string from constants shared with the ribbon code, and if `LookupCommandId` returns null, log it and do not add the button). Every step in try/catch; a failure writes one line to the existing crash/diagnostic log and stops trying for the session.
+
+- [ ] **Step 1:** Implement; build `-c Release2024` and `-c Release2025` → succeed; the build output contains no `AdWindows.dll`.
+- [ ] **Step 2:** Commit `feat(topo-tools): Topo Tools on the Modify | Toposolid tab too`.
+- [ ] Checklist item for Task 10: select a toposolid → "Modify | Toposolid" shows an RVTuk panel with Topo Tools; pressing it starts the session exactly as the RVTuk-panel button does; select a floor → no extra button.
+
+---
+
 ### Task 10: Docs, and the in-Revit pass
 
 **Files:**
-- Modify: `docs/tools/topo-tools/README.md` (rewrite the workflow sections; replace the pane-era verification with the checklist below; Floor ⇄ Topo button), `docs/tools/topo-tools/backlog.md` (drop pane-only items: selection round trip, row focus race, status-line vanishing; keep averaging), `CLAUDE.md` (Topo Tools bullet: panel + texts, no pane; converter is the Floor ⇄ Topo button), `docs/toolkit/specs/2026-11-12-addin-split-design.md` (frozen lists: remove the Topo DockablePaneId and `RVTukTopoLineElevation`; add `RVTukTopoHeightTextLink` and the updater GUID; add the `Topo Edit` panel and button names `FloorTopoConvert`, `TopoDrawLines`, `TopoHeightLabels`, `TopoUpdate`, `TopoAccept`, `TopoCancel`, `TopoSpacing`).
+- Modify: `docs/tools/topo-tools/README.md` (rewrite the workflow sections; replace the pane-era verification with the checklist below; Floor ⇄ Topo button), `docs/tools/topo-tools/backlog.md` (drop pane-only items: selection round trip, row focus race, status-line vanishing; keep averaging), `CLAUDE.md` (Topo Tools bullet: panel + texts, no pane; converter is the Floor ⇄ Topo button; the "Don't retry" note on contextual tabs is amended: one fail-safe `Autodesk.Windows` button on Modify | Toposolid, decided 2026-11-16, the RVTuk-panel button stays), `docs/toolkit/specs/2026-11-12-addin-split-design.md` (frozen lists: remove the Topo DockablePaneId and `RVTukTopoLineElevation`; add `RVTukTopoHeightTextLink` and the updater GUID; add the `Topo Edit` panel and button names `FloorTopoConvert`, `TopoDrawLines`, `TopoHeightLabels`, `TopoUpdate`, `TopoAccept`, `TopoCancel`, `TopoSpacing`).
 
 - [ ] **Step 1:** Edit the docs. Commit `docs(topo-tools): the edit session replaces the pane`.
 - [ ] **Step 2:** Hand Daniel this checklist for Revit 2024 (deploy `.\Deploy.ps1 2024`), and record results in the README:

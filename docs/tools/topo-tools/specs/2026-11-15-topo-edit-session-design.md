@@ -49,8 +49,17 @@ needed** (yours).
    supported API; it looks like normal Revit and cannot break on an update.
 2. A small floating toolbar window over the drawing — could show the target's name and live
    warnings, but is not the ribbon and gets lost behind Revit.
-3. A real contextual tab ("Modify | …") — only reachable through the unsupported `Autodesk.Windows`
-   ribbon, already declined for Massing & Site. Ruled out.
+3. A real contextual tab ("Modify | …") for the whole session — only reachable through the
+   unsupported `Autodesk.Windows` ribbon. Ruled out for the panel.
+
+**Amended 2026-11-16 (yours):** the **Topo Tools start button also appears on Revit's own "Modify |
+Toposolid" contextual tab** whenever a toposolid is selected — another add-in in the office already
+does this, and it fits "select first, then press". It needs the unsupported `Autodesk.Windows`
+ribbon (AdWindows.dll), which reverses the earlier "don't retry" for this one button, so it is built
+to fail safe: the button **stays on the RVTuk panel too**, and any failure finding or filling the
+contextual tab is caught and logged, never shown — a Revit update that breaks it costs a shortcut,
+not the tool. Floors' contextual tab is not included (not asked for; trivial to add). The Topo Edit
+panel itself stays on our own tab.
 
 For the height text: **one text at each line's middle** (yours), over a Label-Contours-style label
 line, which would leave lines no label line crosses with no visible, editable height. Revit's own
@@ -60,6 +69,8 @@ or drive anything.
 ## API constraints that shape the design
 
 - **No contextual tab, no edit mode** for add-ins → a normal panel toggled visible.
+- **Contextual tabs only through `Autodesk.Windows`** → the extra start button is added there
+  (identified by the tab id the Task 1 probe reports), with the RVTuk-panel button as the fallback.
 - **No API to preset the line style of the Detail Line tool** → Draw Lines posts
   `PostableCommand.DetailLine`, and an **`IUpdater`** active only during a session restyles each
   detail line added in the session's view to `_DP-Topo Line`. An updater, not `DocumentChanged`:
