@@ -149,28 +149,28 @@ public class AreaValidatorTests
     public void Config_MissingOutputFolder_IsError()
     {
         var errs = AreaValidator.CheckConfig(new RishuiZaminConfig { OutputFolder = "" });
-        Assert.Contains(errs, e => e.Contains("output", System.StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(errs, e => e.IndexOf("output", System.StringComparison.OrdinalIgnoreCase) >= 0);
     }
 
     [Fact]
     public void Config_MissingFileBaseName_IsError()
     {
         var errs = AreaValidator.CheckConfig(new RishuiZaminConfig { OutputFolder = "C:\\out", FileBaseName = "" });
-        Assert.Contains(errs, e => e.Contains("file", System.StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(errs, e => e.IndexOf("file", System.StringComparison.OrdinalIgnoreCase) >= 0);
     }
 
     [Fact]
     public void Config_ZeroScale_IsError()
     {
         var errs = AreaValidator.CheckConfig(new RishuiZaminConfig { OutputFolder = "C:\\out", FileBaseName = "x", Scale = 0, BuildingNo = 1 });
-        Assert.Contains(errs, e => e.Contains("scale", System.StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(errs, e => e.IndexOf("scale", System.StringComparison.OrdinalIgnoreCase) >= 0);
     }
 
     [Fact]
     public void Config_BuildingNoBelowOne_IsError()
     {
         var errs = AreaValidator.CheckConfig(new RishuiZaminConfig { OutputFolder = "C:\\out", FileBaseName = "x", Scale = 100, BuildingNo = 0 });
-        Assert.Contains(errs, e => e.Contains("building", System.StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(errs, e => e.IndexOf("building", System.StringComparison.OrdinalIgnoreCase) >= 0);
     }
 
     [Fact]
@@ -199,7 +199,7 @@ public class AreaValidatorTests
         var result = AreaValidator.Validate(areas, config);
 
         Assert.Contains(result.Errors, e => e.Contains("101"));
-        Assert.Contains(result.Errors, e => e.Contains("output", System.StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Errors, e => e.IndexOf("output", System.StringComparison.OrdinalIgnoreCase) >= 0);
     }
 
     [Fact]

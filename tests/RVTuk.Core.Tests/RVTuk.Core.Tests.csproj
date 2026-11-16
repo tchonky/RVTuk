@@ -26,6 +26,15 @@
     <Content Include="RishuiZamin\Fixtures\**\*.dxf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- net48 only: the settings tests compare both JSON serializers, and the transmittal
+       tests read zip files. Test-only: the add-in itself ships no System.Text.Json on net48. -->
+  <ItemGroup Condition="'$(TargetFramework)'=='net48'">
+    <PackageReference Include="System.Text.Json" Version="8.0.*" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
 
 </Project>

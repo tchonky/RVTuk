@@ -319,7 +319,9 @@ public class FamilyIndexerTests : IDisposable
     public void Scan_LongPathFamily_KeepsItsRow()
     {
         var rel = new string('d', 120) + "\\" + new string('f', 150) + ".rfa";
-        var full = WriteRfa(rel);
+        var full = Path.Combine(_root, rel);
+        Directory.CreateDirectory(@"\\?\" + Path.GetDirectoryName(full));
+        File.WriteAllText(@"\\?\" + full, "fake");
         Assert.True(full.Length >= 260);
         using var repo = new IndexRepository(_dbPath);
         repo.UpsertFamilyFileInfo(rel, Path.GetFileName(rel), 4, DateTime.UtcNow);

@@ -88,7 +88,7 @@ On a non-Windows SDK (CI, cloud agents) add `-p:EnableWindowsTargeting=true` —
 dotnet test tests\RVTuk.UI.Tests\RVTuk.UI.Tests.csproj -c Release2024
 dotnet test tests\RVTuk.UI.Tests\RVTuk.UI.Tests.csproj -c Release2025
 ```
-Its fixtures are sanitized (`FamilyBrowser\Fixtures\sanitize_instructions.py`): never commit a real database row. Tests that open a database are net8-only (`#if !NETFRAMEWORK`), because SQLite does not initialise in the net48 test host: opening a connection throws a `FileLoadException` for `System.Memory` inside `SQLitePCL.Batteries_V2.DoDynamic_cdecl`. The cause is not settled yet (copying `e_sqlite3.dll` flat does not help); see "Phase 0 record" in [`docs/toolkit/specs/2026-11-12-addin-split-design.md`](docs/toolkit/specs/2026-11-12-addin-split-design.md).
+Its fixtures are sanitized (`FamilyBrowser\Fixtures\sanitize_instructions.py`): never commit a real database row. Database tests run on every framework: each test project carries an xunit.runner.json that switches shadow copy off, because the shadow folder has no e_sqlite3.dll.
 
 ## Deployment
 
