@@ -189,6 +189,85 @@ namespace RVTuk.Setup.Tests
         }
 
         [Fact]
+        public void DeleteTree_OnAReadOnlyJunction_RemovesOnlyTheLink()
+        {
+            string outside = Path.Combine(_dir, "outside"), file = Path.Combine(outside, "sub", "r.dll"), link = Path.Combine(_dir, "link");
+            Directory.CreateDirectory(Path.Combine(outside, "sub"));
+            File.WriteAllText(file, "x");
+            File.SetAttributes(file, FileAttributes.ReadOnly);
+            try
+            {
+                if (!Junction(link, outside)) return;
+                var outsideAttr = File.GetAttributes(outside);
+                File.SetAttributes(link, File.GetAttributes(link) | FileAttributes.ReadOnly);
+                Assert.True((File.GetAttributes(link) & FileAttributes.ReadOnly) != 0);
+                Assert.Equal(outsideAttr, File.GetAttributes(outside));
+                Engine.DeleteTree(link);
+                Assert.False(Directory.Exists(link));
+                Assert.True(File.Exists(file));
+                Assert.Equal("x", File.ReadAllText(file));
+                Assert.Equal(outsideAttr, File.GetAttributes(outside));
+                Assert.True((File.GetAttributes(file) & FileAttributes.ReadOnly) != 0);
+            }
+            finally
+            {
+                if (Directory.Exists(link)) { File.SetAttributes(link, FileAttributes.Directory); Directory.Delete(link); }
+                if (File.Exists(file)) File.SetAttributes(file, FileAttributes.Normal);
+            }
+        }
+
+        [Fact]
+        public void Install_UntrustedYearFolder_Fails()
+        {
+            var a = Cat("A");
+            string yf = M("2024");
+            var trusted = Engine.IsTrustedFile;
+            Engine.IsTrustedFile = p => !string.Equals(p, yf, StringComparison.OrdinalIgnoreCase) && trusted(p);
+            try
+            {
+                var r = Assert.Single(Install(Of(a)));
+                Assert.Equal(Outcome.Failed, r.Outcome);
+                Assert.Contains("is not owned by an administrator", r.Message);
+                Assert.Empty(Directory.GetFileSystemEntries(yf));
+
+                Installed("A", "2024");
+                r = Assert.Single(Remove(Of(a)));
+                Assert.Equal(Outcome.Failed, r.Outcome);
+                Assert.Contains("is not owned by an administrator", r.Message);
+                Assert.True(File.Exists(M("2024", "A", "Host.dll")));
+                Assert.True(File.Exists(M("2024", "A.addin")));
+            }
+            finally { Engine.IsTrustedFile = trusted; }
+        }
+
+        [Fact]
+        public void IsTrustedFile_AcceptsOwnFolderAndFile()
+        {
+            File.WriteAllText(Path.Combine(_dir, "f.txt"), "x");
+            Assert.True(Engine.IsTrustedFile(_dir));
+            Assert.True(Engine.IsTrustedFile(Path.Combine(_dir, "f.txt")));
+        }
+
+        [Fact]
+        public void Install_FreshFolderNotOurs_FailsWithoutCopying()
+        {
+            var a = Cat("A");
+            Installed("A", "2024");
+            string fresh = M("2024", "A.new");
+            var trusted = Engine.IsTrustedFile;
+            Engine.IsTrustedFile = p => !string.Equals(p, fresh, StringComparison.OrdinalIgnoreCase) && trusted(p);
+            try
+            {
+                var r = Assert.Single(Install(Of(a)));
+                Assert.Equal(Outcome.Failed, r.Outcome);
+                Assert.Contains("A.new is not ours", r.Message);
+                Assert.True(!Directory.Exists(fresh) || Directory.GetFileSystemEntries(fresh).Length == 0);
+                Assert.True(File.Exists(M("2024", "A", "stale.dll")));
+            }
+            finally { Engine.IsTrustedFile = trusted; }
+        }
+
+        [Fact]
         public void Install_OldInstallFolderIsAJunction_FailsAndLeavesItsTarget()
         {
             var a = Cat("A");

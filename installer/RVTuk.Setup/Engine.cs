@@ -103,10 +103,12 @@ namespace RVTuk.Setup
             try
             {
                 yf = m.YearFolder(year);
+                Directory.CreateDirectory(yf);
                 string target = Path.Combine(yf, a.Key), fresh = target + ".new", old = target + ".old";
                 string manifest = Path.Combine(yf, a.Manifest), tmp = manifest + ".tmp";
                 string link = Link(new[] { yf, target, fresh, old, manifest, tmp }.Concat(OldInstallPaths(yf, a.Replaces)).ToArray());
                 if (link != null) return R(a.Key, year, Outcome.Failed, link + " is a link");
+                if (!IsTrustedFile(yf)) return R(a.Key, year, Outcome.Failed, $"{yf} is not owned by an administrator");
 
                 // 1
                 if (m.IsRunning(year)) return R(a.Key, year, Outcome.SkippedRevitOpen, $"Revit {year} is open");
@@ -131,9 +133,11 @@ namespace RVTuk.Setup
                 // 4
                 DeleteTree(fresh);
                 DeleteTree(old);
-                Directory.CreateDirectory(yf);
                 string src = Path.Combine(sourceDir, a.Key, year);
                 if (!Directory.Exists(src)) return R(a.Key, year, Outcome.Failed, $"{a.Key} {year} is not in the payload");
+                Directory.CreateDirectory(fresh);
+                if ((File.GetAttributes(fresh) & FileAttributes.ReparsePoint) != 0 || !IsTrustedFile(fresh))
+                    return R(a.Key, year, Outcome.Failed, $"{a.Key}.new is not ours");
                 Copy(src, fresh);
 
                 // 5 Probe
@@ -153,7 +157,10 @@ namespace RVTuk.Setup
                     if (Directory.Exists(manifest)) DeleteTree(manifest);
                     else if (File.Exists(manifest) && (File.GetAttributes(manifest) & FileAttributes.ReadOnly) != 0)
                         File.SetAttributes(manifest, File.GetAttributes(manifest) & ~FileAttributes.ReadOnly);
-                    File.WriteAllText(tmp, ManifestXml(a), new UTF8Encoding(false));
+                    DeleteTree(tmp);
+                    var bytes = new UTF8Encoding(false).GetBytes(ManifestXml(a));
+                    using (var fs = new FileStream(tmp, FileMode.CreateNew, FileAccess.Write, FileShare.None))   // never follows a link
+                        fs.Write(bytes, 0, bytes.Length);
                     if (File.Exists(manifest)) File.Replace(tmp, manifest, null); else File.Move(tmp, manifest);
                 }
                 catch (Exception e)
@@ -194,6 +201,7 @@ namespace RVTuk.Setup
                 string manifest = Path.Combine(yf, manifestName);
                 string link = Link(new[] { yf, target, fresh, old, manifest, manifest + ".tmp" }.Concat(OldInstallPaths(yf, replaces)).ToArray());
                 if (link != null) return R(key, year, Outcome.Failed, link + " is a link");
+                if (Directory.Exists(yf) && !IsTrustedFile(yf)) return R(key, year, Outcome.Failed, $"{yf} is not owned by an administrator");
 
                 if (m.IsRunning(year)) return R(key, year, Outcome.SkippedRevitOpen, $"Revit {year} is open");
                 if (!Directory.Exists(target) && !Directory.Exists(old) && !File.Exists(manifest) && !OldInstallsLeft(yf, replaces))
@@ -298,8 +306,8 @@ namespace RVTuk.Setup
             try { attr = File.GetAttributes(path); }
             catch (Exception e) when (e is FileNotFoundException || e is DirectoryNotFoundException) { return; }
             bool dir = (attr & FileAttributes.Directory) != 0;
+            if ((attr & FileAttributes.ReadOnly) != 0) File.SetAttributes(path, attr & ~FileAttributes.ReadOnly);   // on a link: the link's own flag
             if ((attr & FileAttributes.ReparsePoint) != 0) { if (dir) Directory.Delete(path); else File.Delete(path); return; }
-            if ((attr & FileAttributes.ReadOnly) != 0) File.SetAttributes(path, attr & ~FileAttributes.ReadOnly);
             if (!dir) { File.Delete(path); return; }
             foreach (var e in new DirectoryInfo(path).EnumerateFileSystemInfos()) DeleteTree(e.FullName);
             Directory.Delete(path);
