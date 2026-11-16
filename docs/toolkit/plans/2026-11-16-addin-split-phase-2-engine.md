@@ -1,5 +1,7 @@
 # Add-in split, phase 2 (Foundation), install-engine half — Implementation Plan
 
+> **Executed 2026-11-16; the code now differs from Task 3's algorithm** (three review fix rounds, see the spec's "Phase 2 record (engine half)"): before step 1 the engine creates the year folder, refuses every path it uses that is a link, and refuses a year folder without a trusted owner (Administrators group, system, current user). Decide (step 3) and "Ours" also require trusted owners of `addin.json` and the manifest. Every folder rename retries, not only step 6. `<key>.new` is checked (no link, trusted owner) before the copy. The probe skips links and clears read-only flags. The manifest's `.tmp` is created new, and a manifest that is a folder or read-only is replaced. Deletes never enter a link. `Engine.cs` is the reference.
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Install, update and remove exist once, in a tested C# engine inside the setup exe; one staging function feeds both `Deploy.ps1` and `Build-Installer.ps1`; a staging check proves each staged folder holds exactly what it should — all on today's two add-ins (RVTuk and KKarea), before any tool moves.
