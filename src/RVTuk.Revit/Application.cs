@@ -131,17 +131,8 @@ namespace RVTuk.Revit
             // so we can diagnose crashes that escape Revit's own error handler.
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             {
-                try
-                {
-                    var logPath = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "RVTuk", "crash.log");
-                    Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
-                    var ex = e.ExceptionObject as Exception;
-                    File.AppendAllText(logPath,
-                        $"\n[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex?.GetType().FullName}: {ex?.Message}\n{ex?.StackTrace}\n");
-                }
-                catch { /* logging must never itself crash */ }
+                var ex = e.ExceptionObject as Exception;
+                LogDiagnostic($"{ex?.GetType().FullName}: {ex?.Message}\n{ex?.StackTrace}");
             };
 
             IndexingHandler = new IndexingExternalEventHandler();
@@ -378,6 +369,10 @@ namespace RVTuk.Revit
                 TaskDialog.Show("RVTuk", $"Failed to create ribbon: {ex.Message}");
             }
 
+            // Topo Tools also on "Modify | Toposolid" (unsupported Autodesk.Windows ribbon).
+            // Never throws; on any failure it logs one line and switches itself off.
+            if (RegisterTopoTools) ContextualTopoButton.Install(application);
+
             return Result.Succeeded;
         }
 
@@ -386,6 +381,27 @@ namespace RVTuk.Revit
             AppDomain.CurrentDomain.AssemblyResolve -= ResolveAddinAssembly;
             return Result.Succeeded;
         }
+
+        /// <summary>Appends one entry to %LOCALAPPDATA%\RVTuk\crash.log. Never throws.</summary>
+        internal static void LogDiagnostic(string message)
+        {
+            try
+            {
+                var logPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "RVTuk", "crash.log");
+                Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+                File.AppendAllText(logPath, $"\n[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}\n");
+            }
+            catch { /* logging must never itself crash */ }
+        }
+
+        /// <summary>Name of the toolkit's ribbon panel (on the Add-Ins tab).</summary>
+        internal const string RibbonPanelName = "RVTuk";
+
+        /// <summary>Internal name of the Topo Tools push button. It is part of the button's
+        /// command id, which the contextual Topo Tools button posts (see ContextualTopoButton).</summary>
+        internal const string TopoToolsButtonName = "TopoTools";
 
         private static Assembly? ResolveAddinAssembly(object? sender, ResolveEventArgs args)
         {
@@ -402,7 +418,7 @@ namespace RVTuk.Revit
         private static void CreateRibbon(UIControlledApplication app)
         {
             string assemblyPath = Assembly.GetExecutingAssembly().Location;
-            RibbonPanel panel = app.CreateRibbonPanel("RVTuk");
+            RibbonPanel panel = app.CreateRibbonPanel(RibbonPanelName);
 
             var browseBtn = new PushButtonData(
                 "BrowseLibrary",
@@ -481,7 +497,7 @@ namespace RVTuk.Revit
                 // Autodesk.Windows ribbon, which Autodesk warns may break at any time; not worth a
                 // silently vanishing button in a firm-wide toolkit, so it sits with its siblings.
                 var topoBtn = new PushButtonData(
-                    "TopoTools",
+                    TopoToolsButtonName,
                     "Topo\nTools",
                     assemblyPath,
                     typeof(TopoToolsPaneCommand).FullName!)
@@ -530,7 +546,7 @@ namespace RVTuk.Revit
             neoPanel.AddItem(neoBtn);
         }
 
-        private static BitmapSource CreateTopoToolsIcon(int size)
+        internal static BitmapSource CreateTopoToolsIcon(int size)
         {
             var dv = new DrawingVisual();
             using (var ctx = dv.RenderOpen())
