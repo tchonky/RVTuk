@@ -124,7 +124,8 @@ public class LibraryCacheTests : IDisposable
         var first = LibraryCache.Refresh(_source, _cacheDir);
         // A half-synced file: the right header, the rest missing.
         var bytes = File.ReadAllBytes(_source);
-        File.WriteAllBytes(_source, bytes[..(bytes.Length / 3)]);
+        Array.Resize(ref bytes, bytes.Length / 3);
+        File.WriteAllBytes(_source, bytes);
         File.SetLastWriteTimeUtc(_source, DateTime.UtcNow.AddMinutes(1));
 
         var r = LibraryCache.Refresh(_source, _cacheDir);
