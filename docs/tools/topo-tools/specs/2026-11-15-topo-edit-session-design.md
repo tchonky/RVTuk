@@ -171,8 +171,9 @@ the part over it"):
 lines to the selected element through the sample → route → apply pipeline. The run is idempotent
 (unchanged lines replace their own points with the same points), so "only what changed" and
 "everything" give the same model; doing everything keeps one code path and cannot miss a moved line.
-The summary goes to Revit's status bar, and to a short TaskDialog only when something was skipped
-(my call: the pane's status line is gone).
+The summary is shown in a TaskDialog after every Update and Accept, with a warning heading only
+when something was skipped (Revit has no supported API to write to its status bar; amended
+2026-11-16 — revisit if it proves noisy).
 
 - **Only the selected element is ever written to.** Its own ledger decides the clean-up: points it
   holds for a line that no longer takes part (deleted, moved off it, or now unreadable) are removed;
