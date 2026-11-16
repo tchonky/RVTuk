@@ -1,20 +1,76 @@
+using System.Linq;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RVTuk.Revit.Shared;
 
 namespace RVTuk.Revit.TopoTools.Commands
 {
     /// <summary>
-    /// TEMPORARY: the Topo Tools button while the edit session is being built. The button stays
-    /// registered under its internal name because the contextual Modify-tab button posts it by
-    /// that id (see <see cref="ContextualTopoButton"/>). Task 9 replaces this body.
+    /// Topo Tools: opens a Topo Edit session on the one selected toposolid or floor in a plan view
+    /// and shows the Topo Edit panel. The button keeps its internal name
+    /// (<see cref="Application.TopoToolsButtonName"/>): the contextual Modify-tab button posts it
+    /// by that id (see <see cref="ContextualTopoButton"/>).
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     public class TopoStartCommand : IExternalCommand
     {
+        private const string Title = "Topo Tools";
+        private const string SelectOne = "Select one toposolid or floor in a plan view, then press Topo Tools.";
+
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            TaskDialog.Show("Topo Tools", "The new Topo Tools is being built.");
+            var open = TopoSession.Current;
+            if (open != null)
+            {
+                var label = TopoSessionCommands.LabelOf(open.Document.GetElement(open.TargetId), open.TargetId);
+                TopoEditPanel.Show();
+                TaskDialog.Show(Title, $"A Topo Edit session is already open on {label}.");
+                return Result.Cancelled;
+            }
+
+            var uiDoc = commandData.Application.ActiveUIDocument;
+            if (uiDoc == null || uiDoc.ActiveView is not ViewPlan view)
+            {
+                TaskDialog.Show(Title, SelectOne);
+                return Result.Cancelled;
+            }
+
+            var doc = uiDoc.Document;
+            var ids = uiDoc.Selection.GetElementIds();
+            var element = ids.Count == 1 ? doc.GetElement(ids.First()) : null;
+            if (element is not (Toposolid or Floor))
+            {
+                TaskDialog.Show(Title, SelectOne);
+                return Result.Cancelled;
+            }
+
+            var elementLabel = TopoSessionCommands.LabelOf(element, element.Id);
+            var refusal = SlabRefusals.Of(doc, element);
+            if (refusal != null)
+            {
+                TaskDialog.Show(Title, $"{elementLabel}: {refusal}.");
+                return Result.Cancelled;
+            }
+
+            if (SlabTarget.From(doc, element) == null)
+            {
+                TaskDialog.Show(Title, $"{elementLabel}: its outline cannot be read.");
+                return Result.Cancelled;
+            }
+
+            // The styles must exist before the session: the updater restyles and labels new lines with them.
+            if (!LineStyleCreator.Exists(doc, TopoLineStyle.LineStyleName) || !HeightTextType.Exists(doc))
+            {
+                using var tx = new Transaction(doc, "Topo Tools — create styles");
+                tx.Start();
+                LineStyleCreator.EnsureExists(doc, TopoLineStyle.LineStyleName);
+                HeightTextType.EnsureExists(doc);
+                tx.Commit();
+            }
+
+            TopoSession.Start(doc, view, element);
+            TopoEditPanel.Show();
             return Result.Succeeded;
         }
     }

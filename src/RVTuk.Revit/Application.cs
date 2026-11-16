@@ -471,9 +471,6 @@ namespace RVTuk.Revit
                 });
             }
 
-            // TEMPORARY: throwaway probe, remove together with TopoProbeCommand.cs
-            panel.AddItem(new PushButtonData("TopoProbe", "Topo\nProbe", assemblyPath, typeof(TopoProbeCommand).FullName!));
-
             if (RegisterRoomFloors)
             {
                 var roomFloorBtn = new PushButtonData(
@@ -489,6 +486,10 @@ namespace RVTuk.Revit
 
                 panel.AddItem(roomFloorBtn);
             }
+
+            // The Topo Edit session's panel: created hidden right after the RVTuk panel (the
+            // ribbon API only appends), shown while a session is open.
+            if (RegisterTopoTools) TopoEditPanel.Create(app, assemblyPath);
 
             if (!RegisterNeoProperties) return;
 

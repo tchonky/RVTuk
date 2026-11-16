@@ -14,6 +14,10 @@ namespace RVTuk.Revit.TopoTools
 
         public static bool IsHeightText(TextNote text) => text.TextNoteType?.Name == Name;
 
+        /// <summary>True when the document already has the type. Reads only.</summary>
+        public static bool Exists(Document doc) =>
+            new FilteredElementCollector(doc).OfClass(typeof(TextNoteType)).Any(type => type.Name == Name);
+
         /// <summary>
         /// Returns the type's id, creating it first if needed. An existing type is left as the user
         /// set it. Caller must already be inside a transaction.
