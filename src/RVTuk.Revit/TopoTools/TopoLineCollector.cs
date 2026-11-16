@@ -5,20 +5,17 @@ using RVTuk.Core.Shared.Geometry;
 
 namespace RVTuk.Revit.TopoTools
 {
-    /// <summary>One topo line as the runner needs it: where it goes, and how high.</summary>
-    public sealed record TopoLineCandidate(
-        long LineId,
-        double? ElevationFeet,
-        IReadOnlyList<XyPoint> Polyline,
-        double LengthFeet);
+    /// <summary>One topo line as the session needs it: its id and where it goes.</summary>
+    public sealed record TopoLineCandidate(long LineId, IReadOnlyList<XyPoint> Polyline);
 
     /// <summary>
     /// Reads the view's topo lines. Detail curves only: a model line given the _DP-Topo Line style
     /// would appear in every plan at once, which is exactly the confusion view-specific lines were
-    /// chosen to avoid, so it is ignored rather than half-supported.
+    /// chosen to avoid, so it is ignored rather than half-supported. Lines inside a group (a placed
+    /// or pasted detail group) are skipped too: the session neither restyles nor labels them.
     ///
     /// The curve's Z is the view's sketch plane and is discarded — which is only sound in a plan
-    /// view, and the runner is what enforces that.
+    /// view, and the session is what enforces that.
     /// </summary>
     public static class TopoLineCollector
     {
@@ -26,10 +23,15 @@ namespace RVTuk.Revit.TopoTools
         {
             var candidates = new List<TopoLineCandidate>();
 
-            var lines = new FilteredElementCollector(doc, view.Id)
+            // Document-wide, filtered by owner view: a view collector returns only what is visible,
+            // and a topo line hidden in the view (Hide in View, a filter, its style turned off) is
+            // still a topo line of the view — missing it would delete its height text.
+            var lines = new FilteredElementCollector(doc)
                 .OfClass(typeof(CurveElement))
                 .Cast<CurveElement>()
+                .Where(curveElement => curveElement.OwnerViewId == view.Id)
                 .Where(curveElement => curveElement.CurveElementType == CurveElementType.DetailCurve)
+                .Where(curveElement => curveElement.GroupId == ElementId.InvalidElementId)
                 .Where(TopoLineStyle.IsTopoLine);
 
             foreach (var line in lines)
@@ -42,11 +44,7 @@ namespace RVTuk.Revit.TopoTools
                     .ToList();
                 if (polyline.Count < 2) continue;
 
-                double? elevation = TopoElevationStore.TryGet(line, out var feet)
-                    ? feet
-                    : (double?)null;
-
-                candidates.Add(new TopoLineCandidate(line.Id.Value, elevation, polyline, curve.Length));
+                candidates.Add(new TopoLineCandidate(line.Id.Value, polyline));
             }
 
             return candidates;

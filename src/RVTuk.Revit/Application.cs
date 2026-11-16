@@ -24,9 +24,8 @@ using RVTuk.Core.Shared.Config;
 using RVTuk.Revit.FamilyBrowser.ExternalEvents;
 using RVTuk.Revit.RishuiZamin.ExternalEvents;
 using RVTuk.Revit.NeoProperties;
-using RVTuk.Core.TopoTools;
 using RVTuk.Revit.TopoTools;
-using RVTuk.Revit.TopoTools.ExternalEvents;
+using RVTuk.Revit.TopoTools.Commands;
 using RVTuk.Revit.RoomFloors.Commands;
 
 namespace RVTuk.Revit
@@ -64,17 +63,6 @@ namespace RVTuk.Revit
         public static CreateDimensionsEventHandler CreateDimensionsHandler { get; private set; } = null!;
         public static ExternalEvent CreateDimensionsEvent { get; private set; } = null!;
         public static RVTuk.UI.AutoDimensions.ViewModels.AutoDimensionsPaneViewModel AutoDimensionsPaneViewModel { get; private set; } = null!;
-        public static TopoDiscoveryEventHandler TopoDiscoveryHandler { get; private set; } = null!;
-        public static ExternalEvent TopoDiscoveryEvent { get; private set; } = null!;
-        public static TopoApplyEventHandler TopoApplyHandler { get; private set; } = null!;
-        public static ExternalEvent TopoApplyEvent { get; private set; } = null!;
-        public static TopoSetElevationEventHandler TopoSetElevationHandler { get; private set; } = null!;
-        public static ExternalEvent TopoSetElevationEvent { get; private set; } = null!;
-        public static TopoSelectLinesEventHandler TopoSelectLinesHandler { get; private set; } = null!;
-        public static ExternalEvent TopoSelectLinesEvent { get; private set; } = null!;
-        public static TopoConvertEventHandler TopoConvertHandler { get; private set; } = null!;
-        public static ExternalEvent TopoConvertEvent { get; private set; } = null!;
-        public static RVTuk.UI.TopoTools.ViewModels.TopoToolsPaneViewModel TopoToolsPaneViewModel { get; private set; } = null!;
 
         /// <summary>
         /// Auto Dimensions ships on the RVTuk panel alongside the Family Browser, Area Calc and
@@ -131,17 +119,8 @@ namespace RVTuk.Revit
             // so we can diagnose crashes that escape Revit's own error handler.
             AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             {
-                try
-                {
-                    var logPath = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "RVTuk", "crash.log");
-                    Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
-                    var ex = e.ExceptionObject as Exception;
-                    File.AppendAllText(logPath,
-                        $"\n[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex?.GetType().FullName}: {ex?.Message}\n{ex?.StackTrace}\n");
-                }
-                catch { /* logging must never itself crash */ }
+                var ex = e.ExceptionObject as Exception;
+                LogDiagnostic($"{ex?.GetType().FullName}: {ex?.Message}\n{ex?.StackTrace}");
             };
 
             IndexingHandler = new IndexingExternalEventHandler();
@@ -213,84 +192,6 @@ namespace RVTuk.Revit
                     AutoDimensionsPaneProvider.PaneId,
                     "Auto Dimensions",
                     new AutoDimensionsPaneProvider(autoDimView));
-            }
-
-            if (RegisterTopoTools)
-            {
-                TopoDiscoveryHandler = new TopoDiscoveryEventHandler();
-                TopoDiscoveryEvent   = ExternalEvent.Create(TopoDiscoveryHandler);
-                TopoApplyHandler     = new TopoApplyEventHandler();
-                TopoApplyEvent       = ExternalEvent.Create(TopoApplyHandler);
-                TopoSetElevationHandler = new TopoSetElevationEventHandler();
-                TopoSetElevationEvent   = ExternalEvent.Create(TopoSetElevationHandler);
-                TopoSelectLinesHandler  = new TopoSelectLinesEventHandler();
-                TopoSelectLinesEvent    = ExternalEvent.Create(TopoSelectLinesHandler);
-                TopoConvertHandler      = new TopoConvertEventHandler();
-                TopoConvertEvent        = ExternalEvent.Create(TopoConvertHandler);
-
-                // The pane (UI project) only ever sees these delegates — no Revit types cross over.
-                // All of them block on WaitForCompletion, so the view model calls them from the pool.
-                Func<double, TopoScope> discoverTopo = spacingMillimetres =>
-                {
-                    TopoDiscoveryHandler.Reset();
-                    TopoDiscoveryHandler.Prepare(spacingMillimetres);
-                    TopoDiscoveryEvent.Raise();
-                    TopoDiscoveryHandler.WaitForCompletion();
-                    return TopoDiscoveryHandler.Result;
-                };
-
-                Func<double, string> applyTopo = spacingMillimetres =>
-                {
-                    TopoApplyHandler.Reset();
-                    TopoApplyHandler.Prepare(spacingMillimetres);
-                    TopoApplyEvent.Raise();
-                    TopoApplyHandler.WaitForCompletion();
-                    return TopoApplyHandler.Summary;
-                };
-
-                Func<IReadOnlyList<long>, string, string> setTopoElevation = (lineIds, text) =>
-                {
-                    TopoSetElevationHandler.Reset();
-                    TopoSetElevationHandler.Prepare(lineIds, text);
-                    TopoSetElevationEvent.Raise();
-                    TopoSetElevationHandler.WaitForCompletion();
-                    return TopoSetElevationHandler.Summary;
-                };
-
-                Action<IReadOnlyList<long>> selectTopoLines = lineIds =>
-                {
-                    TopoSelectLinesHandler.Reset();
-                    TopoSelectLinesHandler.Prepare(lineIds);
-                    TopoSelectLinesEvent.Raise();
-                    TopoSelectLinesHandler.WaitForCompletion();
-                };
-
-                Func<string> convertTopo = () =>
-                {
-                    TopoConvertHandler.Reset();
-                    TopoConvertEvent.Raise();
-                    TopoConvertHandler.WaitForCompletion();
-                    return TopoConvertHandler.Summary;
-                };
-
-                TopoToolsPaneViewModel =
-                    new RVTuk.UI.TopoTools.ViewModels.TopoToolsPaneViewModel(
-                        discoverTopo, applyTopo, setTopoElevation, selectTopoLines, convertTopo);
-
-                // Selecting a topo line in the view highlights its row. Not a nicety: the height
-                // lives in storage rather than Properties, so a row labelled "Line 418732" would
-                // otherwise be unidentifiable.
-                TopoToolsSelectionHandler.ViewModel = TopoToolsPaneViewModel;
-                application.SelectionChanged += TopoToolsSelectionHandler.OnSelectionChanged;
-
-                var topoView = new RVTuk.UI.TopoTools.Views.TopoToolsPaneView
-                {
-                    DataContext = TopoToolsPaneViewModel
-                };
-                application.RegisterDockablePane(
-                    TopoToolsPaneProvider.PaneId,
-                    "Topo Tools",
-                    new TopoToolsPaneProvider(topoView));
             }
 
             if (RegisterRoundPositions)
@@ -378,6 +279,51 @@ namespace RVTuk.Revit
                 TaskDialog.Show("RVTuk", $"Failed to create ribbon: {ex.Message}");
             }
 
+            // Topo Tools also on "Modify | Toposolid" (unsupported Autodesk.Windows ribbon).
+            // Never throws; on any failure it logs one line and switches itself off.
+            if (RegisterTopoTools) ContextualTopoButton.Install(application);
+
+            if (RegisterTopoTools)
+            {
+                // The Topo Edit session's updater: registered optional, disabled until a session.
+                try
+                {
+                    TopoSessionUpdater.Register(application.ActiveAddInId);
+                }
+                catch (Exception ex)
+                {
+                    LogDiagnostic($"TopoSessionUpdater.Register failed: {ex}");
+                }
+
+                // A closing document's last typed topo height goes with it, and so does its session.
+                application.ControlledApplication.DocumentClosing += (_, e) =>
+                {
+                    try
+                    {
+                        if (TopoSession.Current?.IsFor(e.Document) == true) TopoSession.End();
+                        LastTypedHeights.Forget(e.Document);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogDiagnostic($"Topo Tools DocumentClosing failed: {ex}");
+                    }
+                };
+
+                // Switching to another document ends the session; another view of the same one does not.
+                application.ViewActivated += (_, e) =>
+                {
+                    try
+                    {
+                        var session = TopoSession.Current;
+                        if (session != null && !session.IsFor(e.Document)) TopoSession.End();
+                    }
+                    catch (Exception ex)
+                    {
+                        LogDiagnostic($"Topo Tools ViewActivated failed: {ex}");
+                    }
+                };
+            }
+
             return Result.Succeeded;
         }
 
@@ -386,6 +332,27 @@ namespace RVTuk.Revit
             AppDomain.CurrentDomain.AssemblyResolve -= ResolveAddinAssembly;
             return Result.Succeeded;
         }
+
+        /// <summary>Appends one entry to %LOCALAPPDATA%\RVTuk\crash.log. Never throws.</summary>
+        internal static void LogDiagnostic(string message)
+        {
+            try
+            {
+                var logPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "RVTuk", "crash.log");
+                Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+                File.AppendAllText(logPath, $"\n[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}\n");
+            }
+            catch { /* logging must never itself crash */ }
+        }
+
+        /// <summary>Name of the toolkit's ribbon panel (on the Add-Ins tab).</summary>
+        internal const string RibbonPanelName = "RVTuk";
+
+        /// <summary>Internal name of the Topo Tools push button. It is part of the button's
+        /// command id, which the contextual Topo Tools button posts (see ContextualTopoButton).</summary>
+        internal const string TopoToolsButtonName = "TopoTools";
 
         private static Assembly? ResolveAddinAssembly(object? sender, ResolveEventArgs args)
         {
@@ -402,7 +369,7 @@ namespace RVTuk.Revit
         private static void CreateRibbon(UIControlledApplication app)
         {
             string assemblyPath = Assembly.GetExecutingAssembly().Location;
-            RibbonPanel panel = app.CreateRibbonPanel("RVTuk");
+            RibbonPanel panel = app.CreateRibbonPanel(RibbonPanelName);
 
             var browseBtn = new PushButtonData(
                 "BrowseLibrary",
@@ -481,17 +448,27 @@ namespace RVTuk.Revit
                 // Autodesk.Windows ribbon, which Autodesk warns may break at any time; not worth a
                 // silently vanishing button in a firm-wide toolkit, so it sits with its siblings.
                 var topoBtn = new PushButtonData(
-                    "TopoTools",
+                    TopoToolsButtonName,
                     "Topo\nTools",
                     assemblyPath,
-                    typeof(TopoToolsPaneCommand).FullName!)
+                    typeof(TopoStartCommand).FullName!)
                 {
-                    ToolTip = "Open the Topo Tools pane: turn topo lines into points on the toposolid below"
+                    ToolTip = "Select a toposolid or floor, then press: draw topo lines and set their heights on the lines"
                 };
                 topoBtn.LargeImage = CreateTopoToolsIcon(32);
                 topoBtn.Image      = CreateTopoToolsIcon(16);
 
                 panel.AddItem(topoBtn);
+
+                // The converter that used to be the pane's ⇄ button; acts on the selection.
+                panel.AddItem(new PushButtonData(
+                    "FloorTopoConvert",
+                    "Floor ⇄\nTopo",
+                    assemblyPath,
+                    typeof(FloorTopoConvertCommand).FullName!)
+                {
+                    ToolTip = "Convert the selected floors to toposolids and the selected toposolids to floors, keeping their shape"
+                });
             }
 
             if (RegisterRoomFloors)
@@ -510,6 +487,10 @@ namespace RVTuk.Revit
                 panel.AddItem(roomFloorBtn);
             }
 
+            // The Topo Edit session's panel: created hidden right after the RVTuk panel (the
+            // ribbon API only appends), shown while a session is open.
+            if (RegisterTopoTools) TopoEditPanel.Create(app, assemblyPath);
+
             if (!RegisterNeoProperties) return;
 
             RibbonPanel neoPanel = app.CreateRibbonPanel("Neo Properties");
@@ -527,7 +508,7 @@ namespace RVTuk.Revit
             neoPanel.AddItem(neoBtn);
         }
 
-        private static BitmapSource CreateTopoToolsIcon(int size)
+        internal static BitmapSource CreateTopoToolsIcon(int size)
         {
             var dv = new DrawingVisual();
             using (var ctx = dv.RenderOpen())

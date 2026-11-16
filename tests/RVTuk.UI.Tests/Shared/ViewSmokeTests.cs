@@ -31,7 +31,8 @@ namespace RVTuk.UI.Tests.Shared
             var views = typeof(DarkThemeDictionary).Assembly.GetTypes()
                 .Where(t => !t.IsAbstract && (typeof(Window).IsAssignableFrom(t) || typeof(UserControl).IsAssignableFrom(t)))
                 .ToList();
-            Assert.Equal(11, views.Count);
+            // 10 since the Topo Tools pane gave way to the ribbon edit session.
+            Assert.Equal(10, views.Count);
 
             var folder = Path.Combine(Path.GetTempPath(), "rvtuk_smoke_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(folder);

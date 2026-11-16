@@ -12,8 +12,8 @@ namespace RVTuk.Core.Tests.Shared;
 public class FrozenIdentifierTests
 {
     // count|snippet. A row changes only on purpose: "AreaCalc" becomes 1 in phase 3's Area Calc
-    // step, which deletes src\KKarea.Revit; the last three rows are retired names that must
-    // never come back.
+    // step, which deletes src\KKarea.Revit; the 0 rows at the end are retired names that must
+    // never come back (the last three went with the Topo Tools pane, replaced by the edit session).
     private const string Table = """
         1|new Guid("7b3c1d92-4e58-4a0f-9c21-6d5f8e3a17b4")
         1|SchemaName = "RVTukAutoDimensionTrackingByView"
@@ -26,10 +26,11 @@ public class FrozenIdentifierTests
         1|AddSimpleField(CategoryMaskField, typeof(int))
         1|AddSimpleField(ViewIdsField, typeof(string))
         1|AddSimpleField(DimensionTypeIdField, typeof(string))
-        1|new Guid("6d21f8b4-0c93-4e57-a8d6-b45f70e29c18")
-        1|SchemaName = "RVTukTopoLineElevation"
-        1|FieldName = "SharedElevation"
-        1|AddSimpleField(FieldName, typeof(double)).SetSpec(SpecTypeId.Length)
+        1|new Guid("ebcc7eef-5290-473c-bc7a-79e14b69cea0")
+        1|SchemaName = "RVTukTopoHeightTextLink"
+        1|FieldName = "LineId"
+        1|AddSimpleField(FieldName, typeof(long))
+        1|new Guid("0aa14034-8c77-48a4-b5d6-dca41ed6da08")
         1|new Guid("3a6c50f1-8b47-4d2e-95c3-1f8a4b7e0d62")
         1|SchemaName = "RVTukTopoToolsPointLedger"
         1|FieldName = "PointsByLineId"
@@ -45,7 +46,6 @@ public class FrozenIdentifierTests
         6|builder.SetWriteAccessLevel(AccessLevel.Public);
         1|OurVendorId = "KnafoKlimor"
         1|new DockablePaneId(new Guid("e5d47b31-2c8a-4f16-b0d9-73a5e91c46f2"))
-        1|new DockablePaneId(new Guid("a17c46e9-5b83-4d20-8f6a-9c4e2b70d135"))
         1|new DockablePaneId(new Guid("88a9c4fa-9c6a-4b02-b169-701be8358090"))
         1|new DockablePaneId(new Guid("b7a1c94e-3f52-4d08-9c6b-1e84a5f2d370"))
         1|UsageTypeParam = "RZ_USAGE_TYPE"
@@ -78,6 +78,15 @@ public class FrozenIdentifierTests
         1|"TopoTools"
         1|"RoomFloors"
         1|"NeoProperties"
+        1|"FloorTopoConvert"
+        1|"TopoDrawLines"
+        1|"TopoHeightLabels"
+        1|"TopoUpdate"
+        1|"TopoAccept"
+        1|"TopoCancel"
+        1|"TopoSpacing"
+        1|PanelName = "Topo Edit"
+        1|Name = "_DP-Topo Height"
         3|"RVTuk.db"
         1|DbFolderName = ".DB"
         1|LegacyDbFolderName = ".Setup"
@@ -113,6 +122,9 @@ public class FrozenIdentifierTests
         0|RZ_UsageType
         0|f80b9154-f0e7-4f01-82d0-3ec259872e5c
         0|RZ Usage Key Schedule
+        0|6d21f8b4-0c93-4e57-a8d6-b45f70e29c18
+        0|RVTukTopoLineElevation
+        0|a17c46e9-5b83-4d20-8f6a-9c4e2b70d135
         """;
 
     [Fact]

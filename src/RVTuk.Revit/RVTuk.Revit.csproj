@@ -30,6 +30,10 @@
                       Version="$(RevitYear).*"
                       IncludeAssets="compile;build;native;contentfiles;analyzers;buildtransitive"
                       ExcludeAssets="runtime" />
+    <PackageReference Include="Nice3point.Revit.Api.AdWindows"
+                      Version="$(RevitYear).*"
+                      IncludeAssets="compile;build;native;contentfiles;analyzers;buildtransitive"
+                      ExcludeAssets="runtime" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\RVTuk.Core\RVTuk.Core.csproj" />
