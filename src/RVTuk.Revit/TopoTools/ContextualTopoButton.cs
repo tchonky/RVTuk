@@ -93,15 +93,21 @@ namespace RVTuk.Revit.TopoTools
             if (_disabled) return;
             try
             {
-                // Nothing to hide before the panel exists.
-                if (!_wanted && _panel == null) return;
+                // Hiding needs no tab: the panel object is enough, whether or not the tab is in
+                // the ribbon right now (otherwise a stale panel could show on the next element's
+                // Modify tab).
+                if (!_wanted)
+                {
+                    if (_panel != null) _panel.IsVisible = false;
+                    return;
+                }
 
                 var tab = FindModifyTab();
                 if (tab == null)
                 {
                     // Revit may build the contextual tab after raising SelectionChanged: look
                     // again once Revit is idle.
-                    if (_wanted) RetryWhenIdle();
+                    RetryWhenIdle();
                     return;
                 }
 
@@ -111,10 +117,10 @@ namespace RVTuk.Revit.TopoTools
                     if (_panel == null) return; // disabled inside
                 }
 
-                if (_wanted && !tab.Panels.Contains(_panel))
+                if (!tab.Panels.Contains(_panel))
                     tab.Panels.Add(_panel);
 
-                _panel.IsVisible = _wanted;
+                _panel.IsVisible = true;
             }
             catch (Exception ex)
             {
