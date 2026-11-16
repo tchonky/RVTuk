@@ -1,13 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Standalone installer for other computers — NOT part of RVTuk.sln (it has no
-       Release{year} configs). Built by Build-Installer.ps1, which stages payload.zip
-       first; a plain `dotnet build` without the zip produces an exe that refuses to run.
+       Release{year} configs). Built by Build-Installer.ps1, which embeds payload.zip, and
+       by Deploy.ps1, which hands it a staged folder instead of a payload.
        net48 so the single exe runs on any Windows 10/11 machine with no .NET install. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
     <RootNamespace>RVTuk.Setup</RootNamespace>
     <AssemblyName>RVTukSetup</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -18,6 +19,8 @@
 
   <ItemGroup>
     <Reference Include="System.IO.Compression" />
+    <Reference Include="System.Runtime.Serialization" />
+    <InternalsVisibleTo Include="RVTuk.Setup.Tests" />
     <EmbeddedResource Include="payload.zip" Condition="Exists('payload.zip')" />
   </ItemGroup>
 

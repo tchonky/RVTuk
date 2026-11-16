@@ -29,6 +29,16 @@ Switch to the project window first. The check does not work while a family is op
 - **Rescan** (top-right icon) re-reads one family's parameters and thumbnail after its file changed.
 - "Working…" at the bottom of the list means Revit or the library database is still busy with your last action.
 
+## View-only access
+
+Most people can only view the library, so only its maintainer can scan or edit it. In that case:
+- the browser reads a copy of the library kept on your PC. The note at the bottom shows its date, and the copy updates by itself when the library changes;
+- "Offline copy" means the library could not be reached, for example because Desktop Connector is not running. You can still browse and load families you already have;
+- the Scan, Rescan, Edit Info and Save to Library buttons are hidden or turned off;
+- ⭐ favourites are your own and stay on your PC.
+
+You need Autodesk Desktop Connector, signed in with your Autodesk account.
+
 ## Settings (⚙️)
 
 - **Library root folder** is the folder with the office families. Its .DB subfolder holds the database everyone shares.

@@ -1,85 +1,44 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Builds-output deployer for RVTuk (2024 / 2025) and KKarea (2023 / 2026 / 2027).
+    Deploys the add-ins from this working tree into this PC's Revit Addins folders.
 .DESCRIPTION
-    Copies each version's build output into the per-year Revit Addins folder and
-    writes the .addin manifest. 2023, 2026 and 2027 deploy the KKarea add-in (Area Calc
-    only); 2024/2025 deploy the full RVTuk add-in. Each version deploys independently: if
-    one year's Revit is open (locking its DLLs) or its build output is missing,
-    that year is skipped with a warning and the others still deploy.
-.PARAMETER Only
-    Optional list of versions to deploy (e.g. ".\Deploy.ps1 2024 2025"). Defaults to all.
+    Builds and stages the add-ins with build\Staging.ps1 into installer\payload-staging,
+    then hands that folder to the setup exe's install engine (installer\RVTuk.Setup),
+    which picks the Addins folder per year, skips a year whose Revit is open or whose
+    files are in use, writes the .addin manifests and prints the summary.
+.PARAMETER Years
+    Optional Revit years (e.g. ".\Deploy.ps1 2024 2027"). Defaults to the years found on the PC.
+.PARAMETER AddIn
+    Optional add-in keys (e.g. -AddIn KKarea). Defaults to all.
+.PARAMETER Clean
+    Remove the add-ins instead of deploying them.
 .EXAMPLE
-    .\Deploy.ps1            # deploy every version that isn't locked/missing
-    .\Deploy.ps1 2024       # deploy only Revit 2024
+    .\Deploy.ps1                # every add-in, every Revit year on the PC
+    .\Deploy.ps1 2024           # only Revit 2024
+    .\Deploy.ps1 2024 2027      # only Revit 2024 and 2027
+    .\Deploy.ps1 -AddIn KKarea  # only KKarea
+    .\Deploy.ps1 -Clean 2025    # remove the add-ins from Revit 2025
 #>
 param(
     [Parameter(Position = 0, ValueFromRemainingArguments = $true)]
-    [string[]]$Only
+    [string[]]$Years,
+    [string[]]$AddIn,
+    [switch]$Clean
 )
 
-# Per-version failures must not abort the run; we handle errors explicitly per year.
-$ErrorActionPreference = "Continue"
 $root = Split-Path $MyInvocation.MyCommand.Path -Parent
+$staging = "$root\installer\payload-staging"
+$exe = "$root\installer\RVTuk.Setup\bin\Release\net48\RVTukSetup.exe"
+. "$root\build\Staging.ps1"
 
-$vendorId     = "KnafoKlimor"
-$vendorDesc   = "Knafo Klimor Architects LTD"
-
-# 2023, 2026 and 2027 ship KKarea (Area Calc only — a separate add-in with its own stable
-# ClientId, shared across its years); 2024/2025 ship the full RVTuk add-in. ClientIds must never change once deployed.
-$versions = [ordered]@{
-    "2023" = @{ Config = "Release2023"; Tfm = "net48"
-                Addin = "KKarea"; Project = "KKarea.Revit"
-                ClassName = "KKarea.Revit.Application"
-                ClientId = "9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC" }
-    "2024" = @{ Config = "Release2024"; Tfm = "net48"
-                Addin = "RVTuk"; Project = "RVTuk.Revit"
-                ClassName = "RVTuk.Revit.Application"
-                ClientId = "D71D7480-4A21-474E-A47E-3E8DF8C1BDA5" }
-    "2025" = @{ Config = "Release2025"; Tfm = "net8.0-windows"
-                Addin = "RVTuk"; Project = "RVTuk.Revit"
-                ClassName = "RVTuk.Revit.Application"
-                ClientId = "D71D7480-4A21-474E-A47E-3E8DF8C1BDA5" }
-    "2026" = @{ Config = "Release2026"; Tfm = "net8.0-windows"
-                Addin = "KKarea"; Project = "KKarea.Revit"
-                ClassName = "KKarea.Revit.Application"
-                ClientId = "9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC" }
-    "2027" = @{ Config = "Release2027"; Tfm = "net10.0-windows"
-                Addin = "KKarea"; Project = "KKarea.Revit"
-                ClassName = "KKarea.Revit.Application"
-                ClientId = "9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC" }
-}
-
-$addinsBase = "C:\ProgramData\Autodesk\Revit\Addins"
-
-# --- helpers ---------------------------------------------------------------
-
-function Write-Banner {
-    $line = "=" * 56
-    Write-Host ""
-    Write-Host "  $line" -ForegroundColor DarkCyan
-    Write-Host "   RVTuk deploy" -ForegroundColor White -NoNewline
-    Write-Host "  -  $(Get-Date -Format 'HH:mm:ss')" -ForegroundColor DarkGray
-    Write-Host "  $line" -ForegroundColor DarkCyan
-    Write-Host ""
-}
-
-# Map each running Revit.exe to its version year via its install path
-# (e.g. "...\Revit 2023\Revit.exe"). Lets us skip a year whose Revit is open.
-function Get-RunningRevitYears {
-    $years = @()
-    foreach ($p in Get-Process -Name "Revit" -ErrorAction SilentlyContinue) {
-        try {
-            if ($p.Path -match "Revit\s+(\d{4})") { $years += $Matches[1] }
-        } catch { }  # Access denied reading Path on some processes — ignore
-    }
-    return ($years | Sort-Object -Unique)
-}
-
-# --- run -------------------------------------------------------------------
-
-Write-Banner
+$line = "=" * 56
+Write-Host ""
+Write-Host "  $line" -ForegroundColor DarkCyan
+Write-Host "   RVTuk deploy" -ForegroundColor White -NoNewline
+Write-Host "  -  $(Get-Date -Format 'HH:mm:ss')" -ForegroundColor DarkGray
+Write-Host "  $line" -ForegroundColor DarkCyan
+Write-Host ""
 
 # Show the source revision being deployed, so it's obvious *what* is going out.
 $branch = (& git -C $root rev-parse --abbrev-ref HEAD 2>$null)
@@ -91,165 +50,25 @@ if ($branch) {
     Write-Host ""
 }
 
-$runningYears = Get-RunningRevitYears
-if ($runningYears.Count -gt 0) {
-    Write-Host "  Revit running: " -NoNewline -ForegroundColor DarkGray
-    Write-Host ($runningYears -join ", ") -ForegroundColor Yellow
-    Write-Host ""
-}
+dotnet build "$root\installer\RVTuk.Setup\RVTuk.Setup.csproj" -c Release --nologo -v q
+if ($LASTEXITCODE -ne 0) { Write-Host "  Setup exe build failed." -ForegroundColor Red; exit 1 }
 
-# Resolve which versions to attempt
-$targets = $versions.Keys
-if ($Only) {
-    $targets = $versions.Keys | Where-Object { $Only -contains $_ }
-    $unknown = $Only | Where-Object { -not $versions.Contains($_) }
-    foreach ($u in $unknown) { Write-Warning "Unknown version '$u' — valid: $($versions.Keys -join ', ')" }
-    if (-not $targets) { Write-Host "Nothing to deploy." -ForegroundColor Red; return }
-}
+# The folder is this script's own; it may still hold the old layout, which New-Staging refuses to wipe.
+if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
+$yearArgs = if ($Years) { @('--years', ($Years -join ',')) } else { @() }
 
-# Status of each year for the closing summary
-$results = [ordered]@{}
-
-foreach ($ver in $targets) {
-    $info   = $versions[$ver]
-    $config = $info.Config
-    $tfm    = $info.Tfm
-    $addinName = $info.Addin
-    $assemblyDll = "$($info.Project).dll"
-
-    Write-Host ("  Revit {0} " -f $ver) -ForegroundColor Cyan -NoNewline
-    Write-Host "[$config]" -ForegroundColor DarkGray
-
-    # 1) Skip if this year's Revit is open — its add-in DLLs are loaded and locked.
-    if ($runningYears -contains $ver) {
-        Write-Host "    SKIP  Revit $ver is open (files are locked). Close it to update." -ForegroundColor DarkRed
-        $results[$ver] = "skipped (Revit open)"
-        Write-Host ""
-        continue
-    }
-
-    # 2) Build fresh so we never ship stale binaries. Copying a stale bin is the #1 cause of
-    #    "I deployed but nothing changed" — the on-disk bin can lag the source you just edited.
-    $proj = "$root\src\$($info.Project)\$($info.Project).csproj"
-    Write-Host "    build $config ..." -NoNewline -ForegroundColor DarkGray
-    $buildLog = & dotnet build $proj -c $config --nologo -v minimal 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host " FAILED" -ForegroundColor Red
-        $buildLog | Select-Object -Last 12 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkYellow }
-        $results[$ver] = "skipped (build failed)"
-        Write-Host ""
-        continue
-    }
-    Write-Host " ok" -ForegroundColor DarkGreen
-
-    # 3) Locate build output (SDK TFM subfolder, with flat fallback).
-    $srcDir = "$root\src\$($info.Project)\bin\$ver\$config\$tfm"
-    if (-not (Test-Path "$srcDir\$assemblyDll")) {
-        $srcDir = "$root\src\$($info.Project)\bin\$ver\$config"
-    }
-    if (-not (Test-Path "$srcDir\$assemblyDll")) {
-        Write-Host "    SKIP  build output not found under bin\$ver\$config." -ForegroundColor Yellow
-        $results[$ver] = "skipped (no output)"
-        Write-Host ""
-        continue
-    }
-
-    $addinsDir = "$addinsBase\$ver"
-    $dllDir    = "$addinsDir\$addinName"
-    $addinFile = "$addinsDir\$addinName.addin"
-
-    try {
-        # Wipe the whole folder so stale DLLs (incl. x64\SQLite.Interop.dll) can't survive.
-        if (Test-Path $dllDir) { Remove-Item $dllDir -Recurse -Force -ErrorAction Stop }
-        New-Item -ItemType Directory -Path $dllDir -Force -ErrorAction Stop | Out-Null
-
-        Copy-Item "$srcDir\*.dll" $dllDir -Force -ErrorAction Stop
-        Copy-Item "$srcDir\*.pdb" $dllDir -Force -ErrorAction SilentlyContinue
-        Copy-Item "$srcDir\*.json" $dllDir -Force -ErrorAction SilentlyContinue
-
-        # Native interop DLLs live in x64\; copy flat since Revit is always x64.
-        $x64Dir = "$srcDir\x64"
-        if (Test-Path $x64Dir) { Copy-Item "$x64Dir\*.dll" $dllDir -Force -ErrorAction Stop }
-
-        # Microsoft.Data.Sqlite ships its native engine under runtimes\<rid>\native.
-        # Revit is x64; copy e_sqlite3.dll flat so the add-in folder resolves it. On net48
-        # SqliteNative.EnsureLoaded() pre-loads it by full path (Revit resolves native libs
-        # relative to Revit.exe, not our folder); net8's resolver also finds it next to the DLL.
-        $nativeSqlite = "$srcDir\runtimes\win-x64\native\e_sqlite3.dll"
-        if (Test-Path $nativeSqlite) { Copy-Item $nativeSqlite $dllDir -Force -ErrorAction Stop }
-
-        # net48: strip BCL polyfill DLLs Revit preloads (shipping newer ones causes
-        # "conflicts with same preloaded module" API_ERRORs -> 0xc0000005 crashes).
-        if ($tfm -eq "net48") {
-            @(
-                "System.Memory.dll", "System.Runtime.CompilerServices.Unsafe.dll",
-                "System.Buffers.dll", "System.Numerics.Vectors.dll",
-                "Microsoft.Bcl.HashCode.dll", "System.ValueTuple.dll",
-                "System.Text.Json.dll", "System.Text.Encodings.Web.dll",
-                "EntityFramework.dll", "EntityFramework.SqlServer.dll",
-                "System.Data.SQLite.EF6.dll", "System.Data.SQLite.Linq.dll"
-            ) | ForEach-Object {
-                $f = "$dllDir\$_"
-                if (Test-Path $f) { Remove-Item $f -Force -ErrorAction SilentlyContinue }
-            }
-        }
-
-        @"
-<?xml version="1.0" encoding="utf-8"?>
-<RevitAddIns>
-  <AddIn Type="Application">
-    <Name>$addinName</Name>
-    <Assembly>$addinName\$assemblyDll</Assembly>
-    <FullClassName>$($info.ClassName)</FullClassName>
-    <ClientId>$($info.ClientId)</ClientId>
-    <VendorId>$vendorId</VendorId>
-    <VendorDescription>$vendorDesc</VendorDescription>
-  </AddIn>
-</RevitAddIns>
-"@ | Out-File $addinFile -Encoding utf8 -Force -ErrorAction Stop
-
-        $dllCount = (Get-ChildItem "$dllDir\*.dll" -ErrorAction SilentlyContinue | Measure-Object).Count
-        Write-Host "    OK    copied $dllCount DLLs -> $dllDir" -ForegroundColor Green
-        # Read the deployed DLLs back and show their build time: proof the overwrite took and that
-        # it's a fresh build, not a stale copy. If these timestamps look old, the deploy didn't take.
-        foreach ($name in @($assemblyDll, "RVTuk.UI.dll", "RVTuk.Core.dll")) {
-            $f = Get-Item "$dllDir\$name" -ErrorAction SilentlyContinue
-            if ($f) { Write-Host ("          {0,-16} built {1:yyyy-MM-dd HH:mm:ss}" -f $f.Name, $f.LastWriteTime) -ForegroundColor DarkGreen }
-        }
-        Write-Host "          manifest -> $addinFile" -ForegroundColor DarkGreen
-        $results[$ver] = "deployed"
-    }
-    catch [System.IO.IOException] {
-        # Almost always a locked file: Revit (this year) has the DLL open.
-        Write-Host "    SKIP  files are locked (Revit $ver likely open): $($_.Exception.Message)" -ForegroundColor DarkRed
-        $results[$ver] = "skipped (locked)"
-    }
-    catch {
-        Write-Host "    FAIL  $($_.Exception.Message)" -ForegroundColor Red
-        $results[$ver] = "FAILED"
-    }
-    Write-Host ""
-}
-
-# --- summary ---------------------------------------------------------------
-
-Write-Host "  " ("-" * 54) -ForegroundColor DarkCyan
-Write-Host "  Summary" -ForegroundColor White
-foreach ($ver in $results.Keys) {
-    $status = $results[$ver]
-    $color = switch -Wildcard ($status) {
-        "deployed"  { "Green" }
-        "FAILED"    { "Red" }
-        default     { "DarkRed" }  # skipped (*)
-    }
-    Write-Host ("    Revit {0}  : " -f $ver) -NoNewline -ForegroundColor DarkGray
-    Write-Host $status -ForegroundColor $color
-}
-Write-Host ""
-
-if ($results.Values -contains "deployed") {
-    Write-Host "  Done. Restart the affected Revit version(s) to load the add-in." -ForegroundColor Yellow
+$buildWarnings = @()
+if ($Clean) {
+    # The full catalog: the engine also removes an add-in of ours that only exists on disk.
+    New-Staging -StagingDir $staging -CatalogOnly -Years $Years | Out-Null
+    $keys = if ($AddIn) { $AddIn -join ',' } else { 'all' }
+    & $exe --remove $keys @yearArgs --source $staging --no-pause
 } else {
-    Write-Host "  Nothing deployed." -ForegroundColor Red
+    Write-Host "  Building and staging ..."
+    $staged = @(New-Staging -StagingDir $staging -Build -AddIn $AddIn -Years $Years -WarningVariable buildWarnings)
+    if ($staged.Count -eq 0) { Write-Host "  Nothing staged." -ForegroundColor Red; exit 1 }
+    & $exe --install (($staged.Key | Select-Object -Unique) -join ',') @yearArgs --source $staging --no-pause
 }
-Write-Host ""
+$code = $LASTEXITCODE
+if ($buildWarnings) { Write-Host "  Some builds failed and were not deployed - see the warnings above." -ForegroundColor Red; exit 1 }
+exit $code

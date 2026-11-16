@@ -78,17 +78,39 @@ namespace RVTuk.UI.FamilyBrowser.Views
 
         private void LoadWithConfig(AppConfig config)
         {
-            AppConfig.MigrateLegacyDbFolder(config.LibraryFolderPath);
-            var dbDir = Path.Combine(config.LibraryFolderPath, AppConfig.DbFolderName);
-            Directory.CreateDirectory(dbDir);
-            var repo = new BrowserRepository(config.DatabasePath);
+            // The library sits on Autodesk Desktop Connector. Its maintainer works on the shared
+            // database in place; everyone else has view-only access and browses a local copy,
+            // so they never hold the synced file open or read a half-synced one.
+            bool canEdit = LibraryCache.CanWrite(config.DatabasePath);
+            string dbPath;
+            CacheRefreshResult? copy = null;
+            if (canEdit)
+            {
+                AppConfig.MigrateLegacyDbFolder(config.LibraryFolderPath);
+                Directory.CreateDirectory(Path.Combine(config.LibraryFolderPath, AppConfig.DbFolderName));
+                dbPath = config.DatabasePath;
+            }
+            else
+            {
+                var cacheDir = config.GetDatabaseCacheFolder();
+                copy = LibraryCache.Current(cacheDir);
+                // First open on this PC: there is nothing to show until a copy is taken.
+                if (copy.DatabasePath == null) copy = LibraryCache.Refresh(config.DatabasePath, cacheDir);
+                dbPath = copy.DatabasePath ?? throw new IOException(
+                    "Could not read the family library database:\n" + config.DatabasePath + "\n\n" +
+                    (copy.Error ?? string.Empty) + "\n\n" +
+                    "Check that Autodesk Desktop Connector is running and signed in, then try again.");
+            }
+
+            var repo = new BrowserRepository(dbPath);
             FamilyBrowserViewModel vm;
             try
             {
                 vm = new FamilyBrowserViewModel(
                     config, repo, _getProjectFamilies, _loadFamily, _rescanFamily,
                     _scan, _openInFamilyEditor, _openModelFamilyInEditor, _saveFamilyToLibrary,
-                    _getFamilyPreviews, onLibraryFolderChanged: ReloadConfig);
+                    _getFamilyPreviews, onLibraryFolderChanged: ReloadConfig,
+                    canEdit: canEdit, favorites: new PersonalFavorites(config.GetFavoritesPath()));
             }
             catch
             {
@@ -111,6 +133,45 @@ namespace RVTuk.UI.FamilyBrowser.Views
             _config = config;
             ViewModel = vm;
             DataContext = ViewModel;
+
+            if (copy != null)
+            {
+                ShowCopyStatus(vm, copy);
+                // A copy just taken is current; otherwise look for a newer one in the background.
+                if (copy.Status != CacheRefreshStatus.Updated) RefreshCopyInBackground(vm, config);
+            }
+        }
+
+        private static void ShowCopyStatus(FamilyBrowserViewModel vm, CacheRefreshResult copy)
+        {
+            var date = copy.CopyOfUtc?.ToLocalTime().ToString("g") ?? "?";
+            vm.LibraryStatus = copy.Error != null
+                ? $"Offline copy from {date}"
+                : $"Library from {date}";
+            vm.LibraryStatusDetail = copy.Error == null
+                ? "You have view-only access, so the library is read from a copy on this PC. It updates when the library changes."
+                : "Showing the last copy on this PC, because the library could not be read:\n" + copy.Error;
+        }
+
+        // Reopens the browser on the newer copy, unless the user has since switched library.
+        private void RefreshCopyInBackground(FamilyBrowserViewModel vm, AppConfig config)
+        {
+            var sourceDb = config.DatabasePath;
+            var cacheDir = config.GetDatabaseCacheFolder();
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                var result = LibraryCache.Refresh(sourceDb, cacheDir);
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (!ReferenceEquals(ViewModel, vm) || !IsLoaded) return; // switched library or closed
+                    if (result.Status == CacheRefreshStatus.Updated)
+                    {
+                        try { LoadWithConfig(config); }
+                        catch (Exception ex) { vm.LibraryStatusDetail = ex.Message; }
+                    }
+                    else ShowCopyStatus(vm, result);
+                }));
+            });
         }
 
         // WPF's native three-state CheckBox cycles true→null→false on each click, which would

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
@@ -244,9 +244,17 @@ namespace RVTuk.Revit.TopoTools
             {
                 try
                 {
+                    var place = new XYZ(target.X, target.Y, SurfaceZ(element, target.X, target.Y));
+                    // The 2026 and 2027 APIs no longer have DrawPoint; AddPoint is tried there, as
+                    // SlabShape.DrawEdgePoints does. Whether it takes an edge point is unchecked in
+                    // those years — a refused point counts as lost.
+#if REVIT2026 || REVIT2027
+                    drawn = editor.AddPoint(place);
+#else
 #pragma warning disable CS0618
-                    drawn = editor.DrawPoint(new XYZ(target.X, target.Y, SurfaceZ(element, target.X, target.Y)));
+                    drawn = editor.DrawPoint(place);
 #pragma warning restore CS0618
+#endif
                 }
                 catch (Exception)
                 {

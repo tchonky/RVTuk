@@ -93,6 +93,10 @@ Also unverified, and only visible in Revit:
 - **Interior points:** the edge-point dedupe does not cover two lines putting interior points on the
   same XY (see averaging above); a vertex merged into an existing one still counts as "added".
 
+- **Revit 2026/2027 edge points are unverified.** Those APIs no longer have `DrawPoint`, so the
+  edit session (like the converter) uses `AddPoint` there. Whether it accepts a point on the outline
+  is unchecked; a refused point counts as lost. Check in 2026 before relying on edge points there.
+
 ## Ideas (deliberately out of v1)
 
 - Read contours from an imported survey DWG — the sampler and router are reused untouched; only a

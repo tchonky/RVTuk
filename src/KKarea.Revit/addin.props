@@ -1,0 +1,14 @@
+<Project>
+  <!-- What this add-in is. Read by build\Staging.ps1 (not imported by the project). The ClientId is frozen. -->
+  <PropertyGroup>
+    <AddInKey>KKarea</AddInKey>
+    <AddInName>KKarea</AddInName>
+    <AddInManifest>KKarea.addin</AddInManifest>
+    <AddInClientId>9C97B9F2-60F9-432D-92A4-5EC2A0FDAFFC</AddInClientId>
+    <AddInEntryClass>KKarea.Revit.Application</AddInEntryClass>
+    <AddInVersion>1.0.0</AddInVersion>
+    <AddInYears>2023</AddInYears>
+    <AddInAssemblies>KKarea.Revit;RVTuk.UI;RVTuk.Core</AddInAssemblies>
+    <AddInThirdParty>true</AddInThirdParty>
+  </PropertyGroup>
+</Project>

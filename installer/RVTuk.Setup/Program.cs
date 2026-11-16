@@ -5,59 +5,109 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
+using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.RegularExpressions;
 
 namespace RVTuk.Setup
 {
     /// <summary>
-    /// Self-contained installer for the RVTuk / KKarea Revit add-ins.
-    /// Build-Installer.ps1 embeds payload.zip (per-year add-in DLLs + .addin manifests);
-    /// this program extracts it into the per-year Revit Addins folders — the same layout
-    /// Deploy.ps1 produces on a dev machine.
+    /// Self-contained installer for the office's Revit add-ins. Build-Installer.ps1 embeds
+    /// payload.zip; this program hands it to <see cref="Engine"/>, which installs each add-in
+    /// into the per-year Revit Addins folders (see <see cref="RealMachine.YearFolder"/>).
     ///
-    /// Zip layout, one top-level folder per Revit year:
-    ///   2023/KKarea.addin   2023/KKarea/...dlls...
-    ///   2024/RVTuk.addin    2024/RVTuk/...dlls...
-    ///   2025/RVTuk.addin    2025/RVTuk/...dlls...
-    ///   2026/KKarea.addin   2026/KKarea/...dlls...
-    ///   2027/KKarea.addin   2027/KKarea/...dlls...
-    ///   version.txt         (source commit + build date, shown in the banner)
+    /// Payload layout (payload.zip, or a folder given with --source):
+    ///   catalog.json            the add-ins it holds, their years and versions
+    ///   &lt;AddIn&gt;/&lt;year&gt;/...     each add-in's files for one Revit year, with its addin.json
     ///
-    /// Flags: --uninstall  remove the add-in instead of installing
-    ///        --all        don't skip years whose Addins folder is missing
-    ///        --target X   install under folder X instead of ProgramData (testing)
-    ///        --no-pause   don't wait for Enter at the end
+    /// Flags: --install &lt;names|all&gt;  install these add-ins (the default: all)
+    ///        --remove &lt;names|all&gt;   remove them instead;  --uninstall = --remove all
+    ///        --years &lt;y,y&gt;         only these Revit years (default: the ones on this PC)
+    ///        --source &lt;dir&gt;        use a payload folder instead of the embedded payload.zip
+    ///        --target &lt;dir&gt;        install every year under that folder (testing, no elevation)
+    ///        --quiet                print nothing (the log is still written)
+    ///        --no-pause             don't wait for Enter at the end
     /// </summary>
+    internal sealed class Options
+    {
+        public bool Remove;
+        public List<string> Keys;
+        public List<string> Years;
+        public string Source, Target;
+        public bool Quiet, NoPause;
+
+        public static Options Parse(string[] args, out string error)
+        {
+            var o = new Options();
+            bool install = false;
+            string err = null;
+            for (int i = 0; i < args.Length && err == null; i++)
+            {
+                string a = args[i];
+                string Value()
+                {
+                    if (i + 1 < args.Length && !args[i + 1].StartsWith("--")) return args[++i];
+                    err = a + " needs a value";
+                    return null;
+                }
+                switch (a)
+                {
+                    case "--install":
+                    case "--remove":
+                        if (a == "--install") install = true; else o.Remove = true;
+                        string v = Value();
+                        if (v == null) break;
+                        o.Keys = v == "all" ? null : v.Split(',').ToList();
+                        string bad = o.Keys?.FirstOrDefault(k => !Catalog.IsPlainName(k));
+                        if (bad != null) err = $"'{bad}' is not an add-in name";
+                        break;
+                    case "--uninstall": o.Remove = true; o.Keys = null; break;
+                    case "--years":
+                        string y = Value();
+                        if (y == null) break;
+                        o.Years = y.Split(',').ToList();
+                        string badYear = o.Years.FirstOrDefault(s => !Regex.IsMatch(s, @"\A[0-9]{4}\z"));
+                        if (badYear != null) err = $"'{badYear}' is not a four-digit year";
+                        break;
+                    case "--source": o.Source = Value(); break;
+                    case "--target": o.Target = Value(); break;
+                    case "--quiet": o.Quiet = true; break;
+                    case "--no-pause": o.NoPause = true; break;
+                    default: err = $"unknown argument '{a}'"; break;
+                }
+            }
+            if (err == null && install && o.Remove) err = "--install cannot be combined with --remove or --uninstall";
+            error = err;
+            return err == null ? o : null;
+        }
+    }
+
     internal static class Program
     {
-        private const string DefaultAddinsBase = @"C:\ProgramData\Autodesk\Revit\Addins";
+        private const string Usage =
+            "Usage: RVTukSetup [--install <names|all> | --remove <names|all> | --uninstall] [--years <y,y>]\r\n" +
+            "                  [--source <dir>] [--target <dir>] [--quiet] [--no-pause]";
 
         private static int Main(string[] args)
         {
-            bool uninstall = args.Contains("--uninstall");
-            bool allYears = args.Contains("--all");
-            bool noPause = args.Contains("--no-pause");
-            string target = GetOption(args, "--target");
-            bool customTarget = target != null;
-            string addinsBase = target ?? DefaultAddinsBase;
+            var o = Options.Parse(args, out string error);
+            if (o == null)
+            {
+                Console.WriteLine(error);
+                Console.WriteLine(Usage);
+                return 2;
+            }
 
-            // Installing under ProgramData needs admin; relaunch elevated if we aren't.
-            if (!customTarget && !IsElevated())
+            // Installing into the machine-wide folders needs admin; relaunch elevated if we aren't.
+            bool elevated = IsElevated();
+            if (o.Target == null && !elevated)
                 return RelaunchElevated(args);
 
-            int exit = 1;
-            try
-            {
-                exit = Run(uninstall, allYears, customTarget, addinsBase);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine();
-                Console.WriteLine("  FAILED: " + ex.Message);
-            }
+            string log = elevated ? ElevatedLog()
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RVTuk", "setup.log");
+            int exit = Run(o, Console.Out, log);
 
-            if (!noPause && !Console.IsOutputRedirected)
+            if (!o.NoPause && !o.Quiet && !Console.IsOutputRedirected)
             {
                 Console.WriteLine();
                 Console.Write("  Press Enter to close...");
@@ -66,149 +116,142 @@ namespace RVTuk.Setup
             return exit;
         }
 
-        private static int Run(bool uninstall, bool allYears, bool customTarget, string addinsBase)
+        // 0 = done; 1 = something failed or was skipped, or there is no payload; 2 = --install names an unknown add-in.
+        internal static int Run(Options o, TextWriter output, string logFile)
         {
-            using (var zip = OpenPayload())
+            void Say(string line)
             {
-                Banner(zip, uninstall);
-
-                var years = PayloadYears(zip);
-                if (years.Count == 0)
+                if (!o.Quiet) output.WriteLine(line);
+                if (logFile == null) return;
+                try
                 {
-                    Console.WriteLine("  FAILED: payload.zip contains no Revit-year folders.");
+                    Directory.CreateDirectory(Path.GetDirectoryName(logFile));
+                    File.AppendAllText(logFile, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + line + Environment.NewLine);
+                }
+                catch (Exception) { }
+            }
+
+            string temp = null;
+            try
+            {
+                string payload = o.Source;
+                Catalog catalog;
+                try
+                {
+                    if (payload == null)
+                    {
+                        var asm = Assembly.GetExecutingAssembly();
+                        string name = asm.GetManifestResourceNames()
+                            .FirstOrDefault(n => n.EndsWith("payload.zip", StringComparison.OrdinalIgnoreCase));
+                        if (name == null)
+                        {
+                            Say("  FAILED: no embedded payload - this exe was built without Build-Installer.ps1.");
+                            return 1;
+                        }
+                        string t = Path.Combine(Path.GetTempPath(), "RVTukSetup-" + Guid.NewGuid().ToString("N"));
+                        if (Directory.Exists(t) || File.Exists(t)) throw new IOException(t + " already exists");
+                        payload = temp = t;
+                        using (var zip = new ZipArchive(asm.GetManifestResourceStream(name), ZipArchiveMode.Read))
+                            foreach (var entry in zip.Entries.Where(e => e.Name.Length > 0))
+                            {
+                                string dest = Path.GetFullPath(Path.Combine(temp, entry.FullName));
+                                if (!dest.StartsWith(temp + Path.DirectorySeparatorChar)) continue; // never extract outside temp
+                                Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                                entry.ExtractToFile(dest, overwrite: true);
+                            }
+                    }
+                    catalog = Catalog.Read(Path.Combine(payload, "catalog.json"));
+                }
+                catch (Exception e)
+                {
+                    Say("  FAILED: " + e.Message);
                     return 1;
                 }
 
-                var running = customTarget ? new HashSet<string>() : GetRunningRevitYears();
-                var results = new Dictionary<string, string>();
+                Say("");
+                Say("  " + new string('=', 56));
+                Say("   RVTuk " + (o.Remove ? "uninstall" : "setup") + "  -  " + catalog.Commit + ", built " + catalog.Built);
+                Say("  " + new string('=', 56));
+                Say("");
 
-                foreach (var year in years)
+                string unknown = o.Remove ? null : o.Keys?.FirstOrDefault(k => catalog.Find(k) == null);
+                if (unknown != null)
                 {
-                    string addinName = ManifestName(zip, year);
-                    Console.WriteLine($"  Revit {year}  [{addinName}]");
-
-                    if (!allYears && !Directory.Exists(Path.Combine(addinsBase, year)))
-                    {
-                        Console.WriteLine($"    SKIP  Revit {year} not found on this machine.");
-                        results[year] = "skipped (not installed)";
-                        continue;
-                    }
-                    if (running.Contains(year))
-                    {
-                        Console.WriteLine($"    SKIP  Revit {year} is open (files are locked). Close it and re-run.");
-                        results[year] = "skipped (Revit open)";
-                        continue;
-                    }
-
-                    try
-                    {
-                        if (uninstall)
-                        {
-                            Remove(addinsBase, year, addinName);
-                            Console.WriteLine($"    OK    removed from {Path.Combine(addinsBase, year)}");
-                            results[year] = "removed";
-                        }
-                        else
-                        {
-                            int files = Install(zip, addinsBase, year, addinName);
-                            Console.WriteLine($"    OK    {files} files -> {Path.Combine(addinsBase, year, addinName)}");
-                            results[year] = "installed";
-                        }
-                    }
-                    catch (IOException ex)
-                    {
-                        Console.WriteLine($"    SKIP  files are locked (Revit {year} likely open): {ex.Message}");
-                        results[year] = "skipped (locked)";
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"    FAIL  {ex.Message}");
-                        results[year] = "FAILED";
-                    }
+                    Say($"  Unknown add-in '{unknown}'. This package holds: {string.Join(", ", catalog.AddIns.Select(a => a.Key))}");
+                    return 2;
                 }
 
-                Summary(results, uninstall);
-                return results.Values.Contains("FAILED") ? 1 : 0;
+                IMachine machine = o.Target != null ? new TargetMachine(o.Target) : new RealMachine();
+                var results = o.Remove
+                    ? Engine.Remove(catalog, machine, o.Keys, o.Years, null)
+                    : Engine.Install(catalog, payload, machine, o.Keys, o.Years, null);
+
+                foreach (var r in results)
+                    Say($"  Revit {r.Year}  {r.AddIn}  {Words(r)}");
+                if (results.Count == 0)
+                    Say("  Nothing to do: no selected add-in fits a Revit year on this PC.");
+                bool failed = Engine.Failed(results);
+                Say(failed ? "  NOT everything was done - see the lines marked SKIPPED or FAILED." : "  Done.");
+                return failed ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Say("  FAILED: " + e.Message);
+                return 1;
+            }
+            finally
+            {
+                if (temp != null)
+                    try { Directory.Delete(temp, true); } catch (Exception) { }
             }
         }
 
-        // --- install / uninstall --------------------------------------------
-
-        private static int Install(ZipArchive zip, string addinsBase, string year, string addinName)
+        private static string Words(Result r)
         {
-            string yearDir = Path.Combine(addinsBase, year);
-            string dllDir = Path.Combine(yearDir, addinName);
-
-            // Wipe the whole folder so stale DLLs from older versions can't survive.
-            if (Directory.Exists(dllDir))
-                Directory.Delete(dllDir, recursive: true);
-            Directory.CreateDirectory(dllDir);
-
-            int files = 0;
-            foreach (var entry in zip.Entries)
+            switch (r.Outcome)
             {
-                var parts = Normalize(entry.FullName).Split('/');
-                if (parts.Length < 2 || parts[0] != year ||
-                    entry.Name.Length == 0 ||          // directory entry
-                    parts.Contains(".."))              // never extract outside the target
-                    continue;
-
-                string dest = Path.Combine(yearDir, Path.Combine(parts.Skip(1).ToArray()));
-                Directory.CreateDirectory(Path.GetDirectoryName(dest));
-                entry.ExtractToFile(dest, overwrite: true);
-                files++;
+                case Outcome.Installed: return "installed";
+                case Outcome.Updated: return "updated";
+                case Outcome.Removed: return "removed";
+                case Outcome.Unchanged: return "unchanged";
+                case Outcome.Newer: return "newer version installed";
+                case Outcome.SkippedRevitOpen: return $"SKIPPED: Revit {r.Year} is open";
+                case Outcome.SkippedInUse: return "SKIPPED: " + r.Message;
+                default: return "FAILED: " + r.Message;
             }
-            return files;
         }
-
-        private static void Remove(string addinsBase, string year, string addinName)
-        {
-            string dllDir = Path.Combine(addinsBase, year, addinName);
-            string manifest = Path.Combine(addinsBase, year, addinName + ".addin");
-            if (Directory.Exists(dllDir))
-                Directory.Delete(dllDir, recursive: true);
-            if (File.Exists(manifest))
-                File.Delete(manifest);
-        }
-
-        // --- payload ---------------------------------------------------------
-
-        private static ZipArchive OpenPayload()
-        {
-            var asm = Assembly.GetExecutingAssembly();
-            string name = asm.GetManifestResourceNames()
-                .FirstOrDefault(n => n.EndsWith("payload.zip", StringComparison.OrdinalIgnoreCase));
-            if (name == null)
-                throw new InvalidOperationException(
-                    "no embedded payload — this exe was built without Build-Installer.ps1.");
-            return new ZipArchive(asm.GetManifestResourceStream(name), ZipArchiveMode.Read);
-        }
-
-        private static List<string> PayloadYears(ZipArchive zip) =>
-            zip.Entries
-                .Select(e => Normalize(e.FullName).Split('/')[0])
-                .Where(top => Regex.IsMatch(top, @"^\d{4}$"))
-                .Distinct()
-                .OrderBy(y => y)
-                .ToList();
-
-        /// <summary>Add-in name for a year, from its "{year}/{name}.addin" manifest entry.</summary>
-        private static string ManifestName(ZipArchive zip, string year)
-        {
-            var entry = zip.Entries.FirstOrDefault(e =>
-            {
-                var parts = Normalize(e.FullName).Split('/');
-                return parts.Length == 2 && parts[0] == year &&
-                       parts[1].EndsWith(".addin", StringComparison.OrdinalIgnoreCase);
-            });
-            if (entry == null)
-                throw new InvalidOperationException($"payload has no .addin manifest for {year}.");
-            return Path.GetFileNameWithoutExtension(entry.Name);
-        }
-
-        private static string Normalize(string entryName) => entryName.Replace('\\', '/');
 
         // --- environment ------------------------------------------------------
+
+        // %ProgramData%\RVTuk\setup.log, unless an ordinary user could have planted the folder or the log: then null (no log).
+        private static string ElevatedLog()
+        {
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "RVTuk");
+                if (!Directory.Exists(dir))
+                {
+                    var ds = new DirectorySecurity();
+                    ds.SetAccessRuleProtection(true, false);
+                    var inherit = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
+                    foreach (var (sid, rights) in new[] {
+                        (WellKnownSidType.BuiltinAdministratorsSid, FileSystemRights.FullControl),
+                        (WellKnownSidType.LocalSystemSid, FileSystemRights.FullControl),
+                        (WellKnownSidType.BuiltinUsersSid, FileSystemRights.ReadAndExecute) })
+                        ds.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(sid, null), rights, inherit, PropagationFlags.None, AccessControlType.Allow));
+                    Directory.CreateDirectory(dir, ds);
+                }
+                // Checked also after creating it: someone may have made it in between.
+                if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0) return null;
+                var owner = Directory.GetAccessControl(dir).GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
+                if (owner == null || !(owner.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid) || owner.IsWellKnown(WellKnownSidType.LocalSystemSid)))
+                    return null;
+                string log = Path.Combine(dir, "setup.log");
+                if ((File.Exists(log) || Directory.Exists(log)) && (File.GetAttributes(log) & FileAttributes.ReparsePoint) != 0) return null;
+                return log;
+            }
+            catch (Exception) { return null; }
+        }
 
         private static bool IsElevated()
         {
@@ -216,12 +259,15 @@ namespace RVTuk.Setup
                 return new WindowsPrincipal(id).IsInRole(WindowsBuiltInRole.Administrator);
         }
 
+        // A trailing backslash would escape the closing quote: double it.
+        internal static string Quote(string a) => "\"" + Regex.Replace(a, @"(\\+)$", "$1$1") + "\"";
+
         private static int RelaunchElevated(string[] args)
         {
             var psi = new ProcessStartInfo
             {
                 FileName = Assembly.GetExecutingAssembly().Location,
-                Arguments = string.Join(" ", args.Select(a => "\"" + a + "\"")),
+                Arguments = string.Join(" ", args.Select(Quote)),
                 UseShellExecute = true,
                 Verb = "runas",
             };
@@ -235,64 +281,9 @@ namespace RVTuk.Setup
             }
             catch (System.ComponentModel.Win32Exception) // UAC prompt declined
             {
-                Console.WriteLine("Administrator rights are required to install into " + DefaultAddinsBase);
+                Console.WriteLine("Administrator rights are required to install into the machine-wide Revit Addins folders.");
                 return 1;
             }
-        }
-
-        /// <summary>Map running Revit.exe processes to their year via the install path.</summary>
-        private static HashSet<string> GetRunningRevitYears()
-        {
-            var years = new HashSet<string>();
-            foreach (var p in Process.GetProcessesByName("Revit"))
-            {
-                try
-                {
-                    var m = Regex.Match(p.MainModule.FileName, @"Revit\s+(\d{4})");
-                    if (m.Success) years.Add(m.Groups[1].Value);
-                }
-                catch { } // access denied reading the path — ignore
-                finally { p.Dispose(); }
-            }
-            return years;
-        }
-
-        // --- output -----------------------------------------------------------
-
-        private static void Banner(ZipArchive zip, bool uninstall)
-        {
-            string version = "";
-            var v = zip.GetEntry("version.txt");
-            if (v != null)
-                using (var r = new StreamReader(v.Open()))
-                    version = r.ReadToEnd().Trim();
-
-            Console.WriteLine();
-            Console.WriteLine("  " + new string('=', 56));
-            Console.WriteLine("   RVTuk " + (uninstall ? "uninstall" : "setup") +
-                              (version.Length > 0 ? "  -  " + version : ""));
-            Console.WriteLine("  " + new string('=', 56));
-            Console.WriteLine();
-        }
-
-        private static void Summary(Dictionary<string, string> results, bool uninstall)
-        {
-            Console.WriteLine();
-            Console.WriteLine("  " + new string('-', 54));
-            Console.WriteLine("  Summary");
-            foreach (var kv in results)
-                Console.WriteLine($"    Revit {kv.Key}  : {kv.Value}");
-            if (!uninstall && results.Values.Contains("installed"))
-            {
-                Console.WriteLine();
-                Console.WriteLine("  Done. Start (or restart) Revit to load the add-in.");
-            }
-        }
-
-        private static string GetOption(string[] args, string name)
-        {
-            int i = Array.IndexOf(args, name);
-            return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
         }
     }
 }
