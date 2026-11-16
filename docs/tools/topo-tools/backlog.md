@@ -2,9 +2,17 @@
 
 ## Verification
 
-The Topo Edit session (2026-11) has not been exercised in Revit yet. Its checklist, and the
-Floor ⇄ Topo checklist, are in [README.md](README.md#in-revit-checklist-topo-edit-session). The
-pane-era checks (rows, selection round trip, height boxes, status line) are gone with the pane.
+The Topo Edit session (2026-11) was tried in Revit 2024 on 2026-11-16 and reported working, but its
+checklist rows are not ticked one by one. The finishing pass of the same day (Modify-tab buttons for
+floors and Floor ⇄ Topo, icons, spacing without Enter, crossing points, error handling) has not
+been in Revit at all: checklist rows 18 and 26–28, and Floor ⇄ Topo row 24. Both checklists are in
+[README.md](README.md#in-revit-checklist-topo-edit-session). The pane-era checks (rows, selection
+round trip, height boxes, status line) are gone with the pane.
+
+Also unverified from the finishing pass: that `ElementOwnerViewFilter` keeps lines and texts hidden
+in the view (Hide in View, a filter, Text Notes off) — the collectors depend on it, and rows 3 and 9
+cover the area; and whether Revit shows its own error dialog as well as ours when Start, Height
+Labels or Cancel return `Failed`.
 
 Settled earlier and kept for the record:
 
@@ -44,58 +52,45 @@ Also unverified, and only visible in Revit:
 
 ## Next
 
-- **Follow-ups from the edit-session reviews (2026-11-16)**, none blocking:
-  - **Spacing typed without Enter is ignored.** Clicking away from the box keeps the old value;
-    commit on focus loss too, or say so in the tooltip.
-  - **Height Labels and Start lack try/catch and logging.** Update and Cancel have it; the other
-    two commands let an exception reach Revit's own error dialog.
-  - **No icons** on the Topo Edit buttons or on Floor ⇄ Topo.
-  - **A line grouped or restyled after being applied leaves its points.** Such a line is no longer
-    collectable, so Update neither cleans nor reports its points on the element.
-  - **The collectors could use `ElementOwnerViewFilter`** instead of filtering every `CurveElement`
-    and `TextNote` in the document by owner view in C#.
-  - **Renaming `_DP-Topo Height` disconnects every text** (and renaming `_DP-Topo Line` every line),
-    since both are found by name. Say so in the type's name comment, or find them by a stored id.
-- **Deferred from the converter's final review (2026-09-29), all minor:**
-  - A flat toposolid converted to a floor comes back with shape editing enabled, because a
-    toposolid always reports its corner vertices and `Replay` enables the floor's editor even for
-    an empty plan. Fix: `ResetSlabShape()` on a floor target that was not enabled and got nothing.
-  - `ShapeReplayPlanner.Plan` de-duplicates with a linear scan (O(n²)); bucket on an XY grid if
-    survey toposolids of tens of thousands of points turn out slow (checklist 5/8b).
-  - Losses the docs do not list yet: walls and columns attached to the floor detach; global
-    parameter associations are lost (only the value copies); the span-direction symbol is lost.
-  - A Revit or exception message ending in "." gives ".." in a skip line.
-  - The spec still says `Uri.EscapeDataString` and "2 hosted families, 1 slab edge"; the code
-    escapes only `% | ;` and says "hosted elements / tags or dimensions / parts". Sync the spec.
-- **Coincident points should average, not race.** Two points landing on the same XY should become
-  one at the mean Z rather than both being handed to `AddPoints` for Revit to reconcile however it
-  sees fit. Two contours crossing in plan is not an error — it is what a saddle or a steep bank
-  looks like — so the rule needs to be ours and deterministic.
-
-  Belongs in the **sample or route stage**, before anything reaches the element: done there it is
-  pure Core logic with a unit test, and the ledger then records one point where one point exists.
-  Done inside the applier we would be reconciling against whatever Revit had already merged.
-
-  **Open question before building it:** averaging a 42.750 contour with a 43.000 one gives 42.875, a
-  height neither line asked for. That is right for a genuine crossing and wrong where the two lines
-  describe a vertical face — a retaining wall read in plan is exactly two contours at the same XY.
-  Decide whether averaging is the whole rule, or whether a large enough Z gap means "wall" and
-  should keep both points, or warn.
-
+- **A line grouped or restyled after being applied leaves its points.** Such a line is no longer
+  collectable, so Update neither cleans nor reports its points on the element. The same happens to
+  every line when `_DP-Topo Line` is renamed (the name comments now say so).
+- `ShapeReplayPlanner.Plan` de-duplicates with a linear scan (O(n²)); bucket on an XY grid, as
+  `TopoPointDeduper` now does, if survey toposolids of tens of thousands of points turn out slow
+  (Floor ⇄ Topo checklist 5/8b).
 - **A pre-existing vertex raised by Update keeps its height.** An edge point that lands on a vertex
   the tool did not create (an outline corner, a hand-placed point) is raised but not recorded, so it is
   never deleted by mistake. The cost: when the line moves away or is deleted, that vertex keeps the
   line's height. Fix if it matters: record the vertex's original Z in the ledger and put it back.
 - **Two views sharing an outline point on one element:** raising a vertex for this view's line changes
   the Z another view's line recorded, so that view's next Update reports one false "moved by hand".
-- **Cancel: `TopoSessionUpdater.Disable()` runs before `tx.Start()`, outside the `try`.** If `Start`
-  throws, the session stays open with the updater off. Move both inside the `try`.
-- **Interior points:** the edge-point dedupe does not cover two lines putting interior points on the
-  same XY (see averaging above); a vertex merged into an existing one still counts as "added".
+  The crossing rule weighs only the lines of the session's view, so it does not help here.
+- **An interior point merged into an existing vertex still counts as "added".**
 
 - **Revit 2026/2027 edge points are unverified.** Those APIs no longer have `DrawPoint`, so the
   edit session (like the converter) uses `AddPoint` there. Whether it accepts a point on the outline
   is unchecked; a refused point counts as lost. Check in 2026 before relying on edge points there.
+
+## Done in the finishing pass (2026-11-16)
+
+- The Modify-tab panel shows Topo Tools for one floor as well as one toposolid, and Floor ⇄ Topo for
+  any selection of only floors and toposolids.
+- Icons on the Topo Edit buttons, Floor ⇄ Topo and the Modify-tab buttons (`TopoIcons`).
+- Spacing typed without Enter is read by Update and Accept; the spacing is rounded to the two
+  decimals the box shows, so the read-back never rewrites a value Enter kept.
+- Start and Height Labels catch, log and report failures; Start ends a half-started session and
+  stops if Revit rolls back the "create styles" transaction. Cancel disables the updater inside its
+  `try`, so a failing `tx.Start()` switches it back on.
+- Coincident points: decided as **the higher point wins** (not averaging) — a retaining wall drawn
+  as two lines keeps its top, and a genuine crossing gets the higher contour. One rule for interior
+  and edge points (`TopoPointDeduper`, 1 mm), before anything reaches the element; the summary
+  counts the points that took a higher line's height.
+- A flat toposolid converted to a floor comes back a plain floor (`ResetSlabShape()`).
+- A message ending in "." no longer gives ".." in a skip or refusal line (`Sentence`).
+- The collectors use `ElementOwnerViewFilter` (never the view constructor, which drops hidden
+  elements).
+- The converter's undocumented losses are in the README; the converter spec matches the code's
+  escaping and dependent wording.
 
 ## Ideas (deliberately out of v1)
 
@@ -104,5 +99,4 @@ Also unverified, and only visible in Revit:
 - Create a toposolid from the topo lines when none exists yet.
 - Subdivisions and split lines/creases (`SlabShapeEditor.DrawSplitLine`).
 - Multi-view sessions, as Auto Dimensions has for levels and views.
-- The Topo Tools shortcut on a floor's contextual tab (trivial to add; not asked for).
 - A session on several elements at once.

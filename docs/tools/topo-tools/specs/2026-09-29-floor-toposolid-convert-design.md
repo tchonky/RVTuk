@@ -56,7 +56,7 @@ current selection into the other kind.
 7. Afterwards:
    - the **new elements are selected**, so pressing ⇄ again flips them straight back;
    - the status line summarises the run, e.g. *"2 floors → toposolids, 1 toposolid → floor.
-     Skipped 2: subdivision; kept its 2 hosted families."*;
+     Skipped 2: subdivision; kept its 2 hosted elements."*;
    - the pane refreshes.
 
 The pane calls a `Func<string>` delegate from the thread pool. The delegate raises a new
@@ -174,8 +174,9 @@ For each parameter:
 **Encoding** is a Core codec, `ParkedParameterCodec`, in the pattern of `TopoPointLedgerCodec`:
 - one string field;
 - each entry holds the key kind, the key, the storage type and the value;
-- keys and string values are percent-escaped (`Uri.EscapeDataString`), so any character survives,
-  including `;`, `=`, `|` and Hebrew;
+- keys and string values escape only the three characters the format itself uses (`%` → `%25`,
+  `|` → `%7C`, `;` → `%3B`), so any character survives, `=` and Hebrew included, and everything
+  else is stored as typed;
 - doubles use "R" formatting, and element ids are stored as `long`;
 - decoding never throws, and a damaged record decodes to empty.
 
@@ -218,7 +219,7 @@ generalised from `Floor` to `Element`, and the subdivision count is added there.
 **Ask phase.** For each element with dependents, in selection order, a `TaskDialog` appears:
 
 > **Convert floor → toposolid?**
-> Floor *Paving 200* (id 418732) carries **2 hosted families, 1 slab edge, 3 tags** that converting
+> Floor *Paving 200* (id 418732) carries **3 hosted elements and 3 tags or dimensions** that converting
 > deletes.
 > ▸ **Convert and delete them**
 > ▸ **Skip this one**
@@ -306,7 +307,7 @@ The repo's rules apply:
 | 10 | Structural floor with a Floors-only shared parameter set to `ריצוף A-12` → toposolid → floor | Structural ticked again; the parameter reads `ריצוף A-12` |
 | 11 | Comments, Mark, Phase Created, Workset | Copied both ways |
 | 12 | A Room Floor floor → toposolid → floor, then click its room with Room Floor | The floor is replaced, not duplicated |
-| 13 | Floor with a hosted family: Convert / Skip / Esc | Deleted and converted / untouched and "kept its 1 hosted family" / nothing changed |
+| 13 | Floor with a hosted family: Convert / Skip / Esc | Deleted and converted / untouched and "kept its 1 hosted element" / nothing changed |
 | 14 | Three floors with hosted families, "Do the same" ticked on the first | One dialog only |
 | 15 | Mixed selection: 2 floors, 1 toposolid, 1 wall | Each flips; the wall is ignored; the new elements are selected |
 | 16 | A toposolid subdivision selected | Skipped: subdivision |

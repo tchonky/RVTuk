@@ -9,8 +9,9 @@ result is what you would have got by drawing it that way to begin with. There is
 ## The workflow
 
 1. **Select** one toposolid or one floor in a plan view. The Topo Tools button is on the RVTuk panel
-   (Add-Ins tab), and also on the Modify tab while exactly one toposolid (not a subdivision) is
-   selected.
+   (Add-Ins tab), and also on the Modify tab while exactly one toposolid (not a subdivision) or one
+   floor is selected. The Floor ⇄ Topo button joins it there while everything selected is a floor
+   or a toposolid.
 2. **Press Topo Tools.** A temporary **Topo Edit** panel appears with **Draw Lines**, **Height
    Labels**, **Update**, **Accept**, **Cancel** and a **Spacing** box. Pressing Topo Tools again
    says a session is already open and on which element. A start with no usable selection says
@@ -49,6 +50,14 @@ the element counts only for the part over it, with a point on the outline at the
 neighbouring toposolids meet at the same height; the drawn line is never split. One transaction per
 Update, so one Ctrl+Z undoes it.
 
+**Where lines cross, the higher point wins.** Two points on the same plan spot (within 1 mm) — two
+contours crossing, a line crossing itself, chained lines meeting on the outline — become one point
+at the higher height; at equal heights the first line keeps it. This is decided before anything
+reaches the element (`TopoPointDeduper`), so the rule is ours rather than whatever Revit does when
+two points nearly coincide, and the ledger records one point where one point exists. The summary
+says how many points took a higher line's height. Points near a crossing but not on the same spot
+all stay, so a bank or a wall drawn as two lines comes out as a steep slope.
+
 **Cancel** works by snapshot, because no transaction can stay open across user interaction. In one
 transaction it deletes the lines and texts the session created, removes those lines' points from
 the element through the ledger, and puts back the text of every height edited during the session.
@@ -58,8 +67,10 @@ only what is still a topo line or height text of the session's view, and the ses
 its transaction has committed, so a failed Cancel can be pressed again. The session also
 ends by itself, keeping everything, when its document closes or another document is activated.
 
-**Spacing** is the distance between points along a line, in centimetres (default 100). Press Enter
-to keep a value; it is remembered between Revit sessions.
+**Spacing** is the distance between points along a line, in centimetres (default 100), rounded to
+two decimals. Press Enter to keep a value; Update and Accept also read the box, so a value typed
+without Enter is used and kept too (whether Revit hands over text not yet confirmed with Enter is
+unverified: checklist row 26). It is remembered between Revit sessions.
 
 ## Why it is shaped this way
 
@@ -103,8 +114,11 @@ from the vertex's current height. So an edge point's offset is target Z minus th
 is read back after the first raise and corrected once if needed.
 
 **The styles create themselves.** `_DP-Topo Line` and the `_DP-Topo Height` text type (a duplicate
-of the project's default text type) are made when a session starts, if missing. Renaming either
-disconnects the tool from every line or text already drawn.
+of the project's default text type) are made when a session starts, if missing. Both are found by
+name only, so renaming either disconnects the tool from every line or text already drawn. Rename
+the text type and the next session gives every line a new text at the last typed height, which the
+next Update applies instead of the heights typed before; rename the line style and Update ignores
+the old lines, leaving their points on the element unreported. Don't rename them.
 
 ### Why the Modify tab needs AdWindows
 
@@ -113,13 +127,17 @@ Revit's own **Modify | Toposolid** tab cannot be reached by the supported API. T
 panels Revit swaps for each selection, so there is no tab of its own to find by name — and the
 title is localised, so it is never matched. The button is added through the unsupported
 `Autodesk.Windows` ribbon (AdWindows, compile-only; nothing is copied to the output) to a panel
-shown only while exactly one non-subdivision toposolid is selected. It was decided on 2026-11-16,
-reversing "don't retry" for this one button, because another add-in in the office does the same and
+of our own on that tab. Its **Topo Tools** button shows while exactly one non-subdivision
+toposolid or one floor is selected; its **Floor ⇄ Topo** button while the selection is not empty
+and every element is a floor or a non-subdivision toposolid. It was decided on 2026-11-16,
+reversing "don't retry" for this one panel, because another add-in in the office does the same and
 "select first, then press" fits it. It is **fail-safe**: any failure is caught and logged, never
-shown, and the button is switched off for the rest of the Revit session. The button on the RVTuk
-panel stays, so a Revit update that breaks the shortcut costs a shortcut, not the tool. It posts
-the RVTuk-panel button's command rather than running anything itself. Floors' contextual tab is not
-included. The Topo Edit panel stays on our own tab.
+shown, and both buttons are switched off for the rest of the Revit session. The buttons on the
+RVTuk panel stay, so a Revit update that breaks the shortcut costs a shortcut, not the tool. Each
+posts its RVTuk-panel button's command rather than running anything itself. The probe was on a
+toposolid; that a floor's contextual tab is the same shared `Modify` tab is assumed (checklist
+row 18 — if it is not, `crash.log` gets one line saying no `Modify` tab was found). The Topo Edit
+panel stays on our own tab.
 
 **Status:** registered on the RVTuk panel on the Add-Ins tab, gated by `RegisterTopoTools` in
 `src/RVTuk.Revit/Application.cs` (on). The Massing & Site tab is impossible and verified so in
@@ -130,7 +148,8 @@ yet ticked one by one.
 
 **Names:** code `TopoTools`; ribbon buttons "Topo Tools" and "Floor ⇄ Topo" (RVTuk panel, internal
 names `TopoTools` and `FloorTopoConvert`); panel `Topo Edit` (`TopoDrawLines`, `TopoHeightLabels`,
-`TopoUpdate`, `TopoAccept`, `TopoCancel`, `TopoSpacing`); line style `_DP-Topo Line`; text type
+`TopoUpdate`, `TopoAccept`, `TopoCancel`, `TopoSpacing`); Modify-tab panel `RVTuk_ContextualTopoTools`
+(AdWindows, posting the two RVTuk-panel buttons' commands); line style `_DP-Topo Line`; text type
 `_DP-Topo Height`; schemas `RVTukTopoHeightTextLink`, `RVTukTopoToolsPointLedger`; updater
 `0aa14034-8c77-48a4-b5d6-dca41ed6da08`.
 
@@ -158,7 +177,7 @@ Tick each case only once it has actually been checked in Revit 2024 (deploy with
 | 15 | Spacing: type 50, press Enter, press Update; restart Revit | Denser points on that Update; 50 is still there after the restart | [ ] |
 | 16 | Floor ⇄ Topo button | Converts as the old ⇄ did | [ ] |
 | 17 | Save a project after a session; open it on a PC without RVTuk | No missing-updater warning | [ ] |
-| 18 | Select one toposolid | A Topo Tools button appears on the Modify tab; pressing it starts the session exactly as the RVTuk-panel button does; selecting a floor shows no extra button | [ ] |
+| 18 | Select one toposolid; then one floor; then two floors and a toposolid; then a floor and a wall | Toposolid and floor: Topo Tools and Floor ⇄ Topo on the Modify tab, each doing exactly what its RVTuk-panel button does. Two floors and a toposolid: Floor ⇄ Topo only. Floor and wall: neither. If nothing shows for a floor, `%LOCALAPPDATA%\RVTuk\crash.log` says whether the Modify tab was found | [ ] |
 | 19 | Floor target: a flat floor at a non-zero level, Update with lines at known heights | The points land at the typed absolute Z (`AddPoints` Z is absolute on a floor) | [ ] |
 | 20 | Floor target: a floor with a slope arrow | Refused with its reason, at start and on Update | [ ] |
 | 21 | Two chained lines meeting on the outline; Update twice | The second summary has no "moved by hand" warning | [ ] |
@@ -166,6 +185,9 @@ Tick each case only once it has actually been checked in Revit 2024 (deploy with
 | 23 | Draw a line, Ctrl+Z it, place an ordinary text note in the view; then Cancel | The text note stays | [ ] |
 | 24 | Session on a floor with no lines over it; Update | The floor is not made shape-edited | [ ] |
 | 25 | Make Revit roll an Update back (press Cancel in a Revit error dialog during Update) | "Nothing was applied — Revit rolled the change back."; the session stays open | [ ] |
+| 26 | Type 50 in Spacing **without** Enter, click Update; restart Revit | Denser points on that Update, and 50 after the restart. If not, Revit does not hand over text before Enter: say so in the tooltip and drop the read-back | [ ] |
+| 27 | Two lines at 42.75 and 43.00 sharing an end point inside the element; Update twice | One point there at 43.00; the summary says "1 point where lines cross took the higher line's height."; the second Update has no "moved by hand" | [ ] |
+| 28 | The Topo Edit buttons, Floor ⇄ Topo and both Modify-tab buttons, in the light and the dark theme | Every button has a legible icon at both sizes | [ ] |
 
 Items 19 and 20 are the two floor facts nothing has verified yet; if a floor wants an offset from
 its top, floors need their own Z conversion.
@@ -197,8 +219,10 @@ everything below *except* the type.
 **Lost:**
 - A sloped floor's slope arrow. It comes back as a flat floor with raised corners and the same
   geometry.
-- Join Geometry.
+- Join Geometry, and walls or columns attached to the floor (they detach).
 - Per-view graphic overrides.
+- Global parameter associations (the value is copied, the association is not).
+- The span-direction symbol.
 - Excavation relationships (Revit 2025).
 - Any point or split line Revit refuses. This is counted in the summary.
 
@@ -255,15 +279,16 @@ Tick each case only once it has actually been checked in Revit.
 | 20 | Workshared: an element borrowed by another user | Skipped, naming the owner | [ ] | [ ] |
 | 21 | Pinned floor → toposolid | The toposolid is pinned | [ ] | [ ] |
 | 22 | Nothing relevant selected, press Floor ⇄ Topo | "Select floors or toposolids first." | [ ] | [ ] |
-| 23 | The summary after any conversion | A TaskDialog lists what was converted, skipped and lost | [ ] | [ ] |
+| 23 | The summary after any conversion | A TaskDialog lists what was converted, skipped and lost; no line ends in ".." | [ ] | [ ] |
+| 24 | A flat toposolid (no points added) → floor | A plain floor: shape editing is off (no Modify Sub Elements points); a shape-edited toposolid still comes back shape-edited | [ ] | [ ] |
 
 ## Code
 
 | Layer | Folder |
 |-------|--------|
-| Core  | `src/RVTuk.Core/TopoTools/` (sampler, line clipper, containment, height label placement, height-text linker, ledger codec, session report, converter planner / chainer / parked-parameter codec / report) |
+| Core  | `src/RVTuk.Core/TopoTools/` (sampler, line clipper, containment, point deduper (crossings), height label placement, height-text linker, ledger codec, session report, `Sentence`, converter planner / chainer / parked-parameter codec / report) |
 | UI    | none: the pane is gone, the session lives on the ribbon |
-| Revit | `src/RVTuk.Revit/TopoTools/` (`TopoSession`, `TopoSessionUpdater`, `TopoSessionRunner`, `TopoEditPanel`, `ContextualTopoButton`, `HeightTexts`, `HeightTextLinkStore`, `HeightTextType`, `LastTypedHeights`, line style and collector, applier, ledger store, the commands in `Commands/`, and the floor / toposolid converter) |
+| Revit | `src/RVTuk.Revit/TopoTools/` (`TopoSession`, `TopoSessionUpdater`, `TopoSessionRunner`, `TopoEditPanel`, `ContextualTopoButton`, `TopoIcons`, `HeightTexts`, `HeightTextLinkStore`, `HeightTextType`, `LastTypedHeights`, line style and collector, applier, ledger store, the commands in `Commands/`, and the floor / toposolid converter) |
 | Tests | `tests/RVTuk.Core.Tests/TopoTools/` |
 
 `XyPoint` moved to `src/RVTuk.Core/Shared/Geometry/` when this tool was built — Auto Dimensions and
