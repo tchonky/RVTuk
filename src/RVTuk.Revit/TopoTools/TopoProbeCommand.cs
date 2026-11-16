@@ -48,6 +48,8 @@ namespace RVTuk.Revit.TopoTools
                 }
             }
 
+            ProbeD(report);
+
             string path = Path.Combine(Path.GetTempPath(), "RVTuk-topo-probe.txt");
             try { File.WriteAllText(path, report.ToString()); } catch (Exception) { }
             TaskDialog.Show("Topo probe", report + "\nSame text saved to:\n" + path);
@@ -162,6 +164,24 @@ namespace RVTuk.Revit.TopoTools
                 }
             }
             catch (Exception ex) { r.AppendLine("  sketch FAILED: " + ex.GetType().Name + ": " + ex.Message); }
+        }
+
+        // (d) ribbon tabs via the unsupported Autodesk.Windows API; does not touch the document
+        private static void ProbeD(StringBuilder r)
+        {
+            r.AppendLine("\n(d) Ribbon tabs (Autodesk.Windows)  << = contextual and visible");
+            try
+            {
+                foreach (var tab in Autodesk.Windows.ComponentManager.Ribbon.Tabs)
+                {
+                    bool hot = tab.IsContextualTab && tab.IsVisible;
+                    r.AppendLine($"  tab Id='{tab.Id}' Title='{tab.Title}' contextual={tab.IsContextualTab} visible={tab.IsVisible} active={tab.IsActive}{(hot ? " <<" : "")}");
+                    if (!tab.IsContextualTab) continue;
+                    foreach (var panel in tab.Panels)
+                        r.AppendLine($"     panel Source.Id='{panel.Source?.Id}' Source.Title='{panel.Source?.Title}'");
+                }
+            }
+            catch (Exception ex) { r.AppendLine("  FAILED: " + ex.GetType().Name + ": " + ex.Message); }
         }
 
         private static List<Face> TopFaces(Element element, out string how)
