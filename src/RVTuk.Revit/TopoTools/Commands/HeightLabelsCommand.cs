@@ -17,7 +17,11 @@ namespace RVTuk.Revit.TopoTools.Commands
             {
                 tx.Start();
                 unlinked = HeightTexts.Label(session.Document, view, session.Created);
-                tx.Commit();
+                if (tx.Commit() != TransactionStatus.Committed)
+                {
+                    TaskDialog.Show(TopoSessionCommands.Title, TopoSessionCommands.RolledBack);
+                    return Result.Cancelled;
+                }
             }
 
             if (unlinked > 0)

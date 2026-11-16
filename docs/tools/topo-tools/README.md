@@ -50,7 +50,10 @@ Update, so one Ctrl+Z undoes it.
 **Cancel** works by snapshot, because no transaction can stay open across user interaction. In one
 transaction it deletes the lines and texts the session created, removes those lines' points from
 the element through the ledger, and puts back the text of every height edited during the session.
-Points that *surviving* lines got from an earlier Update stay (Ctrl+Z undoes them). The session also
+Points that *surviving* lines got from an earlier Update stay: the surface keeps the heights from
+the last Update for the lines that still exist, and the next Update reconciles them. Cancel deletes
+only what is still a topo line or height text of the session's view, and the session ends only once
+its transaction has committed, so a failed Cancel can be pressed again. The session also
 ends by itself, keeping everything, when its document closes or another document is activated.
 
 **Spacing** is the distance between points along a line, in centimetres (default 100). Press Enter
@@ -155,6 +158,11 @@ Tick each case only once it has actually been checked in Revit 2024 (deploy with
 | 18 | Select one toposolid | A Topo Tools button appears on the Modify tab; pressing it starts the session exactly as the RVTuk-panel button does; selecting a floor shows no extra button | [ ] |
 | 19 | Floor target: a flat floor at a non-zero level, Update with lines at known heights | The points land at the typed absolute Z (`AddPoints` Z is absolute on a floor) | [ ] |
 | 20 | Floor target: a floor with a slope arrow | Refused with its reason, at start and on Update | [ ] |
+| 21 | Two chained lines meeting on the outline; Update twice | The second summary has no "moved by hand" warning | [ ] |
+| 22 | During a session, draw a filled region and a masking region | Their boundaries keep their own style and get no height texts | [ ] |
+| 23 | Draw a line, Ctrl+Z it, place an ordinary text note in the view; then Cancel | The text note stays | [ ] |
+| 24 | Session on a floor with no lines over it; Update | The floor is not made shape-edited | [ ] |
+| 25 | Make Revit roll an Update back (press Cancel in a Revit error dialog during Update) | "Nothing was applied — Revit rolled the change back."; the session stays open | [ ] |
 
 Items 19 and 20 are the two floor facts nothing has verified yet; if a floor wants an offset from
 its top, floors need their own Z conversion.

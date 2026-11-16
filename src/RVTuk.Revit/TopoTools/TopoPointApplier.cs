@@ -51,11 +51,6 @@ namespace RVTuk.Revit.TopoTools
 
             var editor = SlabShape.EditorOf(element);
             if (editor == null) return new ApplyOutcome(0, 0, 0, newPointsByLine.Values.Sum(Count));
-            if (!editor.IsEnabled)
-            {
-                editor.Enable();
-                doc.Regenerate();
-            }
 
             // Every line of the view, plus every line since deleted. Not only the lines producing
             // points: a line moved off the element, or whose height became unreadable, must lose
@@ -64,6 +59,17 @@ namespace RVTuk.Revit.TopoTools
             var staleLineIds = ledger.Keys
                 .Where(lineId => inView.Contains(lineId) || !lineStillExists(lineId))
                 .ToList();
+
+            // Nothing to add and nothing to take out: leave the element as it is, so a floor with
+            // no lines over it is not switched to shape editing.
+            if (staleLineIds.Count == 0 && newPointsByLine.Values.Sum(Count) == 0)
+                return new ApplyOutcome(0, 0, 0, 0);
+
+            if (!editor.IsEnabled)
+            {
+                editor.Enable();
+                doc.Regenerate();
+            }
 
             int removed = 0;
             int missing = 0;
@@ -90,7 +96,17 @@ namespace RVTuk.Revit.TopoTools
                     }
                     ledger.Remove(lineId);
                 }
+                doc.Regenerate();
             }
+
+            // The ledger records only points this run created. A vertex that already stood at a
+            // point's plan position before the run (an outline corner, a point added by hand, a
+            // point of a line in another view) is raised or reused but never ledgered: otherwise a
+            // later run would delete a vertex this tool does not own, or report it "moved by hand"
+            // on every run because Revit merged our point into it.
+            var preexisting = new List<XyzPoint>();
+            foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
+                preexisting.Add(SlabShape.ToPoint(vertex.Position));
 
             int added = 0;
             int lost = 0;
@@ -103,27 +119,36 @@ namespace RVTuk.Revit.TopoTools
                 recordedByLine[entry.Key] = recorded;
                 if (entry.Value.Interior.Count == 0) continue;
 
-                lost += AddInterior(editor, entry.Value.Interior, recorded);
-                added += recorded.Count;
+                var result = AddInterior(editor, entry.Value.Interior, preexisting, recorded);
+                added += result.Created;
+                lost += result.Lost;
             }
 
-            // Then the edge points, each on the surface as it now stands. The reference that
-            // ModifySubElement measures from is learnt on the first raise and reused.
+            // Then the edge points, each on the surface as it now stands, and each plan position
+            // once per run: chained lines meeting on the outline share one, and the first line
+            // keeps it. The reference that ModifySubElement measures from is learnt on the first
+            // raise and reused.
+            var edgeByLine = TopoEdgePointDeduper.Dedupe(newPointsByLine.Select(entry =>
+                new KeyValuePair<long, IReadOnlyList<XyzPoint>>(entry.Key, entry.Value.Edge)));
             double? reference = null;
-            foreach (var entry in newPointsByLine)
+            foreach (var entry in edgeByLine)
             {
-                foreach (var point in entry.Value.Edge)
+                foreach (var point in entry.Value)
                 {
-                    var placed = PlaceEdgePoint(doc, element, editor, point, ref reference);
+                    int index = ShapeReplayPlanner.IndexOfXy(preexisting, point);
+                    XyzPoint? existing = index >= 0 ? preexisting[index] : null;
+
+                    var placed = PlaceEdgePoint(doc, element, editor, point, existing, ref reference);
                     if (placed == null)
                     {
                         lost++;
                         continue;
                     }
 
-                    // Recorded even when off its height: it is there, it belongs to this line,
-                    // and the next run must be able to take it back out.
-                    recordedByLine[entry.Key].Add(placed.Value);
+                    // A new point is recorded even when off its height: it is there, it belongs
+                    // to this line, and the next run must be able to take it back out. A vertex
+                    // that was already there is not (see above).
+                    if (existing == null) recordedByLine[entry.Key].Add(placed.Value);
                     if (Math.Abs(placed.Value.Z - point.Z) <= MatchToleranceFeet) added++;
                     else lost++;
                 }
@@ -143,44 +168,55 @@ namespace RVTuk.Revit.TopoTools
         /// <summary>
         /// One <c>AddPoints</c> batch; if Revit refuses it, each point is tried on its own so one
         /// bad point does not cost the rest (as <see cref="SlabShape"/> does). Appends what was
-        /// created to <paramref name="recorded"/> and returns how many could not be added.
+        /// created to <paramref name="recorded"/>, except a vertex at a plan position that was a
+        /// vertex already (in <paramref name="preexisting"/>; see Apply), and returns how many
+        /// points Revit placed and how many it could not.
         /// </summary>
-        private static int AddInterior(SlabShapeEditor editor, IReadOnlyList<XyzPoint> points, List<XyzPoint> recorded)
+        private static (int Created, int Lost) AddInterior(
+            SlabShapeEditor editor, IReadOnlyList<XyzPoint> points, IReadOnlyList<XyzPoint> preexisting,
+            List<XyzPoint> recorded)
         {
             var asked = points.Select(point => new XYZ(point.X, point.Y, point.Z)).ToList();
 
             try
             {
-                int before = recorded.Count;
-                Record(editor.AddPoints(asked), recorded);
-                return Math.Max(0, asked.Count - (recorded.Count - before));
+                int created = Record(editor.AddPoints(asked), preexisting, recorded);
+                return (created, Math.Max(0, asked.Count - created));
             }
             catch (Exception)
             {
                 // Retry one by one below.
             }
 
+            int total = 0;
             int lost = 0;
             foreach (var point in asked)
             {
                 try
                 {
-                    int before = recorded.Count;
-                    Record(editor.AddPoints(new List<XYZ> { point }), recorded);
-                    if (recorded.Count == before) lost++;
+                    int created = Record(editor.AddPoints(new List<XYZ> { point }), preexisting, recorded);
+                    if (created == 0) lost++;
+                    total += created;
                 }
                 catch (Exception)
                 {
                     lost++;
                 }
             }
-            return lost;
+            return (total, lost);
         }
 
-        private static void Record(IList<SlabShapeVertex>? created, List<XyzPoint> recorded)
+        /// <returns>How many vertices Revit returned, ledgered or not.</returns>
+        private static int Record(
+            IList<SlabShapeVertex>? created, IReadOnlyList<XyzPoint> preexisting, List<XyzPoint> recorded)
         {
-            if (created == null) return;
-            foreach (var vertex in created) recorded.Add(SlabShape.ToPoint(vertex.Position));
+            if (created == null) return 0;
+            foreach (var vertex in created)
+            {
+                var position = SlabShape.ToPoint(vertex.Position);
+                if (ShapeReplayPlanner.IndexOfXy(preexisting, position) < 0) recorded.Add(position);
+            }
+            return created.Count;
         }
 
         /// <summary>
@@ -188,24 +224,34 @@ namespace RVTuk.Revit.TopoTools
         /// <c>ModifySubElement</c>'s offset is measured from the element's unshaped top, which is
         /// guessed (level + height offset) until the first raise reveals it as resulting Z − offset
         /// used; a raise that misses by more than 0.1 mm is corrected once with the revealed value.
+        /// When <paramref name="existing"/> is given, a vertex already stands there (an outline
+        /// corner, say): nothing is drawn and that vertex is raised instead.
         /// </summary>
-        /// <returns>Where the point ended up, or null when no point could be drawn.</returns>
+        /// <returns>Where the point ended up, or null when no point could be drawn or found.</returns>
         private static XyzPoint? PlaceEdgePoint(
-            Document doc, Element element, SlabShapeEditor editor, XyzPoint target, ref double? reference)
+            Document doc, Element element, SlabShapeEditor editor, XyzPoint target, XyzPoint? existing,
+            ref double? reference)
         {
             // Earlier raises have changed the surface; faces and vertices are read after a regenerate.
             doc.Regenerate();
 
             SlabShapeVertex? drawn;
-            try
+            if (existing != null)
             {
-#pragma warning disable CS0618
-                drawn = editor.DrawPoint(new XYZ(target.X, target.Y, SurfaceZ(element, target.X, target.Y)));
-#pragma warning restore CS0618
+                drawn = SlabShape.VertexAt(editor, existing.Value);
             }
-            catch (Exception)
+            else
             {
-                return null;
+                try
+                {
+#pragma warning disable CS0618
+                    drawn = editor.DrawPoint(new XYZ(target.X, target.Y, SurfaceZ(element, target.X, target.Y)));
+#pragma warning restore CS0618
+                }
+                catch (Exception)
+                {
+                    return null;
+                }
             }
             if (drawn == null) return null;
 

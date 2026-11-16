@@ -45,11 +45,6 @@ Also unverified, and only visible in Revit:
 ## Next
 
 - **Follow-ups from the edit-session reviews (2026-11-16)**, none blocking:
-  - **A failed Cancel cannot be retried.** The session is ended before the undo runs, so when the
-    undo fails the user is told nothing was undone but has no session to press Cancel in again.
-  - **Cancel deletes the `TextNote`s in `Created` with no type or owner-view check.** A recycled id
-    or a text the user retyped to another type would be deleted. Check `HeightTextType.IsHeightText`
-    and `OwnerViewId` first.
   - **Spacing typed without Enter is ignored.** Clicking away from the box keeps the old value;
     commit on focus loss too, or say so in the tooltip.
   - **Height Labels and Start lack try/catch and logging.** Update and Cancel have it; the other
@@ -57,16 +52,10 @@ Also unverified, and only visible in Revit:
   - **No icons** on the Topo Edit buttons or on Floor ⇄ Topo.
   - **A line grouped or restyled after being applied leaves its points.** Such a line is no longer
     collectable, so Update neither cleans nor reports its points on the element.
-  - **`DrawPoint` landing on an existing corner is reported "moved by hand" forever.** The ledger
-    records a position that Revit merged into the corner vertex.
   - **The collectors could use `ElementOwnerViewFilter`** instead of filtering every `CurveElement`
     and `TextNote` in the document by owner view in C#.
-  - **Dead Core types:** `TopoScope`, `TopoLineInfo` and `TopoLineStatus` were pane types and have
-    no users left. Delete them with their tests.
   - **Renaming `_DP-Topo Height` disconnects every text** (and renaming `_DP-Topo Line` every line),
     since both are found by name. Say so in the type's name comment, or find them by a stored id.
-  - **A refused `PostCommand` disables the Modify-tab button for the whole session.** Check
-    `CanPostCommand` first and only log, instead of calling `Fail`.
 - **Deferred from the converter's final review (2026-09-29), all minor:**
   - A flat toposolid converted to a floor comes back with shape editing enabled, because a
     toposolid always reports its corner vertices and `Replay` enables the floor's editor even for

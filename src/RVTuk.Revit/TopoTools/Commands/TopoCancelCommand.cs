@@ -12,7 +12,9 @@ namespace RVTuk.Revit.TopoTools.Commands
     /// transaction stays open across a session, so this is not a rollback. In one transaction,
     /// "Topo Cancel": the session's new topo lines are deleted and their points taken off the
     /// target; the session's other new height texts are deleted; height texts typed over are put
-    /// back. Points that Update applied for lines that still exist stay (Ctrl+Z undoes them).
+    /// back. Points that Update applied for lines that still exist stay; the next Update
+    /// reconciles them. The session ends only once that transaction has committed, so a failed
+    /// Cancel can be pressed again.
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     public class TopoCancelCommand : IExternalCommand
@@ -27,9 +29,9 @@ namespace RVTuk.Revit.TopoTools.Commands
                 return Result.Cancelled;
             }
 
-            // End first, so the updater is off: the deletes and restores below must not be
-            // restyled, labelled or taken as typed heights.
-            TopoSession.End();
+            // The updater goes off first: the deletes and restores below must not be restyled,
+            // labelled or taken as typed heights. The session itself ends only after the commit.
+            TopoSessionUpdater.Disable();
 
             var doc = session.Document;
             int linesDeleted, pointsRemoved = 0, textsDeleted, textsRestored = 0;
@@ -40,8 +42,14 @@ namespace RVTuk.Revit.TopoTools.Commands
                 try
                 {
                     // 1. The session's new topo lines that still exist (the user may have undone some).
+                    // Created keeps ids across an undo (updaters do not run on undo) and Revit may
+                    // give an undone id to a new element, so each id must still be a topo detail
+                    // line of the session's view.
                     var lineIds = session.Created
-                        .Where(id => doc.GetElement(id) is CurveElement line && TopoLineStyle.IsTopoLine(line))
+                        .Where(id => doc.GetElement(id) is CurveElement line
+                            && line.CurveElementType == CurveElementType.DetailCurve
+                            && line.OwnerViewId == session.ViewId
+                            && TopoLineStyle.IsTopoLine(line))
                         .ToList();
                     if (lineIds.Count > 0) doc.Delete(lineIds);
                     linesDeleted = lineIds.Count;
@@ -60,8 +68,13 @@ namespace RVTuk.Revit.TopoTools.Commands
                         pointsRemoved = outcome.Removed;
                     }
 
-                    // 3. The session's other new texts still there (deleting a line keeps its text).
-                    var textIds = session.Created.Where(id => doc.GetElement(id) is TextNote).ToList();
+                    // 3. The session's other new texts still there (deleting a line keeps its text),
+                    // again only where the id is still a height text of the session's view.
+                    var textIds = session.Created
+                        .Where(id => doc.GetElement(id) is TextNote note
+                            && note.OwnerViewId == session.ViewId
+                            && HeightTextType.IsHeightText(note))
+                        .ToList();
                     if (textIds.Count > 0) doc.Delete(textIds);
                     textsDeleted = textIds.Count;
 
@@ -74,24 +87,35 @@ namespace RVTuk.Revit.TopoTools.Commands
                         textsRestored++;
                     }
 
-                    tx.Commit();
+                    if (tx.Commit() != TransactionStatus.Committed)
+                    {
+                        TopoSessionUpdater.Enable();
+                        TaskDialog.Show(TopoSessionCommands.Title,
+                            TopoSessionCommands.RolledBack + " The Topo Edit session is still open; press Cancel to try again.");
+                        return Result.Cancelled;
+                    }
                 }
                 catch (Exception ex)
                 {
                     if (tx.HasStarted() && !tx.HasEnded()) tx.RollBack();
+                    TopoSessionUpdater.Enable();
                     Application.LogDiagnostic($"Topo Cancel failed: {ex}");
                     TaskDialog.Show(TopoSessionCommands.Title,
-                        $"The session is closed, but undoing its edits failed and nothing was undone: {ex.Message}");
+                        $"Undoing the session's edits failed and nothing was undone: {ex.Message}\n\n" +
+                        "The Topo Edit session is still open; press Cancel to try again.");
                     return Result.Failed;
                 }
             }
+
+            TopoSession.End();
 
             TaskDialog.Show(TopoSessionCommands.Title,
                 "Topo Edit cancelled. " +
                 $"Deleted {Count(linesDeleted, "new line", "new lines")} and {Count(textsDeleted, "new height text", "new height texts")}, " +
                 $"removed {Count(pointsRemoved, "point", "points")} of those lines, " +
                 $"put back {Count(textsRestored, "changed height", "changed heights")}.\n\n" +
-                "Points that Update applied for lines that still exist stay in place; Ctrl+Z undoes them.");
+                "The surface keeps the heights from the last Update for the lines that still exist; " +
+                "the next Update reconciles them.");
             return Result.Succeeded;
         }
 

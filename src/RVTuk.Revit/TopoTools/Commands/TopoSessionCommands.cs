@@ -8,6 +8,9 @@ namespace RVTuk.Revit.TopoTools.Commands
     {
         public const string Title = "Topo Edit";
 
+        /// <summary>Said when <c>Transaction.Commit</c> did not commit: failure processing rolled it back.</summary>
+        public const string RolledBack = "Nothing was applied — Revit rolled the change back.";
+
         /// <summary>
         /// The open session and its plan view. False — after telling the user, and hiding the panel
         /// or ending the session as fits — when there is no session or its view is gone.

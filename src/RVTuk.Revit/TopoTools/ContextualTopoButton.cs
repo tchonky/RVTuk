@@ -249,11 +249,27 @@ namespace RVTuk.Revit.TopoTools
         {
             public RevitCommandId? CommandId { get; set; }
 
+            private bool _refusalLogged;
+
             public void Execute(UIApplication app)
             {
                 try
                 {
-                    if (CommandId != null) app.PostCommand(CommandId);
+                    if (CommandId == null) return;
+
+                    // Revit refuses a post now and then (another command still running, say): that
+                    // is not a broken button, so log it once and ignore the click instead of Fail.
+                    if (!app.CanPostCommand(CommandId))
+                    {
+                        if (!_refusalLogged)
+                        {
+                            _refusalLogged = true;
+                            Application.LogDiagnostic("Contextual Topo Tools button: Revit refused to post the command; click ignored.");
+                        }
+                        return;
+                    }
+
+                    app.PostCommand(CommandId);
                 }
                 catch (Exception ex)
                 {

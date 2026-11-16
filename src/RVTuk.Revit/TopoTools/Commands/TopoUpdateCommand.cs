@@ -58,7 +58,14 @@ namespace RVTuk.Revit.TopoTools.Commands
                     report = TopoSessionRunner.Apply(
                         doc, view, target, TopoEditPanel.SpacingFeet, HeightTexts.ReadHeights(doc, view));
                     report.UnlinkedTexts = unlinked;
-                    tx.Commit();
+
+                    // Failure processing (the user cancelling a Revit error dialog, say) can roll
+                    // the commit back: then nothing was applied, and Accept must keep the session.
+                    if (tx.Commit() != TransactionStatus.Committed)
+                    {
+                        TaskDialog.Show(TopoSessionCommands.Title, TopoSessionCommands.RolledBack);
+                        return false;
+                    }
                 }
                 catch (Exception ex)
                 {
