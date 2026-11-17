@@ -70,7 +70,7 @@ namespace RVTuk.Revit.TopoTools.Commands
                 {
                     tx = new Transaction(doc, "Topo Tools — create styles");
                     tx.Start();
-                    LineStyleCreator.EnsureExists(doc, TopoLineStyle.LineStyleName);
+                    LineStyleCreator.EnsureExists(doc, TopoLineStyle.LineStyleName, TopoLineStyle.Colour);
                     HeightTextType.EnsureExists(doc);
                     if (tx.Commit() != TransactionStatus.Committed)
                     {
