@@ -20,7 +20,7 @@ namespace RVTuk.Core.TopoTools
         /// <param name="sessionOpen">A Topo Edit session is open.</param>
         /// <param name="inEditMode">Revit is in an edit mode, such as Edit Boundary or Edit Group.</param>
         /// <param name="oneTopoTargetSelected">One toposolid or floor is selected.</param>
-        /// <param name="copyAvailable">False once the Revit side has switched the copy off.</param>
+        /// <param name="copyAvailable">The Revit side can put the copy on the Modify tab.</param>
         public static ModifyTabWanted Decide(
             bool sessionOpen, bool inEditMode, bool oneTopoTargetSelected, bool copyAvailable)
         {
