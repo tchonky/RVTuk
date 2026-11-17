@@ -11,8 +11,9 @@ namespace RVTuk.Revit.TopoTools
     /// <summary>
     /// The ⇄ button. It works in three steps:
     /// <list type="number">
-    /// <item><b>Refuse</b> what cannot be converted: subdivisions, group members, elements in
-    /// another design option, elements borrowed by someone else.</item>
+    /// <item><b>Refuse</b> what cannot be converted: the element a Topo Edit session is open on,
+    /// subdivisions, group members, elements in another design option, elements borrowed by
+    /// someone else.</item>
     /// <item><b>Ask</b> about anything whose deletion would take other elements with it, all
     /// before any change. Cancel therefore really does mean nothing happened, and no dialog is
     /// ever up while a transaction is open.</item>
@@ -82,13 +83,20 @@ namespace RVTuk.Revit.TopoTools
         }
 
         /// <summary>
-        /// The refusals shared with the edit session (<see cref="SlabRefusals.Common"/> — not
-        /// <see cref="SlabRefusals.Of"/>, whose shape-point refusal would turn away the sloped
-        /// floors this converter handles on purpose), then the converter's own type checks.
+        /// First the element a Topo Edit session is open on, since converting deletes it from under
+        /// the session. That check is the converter's alone: <see cref="SlabRefusals.Common"/> also
+        /// runs on that element, at Update. Then the refusals shared with the edit session
+        /// (<see cref="SlabRefusals.Common"/> — not <see cref="SlabRefusals.Of"/>, whose shape-point
+        /// refusal would turn away the sloped floors this converter handles on purpose), then the
+        /// converter's own type checks.
         /// </summary>
         private static string? RefusalOf(
             Document doc, Element element, ElementId floorTypeId, ElementId toposolidTypeId)
         {
+            var session = TopoSession.Current;
+            if (session != null && session.IsFor(doc) && element.Id == session.TargetId)
+                return "a Topo Edit session is open on it; Accept or Cancel it first";
+
             var common = SlabRefusals.Common(doc, element);
             if (common != null) return common;
 
