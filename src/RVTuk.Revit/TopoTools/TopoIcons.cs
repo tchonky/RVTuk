@@ -9,13 +9,21 @@ namespace RVTuk.Revit.TopoTools
 {
     /// <summary>
     /// The Topo Tools ribbon icons (Topo Tools, Floor ⇄ Topo and the Topo Edit panel), drawn like
-    /// the toolkit's other icons: dark square, orange strokes, white accents. Each takes the size in
-    /// pixels: 32 for LargeImage, 16 for Image. Shapes are kept bold enough to read at 16.
+    /// the toolkit's other icons: dark square, orange strokes, white accents. Cancel and Accept are
+    /// the exception: a red ✗ and a green ✓ on a transparent background, like Revit's own, in a
+    /// light-theme and a dark-theme version. Each takes the size in pixels: 32 for LargeImage, 16
+    /// for Image. Shapes are kept bold enough to read at 16.
     /// </summary>
     internal static class TopoIcons
     {
         private static readonly WpfColor Background = WpfColor.FromRgb(0x25, 0x25, 0x26);
         private static readonly WpfColor Orange = WpfColor.FromRgb(0xFF, 0x8C, 0x00);
+
+        // ✗ and ✓ per theme: #D9312B and #2F9E44 in the light one, #FF6666 and #62D987 in the dark.
+        private static readonly WpfColor CancelRedLight = WpfColor.FromRgb(0xD9, 0x31, 0x2B);
+        private static readonly WpfColor AcceptGreenLight = WpfColor.FromRgb(0x2F, 0x9E, 0x44);
+        private static readonly WpfColor CancelRedDark = WpfColor.FromRgb(0xFF, 0x66, 0x66);
+        private static readonly WpfColor AcceptGreenDark = WpfColor.FromRgb(0x62, 0xD9, 0x87);
 
         /// <summary>Topo Tools: three nested contour lines, with a point sitting on the middle one.</summary>
         internal static BitmapSource TopoTools(int size) => Draw(size, (ctx, s) =>
@@ -86,17 +94,19 @@ namespace RVTuk.Revit.TopoTools
                 end + tangent * (s * 0.16), end + across * (s * 0.11), end - across * (s * 0.11)));
         });
 
-        /// <summary>Accept: an orange check mark.</summary>
-        internal static BitmapSource Accept(int size) => Draw(size, (ctx, s) =>
+        /// <summary>Accept: a green check mark on a transparent background, in the dark theme's
+        /// green when <paramref name="dark"/>.</summary>
+        internal static BitmapSource Accept(int size, bool dark) => DrawTransparent(size, (ctx, s) =>
         {
-            var pen = BoldPen(Orange, s);
+            var pen = BoldPen(dark ? AcceptGreenDark : AcceptGreenLight, s);
             ctx.DrawGeometry(null, pen, Polyline(s, (0.18, 0.52), (0.40, 0.74), (0.82, 0.28)));
         });
 
-        /// <summary>Cancel: a white X.</summary>
-        internal static BitmapSource Cancel(int size) => Draw(size, (ctx, s) =>
+        /// <summary>Cancel: a red X on a transparent background, in the dark theme's red when
+        /// <paramref name="dark"/>.</summary>
+        internal static BitmapSource Cancel(int size, bool dark) => DrawTransparent(size, (ctx, s) =>
         {
-            var pen = BoldPen(Colors.White, s);
+            var pen = BoldPen(dark ? CancelRedDark : CancelRedLight, s);
             ctx.DrawLine(pen, new WpfPoint(s * 0.24, s * 0.24), new WpfPoint(s * 0.76, s * 0.76));
             ctx.DrawLine(pen, new WpfPoint(s * 0.76, s * 0.24), new WpfPoint(s * 0.24, s * 0.76));
         });
@@ -118,15 +128,21 @@ namespace RVTuk.Revit.TopoTools
             ctx.DrawGeometry(Brushes.White, null, Polygon(s, (0.5, 0.63), (0.38, 0.51), (0.62, 0.51)));
         });
 
-        private static BitmapSource Draw(int size, Action<DrawingContext, double> drawShape)
+        /// <summary>An icon on the toolkit's dark square.</summary>
+        private static BitmapSource Draw(int size, Action<DrawingContext, double> drawShape) =>
+            DrawTransparent(size, (ctx, s) =>
+            {
+                ctx.DrawRectangle(new SolidColorBrush(Background), null, new Rect(0, 0, s, s));
+                drawShape(ctx, s);
+            });
+
+        /// <summary>An icon on a transparent background: only what <paramref name="drawShape"/>
+        /// draws is opaque.</summary>
+        private static BitmapSource DrawTransparent(int size, Action<DrawingContext, double> drawShape)
         {
             var dv = new DrawingVisual();
             using (var ctx = dv.RenderOpen())
-            {
-                double s = size;
-                ctx.DrawRectangle(new SolidColorBrush(Background), null, new Rect(0, 0, s, s));
-                drawShape(ctx, s);
-            }
+                drawShape(ctx, size);
             var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
             bmp.Render(dv);
             bmp.Freeze();

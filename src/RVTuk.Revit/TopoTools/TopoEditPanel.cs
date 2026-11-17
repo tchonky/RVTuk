@@ -1,10 +1,18 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Windows.Media.Imaging;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
 using RVTuk.Core.Shared.Config;
 using RVTuk.Revit.TopoTools.Commands;
+using AwRibbonItem = Autodesk.Windows.RibbonItem;
+using AwRibbonItemSize = Autodesk.Windows.RibbonItemSize;
+using AwRibbonPanel = Autodesk.Windows.RibbonPanel;
+using AwRibbonRowBreak = Autodesk.Windows.RibbonRowBreak;
+using AwRibbonRowPanel = Autodesk.Windows.RibbonRowPanel;
+using AwRibbonTab = Autodesk.Windows.RibbonTab;
 
 namespace RVTuk.Revit.TopoTools
 {
@@ -13,16 +21,42 @@ namespace RVTuk.Revit.TopoTools
     /// panel (the ribbon API only appends), shown while a Topo Edit session is open. It hides
     /// itself on <see cref="TopoSession.Ended"/>, so every way a session ends — Accept, Cancel,
     /// the document closing, switching document — takes the panel with it.
+    ///
+    /// Cancel (✗) above Accept (✓) at its left end, as Revit's own Mode panel has them, then Draw
+    /// Lines, Height Labels, Update and Spacing. The API makes the two as small buttons that show
+    /// their text; the first <see cref="Show"/> makes them icons only through the unsupported
+    /// Autodesk.Windows ribbon, and gives the folded panel the Topo Tools icon. If that fails, the
+    /// API's look stays and the panel works the same.
     /// </summary>
     public static class TopoEditPanel
     {
         public const string PanelName = "Topo Edit";
 
+        /// <summary>Internal name of the Cancel button: part of its command id and of its
+        /// Autodesk.Windows Id (<see cref="ItemIdOf"/>).</summary>
+        internal const string CancelName = "TopoCancel";
+
+        /// <summary>Internal name of the Accept button, used as <see cref="CancelName"/> is.</summary>
+        internal const string AcceptName = "TopoAccept";
+
+        /// <summary>Autodesk.Windows Id of the Add-Ins tab, which hosts this panel. Tabs are found
+        /// by Id, never by their localised title.</summary>
+        private const string AddInsTabId = "Add-Ins";
+
+        /// <summary>The panel's Autodesk.Windows source Id: CustomCtrl_%Add-Ins%Topo Edit.</summary>
+        private const string PanelSourceId = "CustomCtrl_%" + AddInsTabId + "%" + PanelName;
+
         private const double CentimetresPerFoot = 30.48;
 
         private static RibbonPanel? _panel;
+        private static PushButton? _cancelButton;
+        private static PushButton? _acceptButton;
         private static TextBox? _spacingBox;
         private static double _spacingCentimetres = 100;
+
+        /// <summary>Set by the first <see cref="Show"/>: the icons-only look is tried once per
+        /// Revit session, whatever comes of it.</summary>
+        private static bool _iconsOnlyTried;
 
         /// <summary>
         /// The point spacing set in the panel, in Revit's internal feet. Revit's TextBox has no
@@ -53,6 +87,18 @@ namespace RVTuk.Revit.TopoTools
 
             var panel = app.CreateRibbonPanel(PanelName);
 
+            // Added first, so the stack sits at the panel's left end; its first item is the top row.
+            bool dark = IsDarkTheme();
+            var stack = panel.AddStackedItems(
+                Button<TopoCancelCommand>(CancelName, "Cancel", assemblyPath,
+                    "Close the session: delete the lines and texts it made and put changed heights back",
+                    size => TopoIcons.Cancel(size, dark)),
+                Button<TopoAcceptCommand>(AcceptName, "Accept", assemblyPath,
+                    "Apply the topo lines and close the session; lines and heights stay in the view",
+                    size => TopoIcons.Accept(size, dark)));
+            _cancelButton = (PushButton)stack[0];
+            _acceptButton = (PushButton)stack[1];
+
             panel.AddItem(Button<DrawTopoLinesCommand>("TopoDrawLines", "Draw\nLines", assemblyPath,
                 "Start Revit's Detail Line tool: every line drawn in this view becomes a topo line with a height text",
                 TopoIcons.DrawLines));
@@ -60,14 +106,8 @@ namespace RVTuk.Revit.TopoTools
                 "Give every topo line in the view a height text at its middle, and re-centre the existing ones",
                 TopoIcons.HeightLabels));
             panel.AddItem(Button<TopoUpdateCommand>("TopoUpdate", "Update", assemblyPath,
-                "Apply the topo lines and their heights to the selected element, and stay in the session",
+                "Apply the topo lines and their heights to the toposolid or floor being edited, and stay in the session",
                 TopoIcons.Update));
-            panel.AddItem(Button<TopoAcceptCommand>("TopoAccept", "Accept", assemblyPath,
-                "Apply the topo lines and close the session; lines and heights stay in the view",
-                TopoIcons.Accept));
-            panel.AddItem(Button<TopoCancelCommand>("TopoCancel", "Cancel", assemblyPath,
-                "Close the session: delete the lines and texts it made and put changed heights back",
-                TopoIcons.Cancel));
 
             var spacing = (TextBox)panel.AddItem(new TextBoxData("TopoSpacing")
             {
@@ -86,16 +126,155 @@ namespace RVTuk.Revit.TopoTools
             _panel = panel;
             _spacingBox = spacing;
             TopoSession.Ended += Hide;
+            app.ThemeChanged += OnThemeChanged;
         }
 
         public static void Show()
         {
-            if (_panel != null) _panel.Visible = true;
+            if (_panel == null) return;
+            _panel.Visible = true;
+
+            // After Visible, so the panel is surely in the tab. Nothing shows in between: the
+            // ribbon is redrawn only once Revit's thread is free again.
+            if (!_iconsOnlyTried)
+            {
+                _iconsOnlyTried = true;
+                MakeStackIconsOnly();
+            }
         }
 
         public static void Hide()
         {
             if (_panel != null) _panel.Visible = false;
+        }
+
+        /// <summary>
+        /// This panel's Autodesk.Windows object on the Add-Ins tab, hidden or not; null when it is
+        /// not there. Unsupported API, so it may throw: every caller catches.
+        /// </summary>
+        internal static AwRibbonPanel? FindOnAddIns() => FindAddInsTab()?.FindPanel(PanelSourceId);
+
+        private static AwRibbonTab? FindAddInsTab() =>
+            Autodesk.Windows.ComponentManager.Ribbon?.Tabs.FirstOrDefault(t => t.Id == AddInsTabId);
+
+        /// <summary>A button's Autodesk.Windows Id, the same as its command id:
+        /// CustomCtrl_%CustomCtrl_%Add-Ins%Topo Edit% and its name. A stack adds no level.</summary>
+        private static string ItemIdOf(string buttonName) => "CustomCtrl_%" + PanelSourceId + "%" + buttonName;
+
+        /// <summary>
+        /// Makes ✗ and ✓ icons only, as Revit's own Mode panel has them: Large with the text hidden,
+        /// still horizontal (never vertical), so the two rows show the 32 px icons in the height of
+        /// one large button. Then, in a try of its own, gives the folded panel the Topo Tools icon
+        /// instead of its first one, the ✗. Both go through the unsupported Autodesk.Windows
+        /// ribbon, so this never throws: nothing is changed unless the panel is laid out as the API
+        /// builds it, and a failure puts the text back and logs one line. A failure of the folded
+        /// icon logs its own line and leaves the stack's look alone.
+        /// </summary>
+        private static void MakeStackIconsOnly()
+        {
+            var changed = new List<AwRibbonItem>();
+            try
+            {
+                var mismatch = FindStack(out var cancel, out var accept);
+                if (mismatch != null)
+                {
+                    Application.LogDiagnostic($"Topo Edit: Cancel and Accept keep their text: {mismatch}.");
+                }
+                else
+                {
+                    foreach (var button in new[] { cancel!, accept! })
+                    {
+                        changed.Add(button); // first: a setter that throws may still have stored its value
+                        button.Size = AwRibbonItemSize.Large;
+                        button.ShowText = false;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                foreach (var button in changed) PutTextBack(button);
+                Application.LogDiagnostic($"Topo Edit: Cancel and Accept keep their text: {ex}");
+            }
+
+            try
+            {
+                var panel = FindOnAddIns();
+                if (panel != null)
+                    panel.CollapsedPanelImage = TopoIcons.TopoTools(32);
+                else
+                    Application.LogDiagnostic(
+                        $"Topo Edit: the folded panel keeps its first icon: no panel \"{PanelSourceId}\" on the Add-Ins tab.");
+            }
+            catch (Exception ex)
+            {
+                Application.LogDiagnostic($"Topo Edit: the folded panel keeps its first icon: {ex}");
+            }
+        }
+
+        /// <summary>
+        /// Finds ✗ and ✓ on the Add-Ins tab by Id and checks that their panel is laid out as the API
+        /// builds it: its source Id is ours, and its first item is the stack [Cancel, row break,
+        /// Accept], both with a large image. Null when all of that holds; otherwise what does not,
+        /// with both buttons null.
+        /// </summary>
+        private static string? FindStack(out AwRibbonItem? cancel, out AwRibbonItem? accept)
+        {
+            cancel = accept = null;
+            var tab = FindAddInsTab();
+            if (tab == null) return $"no tab with Id \"{AddInsTabId}\"";
+
+            // RibbonTab.FindItem walks every panel, hidden ones too, and goes into stacks (its
+            // enumerator descends into RibbonRowPanel): read in AdWindows 2024, 2026 and 2027.
+            var foundCancel = tab.FindItem(ItemIdOf(CancelName), out var cancelPanel);
+            var foundAccept = tab.FindItem(ItemIdOf(AcceptName), out var acceptPanel);
+            if (foundCancel == null || foundAccept == null) return "a button is not on the Add-Ins tab";
+            if (!ReferenceEquals(cancelPanel, acceptPanel) || cancelPanel.Source?.Id != PanelSourceId)
+                return $"the buttons are not both on the panel \"{PanelSourceId}\"";
+
+            var items = cancelPanel.Source.Items;
+            var rows = items.Count > 0 && items[0] is AwRibbonRowPanel stack ? stack.Items : null;
+            if (rows == null || rows.Count != 3
+                || !ReferenceEquals(rows[0], foundCancel)
+                || rows[1] is not AwRibbonRowBreak
+                || !ReferenceEquals(rows[2], foundAccept))
+                return "the panel does not start with the stack [Cancel, row break, Accept]";
+
+            if (foundCancel.LargeImage == null || foundAccept.LargeImage == null)
+                return "a button has no large image";
+
+            cancel = foundCancel;
+            accept = foundAccept;
+            return null;
+        }
+
+        /// <summary>The API's look back on one button: small, with its text. Best effort, and never
+        /// throws: the caller logs the failure that called for it.</summary>
+        private static void PutTextBack(AwRibbonItem button)
+        {
+            try { button.Size = AwRibbonItemSize.Standard; }
+            catch { /* the caller logs the failure */ }
+            try { button.ShowText = true; }
+            catch { /* the caller logs the failure */ }
+        }
+
+        private static bool IsDarkTheme() => UIThemeManager.CurrentTheme == UITheme.Dark;
+
+        /// <summary>Revit's theme changed: ✗ and ✓ take the colours of the theme now current.</summary>
+        private static void OnThemeChanged(object? sender, ThemeChangedEventArgs e)
+        {
+            try
+            {
+                if (_cancelButton == null || _acceptButton == null) return;
+                bool dark = IsDarkTheme();
+                _cancelButton.Image = TopoIcons.Cancel(16, dark);
+                _cancelButton.LargeImage = TopoIcons.Cancel(32, dark);
+                _acceptButton.Image = TopoIcons.Accept(16, dark);
+                _acceptButton.LargeImage = TopoIcons.Accept(32, dark);
+            }
+            catch (Exception ex)
+            {
+                Application.LogDiagnostic($"Topo Edit icons for the new theme failed: {ex}");
+            }
         }
 
         private static void OnSpacingEntered(object? sender, TextBoxEnterPressedEventArgs e)
