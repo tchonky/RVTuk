@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Autodesk.Revit.DB;
+using RVTuk.Core.TopoTools;
 
 namespace RVTuk.Revit.TopoTools
 {
@@ -154,7 +155,7 @@ namespace RVTuk.Revit.TopoTools
                         // height type) is only recorded: there is no earlier text to compare with.
                         if (!known || current == lastSeen) continue;
 
-                        if (TopoHeightParser.TryParse(doc, current, out double sharedFeet))
+                        if (SurveyHeightText.TryParse(current, out double sharedFeet))
                             LastTypedHeights.Set(doc, sharedFeet);
                     }
                     catch (Exception ex)

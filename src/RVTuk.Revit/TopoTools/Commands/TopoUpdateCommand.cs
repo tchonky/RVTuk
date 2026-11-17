@@ -76,6 +76,23 @@ namespace RVTuk.Revit.TopoTools.Commands
                 }
             }
 
+            // Heights are measured like a Survey Point level, not from the marker, so the first
+            // committed Update of a session names the marker's own height; the report leaves the
+            // note out when it rounds to 0. One read per session, even a failed one.
+            if (!session.MarkerNoted)
+            {
+                try
+                {
+                    report.SurveyPointMarkerMetres =
+                        BasePoint.GetSurveyPoint(doc).SharedPosition.Z * SurveyHeightText.MetresPerFoot;
+                }
+                catch (Exception ex)
+                {
+                    Application.LogDiagnostic($"Topo Update: reading the Survey Point marker failed: {ex}");
+                }
+                session.MarkerNoted = true;
+            }
+
             // Revit's UI API has no supported way to write the status bar, so the summary is a
             // dialog: a warning one when the report names problems, a plain one otherwise.
             var dialog = new TaskDialog(TopoSessionCommands.Title)

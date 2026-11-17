@@ -76,8 +76,8 @@ namespace RVTuk.Revit.TopoTools
 
         /// <summary>
         /// Creates the height text for one line, centred on its middle and rotated along it, showing
-        /// <paramref name="sharedFeet"/>, and links it to the line. Caller must already be inside a
-        /// transaction.
+        /// <paramref name="sharedFeet"/> in metres, and links it to the line. Caller must already be
+        /// inside a transaction.
         /// </summary>
         public static TextNote CreateFor(Document doc, View view, CurveElement line, double sharedFeet)
         {
@@ -94,7 +94,7 @@ namespace RVTuk.Revit.TopoTools
             };
             var note = TextNote.Create(
                 doc, view.Id, new XYZ(spot.Point.X, spot.Point.Y, z),
-                TopoLengthFormatter.Format(doc, sharedFeet), options);
+                SurveyHeightText.Format(sharedFeet), options);
 
             HeightTextLinkStore.Set(note, line.Id.Value);
             return note;

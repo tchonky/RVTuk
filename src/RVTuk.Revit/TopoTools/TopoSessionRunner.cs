@@ -41,7 +41,7 @@ namespace RVTuk.Revit.TopoTools
                 if (points.IsEmpty) continue;
 
                 var text = heightTextByLine.TryGetValue(line.LineId, out var raw) ? raw ?? "" : "";
-                if (!TopoHeightParser.TryParse(doc, text, out double sharedFeet))
+                if (!SurveyHeightText.TryParse(text, out double sharedFeet))
                 {
                     report.UnreadableHeights.Add(text);
                     continue;

@@ -40,6 +40,12 @@ namespace RVTuk.Revit.TopoTools
         /// </summary>
         internal Dictionary<ElementId, string> LastSeenTexts { get; }
 
+        /// <summary>
+        /// Set by the session's first committed Update once it has read the Survey Point marker's
+        /// height for its summary, a failed read included, so at most one summary names the marker.
+        /// </summary>
+        public bool MarkerNoted { get; set; }
+
         private TopoSession(Document document, ElementId viewId, ElementId targetId,
             IReadOnlyDictionary<ElementId, string> textSnapshot)
         {
