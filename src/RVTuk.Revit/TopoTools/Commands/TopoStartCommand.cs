@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
@@ -22,16 +23,16 @@ namespace RVTuk.Revit.TopoTools.Commands
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            var open = TopoSession.Current;
-            if (open != null)
-            {
-                var label = TopoSessionCommands.LabelOf(open.Document.GetElement(open.TargetId), open.TargetId);
-                TopoEditPanel.Show();
-                TaskDialog.Show(Title, $"A Topo Edit session is already open on {label}.");
-                return Result.Cancelled;
-            }
-
             var uiDoc = commandData.Application.ActiveUIDocument;
+            return TopoSession.Current != null ? AskAboutOpenSession(uiDoc) : Start(uiDoc);
+        }
+
+        /// <summary>
+        /// The start, with no session open: a session on the one toposolid or floor in
+        /// <paramref name="selection"/>, or in the current selection when that is null.
+        /// </summary>
+        private static Result Start(UIDocument? uiDoc, ICollection<ElementId>? selection = null)
+        {
             if (uiDoc == null || uiDoc.ActiveView is not ViewPlan view)
             {
                 TaskDialog.Show(Title, SelectOne);
@@ -39,7 +40,7 @@ namespace RVTuk.Revit.TopoTools.Commands
             }
 
             var doc = uiDoc.Document;
-            var ids = uiDoc.Selection.GetElementIds();
+            var ids = selection ?? uiDoc.Selection.GetElementIds();
             var element = ids.Count == 1 ? doc.GetElement(ids.First()) : null;
             if (element is not (Toposolid or Floor))
             {
@@ -89,8 +90,8 @@ namespace RVTuk.Revit.TopoTools.Commands
                 if (tx != null && tx.HasStarted() && !tx.HasEnded()) tx.RollBack();
 
                 // No half-started session: one that started before the failure (the panel would
-                // not show, say) is closed again, so Topo Tools can simply be pressed again. A
-                // session open before this press returned early above, so this one is ours.
+                // not show, say) is closed again, so Topo Tools can simply be pressed again. The
+                // start runs only while no session is open, so this one is ours.
                 TopoSession.End();
 
                 Application.LogDiagnostic($"Topo Tools start failed: {ex}");
@@ -101,6 +102,96 @@ namespace RVTuk.Revit.TopoTools.Commands
             {
                 tx?.Dispose();
             }
+        }
+
+        /// <summary>
+        /// Topo Tools pressed during a session asks what to do with it: go to it, accept it (as ✓)
+        /// or cancel it (as ✗). Closing the dialog changes nothing. Once accepting or cancelling has
+        /// closed the session, a selection of one other toposolid or floor, read before asking,
+        /// goes on into <see cref="Start"/>, as pressing Topo Tools with it selected then would.
+        /// </summary>
+        private static Result AskAboutOpenSession(UIDocument? uiDoc)
+        {
+            // A session whose view is gone has nothing to go to: TryGet closes it and says so.
+            if (!TopoSessionCommands.TryGet(out var open, out var view)) return Result.Cancelled;
+
+            // Read before asking: what to start on afterwards is what was selected when Topo Tools
+            // was pressed.
+            var selection = uiDoc?.Selection.GetElementIds();
+            var label = TopoSessionCommands.LabelOf(open.Document.GetElement(open.TargetId), open.TargetId);
+            TopoEditPanel.Show();
+
+            var dialog = new TaskDialog(Title)
+            {
+                MainInstruction = $"Topo Edit is open on {label} in {view.Name}.",
+                AllowCancellation = true,
+                // A reflexive Enter goes to the session, which changes nothing in the model.
+                DefaultButton = TaskDialogResult.CommandLink1,
+            };
+            dialog.AddCommandLink(TaskDialogCommandLinkId.CommandLink1, "Go to it",
+                "Opens that view and selects that element.");
+            dialog.AddCommandLink(TaskDialogCommandLinkId.CommandLink2, "Accept it",
+                "As ✓; then, if one other toposolid or floor is selected, a session starts on it.");
+            dialog.AddCommandLink(TaskDialogCommandLinkId.CommandLink3, "Cancel it",
+                "As ✗; then the same.");
+
+            Result result;
+            switch (dialog.Show())
+            {
+                case TaskDialogResult.CommandLink1:
+                    return GoTo(uiDoc, open, view, label);
+                case TaskDialogResult.CommandLink2:
+                    result = TopoSessionActions.Accept() ? Result.Succeeded : Result.Cancelled;
+                    break;
+                case TaskDialogResult.CommandLink3:
+                    result = TopoSessionActions.Cancel();
+                    break;
+                default:
+                    return Result.Cancelled; // Esc or the dialog closed: nothing was done.
+            }
+
+            return TopoSession.Current == null && HoldsOneOtherSlab(uiDoc, selection, open)
+                ? Start(uiDoc, selection)
+                : result;
+        }
+
+        /// <summary>Go to it: the session's view becomes the active one, with the session's element
+        /// selected.</summary>
+        private static Result GoTo(UIDocument? uiDoc, TopoSession open, ViewPlan view, string label)
+        {
+            // Activating another document ends the session, so this should not happen; if it does,
+            // there is nothing in the active document to switch to.
+            if (uiDoc == null || !open.IsFor(uiDoc.Document))
+            {
+                TaskDialog.Show(Title,
+                    $"Topo Edit is open on {label} in another document. Switch to that document, then press Topo Tools again.");
+                return Result.Cancelled;
+            }
+
+            try
+            {
+                uiDoc.ActiveView = view;
+                if (open.Document.GetElement(open.TargetId) != null)
+                    uiDoc.Selection.SetElementIds(new List<ElementId> { open.TargetId });
+                return Result.Succeeded;
+            }
+            catch (Exception ex)
+            {
+                Application.LogDiagnostic($"Topo Tools go to session failed: {ex}");
+                TaskDialog.Show(Title, $"Could not go to {label} in {view.Name}: {ex.Message}");
+                return Result.Failed;
+            }
+        }
+
+        /// <summary>True when <paramref name="selection"/> is one toposolid or floor that is still in
+        /// the document and is not the target of the session just closed.</summary>
+        private static bool HoldsOneOtherSlab(UIDocument? uiDoc, ICollection<ElementId>? selection, TopoSession closed)
+        {
+            if (uiDoc == null || selection == null || selection.Count != 1) return false;
+
+            var id = selection.First();
+            if (closed.IsFor(uiDoc.Document) && id == closed.TargetId) return false;
+            return uiDoc.Document.GetElement(id) is Toposolid or Floor;
         }
     }
 }

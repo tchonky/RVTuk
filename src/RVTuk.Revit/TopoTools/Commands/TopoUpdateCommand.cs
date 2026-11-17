@@ -11,7 +11,7 @@ namespace RVTuk.Revit.TopoTools.Commands
     public class TopoUpdateCommand : IExternalCommand
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements) =>
-            Run(commandData.Application) ? Result.Succeeded : Result.Cancelled;
+            Run() ? Result.Succeeded : Result.Cancelled;
 
         /// <summary>
         /// The Update routine, shared with Accept. One transaction, "Topo Update": Height Labels,
@@ -19,7 +19,7 @@ namespace RVTuk.Revit.TopoTools.Commands
         /// deleted the session ends. Returns true when the update was committed — also when its
         /// report has problems (the summary names them).
         /// </summary>
-        public static bool Run(UIApplication uiApp)
+        public static bool Run()
         {
             if (!TopoSessionCommands.TryGet(out var session, out var view)) return false;
 
