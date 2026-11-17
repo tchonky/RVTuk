@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Revit 2024–2027. Build each year: `dotnet build RVTuk.sln -c Release2024` (and `Release2025`, `Release2026`, `Release2027`) → 0 errors. Before every commit: `.\build\Test-All.ps1` → all pass.
+- Revit 2024–2027. Build each year: `dotnet build RVTuk.sln -c Release2024` (and `Release2025`, `Release2026`, `Release2027`) → 0 errors. Before every commit: `.\build\Test-All.ps1` → all pass. This binds commits on `topo-tools-finish`; the throwaway probe branch of Task 6 is exempt.
 - Core stays free of Revit and WPF types. Namespace = folder. Core sources use block namespaces; tests use `namespace RVTuk.Core.Tests.TopoTools;`.
 - Frozen identifiers (`tests\RVTuk.Core.Tests\Shared\FrozenIdentifierTests.cs`): `"TopoTools"`, `"FloorTopoConvert"`, `"TopoDrawLines"`, `"TopoHeightLabels"`, `"TopoUpdate"`, `"TopoAccept"`, `"TopoCancel"`, `"TopoSpacing"`, `PanelName = "Topo Edit"`, `LineStyleName = "_DP-Topo Line"`, `Name = "_DP-Topo Height"` and the updater GUID each stay in `src` exactly once. A second use goes through a constant.
 - Panel and button names do not change. Command ids stay `CustomCtrl_%CustomCtrl_%Add-Ins%Topo Edit%<button>`. The panel's Autodesk.Windows source Id is `CustomCtrl_%Add-Ins%Topo Edit`.
@@ -48,7 +48,7 @@
 4. **Saving another document or a read-only one, or saving while closing**: no prompt for a document the session is not on, and nothing lost on Esc. *Probe 8; checks in Task 12.*
 5. **A theme switch or a narrow window during a session**: ✗ and ✓ stay legible in both themes on both panels; a folded panel shows the Topo Tools icon, and one click opens ✗ over ✓. *Probe 5; checks in Tasks 5 and 10.*
 
-Tasks 1–5 come before the probe, which is cut after Task 5. Tasks 11, 13 and 14 can be built while the probe sitting is pending. Only probe 9 can change any of these (Tasks 2 and 3); if it does, Task 7 Step 3 changes that code.
+Tasks 1–5 come before the probe, which is cut after Task 5. Tasks 11, 13 and 14 can be built while the probe sitting is pending. Only probes 5 and 9 can change any of these (probe 5 Task 5's stack and icons, probe 9 Tasks 2 and 3); if either does, Task 7 Step 3 changes that code.
 
 ---
 
@@ -363,7 +363,6 @@ public void Decides(bool session, bool editMode, bool oneTarget, bool copyAvaila
 - Produces:
   - `internal static BitmapSource TopoIcons.Cancel(int size, bool dark)` and `Accept(int size, bool dark)`: transparent background, colours from Global Constraints.
   - `internal static Autodesk.Windows.RibbonPanel? TopoEditPanel.FindOnAddIns()`: the Add-Ins panel whose `Source.Id == "CustomCtrl_%Add-Ins%Topo Edit"`, or null. Task 10 shares its `Source`.
-  - `internal static bool TopoEditPanel.SkipIconsOnlyLook` (default false). The probe sets it to show the fail-safe look.
 - Rules:
   - The names go through constants, `CancelName = "TopoCancel"` and `AcceptName = "TopoAccept"`, so each literal still appears once.
 
@@ -373,7 +372,7 @@ public void Decides(bool session, bool editMode, bool oneTarget, bool copyAvaila
   - Then Spacing, as today.
   - Choose the icons by `UIThemeManager.CurrentTheme == UITheme.Dark`. Subscribe `app.ThemeChanged`; on every event, re-read `CurrentTheme` and re-assign both buttons' `Image` (16 px) and `LargeImage` (32 px).
 
-- [ ] **Step 2: Make the stack icons only, once, at the first `Show()`,** unless `SkipIconsOnlyLook`. Do it in one method that never throws:
+- [ ] **Step 2: Make the stack icons only, once, at the first `Show()`.** Do it in one method that never throws:
   1. Find the two Autodesk.Windows buttons on the "Add-Ins" tab by Id: `CustomCtrl_%CustomCtrl_%Add-Ins%Topo Edit%` + name. Hidden panels and stacks are searched too.
   2. Check before changing anything:
      - the panel's `Source.Id` is as above;
@@ -399,11 +398,12 @@ public void Decides(bool session, bool editMode, bool oneTarget, bool copyAvaila
 
 ### Task 6: Probe — a throwaway build for one Revit 2024 sitting
 
-Ten facts decide Tasks 8–12, and probe 9 may change Tasks 2 and 3: the spec's probe items 1–9, plus item 10 added here. Item 10 asks whether Draw Lines from another view, which sets the active view and then posts Detail Line, starts drawing in the session's view. They go into a throwaway build. Daniel runs it once in Revit 2024, and Task 7 records the answers. Nothing from this task is merged.
+Ten facts decide Tasks 8–12 (probe 5 may also change Task 5, and probe 9 Tasks 2 and 3): the spec's probe items 1–9, plus item 10 added here. Item 10 asks whether Draw Lines from another view, which sets the active view and then posts Detail Line, starts drawing in the session's view. They go into a throwaway build. Daniel runs it once in Revit 2024, and Task 7 records the answers. Nothing from this task is merged.
 
 **Files (throwaway).** All on branch `topo-probe-2026-11-17`, in the worktree `D:\Coding\RVTuk-probe`, cut from `topo-tools-finish` after Task 5:
 - Create: `src/RVTuk.Revit/TopoTools/TopoRibbonProbe.cs` (startup hooks and the log) and `src/RVTuk.Revit/TopoTools/TopoProbeCommand.cs` (an on-demand dump).
 - Modify: `src/RVTuk.Revit/Application.cs`, with lines marked TEMPORARY: `TopoRibbonProbe.Install(application)`, and a "Topo Probe" button after Floor ⇄ Topo whose name comes from a constant.
+- Modify: `src/RVTuk.Revit/TopoTools/TopoEditPanel.cs`, with lines marked TEMPORARY: `internal static bool SkipIconsOnlyLook`, checked first in Task 5's icons-only method, which then returns and leaves Size and ShowText as they are. The flag never reaches `topo-tools-finish`.
 
 **Behaviour:**
 - **The log** is `%TEMP%\RVTuk-topo-probe.txt`: append only, one timestamped line per event, and it never throws.
@@ -432,7 +432,7 @@ Ten facts decide Tasks 8–12, and probe 9 may change Tasks 2 and 3: the spec's 
   - **Probe 5:** the same per-panel lines as when the Modify tab becomes active, and `ComponentManager.Ribbon.ActualHeight`.
   - **Probe 10:** with a session open and another view active, set `ActiveView` to the session's view, then call `CanPostCommand` and `PostCommand(PostableCommand.DetailLine)`. Log each result.
 
-- [ ] **Step 1: Build the probe.** Create the worktree and branch, write the two files and the temporary lines, and build `-c Release2024` → 0 errors. Test-All is not run on this branch: it is never merged.
+- [ ] **Step 1: Build the probe.** Create the worktree and branch, write the two files and the temporary lines, and build `-c Release2024` → 0 errors. Test-All is not run on this branch: it is never merged. Then commit the probe on `topo-probe-2026-11-17` in one commit, `chore(topo-tools): throwaway probe, never merged`. Commit any later change to the probe the same way, so the worktree stays clean.
 
 - [ ] **Step 2: Ask Daniel for the sitting, and wait for the results.** Send him this script:
 
@@ -471,6 +471,8 @@ Ten facts decide Tasks 8–12, and probe 9 may change Tasks 2 and 3: the spec's 
 **Files:**
 - Modify: the spec (a new section, "## Probe results (Revit 2024, <date>)"), and this plan, amending the Global Constraints and Tasks 2, 3 and 8–12 where a result changes them.
 - Only if rule 9 fires, also: `src/RVTuk.Revit/TopoTools/TopoSessionRunner.cs:28-31, 50`, `src/RVTuk.Revit/TopoTools/Commands/TopoUpdateCommand.cs`, `src/RVTuk.Revit/TopoTools/TopoSession.cs`, `src/RVTuk.Core/TopoTools/TopoSessionReport.cs`, `tests/RVTuk.Core.Tests/TopoTools/TopoSessionReportTests.cs`.
+- Only if rule 5 changes the look, also: `src/RVTuk.Revit/TopoTools/TopoEditPanel.cs`, `src/RVTuk.Revit/TopoTools/TopoIcons.cs`.
+- Only if rule 7 fires, also: Task 15 of this plan (its conditional README note).
 
 - [ ] **Step 1: Record each item's answer in the spec.** Probe 9's line was typed 42.75 into the probe build, which already reads metres (Task 3); Task 3 left the step from shared to internal heights unchanged, so the answer holds for it.
 
@@ -481,21 +483,30 @@ Ten facts decide Tasks 8–12, and probe 9 may change Tasks 2 and 3: the spec's 
   - **4:**
     - An error with today's plain shortcut panel means the crash is real, and PR #16 must not merge before Task 9.
     - Task 9's edit-mode signal is `IsContextualTab && IsInEditMode` if that pair was true exactly during edit modes, Edit Boundary and Edit Group alike, and false again once each ended, after Finish and after Cancel, including the Topo Probe reading after step 6's cancelled new floor. `IsInEditMode` alone cannot be the signal: UIFramework starts it true and writes it only when it builds a contextual tab (`ContextualTab.setProperties`); tearing that tab down resets only `IsContextualTab`, so after an edit mode that ends with nothing selected the plain Modify tab still reads true (2024, 2026 and 2027). Otherwise use the signal the log shows, for example a Revit Mode panel's `Source.Id` on the tab.
-  - **5:** failures in the look are noted, and Task 5's fail-safe look stays. If the copy is folded at the usual width, the choice goes back to Daniel: accept it, or raise the copy's collapse priority.
+  - **5:**
+    - If the icons-only stack looks wrong on Add-Ins (the panels taller during a session than before, by the Topo Probe readings before the sitting and at step 10; anything on Topo Edit cut off; or text still shown, step 1) and step 13 shows the fail-safe stack whole: Step 3 ships the stack as the API builds it, small icons with "Cancel" and "Accept". TopoEditPanel no longer makes it Large with ShowText off at the first `Show()`; the `CollapsedPanelImage` keeps its own try; Task 5 Step 4's checks, and so Task 15's rows, change to that stack.
+    - If the fail-safe stack is wrong too, the choice goes back to Daniel.
+    - If step 8 shows ✗ or ✓ unreadable in one theme, Step 3 changes that theme's colours in the Global Constraints and in `TopoIcons`.
+    - If the copy is folded at the usual width, the choice goes back to Daniel: accept it, or raise the copy's collapse priority.
+    - If the look passes, Task 5's code stays as it is.
   - **6:** if a tiled view does not raise `ViewActivated`, note that such a switch does not disarm.
-  - **7:** if Topo Edit's ids are missing from the list, add a keyboard-shortcut note to the README and the backlog idea (Task 15).
+  - **7:** if Topo Edit's ids are missing from the list, add a keyboard-shortcut note to the README and the backlog idea (Task 15 Step 1 carries the note, Step 4 the idea).
   - **8:** if Esc during a close lets Revit close without saving, Task 12's Esc saves as it is in every case.
   - **9:** if Revit's readings follow the marker, the conversion becomes `internalZ = h + BasePoint.GetSurveyPoint(doc).Position.Z` and the marker note is dropped. Amend the Global Constraints (the Internal Z bullet becomes this formula, read again at every Update; the marker bullet and the marker sentence go), Tasks 2 and 3 (Task 3 Step 4's marker check becomes: with the marker raised 10 m while unclipped, Update raises the points 10 m, as a Survey Point level reads), and the spec. Then do Step 3.
   - **10:** if switching then posting does not start drawing in the session's view, Task 8's Draw Lines switches the view and says "Press Draw Lines again to draw in {view name}."
 
-- [ ] **Step 3: Only if rule 9 fired, change the code Tasks 2 and 3 already built.** On `topo-tools-finish`:
-  - `TopoSessionRunner.Apply`: replace lines 30-31 with `double markerZ = BasePoint.GetSurveyPoint(doc).Position.Z;` and line 50 with `double z = sharedFeet + markerZ;`; rewrite the comment at lines 28-29 to match.
-  - `TopoSessionReport`: remove `SurveyPointMarkerMetres` and its sentence; `NothingOverTarget` is again returned on its own. In `TopoSessionReportTests`, remove the `Marker` constant and the six marker tests.
-  - Remove `TopoSession.MarkerNoted`, and Task 3 Step 2's note code from `TopoUpdateCommand.Run`.
-  - Build all four years → 0 errors; `.\build\Test-All.ps1` → all pass.
-  - Commit `fix(topo-tools): heights measured from the Survey Point marker, as probe 9 found`.
+- [ ] **Step 3: Only if rule 5 or rule 9 fired, change the code already built.** On `topo-tools-finish`, each rule as its own commit, after building all four years → 0 errors and `.\build\Test-All.ps1` → all pass:
+  - **Rule 9:**
+    - `TopoSessionRunner.Apply`: replace lines 30-31 with `double markerZ = BasePoint.GetSurveyPoint(doc).Position.Z;` and line 50 with `double z = sharedFeet + markerZ;`; rewrite the comment at lines 28-29 to match.
+    - `TopoSessionReport`: remove `SurveyPointMarkerMetres` and its sentence; `NothingOverTarget` is again returned on its own. In `TopoSessionReportTests`, remove the `Marker` constant and the six marker tests.
+    - Remove `TopoSession.MarkerNoted`, and Task 3 Step 2's note code from `TopoUpdateCommand.Run`.
+    - Commit `fix(topo-tools): heights measured from the Survey Point marker, as probe 9 found`.
+  - **Rule 5:** change `TopoEditPanel` and `TopoIcons` as the rule says. Commit `fix(topo-tools): the Cancel and Accept stack as probe 5 found`.
 
-- [ ] **Step 4: Delete the probe.** Run `git worktree remove D:\Coding\RVTuk-probe` and `git branch -D topo-probe-2026-11-17`.
+- [ ] **Step 4: Delete the probe.**
+  - From `D:\Coding\RVTuk`, run `git worktree remove D:\Coding\RVTuk-probe`, then `git branch -D topo-probe-2026-11-17` (`-D`: the probe commit is never merged). The worktree is clean: the probe is committed (Task 6 Step 1), and build and deploy output is ignored.
+  - If the removal still refuses, run `git -C D:\Coding\RVTuk-probe status --porcelain`. If it lists only the probe's own files, commit them on the probe branch and retry; if it lists anything else, stop and ask Daniel.
+  - Tell Daniel that the probe build is still installed in Revit 2024, and in 2026 or 2027 if step 14 put it there, with its save prompt. In an elevated shell with Revit closed, he replaces it with `.\Deploy.ps1 2024` from `D:\Coding\RVTuk`, adding 2026 or 2027 as needed.
 
 - [ ] **Step 5: Commit**
 
@@ -572,7 +583,7 @@ Ten facts decide Tasks 8–12, and probe 9 may change Tasks 2 and 3: the spec's 
   - `internal static class ModifyTabAccess`, with:
     - `internal const string AddInsTabId = "Add-Ins";` and `internal const string ModifyTabId = "Modify";`
     - `internal static AwRibbonTab? FindTab(string id)`: `ComponentManager.Ribbon?.FindTab(id)`.
-    - `internal static AwRibbonPanel? NewRevitPanel(AwRibbonPanelSource source)`: the type `UIFramework.RvtRibbonPanel` from the loaded `UIFramework` assembly, made with `Activator.CreateInstance`, cast to `AwRibbonPanel`, with `Source = source`; null when any step fails.
+    - `internal static AwRibbonPanel NewRevitPanel(AwRibbonPanelSource source)`: the type `UIFramework.RvtRibbonPanel` from the loaded `UIFramework` assembly, made with `Activator.CreateInstance`, cast to `AwRibbonPanel`, with `Source = source`. It never returns null, never hands back a half-made panel, and logs nothing: the assembly not loaded, the type not found, or an instance that is not an `Autodesk.Windows.RibbonPanel` each throw `InvalidOperationException` naming that step and the type; exceptions from `CreateInstance` (a `TargetInvocationException` unwrapped to its inner exception) and from the `Source` setter propagate. The caller logs.
     - `internal static bool IsInEditMode(AwRibbonTab modifyTab)`: `modifyTab.IsContextualTab &&` the tab's `IsInEditMode`, read by reflection, unless Task 7 settled on another signal. It throws when the signal cannot be read; the caller's fail-safe handles that.
   - `internal static class ModifyTabHost { internal static void Install(UIControlledApplication app); internal static bool CopyAvailable { get; } }`. Task 10 adds the copy; here `CopyAvailable` is false. `Install` also reads two test switches once (Rules).
 - Rules:
@@ -580,12 +591,12 @@ Ten facts decide Tasks 8–12, and probe 9 may change Tasks 2 and 3: the spec's 
   - **One idempotent `Apply()`.**
     - Inputs: the session open (`TopoSession.Current`); the edit mode (`IsInEditMode`); one toposolid or floor selected (from the last `SelectionChanged`); `CopyAvailable`.
     - It calls `Decide`, then adds or removes each of our panels, never only hiding one.
-    - Our panels come only from `NewRevitPanel`. If it returns null, nothing of ours goes on the tab: log one line and switch off.
+    - Our panels come only from `NewRevitPanel`. If it throws while making the shortcut panel, nothing of ours goes on the tab: the fail-safe below runs.
   - **When `Apply` runs:**
     - On `SelectionChanged`, on `TopoSession.Started` and `Ended`, and on the Modify tab's `Panels.CollectionChanged` and `PropertyChanged`.
     - Always deferred through the ribbon's `Dispatcher.BeginInvoke`, with one call pending at a time.
     - Never inside the notification, and never calling the Revit API.
-  - **Fail-safe**, as `ContextualTopoButton.Fail` today: log one line, remove our panels, unhook, and stop for the Revit session.
+  - **Fail-safe**, as `ContextualTopoButton.Fail` today: log one line (the step, then the exception's type and message), remove our panels, unhook, and stop for the Revit session. It covers finding the Modify tab, the edit-mode signal, and making, adding and removing the shortcut; Task 10's copy has its own failure rule.
   - **Test switches, for checking the fail-safe in Revit.** `Install` looks once for two empty files in `%LOCALAPPDATA%\RVTuk\` (the folder of `crash.log`). Their names are constants in `ModifyTabHost`. The look never throws, and an error counts as no file.
     - `topo-modify-tab-off`: `Install` runs the fail-safe at once, with the step "switched off by topo-modify-tab-off". Nothing of ours goes on the Modify tab.
     - `topo-modify-copy-off`: `CopyAvailable` stays false for the Revit session (Task 10 checks it before making the copy). One line is logged, naming the file.
@@ -612,11 +623,13 @@ Ten facts decide Tasks 8–12, and probe 9 may change Tasks 2 and 3: the spec's 
 - Consumes: `TopoEditPanel.FindOnAddIns()` (Task 5); `ModifyTabAccess.NewRevitPanel` (Task 9).
 - Rules:
   - **The copy:**
-    - Made on the first `Started`, deferred, as `NewRevitPanel(TopoEditPanel.FindOnAddIns()!.Source)`, with its own `CollapsedPanelImage = TopoIcons.TopoTools(32)`.
+    - Made on the first `Started`, deferred, in its own try, never inside Apply's fail-safe: `var addIns = TopoEditPanel.FindOnAddIns();` (null is a copy failure, logged as "Topo Edit panel not found on the Add-Ins tab"), then `ModifyTabAccess.NewRevitPanel(addIns.Source)`.
+    - Its own `CollapsedPanelImage = TopoIcons.TopoTools(32)` is set in a separate try: a failure there logs one line and keeps the copy, which then folds to the ✗.
     - Made once per Revit session and reused.
     - `Apply` adds it at the end of the Modify tab when `Decide` asks for it, and removes it on `Ended` and in edit modes.
   - **The switch to Add-Ins:** once per session start, after the copy, set the "Add-Ins" tab's `IsActive = true` and read it back. Log once if it did not take.
-  - **Copy failure:** any failure sets `CopyAvailable = false` for the Revit session and logs one line. The shortcut then stays during a session, and the Add-Ins panel keeps working. `topo-modify-copy-off` (Task 9) gives the same state without trying the copy.
+  - **Copy failure:** `FindOnAddIns` returning null, `NewRevitPanel` throwing, or a throw while adding or removing the copy. Each sets `CopyAvailable = false` for the Revit session and logs one line with the exception's type and message; `Apply` removes the copy if it is still on the tab. The shortcut then stays during a session, and the Add-Ins panel keeps working. A copy failure never switches the host off. `topo-modify-copy-off` (Task 9) gives the same state without trying the copy.
+  - **`CopyAvailable`:** true from `Install` unless `topo-modify-copy-off` exists; false for the rest of the Revit session after a copy failure (a private setter; Task 9 declared it `{ get; }`).
 
 - [ ] **Step 1: Implement.**
 - [ ] **Step 2: Build all four years; run `.\build\Test-All.ps1`.**
@@ -758,6 +771,8 @@ Ten facts decide Tasks 8–12, and probe 9 may change Tasks 2 and 3: the spec's 
     - Step 4: metres from the Survey Point.
     - "A new line's height": 0.00, and survives a close called off.
     - The "ends by itself" sentence: on DocumentClosed.
+    - The Update paragraph (at HEAD README lines 43-45, starting "**Update** reads each text"; find it by that text, since the edits above shift it): the example becomes "1 line skipped: '42,7x' is not a height in metres.", and "It writes only to the selected element." becomes "It writes only to the toposolid or floor being edited." The rest stays.
+  - **Only if the spec's Probe results record that probe 7 found Topo Edit's ids missing** from Revit's command list: a note beside "Names" that the Topo Edit buttons cannot be given keyboard shortcuts, because Revit builds that list when it starts and skips hidden panels, and Topo Edit is hidden then. Say whether Topo Tools on the RVTuk panel can take one only as probe 7 recorded it.
   - **The updater paragraph:** arming, and Draw Lines from another view.
   - **"Heights are shared (survey) elevations":** as the spec's Docs section says.
   - **"Why the Modify tab needs AdWindows":** the copy during a session, Revit's own panel class, edit modes, the switch to Add-Ins; no Floor ⇄ Topo; the two switch files (`topo-modify-tab-off`, `topo-modify-copy-off` in `%LOCALAPPDATA%\RVTuk\`) that turn the part off for checking the fail-safe.
@@ -790,8 +805,9 @@ Ten facts decide Tasks 8–12, and probe 9 may change Tasks 2 and 3: the spec's 
 
 - [ ] **Step 1: Check the branch.**
   - `.\build\Test-All.ps1` → all pass; all four years build with 0 errors.
-  - `git grep -n "TopoHeightParser\|TopoLengthFormatter\|ContextualTopoButton\|TopoRibbonProbe\|TopoProbeCommand" -- src tests` → nothing.
+  - `git grep -n "TopoHeightParser\|TopoLengthFormatter\|ContextualTopoButton\|TopoRibbonProbe\|TopoProbeCommand\|SkipIconsOnlyLook" -- src tests` → nothing.
   - `git grep -n "ContextualTopoButton\|TopoHeightParser\|TopoLengthFormatter" -- CLAUDE.md docs/tools/topo-tools/README.md docs/tools/topo-tools/backlog.md` → nothing.
+  - `git grep -n "is not a height\"\|selected element" -- docs/tools/topo-tools/README.md` → nothing.
   - If probe 9's rule fired: `git grep -n "SurveyPointMarkerMetres\|MarkerNoted" -- src tests` → nothing.
   - `.\build\Test-Staging.ps1` only if a project file changed (none is planned).
 - [ ] **Step 2: Whole-branch review** against the spec (superpowers:requesting-code-review). Each fix is its own commit.
