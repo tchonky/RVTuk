@@ -108,7 +108,8 @@ namespace RVTuk.Revit.TopoTools.Commands
         /// Topo Tools pressed during a session asks what to do with it: go to it, accept it (as ✓)
         /// or cancel it (as ✗). Closing the dialog changes nothing. Once accepting or cancelling has
         /// closed the session, a selection of one other toposolid or floor, read before asking,
-        /// goes on into <see cref="Start"/>, as pressing Topo Tools with it selected then would.
+        /// goes on into <see cref="Start"/>, as pressing Topo Tools with it selected then would. The
+        /// Accept or Cancel stands even when that start is refused or fails.
         /// </summary>
         private static Result AskAboutOpenSession(UIDocument? uiDoc)
         {
@@ -150,9 +151,12 @@ namespace RVTuk.Revit.TopoTools.Commands
                     return Result.Cancelled; // Esc or the dialog closed: nothing was done.
             }
 
-            return TopoSession.Current == null && HoldsOneOtherSlab(uiDoc, selection, open)
-                ? Start(uiDoc, selection)
-                : result;
+            if (TopoSession.Current != null || !HoldsOneOtherSlab(uiDoc, selection, open)) return result;
+
+            // Revit undoes everything a command committed when it returns anything but Succeeded:
+            // a refused or failed restart must not undo the Accept or Cancel that already ran.
+            var started = Start(uiDoc, selection);
+            return result == Result.Succeeded ? Result.Succeeded : started;
         }
 
         /// <summary>Go to it: the session's view becomes the active one, with the session's element
