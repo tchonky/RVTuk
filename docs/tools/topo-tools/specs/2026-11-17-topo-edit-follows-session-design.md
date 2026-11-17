@@ -1,7 +1,8 @@
 # Topo Tools — the Topo Edit buttons follow the session
 
-Date: 2026-11-17. Status: draft for approval, second round (the layout, the heights and Floor ⇄ Topo
-changed after the first). Amends
+Date: 2026-11-17. Status: approved by Daniel on 2026-11-17, after a second round (the layout, the
+heights and Floor ⇄ Topo changed after the first); the orange of item 8 stays. Plan:
+[2026-11-17-topo-edit-follows-session.md](../plans/2026-11-17-topo-edit-follows-session.md). Amends
 [2026-11-15-topo-edit-session-design.md](2026-11-15-topo-edit-session-design.md): its panel layout;
 its "the Topo Edit panel itself stays on our own tab"; "Starting a session" (a second press now
 asks, item 4); "Draw Lines" (new lines are converted only while armed, item 6, and Draw Lines works
@@ -294,7 +295,8 @@ at hand, items 2, 4 and 9 are repeated there with the same build.
 8. A close during a session: answer Yes at "Save changes?", then Esc at a test prompt hung on
    `DocumentSaving`; on a workshared model, the same after choosing Synchronize. Does the model stay
    open, with its session?
-9. The heights' zero, with today's add-in (heights typed in the project's units, as today). A model
+9. The heights' zero, with the probe build, which already reads heights in metres (plan Task 3; the
+   step from Survey Point heights to internal heights is today's). A model
    whose ±0.00 sits at survey 42.75 (Specify Coordinates at Point, Survey Point clipped): a line at
    42.75 m lands at ±0.00 and agrees with a Survey Point spot elevation, a Survey Point level and
    the toposolid's own point readout (Elevation Base = Survey Point). Then the marker raised 10 m
@@ -302,13 +304,16 @@ at hand, items 2, 4 and 9 are repeated there with the same build.
    shows 10 m. This has never been run with the two zeros apart, and a wrong sign would show only
    here. If Revit's readings follow the marker, the tool measures from the marker and drops the
    marker line.
+10. (Added by the plan.) Draw Lines from another view: does setting the active view and then posting
+    Detail Line start drawing in the session's view?
 
 ## Checks in Revit after the build
 
 New rows in the README checklist, 2024 first, then 2025–2027: each item of "What the user sees"
 (including "Go to it" leaving the element selected, Draw Lines from another view drawing in the
 session's view, and a close called off keeping the session), the fail-safe (the Add-Ins panel keeps
-working when the Modify-tab part is off), and anything the probe left open. For the heights:
+working when the Modify-tab part is off; an empty file switches it off for the check, plan Task 9),
+and anything the probe left open. For the heights:
 
 - In a centimetre, a millimetre and a feet project, "42.75" puts points at 42.75 m.
 - Probe 9's model with the new build, on a toposolid and on a floor: a line labelled 42.75 lands at
