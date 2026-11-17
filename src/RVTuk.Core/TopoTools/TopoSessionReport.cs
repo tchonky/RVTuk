@@ -9,7 +9,9 @@ namespace RVTuk.Core.TopoTools
     /// and tested, as the only text the session shows after each run.
     ///
     /// Sentences are joined by a single space, in this order: applied, crossings, skipped, moved by
-    /// hand, lost, unlinked, Survey Point marker.
+    /// hand, lost, unlinked, Survey Point marker; when nothing was applied and there is no
+    /// problem, <see cref="NothingOverTarget"/> stands in for all but the marker's, which alone can
+    /// follow it.
     /// </summary>
     public sealed class TopoSessionReport
     {
@@ -32,8 +34,9 @@ namespace RVTuk.Core.TopoTools
         public int UnlinkedTexts { get; set; }
 
         /// <summary>The Survey Point marker's own height (its Elev) in metres, or null for no note.
-        /// Heights are measured like a Survey Point level, not from the marker, so a marker off 0 is
-        /// named in the last sentence: a note, not a problem.</summary>
+        /// Heights are measured like a Survey Point level, not from the marker, so a marker at least
+        /// half a millimetre off 0 is named in the last sentence, rounded to the millimetre: a note,
+        /// not a problem.</summary>
         public double? SurveyPointMarkerMetres { get; set; }
 
         public bool HasProblems =>

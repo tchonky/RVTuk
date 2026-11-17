@@ -1,3 +1,4 @@
+using System.Globalization;
 using RVTuk.Core.TopoTools;
 using Xunit;
 
@@ -203,5 +204,92 @@ public class TopoSessionReportTests
             Assert.DoesNotContain("sits at +0.00 m", summary);
             Assert.DoesNotContain("sits at -0.00 m", summary);
         }
+    }
+
+    [Theory]
+    [InlineData(0.0005, "+0.001")]
+    [InlineData(-0.0005, "-0.001")]
+    [InlineData(0.0007, "+0.001")]
+    [InlineData(-0.0009, "-0.001")]
+    [InlineData(0.0025, "+0.003")]
+    [InlineData(-0.0025, "-0.003")]
+    [InlineData(1234.5, "+1234.50")]
+    public void MarkerFigureIsTheHeightRoundedHalfAwayFromZeroToTheMillimetre(double metres, string figure)
+    {
+        var report = new TopoSessionReport { LinesApplied = 1, PointsAdded = 2, SurveyPointMarkerMetres = metres };
+        Assert.Equal(
+            "1 line applied: 2 points added, 0 replaced. The Survey Point marker itself sits at " + figure +
+            " m; heights are measured like a Survey Point level.",
+            report.Summarise());
+    }
+
+    [Fact]
+    public void MarkerNoteComesAfterEveryOtherSentence()
+    {
+        var report = new TopoSessionReport
+        {
+            LinesApplied = 2,
+            PointsAdded = 7,
+            PointsDroppedAtCrossings = 1,
+            PointsMovedByHand = 1,
+            PointsLost = 1,
+            UnlinkedTexts = 1,
+            SurveyPointMarkerMetres = 10,
+        };
+        report.UnreadableHeights.Add("x");
+
+        Assert.Equal(
+            "2 lines applied: 7 points added, 0 replaced. " +
+            "1 point where lines cross took the higher line's height. " +
+            "1 line skipped: 'x' is not a height in metres. " +
+            "1 earlier point had been moved by hand and was left alone. " +
+            "1 point could not be placed. " +
+            "1 height text is not linked to any line and was left alone. " +
+            Marker,
+            report.Summarise());
+    }
+
+    [Fact]
+    public void MarkerNoteFollowsTheProblemsWhenNoLineWasApplied()
+    {
+        var report = new TopoSessionReport { SurveyPointMarkerMetres = 10 };
+        report.UnreadableHeights.Add("x");
+
+        Assert.Equal("1 line skipped: 'x' is not a height in metres. " + Marker, report.Summarise());
+        Assert.True(report.HasProblems);
+    }
+
+    [Fact]
+    public void MarkerFigureIgnoresTheCurrentCulture()
+    {
+        var comma = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+        comma.NumberFormat.NumberDecimalSeparator = ",";
+        var culture = CultureInfo.CurrentCulture;
+        var uiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentCulture = comma;
+            CultureInfo.CurrentUICulture = comma;
+
+            var report = new TopoSessionReport { LinesApplied = 1, PointsAdded = 2, SurveyPointMarkerMetres = 10 };
+            Assert.Equal("1 line applied: 2 points added, 0 replaced. " + Marker, report.Summarise());
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = culture;
+            CultureInfo.CurrentUICulture = uiCulture;
+        }
+    }
+
+    [Fact]
+    public void PointsMovedByHandAloneAreAProblem()
+    {
+        Assert.True(new TopoSessionReport { LinesApplied = 1, PointsMovedByHand = 1 }.HasProblems);
+    }
+
+    [Fact]
+    public void PointsLostAloneAreAProblem()
+    {
+        Assert.True(new TopoSessionReport { LinesApplied = 1, PointsLost = 1 }.HasProblems);
     }
 }
