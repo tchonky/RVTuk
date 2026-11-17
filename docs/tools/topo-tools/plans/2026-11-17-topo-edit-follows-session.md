@@ -498,7 +498,7 @@ Ten facts decide Tasks 8–12 (probe 5 may also change Task 5, and probe 9 Tasks
 - [ ] **Step 3: Only if rule 5 or rule 9 fired, change the code already built.** On `topo-tools-finish`, each rule as its own commit, after building all four years → 0 errors and `.\build\Test-All.ps1` → all pass:
   - **Rule 9:**
     - `TopoSessionRunner.Apply`: replace lines 30-31 with `double markerZ = BasePoint.GetSurveyPoint(doc).Position.Z;` and line 50 with `double z = sharedFeet + markerZ;`; rewrite the comment at lines 28-29 to match.
-    - `TopoSessionReport`: remove `SurveyPointMarkerMetres` and its sentence; `NothingOverTarget` is again returned on its own. In `TopoSessionReportTests`, remove the `Marker` constant and the six marker tests.
+    - `TopoSessionReport`: remove `SurveyPointMarkerMetres` and its sentence; `NothingOverTarget` is again returned on its own. In `TopoSessionReportTests`, remove the `Marker` constant and every test that sets `SurveyPointMarkerMetres`, but keep `MarkerNoteComesAfterEveryOtherSentence`'s sentence-order check without the marker, renamed for what it then checks; remove the class comment's marker clause.
     - Remove `TopoSession.MarkerNoted`, and Task 3 Step 2's note code from `TopoUpdateCommand.Run`.
     - Commit `fix(topo-tools): heights measured from the Survey Point marker, as probe 9 found`.
   - **Rule 5:** change `TopoEditPanel` and `TopoIcons` as the rule says. Commit `fix(topo-tools): the Cancel and Accept stack as probe 5 found`.
