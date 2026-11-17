@@ -22,7 +22,7 @@ public class TopoSessionReportTests
 
         var summary = report.Summarise();
 
-        Assert.Contains("2 lines skipped: '42,7x', '' are not heights.", summary);
+        Assert.Contains("2 lines skipped: '42,7x', '' are not heights in metres.", summary);
         Assert.True(report.HasProblems);
     }
 
@@ -40,7 +40,7 @@ public class TopoSessionReportTests
         var report = new TopoSessionReport { LinesApplied = 1, PointsAdded = 1 };
         report.UnreadableHeights.Add("abc");
 
-        Assert.Contains("1 line skipped: 'abc' is not a height.", report.Summarise());
+        Assert.Contains("1 line skipped: 'abc' is not a height in metres.", report.Summarise());
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class TopoSessionReportTests
     {
         var report = new TopoSessionReport();
 
-        Assert.Equal("No topo line in this view lies over the selected element.", report.Summarise());
+        Assert.Equal("No topo line in the session's view lies over the toposolid or floor being edited.", report.Summarise());
         Assert.False(report.HasProblems);
     }
 
@@ -107,7 +107,7 @@ public class TopoSessionReportTests
 
         var summary = report.Summarise();
 
-        Assert.Equal("1 line skipped: 'x' is not a height.", summary);
+        Assert.Equal("1 line skipped: 'x' is not a height in metres.", summary);
         Assert.DoesNotContain("applied", summary);
         Assert.DoesNotContain("No topo line", summary);
     }
@@ -145,5 +145,63 @@ public class TopoSessionReportTests
         var report = new TopoSessionReport { LinesApplied = 2, PointsAdded = 4, PointsReplaced = 1 };
 
         Assert.False(report.HasProblems);
+    }
+
+    private const string Marker =
+        "The Survey Point marker itself sits at +10.00 m; heights are measured like a Survey Point level.";
+
+    [Fact]
+    public void MarkerNoteComesLastAndIsNoProblem()
+    {
+        var report = new TopoSessionReport { LinesApplied = 1, PointsAdded = 2, SurveyPointMarkerMetres = 10 };
+        Assert.Equal("1 line applied: 2 points added, 0 replaced. " + Marker, report.Summarise());
+        Assert.False(report.HasProblems);
+    }
+
+    [Fact]
+    public void MarkerNoteForAMarkerBelowZero()
+    {
+        var report = new TopoSessionReport { LinesApplied = 1, SurveyPointMarkerMetres = -3.2 };
+        Assert.Contains("The Survey Point marker itself sits at -3.20 m;", report.Summarise());
+    }
+
+    [Fact]
+    public void NothingOverTheTargetKeepsTheMarkerNote()
+    {
+        var report = new TopoSessionReport { SurveyPointMarkerMetres = 10 };
+        Assert.Equal(TopoSessionReport.NothingOverTarget + " " + Marker, report.Summarise());
+    }
+
+    [Fact]
+    public void MarkerNoteForAMarkerAFewMillimetresOff()
+    {
+        Assert.Contains("The Survey Point marker itself sits at -0.003 m;",
+                        new TopoSessionReport { LinesApplied = 1, SurveyPointMarkerMetres = -0.003 }.Summarise());
+        Assert.Contains("The Survey Point marker itself sits at +0.003 m;",
+                        new TopoSessionReport { LinesApplied = 1, SurveyPointMarkerMetres = 0.003 }.Summarise());
+    }
+
+    [Theory]
+    [InlineData(0.0004)]
+    [InlineData(-0.0004)]
+    [InlineData(-0.0000001)]
+    public void NoMarkerNoteWhenTheMarkerRoundsToZero(double metres)
+    {
+        var applied = new TopoSessionReport { LinesApplied = 1, PointsAdded = 2, SurveyPointMarkerMetres = metres };
+        Assert.Equal("1 line applied: 2 points added, 0 replaced.", applied.Summarise());
+        Assert.Equal(TopoSessionReport.NothingOverTarget,
+                     new TopoSessionReport { SurveyPointMarkerMetres = metres }.Summarise());
+    }
+
+    [Fact]
+    public void MarkerFigureIsNeverZeroOrDoubleSigned()
+    {
+        for (int i = -200; i <= 200; i++)
+        {
+            var summary = new TopoSessionReport { LinesApplied = 1, SurveyPointMarkerMetres = i / 10000.0 }.Summarise();
+            Assert.DoesNotContain("-+", summary);
+            Assert.DoesNotContain("sits at +0.00 m", summary);
+            Assert.DoesNotContain("sits at -0.00 m", summary);
+        }
     }
 }

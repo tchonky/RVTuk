@@ -1,17 +1,20 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace RVTuk.Core.TopoTools
 {
     /// <summary>
-    /// What one Topo Edit session did, in the words the pane's status line uses. Kept in Core
+    /// What one Topo Edit session did, in the words the Update dialog shows. Kept in Core
     /// and tested, as the only text the session shows after each run.
     ///
     /// Sentences are joined by a single space, in this order: applied, crossings, skipped, moved by
-    /// hand, lost, unlinked.
+    /// hand, lost, unlinked, Survey Point marker.
     /// </summary>
     public sealed class TopoSessionReport
     {
-        public const string NothingOverTarget = "No topo line in this view lies over the selected element.";
+        public const string NothingOverTarget =
+            "No topo line in the session's view lies over the toposolid or floor being edited.";
 
         public int LinesApplied { get; set; }
         public int PointsAdded { get; set; }
@@ -28,11 +31,17 @@ namespace RVTuk.Core.TopoTools
 
         public int UnlinkedTexts { get; set; }
 
+        /// <summary>The Survey Point marker's own height (its Elev) in metres, or null for no note.
+        /// Heights are measured like a Survey Point level, not from the marker, so a marker off 0 is
+        /// named in the last sentence: a note, not a problem.</summary>
+        public double? SurveyPointMarkerMetres { get; set; }
+
         public bool HasProblems =>
             UnreadableHeights.Count > 0 || PointsMovedByHand > 0 || PointsLost > 0 || UnlinkedTexts > 0;
 
         public string Summarise()
         {
+            string? markerNote = SurveyPointMarkerNote();
             var sentences = new List<string>();
 
             if (LinesApplied > 0)
@@ -44,7 +53,7 @@ namespace RVTuk.Core.TopoTools
             }
             else if (!HasProblems)
             {
-                return NothingOverTarget;
+                return markerNote == null ? NothingOverTarget : NothingOverTarget + " " + markerNote;
             }
 
             if (PointsDroppedAtCrossings > 0)
@@ -59,9 +68,9 @@ namespace RVTuk.Core.TopoTools
                 foreach (var text in UnreadableHeights) quoted.Add("'" + text + "'");
 
                 if (UnreadableHeights.Count == 1)
-                    sentences.Add("1 line skipped: " + quoted[0] + " is not a height.");
+                    sentences.Add("1 line skipped: " + quoted[0] + " is not a height in metres.");
                 else
-                    sentences.Add(UnreadableHeights.Count + " lines skipped: " + string.Join(", ", quoted) + " are not heights.");
+                    sentences.Add(UnreadableHeights.Count + " lines skipped: " + string.Join(", ", quoted) + " are not heights in metres.");
             }
 
             if (PointsMovedByHand > 0)
@@ -81,7 +90,27 @@ namespace RVTuk.Core.TopoTools
                     : UnlinkedTexts + " height texts are not linked to any line and were left alone.");
             }
 
+            if (markerNote != null) sentences.Add(markerNote);
+
             return string.Join(" ", sentences);
+        }
+
+        /// <summary>
+        /// The marker's sentence, or null when there is no marker height or it rounds to 0 at the
+        /// millimetre (-0 included). The rounded value is the one written: two decimals of the raw
+        /// value would write a marker 3 mm off as +0.00, and net8 and net10 write a negative value
+        /// that rounds to zero as "-+0.00".
+        /// </summary>
+        private string? SurveyPointMarkerNote()
+        {
+            if (SurveyPointMarkerMetres == null) return null;
+
+            double r = Math.Round(SurveyPointMarkerMetres.Value, 3, MidpointRounding.AwayFromZero);
+            if (r == 0) return null;
+
+            return "The Survey Point marker itself sits at " +
+                r.ToString("+0.00#;-0.00#", CultureInfo.InvariantCulture) +
+                " m; heights are measured like a Survey Point level.";
         }
 
         private static string Count(int n, string singular, string plural) =>
