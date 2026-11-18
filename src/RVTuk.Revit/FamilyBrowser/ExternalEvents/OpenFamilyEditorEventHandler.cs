@@ -1,11 +1,13 @@
 ﻿using System.Threading;
 using Autodesk.Revit.UI;
 
+using RVTuk.Core.FamilyBrowser.Util;
+
 namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
 {
     public class OpenFamilyEditorEventHandler : IExternalEventHandler
     {
-        private readonly ManualResetEventSlim _done = new(false);
+        private readonly RequestGate _gate = new();
 
         public string? FamilyPath { get; set; }
         public string? ErrorMessage { get; private set; }
@@ -14,13 +16,14 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
         {
             FamilyPath = familyPath;
             ErrorMessage = null;
-            _done.Reset();
+            _gate.Begin();
         }
 
-        public void WaitForCompletion() => _done.Wait();
+        public void WaitForCompletion() => _gate.Wait(RequestGate.StartTimeout);
 
         public void Execute(UIApplication app)
         {
+            if (!_gate.TryStart()) return; // withdrawn: the caller already reported "Revit is busy"
             try
             {
                 if (FamilyPath == null)
@@ -41,7 +44,7 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
             }
             finally
             {
-                _done.Set();
+                _gate.Complete();
             }
         }
 

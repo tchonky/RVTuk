@@ -243,6 +243,8 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
         /// Raises an ExternalEvent for a caller that then waits on its handler. A raise Revit
         /// refuses never reaches the handler, so the wait would block forever (holding whatever
         /// lock the caller is in) — throw instead; every caller reports the message.
+        /// Pending is accepted: an earlier raise whose request was withdrawn (RequestGate) is
+        /// still queued, and that one execution serves the request just prepared.
         /// </summary>
         internal static void Raise(ExternalEvent externalEvent)
         {

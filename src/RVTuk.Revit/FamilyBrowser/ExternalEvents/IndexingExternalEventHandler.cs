@@ -5,15 +5,17 @@ using RVTuk.Core.FamilyBrowser.Database;
 using RVTuk.Core.FamilyBrowser.Models;
 using RVTuk.Revit.FamilyBrowser.Extraction;
 
+using RVTuk.Core.FamilyBrowser.Util;
+
 namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
 {
     /// <summary>
     /// Executes on Revit's main thread. Called once per family needing extraction.
-    /// The background indexing thread blocks on _done until this completes.
+    /// The background indexing thread blocks on _gate until this completes.
     /// </summary>
     public class IndexingExternalEventHandler : IExternalEventHandler
     {
-        private readonly ManualResetEventSlim _done = new(false);
+        private readonly RequestGate _gate = new();
 
         // Set by the background thread before raising the event
         public ExtractionWorkItem? CurrentItem { get; set; }
@@ -33,13 +35,14 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
             Extractor = extractor;
             Error = null;
             Extracted = false;
-            _done.Reset();
+            _gate.Begin();
         }
 
-        public void WaitForCompletion() => _done.Wait();
+        public void WaitForCompletion() => _gate.Wait(RequestGate.StartTimeout);
 
         public void Execute(UIApplication app)
         {
+            if (!_gate.TryStart()) return; // withdrawn: the caller already reported "Revit is busy"
             try
             {
                 if (CurrentItem == null || Repository == null || Extractor == null)
@@ -76,7 +79,7 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
             }
             finally
             {
-                _done.Set();
+                _gate.Complete();
             }
         }
 

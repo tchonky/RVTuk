@@ -11,18 +11,19 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
 {
     public class GetProjectFamiliesEventHandler : IExternalEventHandler
     {
-        private readonly ManualResetEventSlim _done = new(false);
+        private readonly RequestGate _gate = new();
 
         public IReadOnlyList<ProjectFamilyInfo> Result { get; private set; } = Array.Empty<ProjectFamilyInfo>();
 
         /// <summary>Set when there is no project to compare against (a family is active).</summary>
         public string? ErrorMessage { get; private set; }
 
-        public void Reset() { ErrorMessage = null; _done.Reset(); }
-        public void WaitForCompletion() => _done.Wait();
+        public void Reset() { ErrorMessage = null; _gate.Begin(); }
+        public void WaitForCompletion() => _gate.Wait(RequestGate.StartTimeout);
 
         public void Execute(UIApplication app)
         {
+            if (!_gate.TryStart()) return; // withdrawn: the caller already reported "Revit is busy"
             try
             {
                 var doc = app.ActiveUIDocument?.Document;
@@ -58,7 +59,7 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
             }
             finally
             {
-                _done.Set();
+                _gate.Complete();
             }
         }
 
