@@ -40,6 +40,11 @@ namespace RVTuk.Revit.TopoTools
             var texts = CollectTexts(doc, view);
             var plan = Plan(texts, spotByLine);
 
+            // Built before the delete below, since reading a deleted note's Id throws. No deleted
+            // note is read afterwards: the plan keeps every text in DeleteTexts out of Relinked and
+            // LineByText.
+            var textById = texts.ToDictionary(text => text.Note.Id.Value, text => text.Note);
+
             // A text is deleted only when its line is really gone. A line that still exists but is
             // no longer a collectable topo line (restyled, grouped) keeps its text, counted unlinked.
             var lineIdByText = texts.ToDictionary(text => text.Note.Id.Value, text => text.LineId);
@@ -53,7 +58,6 @@ namespace RVTuk.Revit.TopoTools
             }
             if (toDelete.Count > 0) doc.Delete(toDelete);
 
-            var textById = texts.ToDictionary(text => text.Note.Id.Value, text => text.Note);
             foreach (var textId in plan.Relinked)
                 HeightTextLinkStore.Set(textById[textId], plan.LineByText[textId]);
 
