@@ -233,9 +233,10 @@ office does the same and "select first, then press" fits it. The session's panel
 It is **fail-safe**: any failure is caught and logged in one line in
 `%LOCALAPPDATA%\RVTuk\crash.log`, never shown, and switches its part off for the rest of the Revit
 session. A failure in finding the Modify tab, reading its edit mode or handling the shortcut takes
-everything of ours off the Modify tab. The copy and the switch to Add-Ins each fail on their own;
-while the copy is off, the shortcut stays during a session and opens the Topo Tools dialog. The
-panels on the Add-Ins tab stay, so a Revit update that breaks this costs a shortcut, not the tool.
+everything of ours off the Modify tab and also stops the switch to Add-Ins. A failure of the copy
+or of the switch turns off only that one; while the copy is off, the shortcut stays during a
+session and opens the Topo Tools dialog. The panels on the Add-Ins tab stay, so a Revit update
+that breaks this costs a shortcut, not the tool.
 To check the fail-safe, an empty file in `%LOCALAPPDATA%\RVTuk\`, looked for when Revit starts,
 switches a part off for that Revit session: `topo-modify-tab-off` the whole part (row 69),
 `topo-modify-copy-off` only the copy (row 70). Delete the file afterwards.
@@ -343,7 +344,7 @@ at least rows 18, 62, 65, 66, 69 and 70.
 | 66 | During a session: Edit Boundary of another floor with a sketch line selected; a filled region's sketch; Edit Group with an element of the group selected. Finish some, cancel others | While each lasts, the copy is off the Modify tab and Revit shows no error. After Finish, and after Cancel, the copy is back, also with nothing selected | [ ] | [ ] | [ ] | [ ] |
 | 67 | During a session, with nothing selected, start a new floor and press Cancel Edit Mode; open the Modify tab | The copy is on the plain Modify tab | [ ] | [ ] | [ ] | [ ] |
 | 68 | Start a session from the RVTuk panel; another from the Modify-tab shortcut; then select something and press Esc | Each start moves the ribbon to Add-Ins once; after the selection and Esc, Revit lands on Add-Ins | [ ] | [ ] | [ ] | [ ] |
-| 69 | **Fail-safe, whole part:** an empty `%LOCALAPPDATA%\RVTuk\topo-modify-tab-off`, Revit restarted | Nothing of ours on the Modify tab; a whole session (Topo Tools, Draw Lines, Update, Accept, Cancel) works from Add-Ins; crash.log has one line, `Topo Tools Modify-tab panels disabled: switched off by topo-modify-tab-off`. Delete the file afterwards | [ ] | [ ] | [ ] | [ ] |
+| 69 | **Fail-safe, whole part:** an empty `%LOCALAPPDATA%\RVTuk\topo-modify-tab-off`, Revit restarted | Nothing of ours on the Modify tab, and the ribbon does not move to Add-Ins at a start; a whole session (Topo Tools, Draw Lines, Update, Accept, Cancel) works from Add-Ins; crash.log has one line, `Topo Tools Modify-tab panels disabled: switched off by topo-modify-tab-off`. Delete the file afterwards | [ ] | [ ] | [ ] | [ ] |
 | 70 | **Fail-safe, the copy:** an empty `%LOCALAPPDATA%\RVTuk\topo-modify-copy-off`, Revit restarted | The Add-Ins panel works. During a session the shortcut stays on the Modify tab while one toposolid is selected, and opens the Topo Tools dialog; the ribbon still moves to Add-Ins at the start. crash.log has `Topo Tools Modify-tab panels: the Topo Edit copy is switched off by topo-modify-copy-off for this Revit session.` Delete the file afterwards | [ ] | [ ] | [ ] | [ ] |
 | 71 | **Heights.** In a centimetre, a millimetre and a feet project, a line labelled 42.75; Update | Points at 42.75 m in each | [ ] | [ ] | [ ] | [ ] |
 | 72 | Type into the texts of separate lines "42ץ75" (into the first line drawn, so it is listed first), "42,75", "+42.75" and "42.75 m", and "4275", "4275 cm", "±0.00" and a second height typed with the Hebrew keyboard on, "43ץ10"; Update | "42,75", "+42.75" and "42.75 m" are read as 42.75 m. The summary names the other five as not heights in metres and lists them in order, "42ץ75" first, each inside its own quotes and reading as each text does in the drawing | [ ] | [ ] | [ ] | [ ] |
