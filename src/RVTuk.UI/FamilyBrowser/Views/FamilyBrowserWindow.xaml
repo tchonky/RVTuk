@@ -162,6 +162,15 @@
                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                         Command="{Binding SyncCommand}"
                         ToolTip="{Binding SyncToolTip}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsComparisonHidden}" Value="True">
+                                    <Setter Property="Background" Value="{StaticResource Brush.AccentDark}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
                     <Viewbox Width="13" Height="13">
                         <Canvas Width="24" Height="24">
                             <Path Fill="{StaticResource Brush.Text}"
@@ -170,6 +179,12 @@
                     </Viewbox>
                 </Button>
             </Grid>
+
+            <!-- Another document is active: the comparison is hidden until ⟳ (or coming back). -->
+            <TextBlock Grid.Row="2" Margin="8,0,6,4" FontSize="11" TextWrapping="Wrap"
+                       Foreground="{StaticResource Brush.Accent}"
+                       Text="Another project is active — press ⟳ to compare."
+                       Visibility="{Binding IsComparisonHidden, Converter={StaticResource BoolVis}}"/>
 
             <!-- Update All bar (visible only when outdated families exist) -->
             <Button Grid.Row="2" Margin="6,0,6,4"

@@ -668,6 +668,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                                     && (i.Id != 0 || string.Equals(i.FileName, selected.FileName, StringComparison.OrdinalIgnoreCase)))
                                     ?? selected;
                             _allItems = finalItems;
+                            _stash = null;
+                            IsComparisonHidden = false;
                             _lastComparison = finalComparison;
                             _comparedDocumentKey = finalProject?.DocumentKey;
                             ComparedProjectTitle = finalProject?.Title;
@@ -730,6 +732,61 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             if (Warn(text.ToString(), MessageBoxButton.OKCancel, MessageBoxImage.Question, "Update All") != MessageBoxResult.OK)
                 return;
             LoadFamiliesSequentially(items, _comparedDocumentKey);
+        }
+
+        // ── Project switch ──────────────────────────────────────────────────────────────
+        // The comparison belongs to the project the last ⟳ looked at. While another document
+        // is active it is hidden (stashed), and coming back restores it without a new Sync.
+        private List<(FamilyBrowserItemViewModel Item, VersionStatus Status)>? _stash;
+        private bool _isComparisonHidden;
+        public bool IsComparisonHidden
+        {
+            get => _isComparisonHidden;
+            private set => SetProperty(ref _isComparisonHidden, value);
+        }
+
+        public void ActiveDocumentChanged(string documentKey)
+        {
+            if (_comparedDocumentKey == null) return; // nothing compared yet
+            bool isCompared = documentKey == _comparedDocumentKey;
+            if (!isCompared && _stash == null) HideComparison();
+            else if (isCompared && _stash != null) RestoreComparison();
+        }
+
+        public void DocumentClosing(string documentKey)
+        {
+            if (_comparedDocumentKey == null || documentKey != _comparedDocumentKey) return;
+            if (_stash == null) HideComparison();
+            _stash = null; // that project is gone: nothing to come back to
+            _comparedDocumentKey = null;
+            ComparedProjectTitle = null;
+        }
+
+        private void HideComparison()
+        {
+            if (IsBatchRunning) _batchStopReason ??= StoppedProjectChanged;
+            _stash = _allItems.Where(i => i.VersionStatus != VersionStatus.None)
+                .Select(i => (i, i.VersionStatus)).ToList();
+            _allItems = _allItems.Where(i => !i.IsModelOnly).ToList();
+            foreach (var (item, _) in _stash) if (item.Id != 0) item.VersionStatus = VersionStatus.None;
+            IsComparisonHidden = true;
+            RecountOutdated();
+            LoadCategories();
+            ApplyFilter();
+        }
+
+        private void RestoreComparison()
+        {
+            foreach (var (item, status) in _stash!)
+            {
+                item.VersionStatus = status;
+                if (status == VersionStatus.ModelOnly) _allItems.Add(item);
+            }
+            _stash = null;
+            IsComparisonHidden = false;
+            RecountOutdated();
+            LoadCategories();
+            ApplyFilter();
         }
 
         // Update All progress in the footer; null when no batch runs.
