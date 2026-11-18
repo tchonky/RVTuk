@@ -1,4 +1,6 @@
+using System;
 using System.Globalization;
+using System.Linq;
 using RVTuk.Core.TopoTools;
 using Xunit;
 
@@ -23,7 +25,9 @@ public class TopoSessionReportTests
 
         var summary = report.Summarise();
 
-        Assert.Contains("2 lines skipped: '42,7x', '' are not heights in metres.", summary);
+        // Ordinal: a comparison by culture ignores the invisible marks.
+        Assert.Contains("2 lines skipped: \u200E'42,7x'\u200E, \u200E''\u200E are not heights in metres.", summary,
+                        StringComparison.Ordinal);
         Assert.True(report.HasProblems);
     }
 
@@ -41,7 +45,51 @@ public class TopoSessionReportTests
         var report = new TopoSessionReport { LinesApplied = 1, PointsAdded = 1 };
         report.UnreadableHeights.Add("abc");
 
-        Assert.Contains("1 line skipped: 'abc' is not a height in metres.", report.Summarise());
+        Assert.Contains("1 line skipped: \u200E'abc'\u200E is not a height in metres.", report.Summarise(),
+                        StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TwoHeightsTypedWithTheHebrewKeyboardOnEachStandBetweenLeftToRightMarks()
+    {
+        // Without the marks, the Hebrew letter in the first text pulls the quote, the comma and the
+        // digits after it into its right-to-left run: on screen the list came out scrambled.
+        var report = new TopoSessionReport { LinesApplied = 1, PointsAdded = 2 };
+        report.UnreadableHeights.Add("42ץ75");
+        report.UnreadableHeights.Add("43ץ10");
+
+        Assert.Equal(
+            "1 line applied: 2 points added, 0 replaced. " +
+            "2 lines skipped: \u200E'42ץ75'\u200E, \u200E'43ץ10'\u200E are not heights in metres.",
+            report.Summarise());
+    }
+
+    [Fact]
+    public void ALeftToRightMarkSitsOnEachSideOfEveryQuotedText()
+    {
+        // Hebrew mixed with digits or Latin, first, in the middle and last; in the many-text
+        // sentence and in the one-text sentence alike.
+        string[] texts = { "42ץ75", "4275 cm", "ץ42.75", "±0.00", "42.75 מ", "43ץ10" };
+
+        var many = new TopoSessionReport { LinesApplied = 1 };
+        foreach (var text in texts) many.UnreadableHeights.Add(text);
+        AssertEachQuotedBetweenMarks(many.Summarise(), texts);
+
+        foreach (var text in texts)
+        {
+            var one = new TopoSessionReport { LinesApplied = 1 };
+            one.UnreadableHeights.Add(text);
+            AssertEachQuotedBetweenMarks(one.Summarise(), new[] { text });
+        }
+    }
+
+    /// <summary>Each text quoted, with a left-to-right mark on each side, and no mark
+    /// anywhere else. Ordinal: a comparison by culture ignores the marks.</summary>
+    private static void AssertEachQuotedBetweenMarks(string summary, string[] texts)
+    {
+        foreach (var text in texts)
+            Assert.Contains("\u200E'" + text + "'\u200E", summary, StringComparison.Ordinal);
+        Assert.Equal(2 * texts.Length, summary.Count(c => c == '\u200E'));
     }
 
     [Fact]
@@ -108,7 +156,7 @@ public class TopoSessionReportTests
 
         var summary = report.Summarise();
 
-        Assert.Equal("1 line skipped: 'x' is not a height in metres.", summary);
+        Assert.Equal("1 line skipped: \u200E'x'\u200E is not a height in metres.", summary);
         Assert.DoesNotContain("applied", summary);
         Assert.DoesNotContain("No topo line", summary);
     }
@@ -241,7 +289,7 @@ public class TopoSessionReportTests
         Assert.Equal(
             "2 lines applied: 7 points added, 0 replaced. " +
             "1 point where lines cross took the higher line's height. " +
-            "1 line skipped: 'x' is not a height in metres. " +
+            "1 line skipped: \u200E'x'\u200E is not a height in metres. " +
             "1 earlier point had been moved by hand and was left alone. " +
             "1 point could not be placed. " +
             "1 height text is not linked to any line and was left alone. " +
@@ -255,7 +303,7 @@ public class TopoSessionReportTests
         var report = new TopoSessionReport { SurveyPointMarkerMetres = 10 };
         report.UnreadableHeights.Add("x");
 
-        Assert.Equal("1 line skipped: 'x' is not a height in metres. " + Marker, report.Summarise());
+        Assert.Equal("1 line skipped: \u200E'x'\u200E is not a height in metres. " + Marker, report.Summarise());
         Assert.True(report.HasProblems);
     }
 

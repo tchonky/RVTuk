@@ -151,7 +151,9 @@ reshapes the element along it. A forgotten session is usually found through Topo
       "1,234.5"), and "±", so a "±0.00" typed out of habit is caught (other relative heights, such
       as -0.15, cannot be told apart and are read from the Survey Point). A single comma or point
       is always the decimal point, so "1,050" reads 1.05 m: heights are typed without grouping. A
-      height typed with the Hebrew keyboard still on ("42ץ75") is refused too.
+      height typed with the Hebrew keyboard still on ("42ץ75") is refused too. Each quoted text is
+      wrapped in invisible left-to-right marks, so a height typed with the Hebrew keyboard on reads
+      in the list as it does in the drawing.
     - A height outside −500 to +3000 m is refused the same way (my call). This is a coarse net: it
       catches a forgotten point only on sites above 30 m (4275 for 42.75), and texts typed in
       millimetres before this change above 3 m. On a site between −5 and +30 m, a forgotten point

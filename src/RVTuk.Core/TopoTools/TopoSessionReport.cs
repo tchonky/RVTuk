@@ -75,8 +75,13 @@ namespace RVTuk.Core.TopoTools
 
             if (UnreadableHeights.Count > 0)
             {
+                // Each quoted text between left-to-right marks (U+200E). Without them a Hebrew
+                // letter in one text, typed with the Hebrew keyboard on, pulls the punctuation and
+                // digits after it into a right-to-left run as far as the next Latin letter, and the
+                // list is scrambled on screen. With them each text reads as it does alone, in the
+                // drawing. Not FSI/PDI (U+2068/2069): they drew as boxes.
                 var quoted = new List<string>();
-                foreach (var text in UnreadableHeights) quoted.Add("'" + text + "'");
+                foreach (var text in UnreadableHeights) quoted.Add("\u200E'" + text + "'\u200E");
 
                 if (UnreadableHeights.Count == 1)
                     sentences.Add("1 line skipped: " + quoted[0] + " is not a height in metres.");

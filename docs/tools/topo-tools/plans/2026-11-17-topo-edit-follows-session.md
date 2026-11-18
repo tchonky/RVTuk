@@ -32,7 +32,7 @@
   - Texts typed earlier in project units are not converted.
   - The Survey Point marker's figure: `r = Math.Round(m, 3, MidpointRounding.AwayFromZero)`, written `r.ToString("+0.00#;-0.00#", CultureInfo.InvariantCulture)`; no note when `r == 0`.
 - Exact copy:
-  - Summary: `"1 line skipped: '{text}' is not a height in metres."`; `"{n} lines skipped: {list} are not heights in metres."`; `"No topo line in the session's view lies over the toposolid or floor being edited."`; `"The Survey Point marker itself sits at {+10.00} m; heights are measured like a Survey Point level."`
+  - Summary: `"1 line skipped: '{text}' is not a height in metres."`; `"{n} lines skipped: {list} are not heights in metres."`; `"No topo line in the session's view lies over the toposolid or floor being edited."`; `"The Survey Point marker itself sits at {+10.00} m; heights are measured like a Survey Point level."`. Each quoted text is wrapped in invisible left-to-right marks (U+200E), so a height typed with the Hebrew keyboard on reads in the list as it does in the drawing.
   - Update tooltip: `"Apply the topo lines and their heights to the toposolid or floor being edited, and stay in the session"`.
   - Floor ⇄ Topo refusal: `"a Topo Edit session is open on it; Accept or Cancel it first"`.
   - Save prompt: command links `"Accept, then save"`, `"Cancel the session, then save"`, `"Save as it is"`; verification box `"Don't ask again until this Topo Edit ends"`.
