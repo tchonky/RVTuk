@@ -39,6 +39,8 @@
   - Topo Tools during a session: `"Topo Edit is open on {label} in {view name}."` with command links `"Go to it"`, `"Accept it"`, `"Cancel it"`.
 - Colours: RGB 255, 140, 0, set only on a newly created `_DP-Topo Line` and `_DP-Topo Height`.
 - Icons: ✗ red and ✓ green on a transparent background, at 16 and 32 px. Light theme: #D9312B and #2F9E44. Dark theme: #FF6666 and #62D987. Folded panels show `TopoIcons.TopoTools(32)`.
+- The Modify-tab Topo Tools shortcut: exactly one element selected, a `Toposolid` whose `HostTopoId` is `ElementId.InvalidElementId`.
+- Update's summary: after Update only when `TopoSessionReport.ShowAfterUpdate` is true; after Accept always.
 
 ## Review Focus
 
@@ -48,7 +50,7 @@
 4. **Saving another document or a read-only one, or saving while closing**: no prompt for a document the session is not on, and nothing lost on Esc. *Probe 8; checks in Task 12.*
 5. **A theme switch or a narrow window during a session**: ✗ and ✓ stay legible in both themes on both panels; a folded panel shows the Topo Tools icon, and one click opens ✗ over ✓. *Probe 5; checks in Tasks 5 and 10.*
 
-Tasks 1–5 come before the probe, which is cut after Task 5. Tasks 11, 13 and 14 can be built while the probe sitting is pending. Only probes 5 and 9 can change any of these (probe 5 Task 5's stack and icons, probe 9 Tasks 2 and 3); if either does, Task 7 Step 3 changes that code.
+Tasks 1–5 come before the probe, which is cut after Task 5. Tasks 11, 13 and 14 can be built while the probe sitting is pending. Only probes 5 and 9 can change any of these (probe 5 Task 5's stack and icons, probe 9 Tasks 2 and 3); if either does, Task 7 Step 3 changes that code. After the sitting (2026-11-18): Task 7, then Tasks 17 and 18, then Tasks 8, 9, 10 and 12, then 15 and 16.
 
 ---
 
@@ -468,6 +470,8 @@ Ten facts decide Tasks 8–12 (probe 5 may also change Task 5, and probe 9 Tasks
 
 ### Task 7: Record the probe and settle the open points
 
+Done on 2026-11-18 with the decisions in the spec's 'Probe results (Revit 2024, 2026-11-18)'; the probe branch stays until Task 16.
+
 **Files:**
 - Modify: the spec (a new section, "## Probe results (Revit 2024, <date>)"), and this plan, amending the Global Constraints and Tasks 2, 3 and 8–12 where a result changes them.
 - Only if rule 9 fires, also: `src/RVTuk.Revit/TopoTools/TopoSessionRunner.cs:28-31, 50`, `src/RVTuk.Revit/TopoTools/Commands/TopoUpdateCommand.cs`, `src/RVTuk.Revit/TopoTools/TopoSession.cs`, `src/RVTuk.Core/TopoTools/TopoSessionReport.cs`, `tests/RVTuk.Core.Tests/TopoTools/TopoSessionReportTests.cs`.
@@ -576,9 +580,11 @@ Ten facts decide Tasks 8–12 (probe 5 may also change Task 5, and probe 9 Tasks
     - In the `<summary>` of `FloorTopoConvertButtonName`, drop ": the contextual Floor ⇄ Topo button posts it". Keep the constant: the RVTuk-panel button uses it.
     - Name these by constant, not line number: Task 8 shifts the lines after 299.
   - `src/RVTuk.Revit/TopoTools/Commands/TopoStartCommand.cs:15`: in the class summary, `<see cref="ContextualTopoButton"/>` becomes `<see cref="ModifyTabHost"/>`, on the same line, so Task 11's and Task 14's line numbers still hold.
+  - `src/RVTuk.Core/TopoTools/ModifyTabPanels.cs`: the parameter `oneTopoTargetSelected` becomes `oneToposolidSelected`, its `<param>` "One toposolid, not a subdivision, is selected."; the class summary's "while one toposolid or floor is selected" becomes "while one toposolid is selected".
+- Test: `tests/RVTuk.Core.Tests/TopoTools/ModifyTabPanelsTests.cs`: the named argument in `NamesTheCopyAndTheShortcut` follows the rename; nothing else changes there.
 
 **Interfaces:**
-- Consumes: `ModifyTabPanels.Decide` (Task 4); `TopoSession.Started` and `Ended` (Task 8); the edit-mode signal (Task 7).
+- Consumes: `ModifyTabPanels.Decide` (Task 4); `TopoSession.Started` and `Ended` (Task 8); the edit-mode signal (Task 7: `IsContextualTab && IsInEditMode`, rule 4).
 - Produces:
   - `internal static class ModifyTabAccess`, with:
     - `internal const string AddInsTabId = "Add-Ins";` and `internal const string ModifyTabId = "Modify";`
@@ -589,7 +595,7 @@ Ten facts decide Tasks 8–12 (probe 5 may also change Task 5, and probe 9 Tasks
 - Rules:
   - Floor ⇄ Topo's Modify-tab button is gone. The shortcut panel holds Topo Tools alone: Id `RVTuk_ContextualTopoTools`, posting the RVTuk-panel command as today.
   - **One idempotent `Apply()`.**
-    - Inputs: the session open (`TopoSession.Current`); the edit mode (`IsInEditMode`); one toposolid or floor selected (from the last `SelectionChanged`); `CopyAvailable`.
+    - Inputs: the session open (`TopoSession.Current`); the edit mode (`IsInEditMode`); exactly one element selected, a toposolid that is not a subdivision (from the last `SelectionChanged`); `CopyAvailable`.
     - It calls `Decide`, then adds or removes each of our panels, never only hiding one.
     - Our panels come only from `NewRevitPanel`. If it throws while making the shortcut panel, nothing of ours goes on the tab: the fail-safe below runs.
   - **When `Apply` runs:**
@@ -604,8 +610,8 @@ Ten facts decide Tasks 8–12 (probe 5 may also change Task 5, and probe 9 Tasks
 - [ ] **Step 1: Implement.**
 - [ ] **Step 2: Build all four years; run `.\build\Test-All.ps1`.** Then `git grep -n ContextualTopoButton -- src tests` → nothing.
 - [ ] **Step 3: Revit checks (Task 15 rows):**
-  - One toposolid or one floor selected shows Topo Tools only, with no Floor ⇄ Topo; two floors show nothing.
-  - Edit Boundary of a floor, then select a sketch line: no error, and the shortcut is back after Finish.
+  - One toposolid selected shows Topo Tools only, with no Floor ⇄ Topo; a floor, a wall, a door, a subdivision or two toposolids show nothing, also right after a toposolid was selected.
+  - Edit a toposolid's sketch, then select a sketch line: no error, and the shortcut is back after Finish.
   - During a session the shortcut is off the Modify tab; after ✓ it comes back for the toposolid still selected.
   - Fail-safe, whole part: with an empty `%LOCALAPPDATA%\RVTuk\topo-modify-tab-off` and Revit restarted, nothing of ours is on the Modify tab, a whole session (Topo Tools, Draw Lines, Update, Accept, Cancel) works from the Add-Ins tab, and `crash.log` has one line naming the file. Delete the file afterwards.
 - [ ] **Step 4: Commit**
@@ -700,15 +706,15 @@ Ten facts decide Tasks 8–12 (probe 5 may also change Task 5, and probe 9 Tasks
     - `AllowCancellation = true`.
   - **The choices:** "Accept, then save" runs `TopoSessionActions.Accept()`; "Cancel the session, then save" runs `Cancel()`; "Save as it is" does nothing.
   - **The box:** if the session still exists afterwards, `DontAskOnSave = WasVerificationChecked()`.
-  - **Esc:** `e.Cancel()` when `e.Cancellable`, otherwise save as it is. If probe 8 showed that a close then lost the document's changes, Esc saves as it is in every case.
+  - **Esc** saves as it is in every case (rule 8 fired on 2026-11-18): never `e.Cancel()`.
   - **Failures:** log one line, and never block the save.
 
 - [ ] **Step 1: Implement.**
 - [ ] **Step 2: Build all four years; run `.\build\Test-All.ps1`.**
 - [ ] **Step 3: Revit checks (Task 15 rows):**
   - Each choice; the box.
-  - Esc on Save.
-  - A close answered Yes at "Save changes?", then Esc.
+  - Esc on Save: the save goes ahead as it is.
+  - A close answered Yes at "Save changes?", then Esc: the model is saved as it is.
   - Delete one height text in the session's view, close the model, answer Yes at "Save changes?", then choose "Accept, then save": the line's new text reads the last typed height, not 0.00.
   - Synchronize with Central.
   - Saving another document, or a read-only one: no prompt.
@@ -765,35 +771,38 @@ Ten facts decide Tasks 8–12 (probe 5 may also change Task 5, and probe 9 Tasks
 
 - [ ] **Step 1: README.**
   - **The workflow:**
-    - Step 1: Topo Tools alone on the Modify tab.
+    - Step 1: Topo Tools alone on the Modify tab, while exactly one non-subdivision toposolid is selected.
     - Step 2: the panel as one stack plus three buttons and Spacing; a second press asks.
     - Step 3: arming.
     - Step 4: metres from the Survey Point.
     - "A new line's height": 0.00, and survives a close called off.
     - The "ends by itself" sentence: on DocumentClosed.
-    - The Update paragraph (at HEAD README lines 43-45, starting "**Update** reads each text"; find it by that text, since the edits above shift it): the example becomes "1 line skipped: '42,7x' is not a height in metres.", and "It writes only to the selected element." becomes "It writes only to the toposolid or floor being edited." The rest stays.
-  - **Only if the spec's Probe results record that probe 7 found Topo Edit's ids missing** from Revit's command list: a note beside "Names" that the Topo Edit buttons cannot be given keyboard shortcuts, because Revit builds that list when it starts and skips hidden panels, and Topo Edit is hidden then. Say whether Topo Tools on the RVTuk panel can take one only as probe 7 recorded it.
+    - Step 5's "Update and Accept show a summary in a TaskDialog every time": Accept always does, Update only when something needs attention (Task 18).
+    - The Update paragraph (at HEAD README lines 43-45, starting "**Update** reads each text"; find it by that text, since the edits above shift it): the example becomes "1 line skipped: '42,7x' is not a height in metres.", and "It writes only to the selected element." becomes "It writes only to the toposolid or floor being edited." It also says that Update shows no summary unless something needs attention, and ✓ shows it. The rest stays.
+  - **A keyboard-shortcut note beside "Names"** (rule 7 fired: probe 7 found Topo Edit's ids missing from Revit's command list): the Topo Edit buttons cannot be given keyboard shortcuts, because Revit builds that list when it starts and skips hidden panels, and Topo Edit is hidden then. Probe 7 found the RVTuk panel's buttons, Topo Tools among them, in that list: say so.
   - **The updater paragraph:** arming, and Draw Lines from another view.
   - **"Heights are shared (survey) elevations":** as the spec's Docs section says.
-  - **"Why the Modify tab needs AdWindows":** the copy during a session, Revit's own panel class, edit modes, the switch to Add-Ins; no Floor ⇄ Topo; the two switch files (`topo-modify-tab-off`, `topo-modify-copy-off` in `%LOCALAPPDATA%\RVTuk\`) that turn the part off for checking the fail-safe.
+  - **"Why the Modify tab needs AdWindows":** the copy during a session, Revit's own panel class, edit modes, the switch to Add-Ins; the shortcut for one non-subdivision toposolid only; no Floor ⇄ Topo; the two switch files (`topo-modify-tab-off`, `topo-modify-copy-off` in `%LOCALAPPDATA%\RVTuk\`) that turn the part off for checking the fail-safe.
   - **"Names":** the shortcut posts only Topo Tools; the copy shares Topo Edit's source.
   - **The Floor ⇄ Topo "Refused" list:** an element with an open session.
   - **The Docs list:** this spec and this plan.
   - **Session checklist, the existing rows:** add 2025, 2026 and 2027 columns. Change:
     - row 2: the dialog;
     - row 3: "type 42.75; the texts read 0.00 and 42.75";
-    - row 18: Topo Tools only;
+    - row 18: Topo Tools only, and for the toposolid alone (the floor and the mixed selections show nothing);
     - row 28: no Floor ⇄ Topo on the Modify tab.
   - **Session checklist, new rows**, from each task's "Revit checks", plus:
     - the heights rows of the spec's "Checks in Revit after the build";
-    - two documents open, with the session in one: saving the other asks nothing.
+    - two documents open, with the session in one: saving the other asks nothing;
+    - Task 17's and Task 18's Revit checks;
+    - the toposolid-only shortcut: a wall, a door, a subdivision or two toposolids show nothing, also right after a toposolid was selected.
   - **The Code table:** in the Revit row (line 291), replace `ContextualTopoButton` with `ModifyTabHost` and `ModifyTabAccess`, and add `TopoDocumentEvents` and `TopoSaveGuard` (`TopoSessionActions` is under `Commands/`). In the Core row (line 289), add the metre height text (`SurveyHeightText`) and the Modify-tab rule (`ModifyTabPanels`).
   - Fix the row numbers cited at README lines 73, 138-139 and 192, and in the backlog's lines 7-8.
-- [ ] **Step 2: CLAUDE.md.** Rewrite the "One exception" sentence: the Topo Tools shortcut, and the Topo Edit panel during a session, both as Revit's own panel class and fail-safe; the switch to the Add-Ins tab once when a session starts, also through `Autodesk.Windows` and under the same fail-safe; no Floor ⇄ Topo. In the Topo Tools bullet: the panel order (✗ and ✓ first), "metres, measured like a Survey Point level", and "the toposolid or floor being edited".
+- [ ] **Step 2: CLAUDE.md.** Rewrite the "One exception" sentence: the Topo Tools shortcut, shown while exactly one non-subdivision toposolid is selected (today: "one non-subdivision toposolid or one floor"), and the Topo Edit panel during a session, both as Revit's own panel class and fail-safe; the switch to the Add-Ins tab once when a session starts, also through `Autodesk.Windows` and under the same fail-safe; Floor ⇄ Topo is no longer on the Modify tab. In the Topo Tools bullet: the panel order (✗ and ✓ first), "metres, measured like a Survey Point level", and "the toposolid or floor being edited".
 - [ ] **Step 3: The 2026-11-15 spec.** Add an "Amended 2026-11-17" paragraph after the 2026-11-16 one, pointing to the new spec. Line 129's "0 means the survey point's elevation" becomes "0 is the zero of Survey Point levels".
 - [ ] **Step 4: Backlog.**
   - Verification: the rows of this pass.
-  - Ideas: warn when a line's height is far from the element's surface; if probe 7 found no Topo Edit ids, hide the panel only after Revit has listed its commands.
+  - Ideas: warn when a line's height is far from the element's surface; hide the panel only after Revit has listed its commands (rule 7 fired: probe 7 found no Topo Edit ids in that list).
   - Done: this pass.
 - [ ] **Step 5: Commit**
 
@@ -816,4 +825,64 @@ Ten facts decide Tasks 8–12 (probe 5 may also change Task 5, and probe 9 Tasks
   - Each fix is its own commit.
   - Ticked rows go in with `docs(topo-tools): the follow-the-session pass checked in Revit 2024`.
   - Then 2025, 2026 and 2027, as Revit is at hand.
+  - Once Daniel's Revit checks pass, delete the probe branch: `git branch -D topo-probe-2026-11-17`.
 - [ ] **Step 4: Update the description of [tchonky/RVTuk#16](https://github.com/tchonky/RVTuk/pull/16)** with this pass.
+
+---
+
+### Task 17: Revit — a height text whose line was deleted no longer breaks Update
+
+Daniel's report 4 in the spec's "Probe results". The cause (crash.log, 2026-11-18): `Label` builds `textById` from the collected texts after `doc.Delete(toDelete)`; reading the deleted note's `Id` throws `InvalidObjectException`, and Update (and Height Labels, which calls `Label` too) is rolled back.
+
+**Files:**
+- Modify: `src/RVTuk.Revit/TopoTools/HeightTexts.cs` (`Label`)
+
+**Interfaces:**
+- Produces: nothing new.
+- Rules:
+  - Every map keyed by a collected text is built before anything is deleted, and a deleted note's object is never read afterwards. `HeightTextLinker`'s contract already keeps a deleted text out of `Relinked` and `LineByText`.
+  - Also check every other `doc.Delete` / `Document.Delete` in `src/RVTuk.Revit` for a read of a deleted element's managed object after the delete; fix any the same way, or report that there is none.
+
+- [ ] **Step 1: Implement.**
+- [ ] **Step 2: Build all four years; run `.\build\Test-All.ps1`.**
+- [ ] **Step 3: Revit checks (Task 15 rows):** delete a topo line but keep its height text, then Update: no error, the text is deleted, the line's points come off the element; the same with Height Labels.
+- [ ] **Step 4: Commit**
+
+`fix(topo-tools): a height text whose line was deleted no longer breaks Update`
+
+---
+
+### Task 18: Core and Revit — Update shows its summary only when something needs attention; Accept always does
+
+Spec item 12, from Daniel's report 3 in the spec's "Probe results".
+
+**Files:**
+- Modify:
+  - `src/RVTuk.Core/TopoTools/TopoSessionReport.cs`
+  - `src/RVTuk.Revit/TopoTools/Commands/TopoUpdateCommand.cs`
+  - `src/RVTuk.Revit/TopoTools/Commands/TopoSessionActions.cs`
+- Test: `tests/RVTuk.Core.Tests/TopoTools/TopoSessionReportTests.cs`
+
+**Interfaces:**
+- Produces:
+  - `public bool ShowAfterUpdate => HasProblems || LinesApplied == 0;` on `TopoSessionReport`.
+  - `public static bool TopoUpdateCommand.Run(bool alwaysShowSummary)`: the button's `Execute` passes false, `TopoSessionActions.Accept()` passes true.
+- Rules:
+  - The summary dialog shows when `alwaysShowSummary || report.ShowAfterUpdate`; otherwise Run shows nothing after a committed update. Refusals, a rolled-back commit and failures keep their dialogs.
+  - The Survey Point marker is read, and `session.MarkerNoted` set, only when a summary is about to be shown; the "one read per session, even a failed one" rule stays.
+  - The class comment of `TopoSessionReport` stops saying it is shown "after each run".
+
+- [ ] **Step 1: Write the failing tests.** `ShowAfterUpdate` is true for each problem alone (an unreadable height, a point moved by hand, a lost point, an unlinked text, each with `LinesApplied = 1`), true with nothing applied and no problem, and false with lines applied and no problem, also with points dropped at crossings and with a marker figure set.
+- [ ] **Step 2: Run the tests to see them fail**
+
+Run: `dotnet test tests\RVTuk.Core.Tests\RVTuk.Core.Tests.csproj -c Release2025 --filter TopoSessionReportTests` → FAIL.
+
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run the tests to see them pass**
+
+Run: the same filter → PASS. Then build all four years and run `.\build\Test-All.ps1` → all pass.
+
+- [ ] **Step 5: Revit checks (Task 15 rows):** Update with nothing to report shows nothing; ✓ shows the summary, with the marker's line when it applies; an Update with a skipped line shows the summary.
+- [ ] **Step 6: Commit**
+
+`feat(topo-tools): Update shows its summary only when something needs attention; Accept always does`

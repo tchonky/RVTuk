@@ -1,7 +1,9 @@
 # Topo Tools — the Topo Edit buttons follow the session
 
 Date: 2026-11-17. Status: approved by Daniel on 2026-11-17, after a second round (the layout, the
-heights and Floor ⇄ Topo changed after the first); the orange of item 8 stays. Plan:
+heights and Floor ⇄ Topo changed after the first); the orange of item 8 stays. Amended 2026-11-18
+after Daniel's Revit 2024 sitting: item 2 (the shortcut for one toposolid only), item 5 (Esc),
+item 11 (the marker note), a new item 12, and the probe results. Plan:
 [2026-11-17-topo-edit-follows-session.md](../plans/2026-11-17-topo-edit-follows-session.md). Amends
 [2026-11-15-topo-edit-session-design.md](2026-11-15-topo-edit-session-design.md): its panel layout;
 its "the Topo Edit panel itself stays on our own tab"; "Starting a session" (a second press now
@@ -77,10 +79,11 @@ reshapes the element along it. A forgotten session is usually found through Topo
      code is fragile about panels that are not its own (see "How it is built") (my call).
    - The Topo Tools shortcut leaves the Modify tab during a session (my call): the Topo Edit panel
      beside it has ✗ and ✓, which end the session and leave the selection alone, and the shortcut
-     then comes back for the toposolid or floor still selected. That is as many clicks as item 4's
-     dialog, with one panel fewer on the tab.
+     then comes back for the toposolid still selected. That is as many clicks as item 4's dialog,
+     with one panel fewer on the tab.
    - **Floor ⇄ Topo leaves the Modify tab for good** (yours), session or not. It stays on the RVTuk
-     panel; the Modify tab keeps only the Topo Tools shortcut, for one toposolid or one floor. This
+     panel; the Modify tab keeps only the Topo Tools shortcut, for one toposolid (yours, 2026-11-18:
+     "only when a toposolid is selected"); a floor starts its session from the RVTuk panel. This
      undoes part of the finishing pass of 2026-11-16.
 3. **When a session starts, the ribbon switches to Add-Ins** (yours, part of the approach). Revit then
    stays on Add-Ins when the Modify | … tab closes, and comes back to it after the next selection and
@@ -96,10 +99,8 @@ reshapes the element along it. A forgotten session is usually found through Topo
 5. **Saving or syncing during a session asks** (my call): "Topo Edit is still open on Toposolid 123:
    changes to its lines and heights since the last Update are not on it yet." — **Accept, then
    save** / **Cancel the session, then save** / **Save as it is**, with a "Don't ask again until this
-   Topo Edit ends" box. Esc stops the save when Revit lets it be stopped (not while Revit itself is
-   closing), and otherwise saves as it is.
-   - Whether Esc during a document's close keeps the document open, or lets Revit close it unsaved,
-     is for probe 8. If it closes it unsaved, Esc saves as it is in every case.
+   Topo Edit ends" box. Esc saves as it is: in the probe sitting, Esc did not stop Revit from
+   closing (rule 8, 2026-11-18).
    - The session now ends when its document has closed, not when closing starts (my call): a close
      called off at Revit's "Save changes?" keeps the session and its last typed height, and a save
      on the way out still brings up this prompt. Today both end as soon as closing starts.
@@ -134,8 +135,8 @@ reshapes the element along it. A forgotten session is usually found through Topo
       Revit's own readings follow the marker instead, the tool measures from the marker.
     - If the Survey Point marker itself sits off that zero (its own Elev is not 0, as after moving
       it while unclipped), heights still follow the levels and spot elevations, not the marker, and
-      the first Update of every session says so in one line: "The Survey Point marker itself sits
-      at +10.00 m; heights are measured like a Survey Point level."
+      the first summary shown in a session says so in one line: "The Survey Point marker itself
+      sits at +10.00 m; heights are measured like a Survey Point level."
     - A plain number is metres in every project. Today it is read in the project's units: "42.75"
       in a centimetre project means 42.75 cm.
     - New texts are written the way a surveyor writes heights, with a point and at least two
@@ -156,6 +157,10 @@ reshapes the element along it. A forgotten session is usually found through Topo
       applied without warning; retyping it and pressing Update puts the surface back. Texts typed
       in project units are not converted (my call: only test models have them).
     - The tool never rewrites a typed text.
+12. **Update shows no summary unless something needs attention; ✓ always shows it** (yours: no
+    pop-up on Update, the summary at Accept). It still shows when no line was applied or it names
+    a problem (a skipped line, a point moved by hand or not placed, an unlinked text), as a silent
+    Update would hide why nothing changed (my call). Failures and refusals keep their messages.
 
 ## Not possible (looked into on 2026-11-16 and 17)
 
@@ -307,13 +312,115 @@ at hand, items 2, 4 and 9 are repeated there with the same build.
 10. (Added by the plan.) Draw Lines from another view: does setting the active view and then posting
     Detail Line start drawing in the session's view?
 
+## Probe results (Revit 2024, 2026-11-18)
+
+Daniel ran the probe in Revit 2024 (2024.3.60) on 2026-11-18, in an unsaved new project
+("Project1"), not in a copy of a test project. Steps are those of the script in plan Task 6; task
+numbers are the plan's.
+
+**The main sitting's log is lost.** The probe wrote `%TEMP%\RVTuk-topo-probe.txt` from inside
+Revit, and Revit runs with TEMP set to a per-session folder (`%LOCALAPPDATA%\Temp\<guid>\`) that it
+empties when it closes. The sitting's Revit session (07:20-08:40) closed normally. Two short logs
+survive: 07:19 (start-up lines only) and 08:41-08:48 (one session started and ended, then one Topo
+Probe press). Step 13's switch never took effect either: the file was made as
+`RVTuk-probe-no-adwindows.txt` in `%LOCALAPPDATA%\Temp\`, and Revit looked in its own per-session
+folder, for the name without `.txt`.
+
+What the surviving log (the 08:41 session) shows:
+
+- Probe 3: at session start the Add-Ins tab's `IsActive` was set and read back true; the ribbon's
+  active tab was Add-Ins.
+- Probes 1 and 2, in part: the copy was added at index 18 of 19 on Modify | Toposolid, that is
+  last. Nobody looked at it during the session.
+- Probe 4, in part: at start-up the plain Modify tab reads `IsInEditMode` true with
+  `IsContextualTab` false; a plain selection (Modify | Toposolid) reads `IsInEditMode` false with
+  `IsContextualTab` true; after deselecting, both false. No edit mode was logged.
+- Probe 5: the ribbon's `ActualHeight` was 120 before and during the session. Every panel was 93
+  high, Topo Edit on Add-Ins 93 x 248 during it. Cancel and Accept were `Size=Large`,
+  `ShowText=False`: the icons-only look applied.
+- Probe 7: `ShortcutsHelper.Commands` held 2176 entries and none of Topo Edit's six buttons (read
+  after a session, the panel hidden). `RevitCommandId.LookupCommandId` still finds
+  `CustomCtrl_%CustomCtrl_%Add-Ins%Topo Edit%TopoCancel` and `...%TopoUpdate`. The RVTuk panel's
+  buttons, Topo Tools among them, are in the list.
+- Probe 9, one reading, with the Survey Point clipped and at shared 0:
+  `GetProjectPosition(XYZ.Zero).Elevation` = 40 m; the Survey Point's `SharedPosition.Z` = 0 m and
+  `Position.Z` = -40 m; `BASEPOINT_ELEVATION_PARAM` = 0; `InternalOrigin.Get(doc).SharedPosition.Z`
+  = 40 m. Consistent, but the two zeros were never moved apart, so the comparison that decides
+  rule 9 is not recorded.
+- Probes 6 and 10, and steps 8 and 11-13: no lines.
+
+Daniel's report, in his words:
+
+1. "Topo tools appears in modify tabs no matter the element selected. Can we make it appear only
+   when toposolid are selected?"
+2. "floor <-> Topo button is still there in modify tab". Expected: the probe was cut before Task 9,
+   which removes it.
+3. "please remove the popup message on refresh, just show when I hit 'accept'" ("refresh" is
+   Update).
+4. A topo line deleted, its height text kept, then Update: "The update failed and was undone: The
+   referenced object is not valid, possibly because it has been deleted from the database, or its
+   creation was undone." `crash.log` (08:30-08:31) gives the cause: `HeightTexts.Label` builds its
+   map of texts by id after `doc.Delete`, and so reads the deleted note's `Id`.
+5. "When closing the revit with a open session, pressing escape doesn't cancel the exiting."
+   (step 11)
+
+Report 1 narrows item 2's shortcut to one toposolid (yours). Today's code (`ContextualTopoButton`)
+shows the shortcut for one floor too, and only hides its panel (never removes it) otherwise; Task 9
+replaces both. Report 2 needs nothing more. Report 3 is item 12 (yours, its exceptions my call;
+Task 18 builds it). Report 4 is a bug, fixed by Task 17. Report 5 is rule 8.
+
+**No second sitting** (my call). Each open point is decided on the side the plan already builds and
+becomes a Revit check row, run by Daniel in Task 16 (the README checklist of Task 15). The rules of
+Task 7 Step 2:
+
+- **Rule 1** does not fire: nothing was reported against the copy. The copy stays; Task 10's rows
+  check it.
+- **Rule 2:** the copy went last, and Task 9's host already re-applies on the tab's notifications.
+  No change.
+- **Rule 3:** the switch took. After a selection and Esc it was not observed: the one switch at the
+  start stays, as planned; Task 10's row checks it.
+- **Rule 4:** the signal stays `IsContextualTab && IsInEditMode`. The readings that survive fit it
+  (false for a plain selection and for none; the start-up true is not contextual). No error was
+  reported for step 6. Edit modes are checked by Tasks 9 and 10's rows.
+- **Rule 5:** the look passes (no height change, icons only, nothing reported cut off), so Task 5's
+  code stays. The theme switch (step 8) and the folded copy (step 7) were not observed: Task 10's
+  rows; a copy folded at the office's usual width goes back to Daniel then. The fail-safe look was
+  not observed, and is not needed while the icons-only look works.
+- **Rule 6:** not observed; no note; a Task 16 row.
+- **Rule 7 fires:** Topo Edit's ids are not in Revit's shortcut list. Task 15 adds the README's
+  keyboard-shortcut note and the backlog idea.
+- **Rule 8 fires**, on Daniel's report 5: Task 12's Esc saves as it is in every case, never
+  `e.Cancel()`.
+- **Rule 9:** not observed. The conversion and the marker note stay (Task 3 stands); the height
+  rows under "Checks in Revit after the build" decide it in Task 16. If Revit's readings follow the
+  marker there, Task 7 Step 3's rule-9 change is made then.
+- **Rule 10:** not observed. Task 8 builds the switch-then-post as planned, and a Task 8 row checks
+  it; the "Press Draw Lines again..." fallback comes only if that check fails.
+
+The probe's worktree is removed. Its branch, `topo-probe-2026-11-17`, stays until Task 16's Revit
+checks pass: a point they leave open may need it again, with its log moved to
+`%LOCALAPPDATA%\RVTuk\`. Task 16 deletes the branch.
+
 ## Checks in Revit after the build
 
 New rows in the README checklist, 2024 first, then 2025–2027: each item of "What the user sees"
 (including "Go to it" leaving the element selected, Draw Lines from another view drawing in the
 session's view, and a close called off keeping the session), the fail-safe (the Add-Ins panel keeps
 working when the Modify-tab part is off; an empty file switches it off for the check, plan Task 9),
-and anything the probe left open. For the heights:
+and anything the probe left open. Added after the probe sitting (2026-11-18):
+
+- The shortcut: one toposolid shows Topo Tools; a floor, a wall, a door, a subdivision or two
+  toposolids show nothing, also right after a toposolid was selected.
+- Update with nothing to report shows nothing; ✓ shows the summary; an Update with a skipped line
+  shows it.
+- A topo line deleted with its height text kept: Update, and Height Labels, delete the text without
+  an error, and the line's points come off.
+- The probe items not observed: 1 (the copy's colours, clicks, one Spacing box, ✓ while drawing),
+  2 and 3 (after a selection and Esc), 4 (Edit Boundary with a sketch line selected, Edit Group, a
+  cancelled new floor), 5 (a theme switch; the copy whole or folded at the office's usual width;
+  "Minimize to Panel Buttons"), 6 (a tiled view), 10 (Draw Lines from another view).
+
+For the heights:
 
 - In a centimetre, a millimetre and a feet project, "42.75" puts points at 42.75 m.
 - Probe 9's model with the new build, on a toposolid and on a floor: a line labelled 42.75 lands at
@@ -332,8 +439,9 @@ and anything the probe left open. For the heights:
 ## Docs
 
 - **CLAUDE.md:** the "One exception" sentence covers the Topo Edit panel during a session and the
-  switch to Add-Ins, and drops Floor ⇄ Topo from the Modify tab; the Topo Tools line says metres
-  and lists the buttons in their new order (✗ and ✓ first).
+  switch to Add-Ins, says the shortcut shows for one toposolid only, and drops Floor ⇄ Topo from
+  the Modify tab; the Topo Tools line says metres and lists the buttons in their new order (✗ and ✓
+  first).
 - **README:** "Why the Modify tab needs AdWindows", as in CLAUDE.md. The workflow (steps 1–4, "A
   new line's height"), the paragraph on the updater (arming; Draw Lines from another view) and the
   "Names" line (the shortcut posts only Topo Tools; the Modify-tab copy's name). "Heights are shared
@@ -344,7 +452,9 @@ and anything the probe left open. For the heights:
   the internal origin (usually ±0.00), so survey heights need Specify Coordinates first. The
   Floor ⇄ Topo "Refused" list gains the open session, and the Docs list this spec. Checklist rows 2
   (the dialog), 3 ("type 42.75; the texts read 0.00 and 42.75"), 18 and 28 (no Floor ⇄ Topo on the
-  Modify tab).
+  Modify tab). Added after the probe sitting: the keyboard-shortcut note beside "Names" (probe 7:
+  the Topo Edit buttons cannot be given shortcuts); the Update paragraph as item 12 says; and a
+  note on a height text whose line was deleted (it is deleted at the next Update or Height Labels).
 - **The 2026-11-15 spec** gets an "Amended 2026-11-17" line pointing here, and its "0 means the
   survey point's elevation" becomes "0 is the zero of Survey Point levels".
 - **The backlog** is updated, with two new ideas: warn when a line's height is far from the
