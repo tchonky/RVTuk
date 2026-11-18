@@ -167,3 +167,12 @@ plan [2026-11-17-topo-edit-follows-session.md](plans/2026-11-17-topo-edit-follow
 - Hide the Topo Edit panel only after Revit has listed its commands, so its buttons can take
   keyboard shortcuts. Revit builds that list when it starts and skips hidden panels; probe 7 found
   none of Topo Edit's buttons in it.
+- A failure of the whole Modify-tab part also stops the switch to Add-Ins (the switch shares the
+  host's fail-safe). If the part fails in Revit 2025 (UIFramework never read), consider a switch
+  that survives it.
+- The Modify-tab shortcut's selection flag is refreshed only by SelectionChanged; if README row 47
+  shows a shortcut left over after switching models, re-read or clear it on ViewActivated when the
+  document changes.
+- **Tidy-ups:** one helper for the `%LOCALAPPDATA%\RVTuk` folder (ModifyTabHost's switch files and
+  Application's crash.log build it separately), and one definition of the toolkit's orange
+  (TopoLineStyle and TopoIcons).
