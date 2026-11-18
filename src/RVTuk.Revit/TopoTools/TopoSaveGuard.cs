@@ -11,8 +11,8 @@ namespace RVTuk.Revit.TopoTools
     /// Edit ends", sets <see cref="TopoSession.DontAskOnSave"/>. Esc, or closing the dialog, saves as
     /// it is, and the save is never called off: Esc at such a prompt did not stop Revit from closing
     /// (Revit 2024, 2026-11-18), so Esc means the same in every case.
-    /// <para>DocumentSaving, DocumentSavingAs (a new project's first save) and
-    /// DocumentSynchronizingWithCentral share one handler: their arguments all derive from
+    /// <para>DocumentSaving, DocumentSavingAs (every Save As, including a new project's first save)
+    /// and DocumentSynchronizingWithCentral share one handler: their arguments all derive from
     /// RevitAPIPreDocEventArgs (2024–2027). Their handlers may change any document not in read-only
     /// mode, so Accept and Cancel run inside the event, on the session's document, and no view is
     /// switched. Every failure is caught and logged in one line, and the save goes on.</para>
@@ -36,9 +36,12 @@ namespace RVTuk.Revit.TopoTools
 
         /// <summary>
         /// Asks only when the session is on the document being saved, its box was not ticked, and
-        /// the document is neither in read-only mode (no transaction could start, so neither Accept
-        /// nor Cancel could run) nor opened from a read-only file (Save cannot write it back, so
-        /// ending the session for that save would gain nothing). Not asking saves as it is.
+        /// the document is not in read-only mode (no transaction could start, so neither Accept nor
+        /// Cancel could run). For a model opened from a read-only file, a plain Save cannot write the
+        /// file back, so it does not ask; a Save As, the only way to keep such a model's work, asks
+        /// like any other. Only a plain Save's arguments are DocumentSavingEventArgs: those of
+        /// DocumentSavingAs and DocumentSynchronizingWithCentral do not derive from it (2024–2027).
+        /// Not asking saves as it is.
         /// </summary>
         private static void OnSaving(object? sender, RevitAPIPreDocEventArgs e)
         {
@@ -47,7 +50,7 @@ namespace RVTuk.Revit.TopoTools
                 var session = TopoSession.Current;
                 var doc = e.Document;
                 if (session == null || !session.IsFor(doc) || session.DontAskOnSave) return;
-                if (doc.IsReadOnly || doc.IsReadOnlyFile) return;
+                if (doc.IsReadOnly || (doc.IsReadOnlyFile && e is DocumentSavingEventArgs)) return;
 
                 var label = TopoSessionCommands.LabelOf(doc.GetElement(session.TargetId), session.TargetId);
                 var dialog = new TaskDialog(TopoSessionCommands.Title)
@@ -66,13 +69,19 @@ namespace RVTuk.Revit.TopoTools
                 var choice = dialog.Show();
                 bool dontAskAgain = dialog.WasVerificationChecked();
 
-                // Each shows its own dialog. "Save as it is", Esc and the dialog closed do nothing.
-                if (choice == TaskDialogResult.CommandLink1) TopoSessionActions.Accept();
-                else if (choice == TaskDialogResult.CommandLink2) TopoSessionActions.Cancel();
-
-                // Read from the session, not from what Accept returned: Accept can return false and
-                // still have ended the session (its view or element gone).
-                if (ReferenceEquals(TopoSession.Current, session)) session.DontAskOnSave = dontAskAgain;
+                try
+                {
+                    // Each shows its own dialog. "Save as it is", Esc and the dialog closed do nothing.
+                    if (choice == TaskDialogResult.CommandLink1) TopoSessionActions.Accept();
+                    else if (choice == TaskDialogResult.CommandLink2) TopoSessionActions.Cancel();
+                }
+                finally
+                {
+                    // Also when the action threw: the session then stays open, and the box still
+                    // counts. Read from the session, not from what Accept returned: Accept can return
+                    // false and still have ended the session (its view or element gone).
+                    if (ReferenceEquals(TopoSession.Current, session)) session.DontAskOnSave = dontAskAgain;
+                }
             }
             catch (Exception ex)
             {
