@@ -61,6 +61,21 @@ contextual tab is caught and logged, never shown — a Revit update that breaks 
 not the tool. Floors' contextual tab is not included (not asked for; trivial to add). The Topo Edit
 panel itself stays on our own tab.
 
+**Amended 2026-11-17** (approved by Daniel that day; itself amended on 2026-11-18 after the probe
+sitting): [2026-11-17-topo-edit-follows-session-design.md](2026-11-17-topo-edit-follows-session-design.md)
+changes this design's panel layout (✗ above ✓ at its left end, then Draw Lines, Height Labels,
+Update, Spacing) and its "the Topo Edit panel itself stays on our own tab": during a session the
+panel also shows on Revit's Modify tab, through `Autodesk.Windows` under the same fail-safe, and
+the ribbon switches to Add-Ins once at the start. The Modify-tab shortcut shows for one
+non-subdivision toposolid only, and Floor ⇄ Topo leaves the Modify tab. It also amends "Starting a
+session" (a second press asks: go to it, accept it or cancel it), "Draw Lines" (new lines in
+another style are converted only while the session is armed, and Draw Lines works from another
+view), "Update" (its summary shows only when something needs attention; Accept always shows it),
+"The session ends by itself" (at `DocumentClosed`, so a close called off keeps it), and "Reading a
+height" and "A new line's height" (heights are metres, measured like a Survey Point level, whatever
+the project's units). Saving during a session now asks first. Where the two designs disagree, the
+2026-11-17 one holds.
+
 For the height text: **one text at each line's middle** (yours), over a Label-Contours-style label
 line, which would leave lines no label line crosses with no visible, editable height. Revit's own
 Label Contours cannot be used: its labels only report the surface's height and cannot be edited
@@ -126,7 +141,7 @@ in `Execute`. Lines inside a group (a placed or pasted detail group) are skipped
 members from an updater fails or raises group warnings.
 
 **A new line's height** (yours) is **the last height typed**. With nothing typed yet, it is the
-survey **0** (yours: texts always show survey elevations, so 0 means the survey point's elevation).
+survey **0** (yours: texts always show survey elevations, so 0 is the zero of Survey Point levels).
 "Last typed" (my call on details): the updater also watches edits to `_DP-Topo Height` texts in the
 session's view and remembers the last value that parses; it is kept in memory per document for the
 Revit session, so it carries from one session to the next until Revit closes. A copied line keeps
