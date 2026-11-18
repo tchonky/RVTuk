@@ -445,10 +445,16 @@
                         Command="{Binding ToggleHelpCommand}"
                         ToolTip="Help, info &amp; support"
                         Content="ℹ️"/>
-                <TextBlock Grid.Column="1" Text="Working…" Margin="8,0" VerticalAlignment="Center"
-                           Foreground="{StaticResource Brush.TextMuted}" FontSize="11"
-                           ToolTip="Revit or the library database is busy with your last action"
-                           Visibility="{Binding IsBusy, Converter={StaticResource BoolVis}}"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0" VerticalAlignment="Center"
+                            Visibility="{Binding IsBusy, Converter={StaticResource BoolVis}}">
+                    <TextBlock Text="{Binding BatchProgressText, TargetNullValue=Working…}" VerticalAlignment="Center"
+                               Foreground="{StaticResource Brush.TextMuted}" FontSize="11" TextTrimming="CharacterEllipsis"
+                               ToolTip="Revit or the library database is busy with your last action"/>
+                    <TextBlock Margin="8,0,0,0" FontSize="11" VerticalAlignment="Center"
+                               Visibility="{Binding IsBatchRunning, Converter={StaticResource BoolVis}}">
+                        <Hyperlink Command="{Binding CancelBatchCommand}" Foreground="{StaticResource Brush.Accent}">Cancel</Hyperlink>
+                    </TextBlock>
+                </StackPanel>
                 <!-- Read-only users browse a local copy of the library: say how fresh it is. -->
                 <TextBlock Grid.Column="1" Text="{Binding LibraryStatus}" Margin="8,0" VerticalAlignment="Center"
                            Foreground="{StaticResource Brush.TextMuted}" FontSize="11"

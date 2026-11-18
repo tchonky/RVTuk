@@ -412,6 +412,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
             SyncCommand            = new RelayCommand(Sync, () => !IsSyncing);
             UpdateAllCommand       = new RelayCommand(UpdateAll,     () => OutdatedCount > 0 && !IsLoading);
+            CancelBatchCommand     = new RelayCommand(() => _batchStopReason ??= "Cancelled."); // only visible while a batch runs
             // Model-only rows have no .rfa and no DB row behind them, so library-backed
             // actions stay disabled for them; their own actions are open-from-model
             // (OpenFamilyEditorCommand) and Save to Library (below). Load also serves as
@@ -699,25 +700,77 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             OnPropertyChanged(nameof(ShowUpdateInProject));
         }
 
+        // Twin: LoadFamilyEventHandler.ProjectChangedMessage in RVTuk.Revit (not visible from here).
+        private const string ProjectChangedMessage = "The active project changed. Press ⟳ and try again.";
+        private const string StoppedProjectChanged = "Stopped: another project became active.";
+
         private void UpdateAll()
         {
-            var items = _allItems.Where(i => i.VersionStatus == VersionStatus.UpdateAvailable).ToList();
-            if (items.Count > 0) LoadFamiliesSequentially(items);
+            var items = _allItems.Where(i => i.VersionStatus == VersionStatus.UpdateAvailable)
+                .OrderBy(i => i.DisplayName).ToList();
+            if (items.Count == 0) return;
+
+            // ponytail: a plain message box, not a custom dark dialog — swap in a window if the
+            // list ever needs scrolling or per-row choices.
+            const int shown = 25;
+            var text = new System.Text.StringBuilder();
+            text.AppendLine($"Update {items.Count} families in \"{ComparedProjectTitle}\"?");
+            text.AppendLine("Project values are kept.");
+            text.AppendLine();
+            foreach (var i in items.Take(shown))
+                text.AppendLine($"{i.DisplayName}    v{i.ProjectVersion} → v{i.Version}");
+            if (items.Count > shown) text.AppendLine($"…and {items.Count - shown} more.");
+            var skipped = _lastComparison?.SkippedDuplicates ?? Array.Empty<SkippedDuplicate>();
+            if (skipped.Count > 0)
+            {
+                text.AppendLine();
+                text.AppendLine("Skipped — more than one copy in the library:");
+                foreach (var d in skipped) text.AppendLine($"{d.Name}  ({d.RelativePaths.Count} copies)");
+            }
+            if (Warn(text.ToString(), MessageBoxButton.OKCancel, MessageBoxImage.Question, "Update All") != MessageBoxResult.OK)
+                return;
+            LoadFamiliesSequentially(items, _comparedDocumentKey);
         }
+
+        // Update All progress in the footer; null when no batch runs.
+        private string? _batchProgressText;
+        public string? BatchProgressText
+        {
+            get => _batchProgressText;
+            private set { SetProperty(ref _batchProgressText, value); OnPropertyChanged(nameof(IsBatchRunning)); }
+        }
+        public bool IsBatchRunning => _batchProgressText != null;
+
+        // Set by Cancel or a project switch; checked between families (the one in progress finishes).
+        private volatile string? _batchStopReason;
+        public ICommand CancelBatchCommand { get; private set; } = null!;
 
         // Loads families one at a time on a single background worker. LoadFamilyHandler is a
         // shared singleton and ExternalEvent.Raise() coalesces, so firing several loads at once
         // (Update All) would race on its state — _loadLock serialises every ping-pong, even
         // across overlapping batches.
-        private void LoadFamiliesSequentially(IReadOnlyList<FamilyBrowserItemViewModel> items)
+        // expectedDocumentKey: Update All passes the project it confirmed, so a load never lands
+        // in another project; single-row Load passes null and loads into whatever is active.
+        private void LoadFamiliesSequentially(IReadOnlyList<FamilyBrowserItemViewModel> items,
+            string? expectedDocumentKey = null)
         {
+            bool batch = expectedDocumentKey != null;
             IsLoading = true;
+            _batchStopReason = null;
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 // One report at the end, not a dialog per family (Update All can be dozens).
                 var failures = new List<string>();
-                foreach (var item in items)
+                int done = 0;
+                for (int n = 0; n < items.Count; n++)
                 {
+                    if (_batchStopReason != null) break;
+                    var item = items[n];
+                    if (batch)
+                    {
+                        var progress = $"Updating {n + 1} of {items.Count} — {item.DisplayName}";
+                        _dispatcher.Invoke(() => BatchProgressText = progress);
+                    }
                     var fullPath = Path.Combine(_config.LibraryFolderPath, item.RelativePath);
                     try
                     {
@@ -725,25 +778,40 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                         string? error;
                         lock (_loadLock)
                         {
-                            (success, error) = _loadFamily(fullPath, null);
+                            (success, error) = _loadFamily(fullPath, expectedDocumentKey);
                         }
                         if (success)
+                        {
+                            done++;
                             _dispatcher.Invoke(() => item.VersionStatus = VersionStatus.UpToDate);
-                        else
-                            failures.Add($"{item.DisplayName}: {error ?? "Revit did not load the family."}");
+                        }
+                        else if (error == ProjectChangedMessage) _batchStopReason = StoppedProjectChanged;
+                        else failures.Add($"{item.DisplayName}: {error ?? "Revit did not load the family."}");
+                    }
+                    catch (RevitBusyException ex)
+                    {
+                        // Every remaining family would wait the same 10 s and fail the same way.
+                        _batchStopReason = ex.Message;
                     }
                     catch (Exception ex)
                     {
                         failures.Add($"{item.DisplayName}: {ex.Message}");
                     }
                 }
+                var stopReason = _batchStopReason;
                 _dispatcher.BeginInvoke(new Action(() =>
                 {
                     IsLoading = false;
+                    BatchProgressText = null;
                     RecountOutdated();
+                    var report = new System.Text.StringBuilder();
+                    if (stopReason != null)
+                        report.Append(batch ? $"Updated {done} of {items.Count}. {stopReason}" : stopReason);
                     if (failures.Count > 0)
-                        Warn("Failed to load:\n\n" + string.Join("\n", failures.Take(10)) +
-                             (failures.Count > 10 ? $"\n…and {failures.Count - 10} more." : ""));
+                        report.Append((report.Length > 0 ? "\n\n" : "") + "Failed to load:\n\n" +
+                            string.Join("\n", failures.Take(10)) +
+                            (failures.Count > 10 ? $"\n…and {failures.Count - 10} more." : ""));
+                    if (report.Length > 0) Warn(report.ToString());
                 }));
             });
         }

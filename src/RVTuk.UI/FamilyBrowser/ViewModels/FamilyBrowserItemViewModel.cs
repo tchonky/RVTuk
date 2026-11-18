@@ -101,6 +101,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         // The copy loaded in the project, as of the last Sync — kept so a Rescan can re-judge.
         private ProjectFamilyInfo? _inProject;
+        public string? ProjectVersion => _inProject?.Version;
 
         public FamilyBrowserItemViewModel(FamilyBrowserItem model)
         {
