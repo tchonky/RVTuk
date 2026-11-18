@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Windows.Media.Imaging;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
@@ -25,7 +26,10 @@ namespace RVTuk.Revit.TopoTools
     /// Lines, Height Labels, Update and Spacing. The API makes the two as small buttons that show
     /// their text; the first <see cref="Show"/> makes them icons only through the unsupported
     /// Autodesk.Windows ribbon, and gives the folded panel the Topo Tools icon. If that fails, the
-    /// API's look stays and the panel works the same.
+    /// API's look stays and the panel works the same. As in <see cref="ModifyTabAccess"/>, each
+    /// Autodesk.Windows member is reached in a NoInlining method called inside a try: a member
+    /// that a Revit update removed then throws there and is logged in one line, not while a
+    /// caller is being compiled, outside its try.
     /// </summary>
     public static class TopoEditPanel
     {
@@ -130,11 +134,22 @@ namespace RVTuk.Revit.TopoTools
             _panel.Visible = true;
 
             // After Visible, so the panel is surely in the tab. Nothing shows in between: the
-            // ribbon is redrawn only once Revit's thread is free again.
+            // ribbon is redrawn only once Revit's thread is free again. In a try: what a Revit
+            // update took from Autodesk.Windows throws as MakeStackIconsOnly is compiled, before
+            // its own tries.
             if (!_iconsOnlyTried)
             {
                 _iconsOnlyTried = true;
-                MakeStackIconsOnly();
+                try
+                {
+                    MakeStackIconsOnly();
+                }
+                catch (Exception ex)
+                {
+                    Application.LogDiagnostic(
+                        "Topo Edit: Cancel and Accept keep their text, and the folded panel keeps its first icon: " +
+                        $"{ex.GetType().FullName}: {ex.Message}");
+                }
             }
         }
 
@@ -147,6 +162,7 @@ namespace RVTuk.Revit.TopoTools
         /// This panel's Autodesk.Windows object on the Add-Ins tab, hidden or not; null when it is
         /// not there. Unsupported API, so it may throw: every caller catches.
         /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
         internal static AwRibbonPanel? FindOnAddIns() => FindAddInsTab()?.FindPanel(PanelSourceId);
 
         private static AwRibbonTab? FindAddInsTab() => ModifyTabAccess.FindTab(ModifyTabAccess.AddInsTabId);
@@ -162,8 +178,10 @@ namespace RVTuk.Revit.TopoTools
         /// instead of its first one, the ✗. Both go through the unsupported Autodesk.Windows
         /// ribbon, so this never throws: nothing is changed unless the panel is laid out as the API
         /// builds it, and a failure puts the text back and logs one line. A failure of the folded
-        /// icon logs its own line and leaves the stack's look alone.
+        /// icon logs its own line and leaves the stack's look alone. It reaches no Autodesk.Windows
+        /// member itself: each goes through a NoInlining method called inside one of its tries.
         /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void MakeStackIconsOnly()
         {
             var changed = new List<AwRibbonItem>();
@@ -179,29 +197,31 @@ namespace RVTuk.Revit.TopoTools
                     foreach (var button in new[] { cancel!, accept! })
                     {
                         changed.Add(button); // first: a setter that throws may still have stored its value
-                        button.Size = AwRibbonItemSize.Large;
-                        button.ShowText = false;
+                        SetSize(button, AwRibbonItemSize.Large);
+                        SetShowText(button, false);
                     }
                 }
             }
             catch (Exception ex)
             {
                 foreach (var button in changed) PutTextBack(button);
-                Application.LogDiagnostic($"Topo Edit: Cancel and Accept keep their text: {ex}");
+                Application.LogDiagnostic(
+                    $"Topo Edit: Cancel and Accept keep their text: {ex.GetType().FullName}: {ex.Message}");
             }
 
             try
             {
                 var panel = FindOnAddIns();
                 if (panel != null)
-                    panel.CollapsedPanelImage = TopoIcons.TopoTools(32);
+                    SetFoldedIcon(panel);
                 else
                     Application.LogDiagnostic(
                         $"Topo Edit: the folded panel keeps its first icon: no panel \"{PanelSourceId}\" on the Add-Ins tab.");
             }
             catch (Exception ex)
             {
-                Application.LogDiagnostic($"Topo Edit: the folded panel keeps its first icon: {ex}");
+                Application.LogDiagnostic(
+                    $"Topo Edit: the folded panel keeps its first icon: {ex.GetType().FullName}: {ex.Message}");
             }
         }
 
@@ -211,6 +231,7 @@ namespace RVTuk.Revit.TopoTools
         /// Accept], both with a large image. Null when all of that holds; otherwise what does not,
         /// with both buttons null.
         /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static string? FindStack(out AwRibbonItem? cancel, out AwRibbonItem? accept)
         {
             cancel = accept = null;
@@ -243,13 +264,23 @@ namespace RVTuk.Revit.TopoTools
 
         /// <summary>The API's look back on one button: small, with its text. Best effort, and never
         /// throws: the caller logs the failure that called for it.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
         private static void PutTextBack(AwRibbonItem button)
         {
-            try { button.Size = AwRibbonItemSize.Standard; }
+            try { SetSize(button, AwRibbonItemSize.Standard); }
             catch { /* the caller logs the failure */ }
-            try { button.ShowText = true; }
+            try { SetShowText(button, true); }
             catch { /* the caller logs the failure */ }
         }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void SetSize(AwRibbonItem button, AwRibbonItemSize size) => button.Size = size;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void SetShowText(AwRibbonItem button, bool showText) => button.ShowText = showText;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void SetFoldedIcon(AwRibbonPanel panel) => panel.CollapsedPanelImage = TopoIcons.TopoTools(32);
 
         private static bool IsDarkTheme() => UIThemeManager.CurrentTheme == UITheme.Dark;
 
