@@ -128,5 +128,24 @@ namespace RVTuk.Core.Tests.FamilyBrowser
             Assert.Equal((null, 0), ThumbnailExtractor.ExtractFromRfa(path));
             File.Delete(path); // throws IOException on Windows while a handle is open
         }
+    
+        [Fact]
+        public void ReadRevitYear_ReadsFormatLine_ZeroWhenMissingOrNotCompound()
+        {
+            var path = Path.Combine(Path.GetTempPath(), "rvtuk_rfa_" + Guid.NewGuid().ToString("N") + ".rfa");
+            try
+            {
+                WriteRfa(path);
+                Assert.Equal(2024, ThumbnailExtractor.ReadRevitYear(path));
+
+                WriteRfa(path, basicFileInfo: false);
+                Assert.Equal(0, ThumbnailExtractor.ReadRevitYear(path));
+
+                File.WriteAllText(path, "not a compound file");
+                Assert.Equal(0, ThumbnailExtractor.ReadRevitYear(path));
+                File.Delete(path); // released: must not throw
+            }
+            finally { if (File.Exists(path)) File.Delete(path); }
+        }
     }
 }

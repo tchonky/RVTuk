@@ -39,6 +39,21 @@ namespace RVTuk.Core.FamilyBrowser.Extraction
             }
         }
 
+        /// <summary>Reads only the Revit build year (e.g. 2024); 0 = unreadable / unknown.</summary>
+        public static int ReadRevitYear(string rfaPath)
+        {
+            try
+            {
+                using var fs = new FileStream(rfaPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var rootStorage = RootStorage.Open(fs, StorageModeFlags.LeaveOpen);
+                return TryReadRevitYear(rootStorage);
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
         // ── thumbnail ────────────────────────────────────────────────────────────
 
         // 1) Preferred path: the modern "RevitPreview4.0" stream holds an embedded PNG.

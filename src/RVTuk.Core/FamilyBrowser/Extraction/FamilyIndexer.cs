@@ -164,6 +164,8 @@ namespace RVTuk.Core.FamilyBrowser.Extraction
                     int revitYear = 0;
                     if (needsThumbnail)
                         (thumbnail, revitYear) = ThumbnailExtractor.ExtractFromRfa(fullPath);
+                    else
+                        revitYear = ThumbnailExtractor.ReadRevitYear(fullPath); // the "too new" guard needs it
 
                     workItems.Add(new ExtractionWorkItem
                     {
