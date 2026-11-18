@@ -4,12 +4,12 @@ using System.Linq;
 namespace RVTuk.Core.TopoTools
 {
     /// <summary>
-    /// What one ⇄ run did, in the words the pane's status line uses. Kept in Core, and tested, as
-    /// the only text the converter shows every time.
+    /// What one ⇄ run did, as its summary dialog says it. Kept in Core, and tested, as the only
+    /// text the converter shows every time.
     ///
     /// Skip entries name elements by category and id ("Floor 418732"), never by type name: the
-    /// status line is a left-to-right TextBlock, and a Hebrew type name there would drag the
-    /// punctuation around it into its own run.
+    /// summary is left-to-right text, and a Hebrew type name there would drag the punctuation
+    /// around it into its own run.
     /// </summary>
     public sealed class ConvertReport
     {
