@@ -10,8 +10,8 @@ pass below). Both checklists are in [README.md](README.md#in-revit-checklist-top
 pane-era checks (rows, selection round trip, height boxes, status line) are gone with the pane.
 
 **The follow-the-session pass (2026-11-17 and 18)** is built, with Core tests on all three
-frameworks, but not checked in Revit: checklist rows 29–85, and rows 2, 3, 18, 21, 27 and 28 as
-reworded for it, 2024 first, then 2025–2027. The probe sitting (Revit 2024, 2026-11-18) ran a
+frameworks, but not checked in Revit: checklist rows 29–85, and rows 2, 3, 4, 6, 9, 18, 21, 27 and
+28 as reworded for it, 2024 first, then 2025–2027. The probe sitting (Revit 2024, 2026-11-18) ran a
 throwaway build, and its main log was lost (Revit empties its per-session TEMP folder when it
 closes). So each point the probe left open was decided on the side the plan built, and became a
 row. These could still change the code:

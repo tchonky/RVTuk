@@ -269,22 +269,22 @@ RVTuk panel's buttons, Topo Tools among them, are in it, so they can take a shor
 
 Tick each case only once it has actually been checked in that year's Revit: 2024 first (deploy with
 `.\Deploy.ps1 2024` from an elevated shell, Revit closed), then 2025, 2026 and 2027 as Revit is at
-hand. Rows 29–85 check the follow-the-session pass of 2026-11-17, and rows 2, 3, 18, 21, 27 and 28
-were reworded for it. "Report it" marks a result the design did not expect: it goes back to the
-design rather than being ticked. UIFramework 2025 could not be read for that pass, so in 2025 run
-at least rows 18, 62, 65, 66, 69 and 70.
+hand. Rows 29–85 check the follow-the-session pass of 2026-11-17, and rows 2, 3, 4, 6, 9, 18, 21,
+27 and 28 were reworded for it. "Report it" marks a result the design did not expect: it goes back
+to the design rather than being ticked. UIFramework 2025 could not be read for that pass, so in
+2025 run at least rows 18, 62, 65, 66, 69 and 70.
 
 | # | Case | Expected | 2024 | 2025 | 2026 | 2027 |
 |---|------|----------|------|------|------|------|
 | 1 | Nothing / a wall / two toposolids selected, press Topo Tools; then a subdivision, then a sloped floor | The start message for the first three; the subdivision and the sloped floor refused with their reasons | [ ] | [ ] | [ ] | [ ] |
 | 2 | Start a session, then press Topo Tools again | The Topo Edit panel appears. The second press shows a dialog titled "Topo Tools": "Topo Edit is open on Toposolid N in {view}.", with Go to it, Accept it and Cancel it and their descriptions; ✓ and ✗ read clearly in them | [ ] | [ ] | [ ] | [ ] |
 | 3 | Draw Lines, draw two lines; type 42.75 in one text; draw a third line | Lines are `_DP-Topo Line` with a text at their middle; the texts read 0.00 and 42.75, and the third line's reads 42.75 | [ ] | [ ] | [ ] | [ ] |
-| 4 | Draw a line in another view | It is untouched | [ ] | [ ] | [ ] | [ ] |
+| 4 | Draw a line in another view with Revit's own Detail Line (opening that view disarms the session) | It is untouched | [ ] | [ ] | [ ] | [ ] |
 | 5 | Edit a number, press Update; then Ctrl+Z | The surface moves; Ctrl+Z undoes the Update in one step | [ ] | [ ] | [ ] | [ ] |
-| 6 | A line half over the target | Points only on the inside part, one on the edge at the line's height; the neighbouring toposolid is untouched | [ ] | [ ] | [ ] | [ ] |
+| 6 | Press Draw Lines and draw a line half over the target | Points only on the inside part, one on the edge at the line's height; the neighbouring toposolid is untouched | [ ] | [ ] | [ ] | [ ] |
 | 7 | Type "42,7x", press Update | The line is skipped and named in the summary; its earlier points are gone | [ ] | [ ] | [ ] | [ ] |
 | 8 | Move a line off the target, press Update | Its points on the target are gone | [ ] | [ ] | [ ] | [ ] |
-| 9 | Move a line, press Height Labels; delete a line | The text re-centres; the deleted line's text goes | [ ] | [ ] | [ ] | [ ] |
+| 9 | Move a line, press Height Labels; delete a line, press Height Labels | The text re-centres; the deleted line's text goes | [ ] | [ ] | [ ] | [ ] |
 | 10 | Copy a line together with its text | The copy's text moves to the copied line and keeps the copied number | [ ] | [ ] | [ ] | [ ] |
 | 11 | Run the session on a floor | Works the same as a toposolid | [ ] | [ ] | [ ] | [ ] |
 | 12 | Cancel | New lines and their points gone, edited numbers restored, panel hidden | [ ] | [ ] | [ ] | [ ] |
