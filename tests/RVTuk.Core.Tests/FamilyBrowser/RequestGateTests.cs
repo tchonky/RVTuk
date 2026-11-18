@@ -15,16 +15,18 @@ public class RequestGateTests
     {
         var gate = new RequestGate();
         gate.Begin();
-        var worker = Task.Run(() =>
+        bool finished = false;
+        Task.Run(() =>
         {
             Assert.True(gate.TryStart());
             Thread.Sleep(100);
+            Volatile.Write(ref finished, true);
             gate.Complete();
         });
 
         gate.Wait(TimeSpan.FromSeconds(1));
 
-        Assert.True(worker.IsCompleted);
+        Assert.True(Volatile.Read(ref finished));
     }
 
     [Fact]
@@ -67,11 +69,12 @@ public class RequestGateTests
         var gate = new RequestGate();
         gate.Begin();
         Assert.True(gate.TryStart());
-        var worker = Task.Run(() => { Thread.Sleep(300); gate.Complete(); });
+        bool finished = false;
+        Task.Run(() => { Thread.Sleep(300); Volatile.Write(ref finished, true); gate.Complete(); });
 
         gate.Wait(Short);
 
-        Assert.True(worker.IsCompleted);
+        Assert.True(Volatile.Read(ref finished));
     }
 
     [Fact]

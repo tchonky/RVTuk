@@ -407,11 +407,15 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             {
                 if (e.PropertyName is nameof(ConfigViewModel.IgnoredSubfoldersText)
                                    or nameof(ConfigViewModel.IgnoredFilePatternsText))
+                {
                     ApplyFilter();
+                    RecountOutdated();
+                }
             };
 
             SyncCommand            = new RelayCommand(Sync, () => !IsSyncing);
-            UpdateAllCommand       = new RelayCommand(UpdateAll,     () => OutdatedCount > 0 && !IsLoading);
+            UpdateAllCommand       = new RelayCommand(UpdateAll,
+                () => OutdatedCount > 0 && !IsLoading && !IsComparisonHidden && _comparedDocumentKey != null);
             CancelBatchCommand     = new RelayCommand(() => _batchStopReason ??= "Cancelled."); // only visible while a batch runs
             // Model-only rows have no .rfa and no DB row behind them, so library-backed
             // actions stay disabled for them; their own actions are open-from-model
@@ -675,6 +679,11 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                             ComparedProjectTitle = finalProject?.Title;
                             LoadCategories();
                             OutdatedCount = finalOutdated;
+                            // The user switched while ⟳ ran: this comparison is already about
+                            // a project that isn't active.
+                            if (_activeDocumentKey != null && _comparedDocumentKey != null
+                                && _activeDocumentKey != _comparedDocumentKey)
+                                HideComparison();
                             ApplyFilter();
                             OnPropertyChanged(nameof(ShowUpdateInProject));
                         });
@@ -698,7 +707,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         private void RecountOutdated()
         {
-            OutdatedCount = _allItems.Count(i => i.VersionStatus == VersionStatus.UpdateAvailable);
+            var ignored = IgnoredRule();
+            OutdatedCount = _allItems.Count(i => i.VersionStatus == VersionStatus.UpdateAvailable && !ignored(i));
             OnPropertyChanged(nameof(ShowUpdateInProject));
         }
 
@@ -708,7 +718,9 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         private void UpdateAll()
         {
-            var items = _allItems.Where(i => i.VersionStatus == VersionStatus.UpdateAvailable)
+            if (IsComparisonHidden || _comparedDocumentKey == null) return;
+            var ignored = IgnoredRule();
+            var items = _allItems.Where(i => i.VersionStatus == VersionStatus.UpdateAvailable && !ignored(i))
                 .OrderBy(i => i.DisplayName).ToList();
             if (items.Count == 0) return;
 
@@ -731,7 +743,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             }
             if (Warn(text.ToString(), MessageBoxButton.OKCancel, MessageBoxImage.Question, "Update All") != MessageBoxResult.OK)
                 return;
-            LoadFamiliesSequentially(items, _comparedDocumentKey);
+            LoadFamiliesSequentially(items, _comparedDocumentKey, batch: true);
         }
 
         // ── Project switch ──────────────────────────────────────────────────────────────
@@ -745,8 +757,11 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             private set => SetProperty(ref _isComparisonHidden, value);
         }
 
+        private string? _activeDocumentKey; // last one Revit reported active (null until a switch)
+
         public void ActiveDocumentChanged(string documentKey)
         {
+            _activeDocumentKey = documentKey;
             if (_comparedDocumentKey == null) return; // nothing compared yet
             bool isCompared = documentKey == _comparedDocumentKey;
             if (!isCompared && _stash == null) HideComparison();
@@ -773,6 +788,16 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             RecountOutdated();
             LoadCategories();
             ApplyFilter();
+        }
+
+        // While hidden, the visible rows describe no project: a load into another document
+        // shows nothing, and a batch load into the compared project updates the stash.
+        private void MarkLoaded(FamilyBrowserItemViewModel item, string? documentKey)
+        {
+            if (_stash == null) { item.VersionStatus = VersionStatus.UpToDate; return; }
+            if (documentKey == null || documentKey != _comparedDocumentKey) return;
+            int at = _stash.FindIndex(e => ReferenceEquals(e.Item, item));
+            if (at >= 0) _stash[at] = (item, VersionStatus.UpToDate);
         }
 
         private void RestoreComparison()
@@ -809,9 +834,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         // expectedDocumentKey: Update All passes the project it confirmed, so a load never lands
         // in another project; single-row Load passes null and loads into whatever is active.
         private void LoadFamiliesSequentially(IReadOnlyList<FamilyBrowserItemViewModel> items,
-            string? expectedDocumentKey = null)
+            string? expectedDocumentKey = null, bool batch = false)
         {
-            bool batch = expectedDocumentKey != null;
             IsLoading = true;
             _batchStopReason = null;
             ThreadPool.QueueUserWorkItem(_ =>
@@ -840,7 +864,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                         if (success)
                         {
                             done++;
-                            _dispatcher.Invoke(() => item.VersionStatus = VersionStatus.UpToDate);
+                            _dispatcher.Invoke(() => MarkLoaded(item, expectedDocumentKey));
                         }
                         else if (error == ProjectChangedMessage) _batchStopReason = StoppedProjectChanged;
                         else failures.Add($"{item.DisplayName}: {error ?? "Revit did not load the family."}");
@@ -935,6 +959,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                             if (fresh != null)
                             {
                                 item.Refresh(fresh);
+                                if (_stash != null) item.VersionStatus = VersionStatus.None;
                                 LoadCategories();
                                 ApplyFilter();
                                 RecountOutdated();
