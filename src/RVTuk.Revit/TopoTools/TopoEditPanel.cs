@@ -99,10 +99,10 @@ namespace RVTuk.Revit.TopoTools
             _acceptButton = (PushButton)stack[1];
 
             panel.AddItem(Button<DrawTopoLinesCommand>("TopoDrawLines", "Draw\nLines", assemblyPath,
-                "Start Revit's Detail Line tool: every line drawn in this view becomes a topo line with a height text",
+                "Start Revit's Detail Line tool in the session's view, opening it first if needed: every line drawn there becomes a topo line with a height text",
                 TopoIcons.DrawLines));
             panel.AddItem(Button<HeightLabelsCommand>("TopoHeightLabels", "Height\nLabels", assemblyPath,
-                "Give every topo line in the view a height text at its middle, and re-centre the existing ones",
+                "Give every topo line in the session's view a height text at its middle, and re-centre the existing ones",
                 TopoIcons.HeightLabels));
             panel.AddItem(Button<TopoUpdateCommand>("TopoUpdate", "Update", assemblyPath,
                 "Apply the topo lines and their heights to the toposolid or floor being edited, and stay in the session",
