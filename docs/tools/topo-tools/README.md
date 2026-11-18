@@ -360,7 +360,7 @@ at least rows 18, 62, 65, 66, 69 and 70.
 | 82 | A project where `_DP-Topo Line` is blue and `_DP-Topo Height` is missing (then the other way round); start a session | The existing one stays blue; only the one Topo Tools creates is orange | [ ] | [ ] | [ ] | [ ] |
 | 83 | In a new project, run Auto Dimensions | `_DP-Dim Outer`, `_DP-Dim Inner` and `_DP-Dim Ref` keep Revit's default colour | [ ] | [ ] | [ ] | [ ] |
 | 84 | **Floor ⇄ Topo.** During a session on a floor, select it with another floor and press Floor ⇄ Topo | The summary skips the session's floor: "Floor N: a Topo Edit session is open on it; Accept or Cancel it first"; the other floor converts | [ ] | [ ] | [ ] | [ ] |
-| 85 | After all the rows above | crash.log has no line with "keep their text", "keeps its first icon", "folds to its first icon", "Topo Edit copy is off", "did not switch" or "switch to the Add-Ins tab is off" | [ ] | [ ] | [ ] | [ ] |
+| 85 | After all the rows above | crash.log has no line with "keep their text", "keeps its first icon", "folds to its first icon", "Topo Edit copy is off", "did not switch", "switch to the Add-Ins tab is off" or "Modify-tab panels disabled", apart from row 69's "switched off by topo-modify-tab-off" | [ ] | [ ] | [ ] | [ ] |
 
 Items 19 and 20 are the two floor facts nothing has verified yet; if a floor wants an offset from
 its top, floors need their own Z conversion.
