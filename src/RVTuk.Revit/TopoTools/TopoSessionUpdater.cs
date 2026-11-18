@@ -1,15 +1,19 @@
 using System;
 using System.Collections.Generic;
 using Autodesk.Revit.DB;
+using RVTuk.Core.TopoTools;
 
 namespace RVTuk.Revit.TopoTools
 {
     /// <summary>
     /// Active only during a Topo Edit session. Inside the user's own transaction it gives each new
-    /// detail line drawn in the session's view the "_DP-Topo Line" style and a height text at the
-    /// last typed height, and remembers each height the user types into a height text as the next
-    /// line's height. There is no API to preset the Detail Line tool's style, hence an updater; and
-    /// only an updater may change the document inside the user's transaction.
+    /// detail line drawn in the session's view a height text at the last typed height, first giving
+    /// it the "_DP-Topo Line" style when it has another one. A line in another style is converted
+    /// only while the session is armed (<see cref="TopoSession.Armed"/>); disarmed, it stays as
+    /// drawn, and only new lines already on "_DP-Topo Line" are labelled. It also remembers each
+    /// height the user types into a height text as the next line's height. There is no API to
+    /// preset the Detail Line tool's style, hence an updater; and only an updater may change the
+    /// document inside the user's transaction.
     ///
     /// Registered once at startup as optional, so documents it touched open without a
     /// missing-updater warning on PCs without the add-in, then kept disabled outside sessions.
@@ -112,17 +116,26 @@ namespace RVTuk.Revit.TopoTools
                         if (line.OwnerViewId != session.ViewId) continue;
                         if (line.GroupId != ElementId.InvalidElementId) continue;
 
-                        if (!styleLookedUp)
-                        {
-                            topoStyle = FindTopoLineStyle(doc);
-                            styleLookedUp = true;
-                            if (topoStyle == null)
-                                Application.LogDiagnostic(
-                                    $"TopoSessionUpdater: line style \"{TopoLineStyle.LineStyleName}\" is missing; new lines left as drawn.");
-                        }
-                        if (topoStyle == null) break;
+                        // A line already on the topo style (a copy, offset, mirror or paste of a
+                        // topo line) is a topo line whether or not the session is armed. A line in
+                        // another style becomes one only while it is armed.
+                        bool alreadyTopo = TopoLineStyle.IsTopoLine(line);
+                        if (!session.Armed && !alreadyTopo) continue;
 
-                        line.LineStyle = topoStyle;
+                        if (!alreadyTopo)
+                        {
+                            if (!styleLookedUp)
+                            {
+                                topoStyle = FindTopoLineStyle(doc);
+                                styleLookedUp = true;
+                                if (topoStyle == null)
+                                    Application.LogDiagnostic(
+                                        $"TopoSessionUpdater: line style \"{TopoLineStyle.LineStyleName}\" is missing; new lines left as drawn.");
+                            }
+                            if (topoStyle == null) continue;
+
+                            line.LineStyle = topoStyle;
+                        }
                         session.Created.Add(line.Id);
                         if (linesCameWithTexts) continue;
 
@@ -154,7 +167,7 @@ namespace RVTuk.Revit.TopoTools
                         // height type) is only recorded: there is no earlier text to compare with.
                         if (!known || current == lastSeen) continue;
 
-                        if (TopoHeightParser.TryParse(doc, current, out double sharedFeet))
+                        if (SurveyHeightText.TryParse(current, out double sharedFeet))
                             LastTypedHeights.Set(doc, sharedFeet);
                     }
                     catch (Exception ex)

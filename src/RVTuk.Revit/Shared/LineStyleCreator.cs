@@ -15,12 +15,17 @@ namespace RVTuk.Revit.Shared
             doc.Settings.Categories.get_Item(BuiltInCategory.OST_Lines)
                 .SubCategories.Contains(name);
 
-        /// <summary>Must be called inside an open transaction.</summary>
-        public static void EnsureExists(Document doc, string name)
+        /// <summary>
+        /// Creates the style when the document lacks it, with <paramref name="colour"/> as its line
+        /// colour when one is given and Revit's default otherwise. A style that already exists is
+        /// left as it is, colour included. Must be called inside an open transaction.
+        /// </summary>
+        public static void EnsureExists(Document doc, string name, Color? colour = null)
         {
             var linesCategory = doc.Settings.Categories.get_Item(BuiltInCategory.OST_Lines);
             if (linesCategory.SubCategories.Contains(name)) return;
-            doc.Settings.Categories.NewSubcategory(linesCategory, name);
+            var created = doc.Settings.Categories.NewSubcategory(linesCategory, name);
+            if (colour != null) created.LineColor = colour;
         }
 
         /// <summary>

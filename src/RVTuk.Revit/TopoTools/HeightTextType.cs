@@ -6,7 +6,8 @@ namespace RVTuk.Revit.TopoTools
     /// <summary>
     /// The text type ("_DP-Topo Height") that marks a text note as a topo line's height. Created
     /// from the document's default text type with an opaque background, so a text centred on its
-    /// line masks the line under it, like a contour label.
+    /// line masks the line under it, like a contour label, and in the lines' orange
+    /// (<see cref="TopoLineStyle.Colour"/>).
     ///
     /// The type is found by this name and nothing else. Renaming it in the project disconnects
     /// every height text already drawn: they stop counting as height texts, so the next session
@@ -42,7 +43,13 @@ namespace RVTuk.Revit.TopoTools
             var created = (TextNoteType)source.Duplicate(Name);
             created.get_Parameter(BuiltInParameter.TEXT_BACKGROUND)
                 ?.Set((int)TextElementBackground.TBGR_OPAQUE);
+            created.get_Parameter(BuiltInParameter.LINE_COLOR)
+                ?.Set(ColourInteger(TopoLineStyle.Colour));
             return created.Id;
         }
+
+        /// <summary>A colour as the integer a type's Color parameter holds: R + G·256 + B·65536.</summary>
+        private static int ColourInteger(Color colour) =>
+            colour.Red + colour.Green * 256 + colour.Blue * 65536;
     }
 }

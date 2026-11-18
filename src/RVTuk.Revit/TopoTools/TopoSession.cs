@@ -9,7 +9,9 @@ namespace RVTuk.Revit.TopoTools
     /// The one open Topo Edit session: the plan view it works in, the toposolid or floor it shapes,
     /// the elements it created (so Cancel can delete them) and the text of every height text in the
     /// view when it started (so Cancel can put typed heights back). While a session is open the
-    /// TopoSessionUpdater restyles and labels each new detail line drawn in the view.
+    /// TopoSessionUpdater labels each new line on "_DP-Topo Line" drawn in the view, and while it
+    /// is <see cref="Armed"/> it also turns new lines in other styles into topo lines and labels
+    /// them.
     ///
     /// No transaction stays open across the session: Revit cannot keep one open while the user
     /// works, so Cancel undoes by these records, not by a rollback.
@@ -18,6 +20,10 @@ namespace RVTuk.Revit.TopoTools
     {
         /// <summary>The open session, or null. At most one at a time.</summary>
         public static TopoSession? Current { get; private set; }
+
+        /// <summary>Raised once by <see cref="Start"/>, after <see cref="Current"/> is set and the
+        /// updater switched on. A handler that throws is logged; the session stays open.</summary>
+        public static event Action? Started;
 
         /// <summary>Raised once by <see cref="End"/>, after <see cref="Current"/> is cleared.
         /// The Topo Edit panel hides itself on it.</summary>
@@ -40,6 +46,30 @@ namespace RVTuk.Revit.TopoTools
         /// </summary>
         internal Dictionary<ElementId, string> LastSeenTexts { get; }
 
+        /// <summary>
+        /// Set by the session's first Update that shows its summary (Accept's always does), once it
+        /// has read the Survey Point marker's height for it, a failed read included, so at most one
+        /// summary names the marker.
+        /// </summary>
+        public bool MarkerNoted { get; set; }
+
+        /// <summary>
+        /// True while new detail lines drawn in the session's view in another style become topo
+        /// lines. A session starts armed; another view of its document becoming active disarms it
+        /// (<see cref="TopoDocumentEvents"/>), and only Draw Lines arms it again: coming back to the
+        /// session's view by its tab, a tiled window or "Go to it" does not. Disarmed, the updater
+        /// leaves such lines as drawn, and still labels a new line already on "_DP-Topo Line" (a
+        /// copy, offset, mirror or paste of a topo line).
+        /// </summary>
+        public bool Armed { get; set; } = true;
+
+        /// <summary>
+        /// True when saving the session's document should no longer ask about this session ("Don't
+        /// ask again until this Topo Edit ends"). False when the session starts; it lasts as long as
+        /// the session.
+        /// </summary>
+        public bool DontAskOnSave { get; set; }
+
         private TopoSession(Document document, ElementId viewId, ElementId targetId,
             IReadOnlyDictionary<ElementId, string> textSnapshot)
         {
@@ -52,9 +82,9 @@ namespace RVTuk.Revit.TopoTools
         }
 
         /// <summary>
-        /// Opens a session on <paramref name="target"/> in <paramref name="view"/>, snapshots the
-        /// view's height texts and switches the updater on. Throws if a session is already open.
-        /// Needs no transaction.
+        /// Opens a session on <paramref name="target"/> in <paramref name="view"/>, armed, snapshots
+        /// the view's height texts, switches the updater on and raises <see cref="Started"/>. Throws
+        /// if a session is already open. Needs no transaction.
         /// </summary>
         public static TopoSession Start(Document document, ViewPlan view, Element target)
         {
@@ -75,6 +105,16 @@ namespace RVTuk.Revit.TopoTools
             var session = new TopoSession(document, view.Id, target.Id, snapshot);
             Current = session;
             TopoSessionUpdater.Enable();
+
+            try
+            {
+                Started?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                Application.LogDiagnostic($"TopoSession.Started handler failed: {ex}");
+            }
+
             return session;
         }
 

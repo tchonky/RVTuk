@@ -294,10 +294,13 @@ namespace RVTuk.Revit
                 TaskDialog.Show("RVTuk", $"Failed to create ribbon: {ex.Message}");
             }
 
-            // Topo Tools and Floor ⇄ Topo also on the contextual Modify tab of a selected toposolid
-            // or floor (unsupported Autodesk.Windows ribbon). Never throws; on any failure it logs
-            // one line and switches itself off.
-            if (RegisterTopoTools) ContextualTopoButton.Install(application);
+            // ModifyTabHost puts our panels on the Modify tab through the unsupported
+            // Autodesk.Windows ribbon — the Topo Tools shortcut while one non-subdivision toposolid
+            // is selected, and the Topo Edit copy during a session (never Floor ⇄ Topo); it also
+            // switches the ribbon to Add-Ins once at each session start; it never throws: a failure
+            // of the copy or of the switch turns off only that part, any other failure logs one
+            // line and switches the whole host off.
+            if (RegisterTopoTools) ModifyTabHost.Install(application);
 
             if (RegisterTopoTools)
             {
@@ -311,33 +314,14 @@ namespace RVTuk.Revit
                     LogDiagnostic($"TopoSessionUpdater.Register failed: {ex}");
                 }
 
-                // A closing document's last typed topo height goes with it, and so does its session.
-                application.ControlledApplication.DocumentClosing += (_, e) =>
-                {
-                    try
-                    {
-                        if (TopoSession.Current?.IsFor(e.Document) == true) TopoSession.End();
-                        LastTypedHeights.Forget(e.Document);
-                    }
-                    catch (Exception ex)
-                    {
-                        LogDiagnostic($"Topo Tools DocumentClosing failed: {ex}");
-                    }
-                };
+                // A document closed for real ends its session and forgets its last typed topo
+                // height; another document's view ends the session, another view of its own
+                // document disarms it. Never throws.
+                TopoDocumentEvents.Install(application);
 
-                // Switching to another document ends the session; another view of the same one does not.
-                application.ViewActivated += (_, e) =>
-                {
-                    try
-                    {
-                        var session = TopoSession.Current;
-                        if (session != null && !session.IsFor(e.Document)) TopoSession.End();
-                    }
-                    catch (Exception ex)
-                    {
-                        LogDiagnostic($"Topo Tools ViewActivated failed: {ex}");
-                    }
-                };
+                // Saving or syncing the session's document asks first: Accept, then save; Cancel
+                // the session, then save; or save as it is. Never throws.
+                TopoSaveGuard.Install(application);
             }
 
             return Result.Succeeded;
@@ -388,11 +372,12 @@ namespace RVTuk.Revit
         internal const string RibbonPanelName = "RVTuk";
 
         /// <summary>Internal name of the Topo Tools push button. It is part of the button's
-        /// command id, which the contextual Topo Tools button posts (see ContextualTopoButton).</summary>
+        /// command id, which the contextual Topo Tools button posts (see
+        /// <see cref="ModifyTabHost"/>).</summary>
         internal const string TopoToolsButtonName = "TopoTools";
 
         /// <summary>Internal name of the Floor ⇄ Topo push button, part of its command id like
-        /// <see cref="TopoToolsButtonName"/>: the contextual Floor ⇄ Topo button posts it.</summary>
+        /// <see cref="TopoToolsButtonName"/>.</summary>
         internal const string FloorTopoConvertButtonName = "FloorTopoConvert";
 
         private static Assembly? ResolveAddinAssembly(object? sender, ResolveEventArgs args)
