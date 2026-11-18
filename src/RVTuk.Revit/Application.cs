@@ -300,6 +300,10 @@ namespace RVTuk.Revit
                 // height; another document's view ends the session, another view of its own
                 // document disarms it. Never throws.
                 TopoDocumentEvents.Install(application);
+
+                // Saving or syncing the session's document asks first: Accept, then save; Cancel
+                // the session, then save; or save as it is. Never throws.
+                TopoSaveGuard.Install(application);
             }
 
             return Result.Succeeded;
