@@ -279,9 +279,12 @@ namespace RVTuk.Revit
                 TaskDialog.Show("RVTuk", $"Failed to create ribbon: {ex.Message}");
             }
 
-            // ModifyTabHost puts our panels on the Modify tab, without Floor ⇄ Topo: the Topo Tools
-            // shortcut while one toposolid is selected (unsupported Autodesk.Windows ribbon). Never
-            // throws; on any failure it logs one line and switches itself off.
+            // ModifyTabHost puts our panels on the Modify tab through the unsupported
+            // Autodesk.Windows ribbon — the Topo Tools shortcut while one non-subdivision toposolid
+            // is selected, and the Topo Edit copy during a session (never Floor ⇄ Topo); it also
+            // switches the ribbon to Add-Ins once at each session start; it never throws: a failure
+            // of the copy or of the switch turns off only that part, any other failure logs one
+            // line and switches the whole host off.
             if (RegisterTopoTools) ModifyTabHost.Install(application);
 
             if (RegisterTopoTools)
