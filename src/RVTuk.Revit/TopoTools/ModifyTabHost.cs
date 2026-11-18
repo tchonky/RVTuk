@@ -31,7 +31,7 @@ namespace RVTuk.Revit.TopoTools
     /// holds the same buttons and the same Spacing box, and a click on it is a click on the real
     /// button. It is made at the first session start, with the Topo Tools icon for when it is
     /// folded, and kept for the Revit session. When a session starts, the ribbon also switches to
-    /// the Add-Ins tab, once.
+    /// the Add-Ins tab, once, at Revit's first idle moment after the start.
     ///
     /// Which of our panels belong there is <see cref="ModifyTabPanels.Decide"/>'s answer, and one
     /// idempotent <see cref="Apply"/> makes the tab match it: a panel is added at the end of the
@@ -103,7 +103,7 @@ namespace RVTuk.Revit.TopoTools
         private static bool _disabled;
 
         /// <summary>A session started since the last Apply: the next one is preceded by making the
-        /// copy and followed by the switch to Add-Ins (<see cref="RunPendingApply"/>).</summary>
+        /// copy (<see cref="RunPendingApply"/>).</summary>
         private static bool _sessionStartPending;
 
         /// <summary>Set by a copy failure during Apply, which then asks for one more Apply as it
@@ -116,6 +116,11 @@ namespace RVTuk.Revit.TopoTools
 
         /// <summary>A switch to Add-Ins that did not take is logged once per Revit session.</summary>
         private static bool _switchRefusalLogged;
+
+        /// <summary>The application whose Idling is hooked for the switch to Add-Ins: set when a
+        /// session start hooks it, cleared when the handler unhooks it at Revit's first idle moment.
+        /// One hook serves every start before that moment.</summary>
+        private static UIControlledApplication? _switchIdlingApp;
 
         /// <summary>
         /// Whether the copy of the Topo Edit panel can go on the Modify tab during a session. True
@@ -238,12 +243,14 @@ namespace RVTuk.Revit.TopoTools
             }
         }
 
-        /// <summary>A session started, inside its start command: the Apply asked for here is
-        /// preceded by making the copy, if it is not made yet, and followed by the switch to
-        /// Add-Ins. Both run later, so once the command has returned.</summary>
+        /// <summary>A session started, inside its start command. The Apply asked for here is
+        /// preceded by making the copy, if it is not made yet; the switch to Add-Ins waits for
+        /// Revit's first idle moment after the start (<see cref="OnFirstIdleAfterStart"/>). Both
+        /// run once the command has returned.</summary>
         private static void OnSessionStarted()
         {
             _sessionStartPending = true;
+            HookIdlingForSwitch();
             RequestApply();
         }
 
@@ -273,17 +280,16 @@ namespace RVTuk.Revit.TopoTools
         }
 
         /// <summary>The Dispatcher callback <see cref="RequestApply"/> queues. After a session
-        /// start the copy is made first, outside Apply's fail-safe, and the ribbon switches to
-        /// Add-Ins last, whatever became of the copy.</summary>
+        /// start the copy is made first, outside Apply's fail-safe.</summary>
         private static void RunPendingApply()
         {
             _applyPending = false;
-            bool sessionStarted = _sessionStartPending;
-            _sessionStartPending = false;
-
-            if (sessionStarted) MakeCopyOnce();
+            if (_sessionStartPending)
+            {
+                _sessionStartPending = false;
+                MakeCopyOnce();
+            }
             Apply();
-            if (sessionStarted) SwitchToAddIns();
         }
 
         // ------------------------------------------------------------------ Apply
@@ -466,13 +472,60 @@ namespace RVTuk.Revit.TopoTools
         }
 
         /// <summary>
-        /// After a session start, makes the Add-Ins tab the active one and reads it back: a hidden
-        /// tab refuses without a word (read in AdWindows 2024 to 2027). Revit notes the tab that is
-        /// active when it opens a Modify | … tab and goes back to it when that tab closes (read in
-        /// UIFramework 2024, 2026 and 2027), which is how a selection and Esc then land on Add-Ins.
-        /// Only at a start: a tab picked afterwards is the user's. A switch that did not take is
-        /// logged once per Revit session; one that throws is logged and not tried again this Revit
-        /// session. Neither switches anything else off.
+        /// At a session start, hooks Revit's Idling once for the switch to Add-Ins: the switch
+        /// waits for Revit's first idle moment after the start, which comes once Revit is done with
+        /// the start command. That is the moment the probe saw the switch take (Revit 2024,
+        /// 2026-11-18); an earlier switch could be undone by Revit rebuilding Modify | Toposolid
+        /// after the command. A start while the hook is pending adds nothing. Runs in the start
+        /// command, where the Revit API may be called. Never throws: a failure turns off only the
+        /// switch.
+        /// </summary>
+        private static void HookIdlingForSwitch()
+        {
+            if (_disabled || _switchOff || _switchIdlingApp != null) return;
+            var app = _app;
+            if (app == null) return;
+            try
+            {
+                app.Idling += OnFirstIdleAfterStart;
+                _switchIdlingApp = app;
+            }
+            catch (Exception ex)
+            {
+                SwitchFailed("hooking Idling", ex);
+            }
+        }
+
+        /// <summary>
+        /// Revit's first idle moment after a session start: unhooks itself first, whatever
+        /// follows, then queues the switch on the ribbon's Dispatcher, as the probe did. The copy
+        /// and its Apply were queued at the start, so the switch runs after them. Never throws: a
+        /// failure turns off only the switch.
+        /// </summary>
+        private static void OnFirstIdleAfterStart(object? sender, IdlingEventArgs e)
+        {
+            try
+            {
+                var app = _switchIdlingApp;
+                _switchIdlingApp = null;
+                if (app != null) app.Idling -= OnFirstIdleAfterStart;
+
+                if (_disabled || _switchOff) return;
+                if (!Defer(SwitchToAddIns)) NoteSwitchRefused("there is no ribbon");
+            }
+            catch (Exception ex)
+            {
+                SwitchFailed("at Revit's first idle moment", ex);
+            }
+        }
+
+        /// <summary>
+        /// The Dispatcher callback queued at Revit's first idle moment after a session start:
+        /// makes the Add-Ins tab the active one and reads it back. A hidden tab refuses without a
+        /// word (read in AdWindows 2024 to 2027). Revit notes the tab that is active when it opens a
+        /// Modify | … tab and goes back to it when that tab closes (read in UIFramework 2024, 2026
+        /// and 2027), which is how a selection and Esc then land on Add-Ins. Only at a start: a tab
+        /// picked afterwards is the user's. Nothing when the session has ended meanwhile.
         /// </summary>
         private static void SwitchToAddIns()
         {
@@ -480,18 +533,35 @@ namespace RVTuk.Revit.TopoTools
             try
             {
                 var refusal = ActivateAddInsTab();
-                if (refusal != null && !_switchRefusalLogged)
-                {
-                    _switchRefusalLogged = true;
-                    Application.LogDiagnostic($"{LogPrefix}: the ribbon did not switch to the Add-Ins tab: {refusal}.");
-                }
+                if (refusal != null) NoteSwitchRefused(refusal);
             }
             catch (Exception ex)
             {
-                _switchOff = true;
-                Application.LogDiagnostic(
-                    $"{LogPrefix}: the switch to the Add-Ins tab is off for this Revit session: {ex.GetType().FullName}: {ex.Message}");
+                SwitchFailed("switching to the Add-Ins tab", ex);
             }
+        }
+
+        /// <summary>A switch to Add-Ins that did not take: one line, the first time in the Revit
+        /// session. It is tried again at the next start.</summary>
+        private static void NoteSwitchRefused(string why)
+        {
+            if (_switchRefusalLogged) return;
+            _switchRefusalLogged = true;
+            Application.LogDiagnostic($"{LogPrefix}: the ribbon did not switch to the Add-Ins tab: {why}.");
+        }
+
+        /// <summary>
+        /// The switch's fail-safe: one line (the step, then the exception's type and message), and
+        /// the switch is off for the rest of the Revit session. Nothing else is switched off. A hook
+        /// on Idling still pending unhooks itself at the next idle moment: this may run from the
+        /// Dispatcher, where the Revit API must not be called.
+        /// </summary>
+        private static void SwitchFailed(string step, Exception ex)
+        {
+            if (_switchOff) return;
+            _switchOff = true;
+            Application.LogDiagnostic(
+                $"{LogPrefix}: the switch to the Add-Ins tab is off for this Revit session ({step}): {ex.GetType().FullName}: {ex.Message}");
         }
 
         // ------------------------------------------------------------------ Autodesk.Windows, NoInlining
@@ -584,7 +654,8 @@ namespace RVTuk.Revit.TopoTools
         /// <summary>
         /// Logs one line (the step, then the exception's type and message), takes our panels off
         /// the Modify tab, unhooks, and switches this off for the rest of the Revit session.
-        /// SelectionChanged is unhooked by its own handler (<see cref="OnSelectionChanged"/>): this
+        /// SelectionChanged is unhooked by its own handler (<see cref="OnSelectionChanged"/>), and
+        /// so is a pending Idling hook of the switch (<see cref="OnFirstIdleAfterStart"/>): this
         /// may run from the Dispatcher, where the Revit API must not be called.
         /// </summary>
         private static void Fail(string step, Exception? ex)
