@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Windows.Media.Imaging;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
@@ -39,12 +38,8 @@ namespace RVTuk.Revit.TopoTools
         /// <summary>Internal name of the Accept button, used as <see cref="CancelName"/> is.</summary>
         internal const string AcceptName = "TopoAccept";
 
-        /// <summary>Autodesk.Windows Id of the Add-Ins tab, which hosts this panel. Tabs are found
-        /// by Id, never by their localised title.</summary>
-        private const string AddInsTabId = "Add-Ins";
-
         /// <summary>The panel's Autodesk.Windows source Id: CustomCtrl_%Add-Ins%Topo Edit.</summary>
-        private const string PanelSourceId = "CustomCtrl_%" + AddInsTabId + "%" + PanelName;
+        private static readonly string PanelSourceId = ModifyTabAccess.AddInsPanelId(PanelName);
 
         private const double CentimetresPerFoot = 30.48;
 
@@ -154,12 +149,11 @@ namespace RVTuk.Revit.TopoTools
         /// </summary>
         internal static AwRibbonPanel? FindOnAddIns() => FindAddInsTab()?.FindPanel(PanelSourceId);
 
-        private static AwRibbonTab? FindAddInsTab() =>
-            Autodesk.Windows.ComponentManager.Ribbon?.Tabs.FirstOrDefault(t => t.Id == AddInsTabId);
+        private static AwRibbonTab? FindAddInsTab() => ModifyTabAccess.FindTab(ModifyTabAccess.AddInsTabId);
 
         /// <summary>A button's Autodesk.Windows Id, the same as its command id:
         /// CustomCtrl_%CustomCtrl_%Add-Ins%Topo Edit% and its name. A stack adds no level.</summary>
-        private static string ItemIdOf(string buttonName) => "CustomCtrl_%" + PanelSourceId + "%" + buttonName;
+        private static string ItemIdOf(string buttonName) => ModifyTabAccess.AddInsButtonId(PanelName, buttonName);
 
         /// <summary>
         /// Makes ✗ and ✓ icons only, as Revit's own Mode panel has them: Large with the text hidden,
@@ -221,7 +215,7 @@ namespace RVTuk.Revit.TopoTools
         {
             cancel = accept = null;
             var tab = FindAddInsTab();
-            if (tab == null) return $"no tab with Id \"{AddInsTabId}\"";
+            if (tab == null) return $"no tab with Id \"{ModifyTabAccess.AddInsTabId}\"";
 
             // RibbonTab.FindItem walks every panel, hidden ones too, and goes into stacks (its
             // enumerator descends into RibbonRowPanel): read in AdWindows 2024, 2026 and 2027.

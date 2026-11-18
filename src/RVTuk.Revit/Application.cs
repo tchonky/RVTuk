@@ -279,10 +279,10 @@ namespace RVTuk.Revit
                 TaskDialog.Show("RVTuk", $"Failed to create ribbon: {ex.Message}");
             }
 
-            // Topo Tools and Floor ⇄ Topo also on the contextual Modify tab of a selected toposolid
-            // or floor (unsupported Autodesk.Windows ribbon). Never throws; on any failure it logs
-            // one line and switches itself off.
-            if (RegisterTopoTools) ContextualTopoButton.Install(application);
+            // ModifyTabHost puts our panels on the Modify tab, without Floor ⇄ Topo: the Topo Tools
+            // shortcut while one toposolid is selected (unsupported Autodesk.Windows ribbon). Never
+            // throws; on any failure it logs one line and switches itself off.
+            if (RegisterTopoTools) ModifyTabHost.Install(application);
 
             if (RegisterTopoTools)
             {
@@ -329,11 +329,12 @@ namespace RVTuk.Revit
         internal const string RibbonPanelName = "RVTuk";
 
         /// <summary>Internal name of the Topo Tools push button. It is part of the button's
-        /// command id, which the contextual Topo Tools button posts (see ContextualTopoButton).</summary>
+        /// command id, which the contextual Topo Tools button posts (see
+        /// <see cref="ModifyTabHost"/>).</summary>
         internal const string TopoToolsButtonName = "TopoTools";
 
         /// <summary>Internal name of the Floor ⇄ Topo push button, part of its command id like
-        /// <see cref="TopoToolsButtonName"/>: the contextual Floor ⇄ Topo button posts it.</summary>
+        /// <see cref="TopoToolsButtonName"/>.</summary>
         internal const string FloorTopoConvertButtonName = "FloorTopoConvert";
 
         private static Assembly? ResolveAddinAssembly(object? sender, ResolveEventArgs args)

@@ -30,12 +30,12 @@ public class ModifyTabPanelsTests
     public void NamesTheCopyAndTheShortcut()
     {
         var duringSession = ModifyTabPanels.Decide(
-            sessionOpen: true, inEditMode: false, oneTopoTargetSelected: false, copyAvailable: true);
+            sessionOpen: true, inEditMode: false, oneToposolidSelected: false, copyAvailable: true);
         Assert.True(duringSession.TopoEditCopy);
         Assert.False(duringSession.TopoToolsShortcut);
 
         var outsideSession = ModifyTabPanels.Decide(
-            sessionOpen: false, inEditMode: false, oneTopoTargetSelected: true, copyAvailable: true);
+            sessionOpen: false, inEditMode: false, oneToposolidSelected: true, copyAvailable: true);
         Assert.False(outsideSession.TopoEditCopy);
         Assert.True(outsideSession.TopoToolsShortcut);
     }

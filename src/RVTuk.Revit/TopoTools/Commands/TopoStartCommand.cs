@@ -13,7 +13,7 @@ namespace RVTuk.Revit.TopoTools.Commands
     /// Topo Tools: opens a Topo Edit session on the one selected toposolid or floor in a plan view
     /// and shows the Topo Edit panel. The button keeps its internal name
     /// (<see cref="Application.TopoToolsButtonName"/>): the contextual Modify-tab button posts it
-    /// by that id (see <see cref="ContextualTopoButton"/>).
+    /// by that id (see <see cref="ModifyTabHost"/>).
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     public class TopoStartCommand : IExternalCommand
