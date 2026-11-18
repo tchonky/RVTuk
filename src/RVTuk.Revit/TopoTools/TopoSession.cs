@@ -9,8 +9,9 @@ namespace RVTuk.Revit.TopoTools
     /// The one open Topo Edit session: the plan view it works in, the toposolid or floor it shapes,
     /// the elements it created (so Cancel can delete them) and the text of every height text in the
     /// view when it started (so Cancel can put typed heights back). While a session is open the
-    /// TopoSessionUpdater labels each new detail line drawn in the view, and while it is
-    /// <see cref="Armed"/> also turns new lines in other styles into topo lines.
+    /// TopoSessionUpdater labels each new line on "_DP-Topo Line" drawn in the view, and while it
+    /// is <see cref="Armed"/> it also turns new lines in other styles into topo lines and labels
+    /// them.
     ///
     /// No transaction stays open across the session: Revit cannot keep one open while the user
     /// works, so Cancel undoes by these records, not by a rollback.
