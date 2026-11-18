@@ -330,9 +330,26 @@ public class TopoSessionReportTests
     }
 
     [Fact]
+    public void NothingAppliedShowsTheSummaryAfterUpdateAlsoWhenEarlierPointsCameOut()
+    {
+        // Every topo line moved off the element or deleted: their earlier points are taken out,
+        // and no line is applied.
+        var report = new TopoSessionReport { PointsReplaced = 3 };
+
+        Assert.False(report.HasProblems);
+        Assert.True(report.ShowAfterUpdate);
+    }
+
+    [Fact]
     public void AnUpdateWithNothingToReportShowsNoSummary()
     {
         Assert.False(new TopoSessionReport { LinesApplied = 1, PointsAdded = 2, PointsReplaced = 1 }.ShowAfterUpdate);
+    }
+
+    [Fact]
+    public void ALineAppliedShowsNoSummaryAfterUpdateWhateverThePointCounts()
+    {
+        Assert.False(new TopoSessionReport { LinesApplied = 1 }.ShowAfterUpdate);
     }
 
     [Fact]
@@ -348,5 +365,11 @@ public class TopoSessionReportTests
 
         Assert.Contains(Marker, report.Summarise());
         Assert.False(report.ShowAfterUpdate);
+    }
+
+    [Fact]
+    public void AMarkerFigureDoesNotSilenceAnUpdateThatAppliedNothing()
+    {
+        Assert.True(new TopoSessionReport { SurveyPointMarkerMetres = 10 }.ShowAfterUpdate);
     }
 }
