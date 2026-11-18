@@ -6,8 +6,8 @@ using RVTuk.Core.TopoTools;
 namespace RVTuk.Revit.TopoTools
 {
     /// <summary>
-    /// One Update: collect the view's topo lines, clip each to the selected element, read its
-    /// height, apply. Only the selected element is written to. A line that does not cross it is
+    /// One Update: collect the view's topo lines, clip each to the toposolid or floor being edited,
+    /// read its height, apply. Only that element is written to. A line that does not cross it is
     /// ignored — not applied and not reported — though, being in the view, its earlier points on
     /// this element (if it has since moved off it) are still cleaned by the applier. Where lines
     /// put points on one plan spot, the highest is kept (<see cref="TopoPointDeduper"/>).
