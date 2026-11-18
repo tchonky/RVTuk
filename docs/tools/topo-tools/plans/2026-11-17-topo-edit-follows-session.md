@@ -307,7 +307,7 @@ Run: the same filter → PASS. Then `.\build\Test-All.ps1` → all pass.
   - In a centimetre, a millimetre and a feet project, "42.75" puts points at 42.75 m.
   - New texts read 0.00, then the last typed height.
   - The accept and refuse lists of Task 1, typed into texts.
-  - With the marker raised 10 m while unclipped, the first Update's summary names +10.00 m and the second does not.
+  - With the marker raised 10 m while unclipped, the first summary shown in the session (✓'s summary, or an Update that needs attention) names +10.00 m; a later summary in the same session does not.
 
 - [ ] **Step 5: Commit**
 
@@ -554,7 +554,7 @@ Done on 2026-11-18 with the decisions in the spec's 'Probe results (Revit 2024, 
   - **Draw Lines:**
     - Only when the active view of the session's document is not the session's view: set `uiDoc.ActiveView` to it. On failure, show the old "Go back to {view.Name} to draw topo lines." and return Cancelled.
     - In every case, pressed in the session's view or after a successful switch: once `CanPostCommand` passes, set `session.Armed = true`, then post Detail Line as today. The usual ways back to the session's view (its tab, a tiled view, "Go to it") do not arm; pressing Draw Lines does. A press that returns Cancelled does not arm.
-    - Probe 10 may change the switch through Task 7; arming stays as it is. Under Task 7's probe-10 fallback ("Press Draw Lines again…"), the press that only switches does not arm, and the second press, which posts, does.
+    - Task 7 kept the switch-then-post (rule 10: not observed); the probe-10 fallback ("Press Draw Lines again…") comes only if Step 3's check fails. Arming stays as it is. Under that fallback, the press that only switches does not arm, and the second press, which posts, does.
 
 - [ ] **Step 1: Implement.**
 - [ ] **Step 2: Build all four years; run `.\build\Test-All.ps1`.**
@@ -590,7 +590,7 @@ Done on 2026-11-18 with the decisions in the spec's 'Probe results (Revit 2024, 
     - `internal const string AddInsTabId = "Add-Ins";` and `internal const string ModifyTabId = "Modify";`
     - `internal static AwRibbonTab? FindTab(string id)`: `ComponentManager.Ribbon?.FindTab(id)`.
     - `internal static AwRibbonPanel NewRevitPanel(AwRibbonPanelSource source)`: the type `UIFramework.RvtRibbonPanel` from the loaded `UIFramework` assembly, made with `Activator.CreateInstance`, cast to `AwRibbonPanel`, with `Source = source`. It never returns null, never hands back a half-made panel, and logs nothing: the assembly not loaded, the type not found, or an instance that is not an `Autodesk.Windows.RibbonPanel` each throw `InvalidOperationException` naming that step and the type; exceptions from `CreateInstance` (a `TargetInvocationException` unwrapped to its inner exception) and from the `Source` setter propagate. The caller logs.
-    - `internal static bool IsInEditMode(AwRibbonTab modifyTab)`: `modifyTab.IsContextualTab &&` the tab's `IsInEditMode`, read by reflection, unless Task 7 settled on another signal. It throws when the signal cannot be read; the caller's fail-safe handles that.
+    - `internal static bool IsInEditMode(AwRibbonTab modifyTab)`: `modifyTab.IsContextualTab &&` the tab's `IsInEditMode`, read by reflection: the signal Task 7 kept (rule 4). It throws when the signal cannot be read; the caller's fail-safe handles that.
   - `internal static class ModifyTabHost { internal static void Install(UIControlledApplication app); internal static bool CopyAvailable { get; } }`. Task 10 adds the copy; here `CopyAvailable` is false. `Install` also reads two test switches once (Rules).
 - Rules:
   - Floor ⇄ Topo's Modify-tab button is gone. The shortcut panel holds Topo Tools alone: Id `RVTuk_ContextualTopoTools`, posting the RVTuk-panel command as today.
@@ -610,7 +610,7 @@ Done on 2026-11-18 with the decisions in the spec's 'Probe results (Revit 2024, 
 - [ ] **Step 1: Implement.**
 - [ ] **Step 2: Build all four years; run `.\build\Test-All.ps1`.** Then `git grep -n ContextualTopoButton -- src tests` → nothing.
 - [ ] **Step 3: Revit checks (Task 15 rows):**
-  - One toposolid selected shows Topo Tools only, with no Floor ⇄ Topo; a floor, a wall, a door, a subdivision or two toposolids show nothing, also right after a toposolid was selected.
+  - One toposolid selected shows Topo Tools only, with no Floor ⇄ Topo; a floor, a wall, a door, a subdivision or two toposolids show nothing, also right after a toposolid was selected. In the README this is row 18, reworded (Task 15), not a new row.
   - Edit a toposolid's sketch, then select a sketch line: no error, and the shortcut is back after Finish.
   - During a session the shortcut is off the Modify tab; after ✓ it comes back for the toposolid still selected.
   - Fail-safe, whole part: with an empty `%LOCALAPPDATA%\RVTuk\topo-modify-tab-off` and Revit restarted, nothing of ours is on the Modify tab, a whole session (Topo Tools, Draw Lines, Update, Accept, Cancel) works from the Add-Ins tab, and `crash.log` has one line naming the file. Delete the file afterwards.
@@ -778,6 +778,7 @@ Done on 2026-11-18 with the decisions in the spec's 'Probe results (Revit 2024, 
     - "A new line's height": 0.00, and survives a close called off.
     - The "ends by itself" sentence: on DocumentClosed.
     - Step 5's "Update and Accept show a summary in a TaskDialog every time": Accept always does, Update only when something needs attention (Task 18).
+    - The Height Labels paragraph: its "a text whose line is gone is deleted" stays, and it adds that Update does the same. This is the spec's Docs note on a height text whose line was deleted; Task 17's check row is among the new rows below.
     - The Update paragraph (at HEAD README lines 43-45, starting "**Update** reads each text"; find it by that text, since the edits above shift it): the example becomes "1 line skipped: '42,7x' is not a height in metres.", and "It writes only to the selected element." becomes "It writes only to the toposolid or floor being edited." It also says that Update shows no summary unless something needs attention, and ✓ shows it. The rest stays.
   - **A keyboard-shortcut note beside "Names"** (rule 7 fired: probe 7 found Topo Edit's ids missing from Revit's command list): the Topo Edit buttons cannot be given keyboard shortcuts, because Revit builds that list when it starts and skips hidden panels, and Topo Edit is hidden then. Probe 7 found the RVTuk panel's buttons, Topo Tools among them, in that list: say so.
   - **The updater paragraph:** arming, and Draw Lines from another view.
@@ -789,13 +790,14 @@ Done on 2026-11-18 with the decisions in the spec's 'Probe results (Revit 2024, 
   - **Session checklist, the existing rows:** add 2025, 2026 and 2027 columns. Change:
     - row 2: the dialog;
     - row 3: "type 42.75; the texts read 0.00 and 42.75";
-    - row 18: Topo Tools only, and for the toposolid alone (the floor and the mixed selections show nothing);
+    - row 18: the one row for the toposolid-only shortcut (Task 9's first check, and the spec's): one toposolid shows Topo Tools only, with no Floor ⇄ Topo, doing exactly what its RVTuk-panel button does; a floor, a wall, a door, a subdivision or two toposolids show nothing, also right after a toposolid was selected. Its tail "If nothing shows for a floor, `crash.log` says whether the Modify tab was found" goes: nothing showing for a floor is now the expected result;
+    - row 21: the second Update shows no summary, since a "moved by hand" warning would bring one up (Task 18);
+    - row 27: "Update twice, then ✓": the second Update shows no summary, and ✓'s summary says "1 point where lines cross took the higher line's height." (Task 18: crossings alone need no attention);
     - row 28: no Floor ⇄ Topo on the Modify tab.
-  - **Session checklist, new rows**, from each task's "Revit checks", plus:
+  - **Session checklist, new rows**, from each task's "Revit checks" (Task 9's first check is row 18, not a new row), plus:
     - the heights rows of the spec's "Checks in Revit after the build";
     - two documents open, with the session in one: saving the other asks nothing;
-    - Task 17's and Task 18's Revit checks;
-    - the toposolid-only shortcut: a wall, a door, a subdivision or two toposolids show nothing, also right after a toposolid was selected.
+    - Task 17's and Task 18's Revit checks.
   - **The Code table:** in the Revit row (line 291), replace `ContextualTopoButton` with `ModifyTabHost` and `ModifyTabAccess`, and add `TopoDocumentEvents` and `TopoSaveGuard` (`TopoSessionActions` is under `Commands/`). In the Core row (line 289), add the metre height text (`SurveyHeightText`) and the Modify-tab rule (`ModifyTabPanels`).
   - Fix the row numbers cited at README lines 73, 138-139 and 192, and in the backlog's lines 7-8.
 - [ ] **Step 2: CLAUDE.md.** Rewrite the "One exception" sentence: the Topo Tools shortcut, shown while exactly one non-subdivision toposolid is selected (today: "one non-subdivision toposolid or one floor"), and the Topo Edit panel during a session, both as Revit's own panel class and fail-safe; the switch to the Add-Ins tab once when a session starts, also through `Autodesk.Windows` and under the same fail-safe; Floor ⇄ Topo is no longer on the Modify tab. In the Topo Tools bullet: the panel order (✗ and ✓ first), "metres, measured like a Survey Point level", and "the toposolid or floor being edited".

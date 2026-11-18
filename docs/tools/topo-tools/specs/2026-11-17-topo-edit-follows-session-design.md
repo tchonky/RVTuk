@@ -37,8 +37,8 @@ reshapes the element along it. A forgotten session is usually found through Topo
   is noticed early and costs little; the session looks and feels like a Revit edit mode; a height
   text means the same in every project.
 - **Non-goals:** a real lock; anything on the Options Bar; buttons drawn in the view; keyboard
-  shortcuts for the Topo Edit buttons, which most likely cannot be set today either (probe 7; my
-  call).
+  shortcuts for the Topo Edit buttons (my call), which cannot be set today either: probe 7 found
+  them missing from Revit's list.
 - **Anti-goals:** anything a Revit update can turn into a broken ribbon or a lost session (every
   unsupported part fails safe, and the supported panels keep working alone); a ribbon that fights
   the user's own tab choices; losing any part of Revit's Detail Line tool (chains, arcs, offsets,
@@ -72,8 +72,9 @@ reshapes the element along it. A forgotten session is usually found through Topo
    Modify | Text Notes, Modify | Walls, and the plain Modify tab. It comes after Revit's own panels
    (my call), though Revit may later slot one of its own after it.
    - Being last, it is the first panel to fold into a single "Topo Edit" button on a narrow screen;
-     one click opens it. If the probe finds it folded at the office's usual width, that comes back
-     to Daniel: accept it, or have Revit's own panels fold first.
+     one click opens it. The probe did not look (rule 5). If Task 10's check finds it folded at the
+     office's usual width, that comes back to Daniel: accept it, or have Revit's own panels fold
+     first.
    - Not while Revit is in an edit mode (Edit Boundary, any sketch, Edit Group): two ✗/✓ pairs side
      by side would invite clicking ours to finish Revit's sketch, and edit modes are where Revit's
      code is fragile about panels that are not its own (see "How it is built") (my call).
@@ -131,8 +132,9 @@ reshapes the element along it. A forgotten session is usually found through Topo
     units** (yours).
     - "From the Survey Point" as Revit itself uses it (my call): a line labelled 42.75 lies where a
       level or a spot elevation set to Survey Point reads 42.75. Autodesk's documentation says this
-      is the zero the tool already uses, so only the units change. Probe 9 checks it in Revit; if
-      Revit's own readings follow the marker instead, the tool measures from the marker.
+      is the zero the tool already uses, so only the units change. The probe left it open (rule
+      9), so the height rows under "Checks in Revit after the build" check it; if Revit's own
+      readings follow the marker instead, the tool measures from the marker.
     - If the Survey Point marker itself sits off that zero (its own Elev is not 0, as after moving
       it while unclipped), heights still follow the levels and spot elevations, not the marker, and
       the first summary shown in a session says so in one line: "The Survey Point marker itself
@@ -200,8 +202,8 @@ Everything below may fail; this panel alone still gives a working session.
   Large with the text hidden, still horizontal: two 34 px rows, the height of one large button, so
   the ribbon does not grow. If that part fails, it is undone, and the stack shows small icons with
   "Cancel" and "Accept" at the same height.
-- The API requires each button's text: "Cancel" and "Accept" stay, as the tooltip titles, and as
-  their names in Keyboard Shortcuts if Revit lists them there (probe 7).
+- The API requires each button's text: "Cancel" and "Accept" stay, as the tooltip titles. Revit
+  does not list them in Keyboard Shortcuts (probe 7).
 - The folded panel's icon is set on each panel object, through Autodesk.Windows.
 - The ✗ and ✓ icons are swapped on `ThemeChanged` (supported, 2024 on). The swap reaches the
   Modify-tab copy too, since it shares the buttons.
@@ -213,7 +215,7 @@ for the rest of the Revit session, leaving the Add-Ins panels, as `ContextualTop
   its owner on the other. Instead **a second panel object shares the real panel's contents** (its
   `RibbonPanelSource`): the same buttons and the same Spacing box, so a click is a click on the real
   button. Whether Revit then ends a running tool first (✓ pressed while drawing ends the Detail Line
-  tool and accepts) is for the probe.
+  tool and accepts) was not seen in the probe (rule 1); Task 10's row checks it.
 - Every panel we put on the Modify tab is created as the same class Revit uses for its own panels.
   Revit's code walks that tab's panels assuming they are all of its class, and can throw when a
   plain Autodesk.Windows panel is the first one after the fixed panels and something is selected
@@ -232,7 +234,8 @@ for the rest of the Revit session, leaving the Add-Ins panels, as `ContextualTop
   switch to Add-Ins still happens. Not copies that post the real buttons' commands, as first
   planned: Revit fills its list of commands that can be posted (the Keyboard Shortcuts list) when it
   starts, skipping hidden panels, and Topo Edit is hidden then, so posting its commands would most
-  likely do nothing (read in Revit's code and journals, not yet seen in Revit; probe 7 checks it).
+  likely do nothing (read in Revit's code and journals; probe 7 found Topo Edit's ids missing from
+  that list, and did not try posting).
   In this fallback the Topo Tools shortcut stays during a session and opens item 4's dialog.
 
 **The switch to Add-Ins** makes the Add-Ins tab active through Autodesk.Windows once the start
@@ -410,7 +413,8 @@ working when the Modify-tab part is off; an empty file switches it off for the c
 and anything the probe left open. Added after the probe sitting (2026-11-18):
 
 - The shortcut: one toposolid shows Topo Tools; a floor, a wall, a door, a subdivision or two
-  toposolids show nothing, also right after a toposolid was selected.
+  toposolids show nothing, also right after a toposolid was selected. This rewords README row 18
+  rather than adding a row.
 - Update with nothing to report shows nothing; ✓ shows the summary; an Update with a skipped line
   shows it.
 - A topo line deleted with its height text kept: Update, and Height Labels, delete the text without
@@ -424,17 +428,17 @@ For the heights:
 
 - In a centimetre, a millimetre and a feet project, "42.75" puts points at 42.75 m.
 - Probe 9's model with the new build, on a toposolid and on a floor: a line labelled 42.75 lands at
-  ±0.00; with the marker raised, Update moves nothing, and its summary's figure equals the marker's
-  Elev in Properties.
+  ±0.00; with the marker raised, Update moves nothing, and ✓'s summary names a figure equal to the
+  marker's Elev in Properties.
 - On an office PC as the office sets it up: a "-3.20" the tool writes, and one typed with the
   Hebrew keyboard on (the point from the number pad), both show -3.20, not 3.20-, and Update reads
   the typed one. If Revit shows 3.20-, new negative texts get a leading invisible left-to-right
   mark, which the parser already drops.
 - "42,75", "+42.75" and "42.75 m" are read; "4275", "4275 cm", "±0.00" and "42ץ75" are refused and
   named.
-- A close during a session, Yes at "Save changes?", then Esc at the Topo Edit prompt: as probe 8
-  found. A close called off at "Save changes?" keeps the session, and the next line still takes the
-  last typed height.
+- A close during a session, Yes at "Save changes?", then Esc at the Topo Edit prompt: the model is
+  saved as it is (rule 8). A close called off at "Save changes?" keeps the session, and the next
+  line still takes the last typed height.
 
 ## Docs
 
@@ -451,21 +455,24 @@ For the heights:
   the unclipped marker); and says that where a project's coordinates were never set, survey 0 is
   the internal origin (usually ±0.00), so survey heights need Specify Coordinates first. The
   Floor ⇄ Topo "Refused" list gains the open session, and the Docs list this spec. Checklist rows 2
-  (the dialog), 3 ("type 42.75; the texts read 0.00 and 42.75"), 18 and 28 (no Floor ⇄ Topo on the
-  Modify tab). Added after the probe sitting: the keyboard-shortcut note beside "Names" (probe 7:
-  the Topo Edit buttons cannot be given shortcuts); the Update paragraph as item 12 says; and a
-  note on a height text whose line was deleted (it is deleted at the next Update or Height Labels).
+  (the dialog), 3 ("type 42.75; the texts read 0.00 and 42.75"), 18 (Topo Tools only, for one
+  toposolid), 21 and 27 (no summary after the second Update; row 27 reads its crossing sentence
+  at ✓) and 28 (no Floor ⇄ Topo on the Modify tab). Added after the probe sitting: the
+  keyboard-shortcut note beside "Names" (probe 7: the Topo Edit buttons cannot be given
+  shortcuts); the Update paragraph as item 12 says; and a note on a height text whose line was
+  deleted (it is deleted at the next Update or Height Labels).
 - **The 2026-11-15 spec** gets an "Amended 2026-11-17" line pointing here, and its "0 means the
   survey point's elevation" becomes "0 is the zero of Survey Point levels".
 - **The backlog** is updated, with two new ideas: warn when a line's height is far from the
-  element's surface (it would catch what the −500 to +3000 m net misses); and, if probe 7 confirms
-  that the Topo Edit buttons cannot take keyboard shortcuts, hide the panel only after Revit has
-  listed its commands.
+  element's surface (it would catch what the −500 to +3000 m net misses); and hide the panel only
+  after Revit has listed its commands, since probe 7 found that the Topo Edit buttons cannot take
+  keyboard shortcuts.
 
 ## Left to the builder
 
-How the Autodesk.Windows panels and tabs are found (by Id, never by the localised title); how an edit
-mode is recognised on the tab (from the probe: from the tab itself through Autodesk.Windows, never
-from UIFramework's contextual-tab events, one of which is gone after 2024); the dialogs' exact wording (short and plain, like the
-toolkit's others); the icons' drawing in both themes; the Core height class's name; and whether
-any other decision logic (arming, the dialogs' outcomes) is worth moving to Core for unit tests.
+How the Autodesk.Windows panels and tabs are found (by Id, never by the localised title); how an
+edit mode is recognised on the tab (rule 4 keeps `IsContextualTab && IsInEditMode`, read from the
+tab itself through Autodesk.Windows, never from UIFramework's contextual-tab events, one of which
+is gone after 2024); the dialogs' exact wording (short and plain, like the toolkit's others); the
+icons' drawing in both themes; the Core height class's name; and whether any other decision logic
+(arming, the dialogs' outcomes) is worth moving to Core for unit tests.
