@@ -12,7 +12,9 @@ namespace RVTuk.Core.TopoTools
 
     /// <summary>
     /// What to do with the height texts. LineByText holds every text that ends up linked
-    /// (kept and relinked); Relinked lists the ones whose link changed.
+    /// (kept and relinked); Relinked lists the ones whose link changed. A text in DeleteTexts is
+    /// never also in LineByText or Relinked, so a caller can delete those texts first and then
+    /// read the rest.
     /// </summary>
     public sealed record LinkPlan(
         IReadOnlyDictionary<long, long> LineByText,

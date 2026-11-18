@@ -56,6 +56,21 @@ public class HeightTextLinkerTests
     }
 
     [Fact]
+    public void ATextWhoseLineIsGoneIsNeverAlsoKeptOrRelinked()
+    {
+        // HeightTexts.Label reads the kept and relinked texts after deleting the others, so a text
+        // in both would be read once deleted. The free line is one it could wrongly be given.
+        var plan = HeightTextLinker.Plan(
+            new[] { Text(5, 99, 0, 0) },
+            new[] { Spot(10, 0, 0) });
+
+        Assert.Equal(new long[] { 5 }, plan.DeleteTexts.ToArray());
+        Assert.Empty(plan.LineByText);
+        Assert.Empty(plan.Relinked);
+        Assert.Equal(new long[] { 10 }, plan.LinesNeedingText.ToArray());
+    }
+
+    [Fact]
     public void ALineWithoutATextNeedsOne()
     {
         var plan = HeightTextLinker.Plan(new List<TextClaim>(), new[] { Spot(10, 0, 0) });
