@@ -296,33 +296,10 @@ namespace RVTuk.Revit
                     LogDiagnostic($"TopoSessionUpdater.Register failed: {ex}");
                 }
 
-                // A closing document's last typed topo height goes with it, and so does its session.
-                application.ControlledApplication.DocumentClosing += (_, e) =>
-                {
-                    try
-                    {
-                        if (TopoSession.Current?.IsFor(e.Document) == true) TopoSession.End();
-                        LastTypedHeights.Forget(e.Document);
-                    }
-                    catch (Exception ex)
-                    {
-                        LogDiagnostic($"Topo Tools DocumentClosing failed: {ex}");
-                    }
-                };
-
-                // Switching to another document ends the session; another view of the same one does not.
-                application.ViewActivated += (_, e) =>
-                {
-                    try
-                    {
-                        var session = TopoSession.Current;
-                        if (session != null && !session.IsFor(e.Document)) TopoSession.End();
-                    }
-                    catch (Exception ex)
-                    {
-                        LogDiagnostic($"Topo Tools ViewActivated failed: {ex}");
-                    }
-                };
+                // A document closed for real ends its session and forgets its last typed topo
+                // height; another document's view ends the session, another view of its own
+                // document disarms it. Never throws.
+                TopoDocumentEvents.Install(application);
             }
 
             return Result.Succeeded;
