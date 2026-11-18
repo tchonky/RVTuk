@@ -76,6 +76,11 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
 
 ## ✅ Done
 
+- [x] **Safe Update** (2026-11-18): Update kept nothing the project changed, Update All could
+  load ignored or duplicate copies, badges outlived a project switch, a busy Revit froze the
+  browser, and parameters-only scans dropped the Revit year (switching off the "too new"
+  guard). All fixed — see [specs/2026-11-18-safe-update-design.md](specs/2026-11-18-safe-update-design.md).
+
 - [x] **Instructions with images opened empty, and Save wrote the empty text back** (fixed in the
   add-in split's phase 0). Two causes: rows saved before the namespace move declare the old
   `RVTuk.UI.Controls` namespace, and rows saved from Revit 2025+ declare `System.Private.CoreLib`,

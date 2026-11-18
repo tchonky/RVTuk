@@ -377,6 +377,16 @@ composed as `FamilyBrowserViewModel.Settings`.
 
 ## Deviations since design (as built)
 
+- **Safe Update (2026-11-18)** — spec `specs/2026-11-18-safe-update-design.md`. Load, Update
+  and Update All keep the project's parameter values (`overwriteParameterValues = false`).
+  The ⟳ check (Core `ProjectComparer`) ignores rows in ignored folders/patterns, and a file
+  name with several library copies gets ⚠ instead of a verdict and is never updated. Update
+  All confirms (message box, first 25 families), shows progress and can be cancelled; each of
+  its loads names the confirmed project and is refused in another. Switching documents hides
+  the comparison until ⟳ (coming back restores it). Every request to Revit is withdrawn when
+  Revit has not started it within 10 s (`RequestGate`), with a "Revit is busy" message.
+  Parameters-only scans read the file's Revit year, so the "too new" guard works.
+
 - **Thumbnail source:** the "system OLE thumbnail" is actually read from the modern
   **`RevitPreview4.0`** stream (embedded PNG) first, with the legacy `\x05SummaryInformation`
   DIB as fallback — current families leave the legacy property empty.
