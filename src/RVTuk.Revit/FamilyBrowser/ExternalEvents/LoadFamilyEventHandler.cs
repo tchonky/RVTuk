@@ -1,4 +1,6 @@
-﻿using System.Threading;
+﻿using System;
+using System.IO;
+using System.Linq;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
@@ -11,12 +13,18 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
         private readonly RequestGate _gate = new();
 
         public string? FamilyPath { get; set; }
+        /// <summary>Update All: the project the user confirmed; null = load into whatever is active.</summary>
+        public string? ExpectedDocumentKey { get; set; }
         public bool Success { get; private set; }
         public string? ErrorMessage { get; private set; }
 
-        public void Prepare(string familyPath)
+        // Twin: FamilyBrowserViewModel.ProjectChangedMessage (the UI cannot see this one).
+        internal const string ProjectChangedMessage = "The active project changed. Press ⟳ and try again.";
+
+        public void Prepare(string familyPath, string? expectedDocumentKey)
         {
             FamilyPath = familyPath;
+            ExpectedDocumentKey = expectedDocumentKey;
             Success = false;
             ErrorMessage = null;
             _gate.Begin();
@@ -42,16 +50,24 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
                     ErrorMessage = FamilyDocumentActive;
                     return;
                 }
+                if (ExpectedDocumentKey != null && ProjectKey.Of(doc) != ExpectedDocumentKey)
+                {
+                    ErrorMessage = ProjectChangedMessage;
+                    return;
+                }
 
+                var options = new KeepValuesLoadOptions();
                 using var tx = new Transaction(doc, "Load Family");
                 tx.Start();
-                bool loaded = doc.LoadFamily(FamilyPath, new OverwriteLoadOptions(), out _);
+                bool loaded = doc.LoadFamily(FamilyPath, options, out _);
                 tx.Commit();
-                Success = loaded;
-                if (!loaded)
+                // An identical family already in the project: Revit returns false without asking
+                // the load options. That is "already current", not a failure.
+                Success = loaded || (!options.FamilyFoundCalled && IsLoaded(doc, FamilyPath));
+                if (!Success)
                     ErrorMessage = "Revit did not load the family (it may be invalid, or the load was rejected).";
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 ErrorMessage = ex.Message;
             }
@@ -61,24 +77,37 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
             }
         }
 
+        private static bool IsLoaded(Document doc, string familyPath)
+        {
+            var name = FamilyFileName.WithoutRfaExtension(Path.GetFileName(familyPath));
+            return new FilteredElementCollector(doc).OfClass(typeof(Family))
+                .Any(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
+        }
+
         public string GetName() => "RVTuk.LoadFamilyEventHandler";
 
         internal const string FamilyDocumentActive =
             "The active window is a family in the Family Editor. Switch to the project window and try again.";
 
-        private class OverwriteLoadOptions : IFamilyLoadOptions
+        // The project's values always win (decided 2026-11-18): a library update brings new
+        // geometry and parameters but never resets type values the project team changed.
+        private class KeepValuesLoadOptions : IFamilyLoadOptions
         {
+            public bool FamilyFoundCalled { get; private set; }
+
             public bool OnFamilyFound(bool familyInUse, out bool overwriteParameterValues)
             {
-                overwriteParameterValues = true;
+                FamilyFoundCalled = true;
+                overwriteParameterValues = false;
                 return true;
             }
 
             public bool OnSharedFamilyFound(Family sharedFamily, bool familyInUse,
                 out FamilySource source, out bool overwriteParameterValues)
             {
+                FamilyFoundCalled = true;
                 source = FamilySource.Family;
-                overwriteParameterValues = true;
+                overwriteParameterValues = false;
                 return true;
             }
         }

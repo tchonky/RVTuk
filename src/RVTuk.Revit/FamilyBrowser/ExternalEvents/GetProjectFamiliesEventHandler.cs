@@ -13,7 +13,7 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
     {
         private readonly RequestGate _gate = new();
 
-        public IReadOnlyList<ProjectFamilyInfo> Result { get; private set; } = Array.Empty<ProjectFamilyInfo>();
+        public ProjectSnapshot Result { get; private set; } = new();
 
         /// <summary>Set when there is no project to compare against (a family is active).</summary>
         public string? ErrorMessage { get; private set; }
@@ -27,12 +27,12 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
             try
             {
                 var doc = app.ActiveUIDocument?.Document;
-                if (doc == null) { Result = Array.Empty<ProjectFamilyInfo>(); return; }
+                if (doc == null) { Result = new ProjectSnapshot(); return; }
                 // A family document lists its nested families — comparing those against the
                 // library would be wrong; say so instead of showing a misleading list.
                 if (doc.IsFamilyDocument)
                 {
-                    Result = Array.Empty<ProjectFamilyInfo>();
+                    Result = new ProjectSnapshot();
                     ErrorMessage = LoadFamilyEventHandler.FamilyDocumentActive;
                     return;
                 }
@@ -51,11 +51,11 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
                     infos.Add(info);
                 }
                 ReadVersionsFromInstances(doc, unresolved);
-                Result = infos;
+                Result = new ProjectSnapshot { DocumentKey = ProjectKey.Of(doc), Title = doc.Title, Families = infos };
             }
             catch
             {
-                Result = Array.Empty<ProjectFamilyInfo>();
+                Result = new ProjectSnapshot();
             }
             finally
             {

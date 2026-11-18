@@ -33,8 +33,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         private readonly PersonalFavorites? _favorites;
         private string _libraryStatus = string.Empty;
         private string? _libraryStatusDetail;
-        private readonly Func<IReadOnlyList<ProjectFamilyInfo>> _getProjectFamilies;
-        private readonly Func<string, (bool Success, string? Error)> _loadFamily;
+        private readonly Func<ProjectSnapshot> _getProjectFamilies;
+        private readonly Func<string, string?, (bool Success, string? Error)> _loadFamily;
         private readonly Func<long, string, (bool Success, string? Error)> _rescanFamily;
         private readonly Func<string, (bool Success, string? Error)> _openInFamilyEditor;
         private readonly Func<string, (bool Success, string? Error)> _openModelFamilyInEditor;
@@ -362,8 +362,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         public FamilyBrowserViewModel(
             AppConfig config,
             BrowserRepository repo,
-            Func<IReadOnlyList<ProjectFamilyInfo>> getProjectFamilies,
-            Func<string, (bool Success, string? Error)> loadFamily,
+            Func<ProjectSnapshot> getProjectFamilies,
+            Func<string, string?, (bool Success, string? Error)> loadFamily,
             Func<long, string, (bool Success, string? Error)> rescanFamily,
             Action<bool, bool> scan,
             Func<string, (bool Success, string? Error)> openInFamilyEditor,
@@ -581,7 +581,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                     // "in project" with no update verdict (FamilyVersionCheck returns false).
                     // (Families can share a name across categories; first occurrence wins.)
                     var projectFamilies = new Dictionary<string, ProjectFamilyInfo>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var pf in _getProjectFamilies())
+                    foreach (var pf in _getProjectFamilies().Families)
                         if (!projectFamilies.ContainsKey(pf.Name))
                             projectFamilies[pf.Name] = pf;
 
@@ -704,7 +704,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                         string? error;
                         lock (_loadLock)
                         {
-                            (success, error) = _loadFamily(fullPath);
+                            (success, error) = _loadFamily(fullPath, null);
                         }
                         if (success)
                             _dispatcher.Invoke(() => item.VersionStatus = VersionStatus.UpToDate);
