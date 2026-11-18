@@ -1,4 +1,4 @@
-using RVTuk.Core.FamilyBrowser.Models;
+﻿using RVTuk.Core.FamilyBrowser.Models;
 using RVTuk.Core.FamilyBrowser.Util;
 using Xunit;
 
@@ -98,5 +98,11 @@ public class SourceToggleFilterTests
     {
         Assert.Equal(expected, SourceToggleFilter.Matches(status, isFavorite,
             showModel: true, showLibrary: true, showFavorites: true));
+    }
+
+    [Fact]
+    public void DuplicateInLibrary_CountsAsInModelAndInLibrary()
+    {
+        Assert.True(SourceToggleFilter.Matches(VersionStatus.DuplicateInLibrary, false, true, true, false));
     }
 }
