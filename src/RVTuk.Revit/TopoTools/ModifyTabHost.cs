@@ -20,10 +20,18 @@ namespace RVTuk.Revit.TopoTools
 {
     /// <summary>
     /// Puts our panels on Revit's Modify tab (what the user sees as "Modify | Toposolid" and the
-    /// like) and takes them off again. That is the Topo Tools shortcut, a panel with that one
-    /// button, while exactly one toposolid that is not a subdivision is selected. Floor ⇄ Topo is
-    /// not on the tab, and a floor starts its session from the RVTuk panel. The shortcut posts the
-    /// RVTuk panel's Topo Tools command, so it does exactly what that button does.
+    /// like) and takes them off again. Outside a Topo Edit session that is the Topo Tools
+    /// shortcut, a panel with that one button, while exactly one toposolid that is not a
+    /// subdivision is selected. Floor ⇄ Topo is not on the tab, and a floor starts its session from
+    /// the RVTuk panel. The shortcut posts the RVTuk panel's Topo Tools command, so it does exactly
+    /// what that button does.
+    ///
+    /// During a session the copy of the Topo Edit panel is there instead, whatever is selected: a
+    /// second panel object showing the source of the Topo Edit panel on the Add-Ins tab, so it
+    /// holds the same buttons and the same Spacing box, and a click on it is a click on the real
+    /// button. It is made at the first session start, with the Topo Tools icon for when it is
+    /// folded, and kept for the Revit session. When a session starts, the ribbon also switches to
+    /// the Add-Ins tab, once.
     ///
     /// Which of our panels belong there is <see cref="ModifyTabPanels.Decide"/>'s answer, and one
     /// idempotent <see cref="Apply"/> makes the tab match it: a panel is added at the end of the
@@ -43,7 +51,10 @@ namespace RVTuk.Revit.TopoTools
     /// The Modify tab is reachable only through the unsupported Autodesk.Windows ribbon. Fail-safe:
     /// any failure writes one line to the crash log, takes our panels off the tab, unhooks, and
     /// switches this off for the rest of the Revit session; the Add-Ins panels work on as before.
-    /// For checking that in Revit, an empty file named <see cref="TabOffSwitch"/> or
+    /// Two parts fail on their own instead, each with one line, and stay off for the rest of the
+    /// Revit session while everything else goes on: the copy (<see cref="CopyFailed"/>; during a
+    /// session the shortcut then stays as it is outside one), and the switch to Add-Ins. For
+    /// checking that in Revit, an empty file named <see cref="TabOffSwitch"/> or
     /// <see cref="CopyOffSwitch"/> in %LOCALAPPDATA%\RVTuk\, beside crash.log, switches a part off
     /// when Revit starts.
     /// </summary>
@@ -74,6 +85,11 @@ namespace RVTuk.Revit.TopoTools
         /// session and added or removed as wanted.</summary>
         private static AwRibbonPanel? _shortcut;
 
+        /// <summary>The copy of the Topo Edit panel: made at the first session start
+        /// (<see cref="MakeCopyOnce"/>), then kept for the Revit session and added or removed as
+        /// wanted.</summary>
+        private static AwRibbonPanel? _copy;
+
         /// <summary>The Modify tab whose panel list and properties are hooked. Panels of ours go
         /// on this tab only.</summary>
         private static AwRibbonTab? _watchedTab;
@@ -86,18 +102,38 @@ namespace RVTuk.Revit.TopoTools
         private static bool _applying;
         private static bool _disabled;
 
-        /// <summary>Whether a copy of the Topo Edit panel can go on the Modify tab during a session.
-        /// False: there is no copy yet, so during a session the shortcut follows the selection as it
-        /// does outside one, and opens the session dialog.</summary>
-        internal static bool CopyAvailable { get; }
+        /// <summary>A session started since the last Apply: the next one is preceded by making the
+        /// copy and followed by the switch to Add-Ins (<see cref="RunPendingApply"/>).</summary>
+        private static bool _sessionStartPending;
 
-        /// <summary>Call once from OnStartup, after the ribbon is built. Reads the two switch files.
-        /// Never throws.</summary>
+        /// <summary>Set by a copy failure during Apply, which then asks for one more Apply as it
+        /// ends: that one takes the copy off the tab, if it is on it, and lets the shortcut stand
+        /// in for it. Requests made while Apply runs are otherwise dropped.</summary>
+        private static bool _applyAgain;
+
+        /// <summary>The switch to Add-Ins threw once: it is not tried again this Revit session.</summary>
+        private static bool _switchOff;
+
+        /// <summary>A switch to Add-Ins that did not take is logged once per Revit session.</summary>
+        private static bool _switchRefusalLogged;
+
+        /// <summary>
+        /// Whether the copy of the Topo Edit panel can go on the Modify tab during a session. True
+        /// from <see cref="Install"/> unless <see cref="CopyOffSwitch"/> is there; false for the
+        /// rest of the Revit session after a copy failure (<see cref="CopyFailed"/>). While false,
+        /// during a session the shortcut follows the selection as it does outside one, and opens
+        /// the session dialog.
+        /// </summary>
+        internal static bool CopyAvailable { get; private set; }
+
+        /// <summary>Call once from OnStartup, after the ribbon is built. Reads the two switch files,
+        /// once. Never throws.</summary>
         internal static void Install(UIControlledApplication app)
         {
             try
             {
-                if (SwitchFileExists(CopyOffSwitch))
+                CopyAvailable = !SwitchFileExists(CopyOffSwitch);
+                if (!CopyAvailable)
                     Application.LogDiagnostic(
                         $"{LogPrefix}: the Topo Edit copy is switched off by {CopyOffSwitch} for this Revit session.");
                 if (SwitchFileExists(TabOffSwitch))
@@ -112,8 +148,8 @@ namespace RVTuk.Revit.TopoTools
                 _postHandler = new PostCommandEventHandler();
                 _postEvent = ExternalEvent.Create(_postHandler);
                 app.SelectionChanged += OnSelectionChanged;
-                TopoSession.Started += OnSessionStartedOrEnded;
-                TopoSession.Ended += OnSessionStartedOrEnded;
+                TopoSession.Started += OnSessionStarted;
+                TopoSession.Ended += OnSessionEnded;
             }
             catch (Exception ex)
             {
@@ -202,7 +238,16 @@ namespace RVTuk.Revit.TopoTools
             }
         }
 
-        private static void OnSessionStartedOrEnded() => RequestApply();
+        /// <summary>A session started, inside its start command: the Apply asked for here is
+        /// preceded by making the copy, if it is not made yet, and followed by the switch to
+        /// Add-Ins. Both run later, so once the command has returned.</summary>
+        private static void OnSessionStarted()
+        {
+            _sessionStartPending = true;
+            RequestApply();
+        }
+
+        private static void OnSessionEnded() => RequestApply();
 
         private static void OnModifyPanelsChanged(object? sender, NotifyCollectionChangedEventArgs e) => RequestApply();
 
@@ -227,10 +272,18 @@ namespace RVTuk.Revit.TopoTools
             }
         }
 
+        /// <summary>The Dispatcher callback <see cref="RequestApply"/> queues. After a session
+        /// start the copy is made first, outside Apply's fail-safe, and the ribbon switches to
+        /// Add-Ins last, whatever became of the copy.</summary>
         private static void RunPendingApply()
         {
             _applyPending = false;
+            bool sessionStarted = _sessionStartPending;
+            _sessionStartPending = false;
+
+            if (sessionStarted) MakeCopyOnce();
             Apply();
+            if (sessionStarted) SwitchToAddIns();
         }
 
         // ------------------------------------------------------------------ Apply
@@ -239,7 +292,9 @@ namespace RVTuk.Revit.TopoTools
         /// Makes the Modify tab hold exactly the panels of ours that
         /// <see cref="ModifyTabPanels.Decide"/> asks for. Idempotent. Runs only from the ribbon's
         /// Dispatcher (<see cref="RequestApply"/>) and never calls the Revit API. Any failure is the
-        /// fail-safe's: if the shortcut cannot be made, nothing of ours goes on the tab.
+        /// fail-safe's: if the shortcut cannot be made, nothing of ours goes on the tab. The copy is
+        /// the exception: adding or removing it fails under its own rule
+        /// (<see cref="ApplyCopy"/>).
         /// </summary>
         private static void Apply()
         {
@@ -276,6 +331,8 @@ namespace RVTuk.Revit.TopoTools
                     oneToposolidSelected: oneToposolidSelected,
                     copyAvailable: CopyAvailable);
 
+                ApplyCopy(tab, wanted.TopoEditCopy);
+
                 if (wanted.TopoToolsShortcut)
                 {
                     step = "making the shortcut";
@@ -297,6 +354,32 @@ namespace RVTuk.Revit.TopoTools
             finally
             {
                 _applying = false;
+                if (_applyAgain)
+                {
+                    _applyAgain = false;
+                    RequestApply();
+                }
+            }
+        }
+
+        /// <summary>
+        /// The copy's part of <see cref="Apply"/>: on <paramref name="tab"/>, at its end, when
+        /// <paramref name="wanted"/>, and off it otherwise, which also takes it off after a copy
+        /// failure. A failure here is the copy's (<see cref="CopyFailed"/>), never the fail-safe's.
+        /// Nothing to do before the copy is made.
+        /// </summary>
+        private static void ApplyCopy(AwRibbonTab tab, bool wanted)
+        {
+            var copy = _copy;
+            if (copy == null) return;
+            try
+            {
+                if (wanted) PutAtEnd(tab, copy);
+                else TakeOff(tab, copy);
+            }
+            catch (Exception ex)
+            {
+                CopyFailed(wanted ? "adding the copy" : "removing the copy", ex);
             }
         }
 
@@ -323,6 +406,94 @@ namespace RVTuk.Revit.TopoTools
             return ModifyTabAccess.NewRevitPanel(source);
         }
 
+        // ------------------------------------------------------------------ the copy and the switch
+
+        /// <summary>
+        /// Makes the copy at a session start, once per Revit session: a panel of Revit's own class
+        /// showing the source of the Topo Edit panel on the Add-Ins tab. Then, in a try of its own,
+        /// gives it the Topo Tools icon for when it is folded; if that fails, the copy is kept and
+        /// folds to its first icon, the ✗. Runs before Apply, outside its fail-safe: a failure is
+        /// the copy's (<see cref="CopyFailed"/>).
+        /// </summary>
+        private static void MakeCopyOnce()
+        {
+            if (_disabled || !CopyAvailable || _copy != null) return;
+            try
+            {
+                _copy = NewCopy();
+            }
+            catch (Exception ex)
+            {
+                CopyFailed("making the copy", ex);
+                return;
+            }
+            if (_copy == null)
+            {
+                CopyFailed("Topo Edit panel not found on the Add-Ins tab", null);
+                return;
+            }
+
+            try
+            {
+                SetFoldedIcon(_copy);
+            }
+            catch (Exception ex)
+            {
+                Application.LogDiagnostic(
+                    $"{LogPrefix}: the Topo Edit copy folds to its first icon: {ex.GetType().FullName}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// The copy's fail-safe: logs one line (the step, then the exception's type and message, if
+        /// any) and switches the copy off for the rest of the Revit session. All else goes on:
+        /// during a session the shortcut then stands in for the copy, and the Add-Ins panel works
+        /// as before. It never changes the tab's panel list itself, wherever it runs: a copy that
+        /// may be on the tab comes off in one more Apply, run later through the Dispatcher. Once
+        /// the copy is off, a later failure (taking it off, say) adds nothing.
+        /// </summary>
+        private static void CopyFailed(string step, Exception? ex)
+        {
+            if (!CopyAvailable) return;
+            CopyAvailable = false;
+            Application.LogDiagnostic(ex == null
+                ? $"{LogPrefix}: the Topo Edit copy is off for this Revit session: {step}"
+                : $"{LogPrefix}: the Topo Edit copy is off for this Revit session ({step}): {ex.GetType().FullName}: {ex.Message}");
+
+            if (_copy == null) return; // never made, so on no tab
+            if (_applying) _applyAgain = true;
+            else RequestApply();
+        }
+
+        /// <summary>
+        /// After a session start, makes the Add-Ins tab the active one and reads it back: a hidden
+        /// tab refuses without a word (read in AdWindows 2024 to 2027). Revit notes the tab that is
+        /// active when it opens a Modify | … tab and goes back to it when that tab closes (read in
+        /// UIFramework 2024, 2026 and 2027), which is how a selection and Esc then land on Add-Ins.
+        /// Only at a start: a tab picked afterwards is the user's. A switch that did not take is
+        /// logged once per Revit session; one that throws is logged and not tried again this Revit
+        /// session. Neither switches anything else off.
+        /// </summary>
+        private static void SwitchToAddIns()
+        {
+            if (_disabled || _switchOff || TopoSession.Current == null) return;
+            try
+            {
+                var refusal = ActivateAddInsTab();
+                if (refusal != null && !_switchRefusalLogged)
+                {
+                    _switchRefusalLogged = true;
+                    Application.LogDiagnostic($"{LogPrefix}: the ribbon did not switch to the Add-Ins tab: {refusal}.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _switchOff = true;
+                Application.LogDiagnostic(
+                    $"{LogPrefix}: the switch to the Add-Ins tab is off for this Revit session: {ex.GetType().FullName}: {ex.Message}");
+            }
+        }
+
         // ------------------------------------------------------------------ Autodesk.Windows, NoInlining
 
         /// <summary>Queues <paramref name="action"/> on the ribbon's Dispatcher, at Normal priority:
@@ -338,8 +509,8 @@ namespace RVTuk.Revit.TopoTools
         }
 
         /// <summary>Hooks the panel list and properties of <paramref name="tab"/>, the Modify tab
-        /// Revit has now. If that is another object than before, the shortcut first leaves the old
-        /// one, which is unhooked. Null unhooks only.</summary>
+        /// Revit has now. If that is another object than before, our panels first leave the old
+        /// one, the copy under its own failure rule, and it is unhooked. Null unhooks only.</summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void Watch(AwRibbonTab? tab)
         {
@@ -347,6 +518,7 @@ namespace RVTuk.Revit.TopoTools
             if (ReferenceEquals(tab, old)) return;
             if (old != null)
             {
+                ApplyCopy(old, wanted: false);
                 if (_shortcut != null) old.Panels.Remove(_shortcut);
                 Unhook(old);
             }
@@ -378,6 +550,35 @@ namespace RVTuk.Revit.TopoTools
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void TakeOff(AwRibbonTab tab, AwRibbonPanel panel) => tab.Panels.Remove(panel);
 
+        /// <summary>A new copy of the Topo Edit panel on the Add-Ins tab, of Revit's own panel class
+        /// and showing that panel's source; null when the panel is not there. Throws when the copy
+        /// cannot be made.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static AwRibbonPanel? NewCopy()
+        {
+            var addIns = TopoEditPanel.FindOnAddIns();
+            if (addIns == null) return null;
+            // Never a copy without a source: Revit's code reads the source Id of every panel on
+            // the Modify tab.
+            var source = addIns.Source
+                ?? throw new InvalidOperationException("The Topo Edit panel on the Add-Ins tab has no source.");
+            return ModifyTabAccess.NewRevitPanel(source);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void SetFoldedIcon(AwRibbonPanel panel) => panel.CollapsedPanelImage = TopoIcons.TopoTools(32);
+
+        /// <summary>Makes the Add-Ins tab the active one. Null when it then is; otherwise why
+        /// not.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static string? ActivateAddInsTab()
+        {
+            var tab = ModifyTabAccess.FindTab(ModifyTabAccess.AddInsTabId);
+            if (tab == null) return $"no tab with Id \"{ModifyTabAccess.AddInsTabId}\"";
+            tab.IsActive = true;
+            return tab.IsActive ? null : "the tab did not become active (a hidden tab refuses)";
+        }
+
         // ------------------------------------------------------------------ the fail-safe
 
         /// <summary>
@@ -394,12 +595,26 @@ namespace RVTuk.Revit.TopoTools
                 ? $"{LogPrefix} disabled: {step}"
                 : $"{LogPrefix} disabled ({step}): {ex.GetType().FullName}: {ex.Message}");
 
-            TopoSession.Started -= OnSessionStartedOrEnded;
-            TopoSession.Ended -= OnSessionStartedOrEnded;
+            TopoSession.Started -= OnSessionStarted;
+            TopoSession.Ended -= OnSessionEnded;
 
             // Best effort, each part on its own: the line above already says what broke.
             var tab = _watchedTab;
             if (tab == null) return;
+            if (_copy != null)
+            {
+                // The copy comes off later, through the Dispatcher, never from here: this may run
+                // inside a notification of the tab's panel list (from RequestApply), where a
+                // change to the list throws.
+                try
+                {
+                    Defer(TakeCopyOffAfterFail);
+                }
+                catch (Exception)
+                {
+                    // The copy stays where it is: switched off, and logged above.
+                }
+            }
             if (_shortcut != null)
             {
                 try
@@ -418,6 +633,23 @@ namespace RVTuk.Revit.TopoTools
             catch (Exception)
             {
                 // The same: the handlers do nothing once switched off.
+            }
+        }
+
+        /// <summary>Dispatcher callback queued by <see cref="Fail"/>: the copy leaves the watched
+        /// tab. Best effort; never throws.</summary>
+        private static void TakeCopyOffAfterFail()
+        {
+            var tab = _watchedTab;
+            var copy = _copy;
+            if (tab == null || copy == null) return;
+            try
+            {
+                TakeOff(tab, copy);
+            }
+            catch (Exception)
+            {
+                // Nothing more to do: switched off, and logged by Fail.
             }
         }
 
