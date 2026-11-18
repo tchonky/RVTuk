@@ -292,4 +292,61 @@ public class TopoSessionReportTests
     {
         Assert.True(new TopoSessionReport { LinesApplied = 1, PointsLost = 1 }.HasProblems);
     }
+
+    [Fact]
+    public void AnUnreadableHeightAloneShowsTheSummaryAfterUpdate()
+    {
+        var report = new TopoSessionReport { LinesApplied = 1 };
+        report.UnreadableHeights.Add("x");
+
+        Assert.True(report.ShowAfterUpdate);
+    }
+
+    [Fact]
+    public void APointMovedByHandAloneShowsTheSummaryAfterUpdate()
+    {
+        Assert.True(new TopoSessionReport { LinesApplied = 1, PointsMovedByHand = 1 }.ShowAfterUpdate);
+    }
+
+    [Fact]
+    public void APointLostAloneShowsTheSummaryAfterUpdate()
+    {
+        Assert.True(new TopoSessionReport { LinesApplied = 1, PointsLost = 1 }.ShowAfterUpdate);
+    }
+
+    [Fact]
+    public void AnUnlinkedTextAloneShowsTheSummaryAfterUpdate()
+    {
+        Assert.True(new TopoSessionReport { LinesApplied = 1, UnlinkedTexts = 1 }.ShowAfterUpdate);
+    }
+
+    [Fact]
+    public void NothingAppliedShowsTheSummaryAfterUpdate()
+    {
+        var report = new TopoSessionReport();
+
+        Assert.False(report.HasProblems);
+        Assert.True(report.ShowAfterUpdate);
+    }
+
+    [Fact]
+    public void AnUpdateWithNothingToReportShowsNoSummary()
+    {
+        Assert.False(new TopoSessionReport { LinesApplied = 1, PointsAdded = 2, PointsReplaced = 1 }.ShowAfterUpdate);
+    }
+
+    [Fact]
+    public void PointsDroppedAtCrossingsShowNoSummaryAfterUpdate()
+    {
+        Assert.False(new TopoSessionReport { LinesApplied = 2, PointsAdded = 7, PointsDroppedAtCrossings = 3 }.ShowAfterUpdate);
+    }
+
+    [Fact]
+    public void AMarkerFigureShowsNoSummaryAfterUpdate()
+    {
+        var report = new TopoSessionReport { LinesApplied = 1, PointsAdded = 2, SurveyPointMarkerMetres = 10 };
+
+        Assert.Contains(Marker, report.Summarise());
+        Assert.False(report.ShowAfterUpdate);
+    }
 }

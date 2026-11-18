@@ -5,8 +5,9 @@ using System.Globalization;
 namespace RVTuk.Core.TopoTools
 {
     /// <summary>
-    /// What one Topo Edit session did, in the words the Update dialog shows. Kept in Core
-    /// and tested, as the only text the session shows after each run.
+    /// What one Update did, in the words of its summary dialog. Accept always shows the summary;
+    /// the Update button only when <see cref="ShowAfterUpdate"/> is true. Kept in Core and tested,
+    /// as the only account the user gets of what an Update applied.
     ///
     /// Sentences are joined by a single space, in this order: applied, crossings, skipped, moved by
     /// hand, lost, unlinked, Survey Point marker; when nothing was applied and there is no
@@ -41,6 +42,13 @@ namespace RVTuk.Core.TopoTools
 
         public bool HasProblems =>
             UnreadableHeights.Count > 0 || PointsMovedByHand > 0 || PointsLost > 0 || UnlinkedTexts > 0;
+
+        /// <summary>
+        /// Whether the Update button shows this summary: only when it names a problem or nothing was
+        /// applied, as a silent Update would hide why nothing changed. Points dropped at crossings and
+        /// the marker's note do not count. Accept shows the summary whatever this says.
+        /// </summary>
+        public bool ShowAfterUpdate => HasProblems || LinesApplied == 0;
 
         public string Summarise()
         {

@@ -14,16 +14,18 @@ namespace RVTuk.Revit.TopoTools.Commands
     internal static class TopoSessionActions
     {
         /// <summary>
-        /// Accept: Update, then close the session. Lines and texts stay in the view. The session closes
-        /// also when the update reported problems (its summary says what was skipped), but not when the
-        /// update could not run at all — then the user can fix it, or Cancel.
+        /// Accept: Update, always showing its summary (the Update button shows it only when something
+        /// needs attention), then close the session. Lines and texts stay in the view. The session
+        /// closes also when the update reported problems (its summary says what was skipped), but not
+        /// when the update was not committed (refused, rolled back or failed) — then the user can fix
+        /// it, or Cancel.
         /// </summary>
-        /// <returns>True when the update ran and the session closed. False when the update did not
-        /// run: the session then stays open, unless there was none or the update found its view or
-        /// its element gone and closed it.</returns>
+        /// <returns>True when the update was committed, its summary shown, and the session closed.
+        /// False when the update was not committed: the session then stays open, unless there was
+        /// none or the update found its view or its element gone and closed it.</returns>
         internal static bool Accept()
         {
-            if (!TopoUpdateCommand.Run()) return false;
+            if (!TopoUpdateCommand.Run(alwaysShowSummary: true)) return false;
 
             TopoSession.End();
             return true;

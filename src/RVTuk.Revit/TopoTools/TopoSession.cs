@@ -41,8 +41,9 @@ namespace RVTuk.Revit.TopoTools
         internal Dictionary<ElementId, string> LastSeenTexts { get; }
 
         /// <summary>
-        /// Set by the session's first committed Update once it has read the Survey Point marker's
-        /// height for its summary, a failed read included, so at most one summary names the marker.
+        /// Set by the session's first Update that shows its summary (Accept's always does), once it
+        /// has read the Survey Point marker's height for it, a failed read included, so at most one
+        /// summary names the marker.
         /// </summary>
         public bool MarkerNoted { get; set; }
 
