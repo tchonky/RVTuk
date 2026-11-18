@@ -11,27 +11,28 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
 {
     public class GetProjectFamiliesEventHandler : IExternalEventHandler
     {
-        private readonly ManualResetEventSlim _done = new(false);
+        private readonly RequestGate _gate = new();
 
-        public IReadOnlyList<ProjectFamilyInfo> Result { get; private set; } = Array.Empty<ProjectFamilyInfo>();
+        public ProjectSnapshot Result { get; private set; } = new();
 
         /// <summary>Set when there is no project to compare against (a family is active).</summary>
         public string? ErrorMessage { get; private set; }
 
-        public void Reset() { ErrorMessage = null; _done.Reset(); }
-        public void WaitForCompletion() => _done.Wait();
+        public void Reset() { ErrorMessage = null; _gate.Begin(); }
+        public void WaitForCompletion() => _gate.Wait(RequestGate.StartTimeout);
 
         public void Execute(UIApplication app)
         {
+            if (!_gate.TryStart()) return; // withdrawn: the caller already reported "Revit is busy"
             try
             {
                 var doc = app.ActiveUIDocument?.Document;
-                if (doc == null) { Result = Array.Empty<ProjectFamilyInfo>(); return; }
+                if (doc == null) { Result = new ProjectSnapshot(); return; }
                 // A family document lists its nested families — comparing those against the
                 // library would be wrong; say so instead of showing a misleading list.
                 if (doc.IsFamilyDocument)
                 {
-                    Result = Array.Empty<ProjectFamilyInfo>();
+                    Result = new ProjectSnapshot();
                     ErrorMessage = LoadFamilyEventHandler.FamilyDocumentActive;
                     return;
                 }
@@ -50,15 +51,15 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
                     infos.Add(info);
                 }
                 ReadVersionsFromInstances(doc, unresolved);
-                Result = infos;
+                Result = new ProjectSnapshot { DocumentKey = ProjectKey.Of(doc), Title = doc.Title, Families = infos };
             }
             catch
             {
-                Result = Array.Empty<ProjectFamilyInfo>();
+                Result = new ProjectSnapshot();
             }
             finally
             {
-                _done.Set();
+                _gate.Complete();
             }
         }
 

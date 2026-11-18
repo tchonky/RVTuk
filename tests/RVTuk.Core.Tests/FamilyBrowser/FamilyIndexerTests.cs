@@ -429,4 +429,19 @@ public class FamilyIndexerTests : IDisposable
         long id2 = repo.GetFamilyByPath(rel)!.Id;
         Assert.Equal(id1, id2);
     }
+
+    [Fact]
+    public void Scan_IncludeParametersOnly_WorkItemCarriesFileYear()
+    {
+        var full = Path.Combine(_root, "Doors", "A.rfa");
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        ThumbnailExtractorTests.WriteRfa(full); // Format: 2024
+        using var repo = new IndexRepository(_dbPath);
+        var indexer = new FamilyIndexer(repo, _root);
+
+        var item = Assert.Single(indexer.Scan(NoProgress, default, includeParameters: true));
+
+        Assert.Equal(2024, item.FileRevitYear);
+        Assert.Null(item.ThumbnailPng);
+    }
 }

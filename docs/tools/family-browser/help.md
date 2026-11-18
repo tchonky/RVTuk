@@ -17,7 +17,12 @@ Search the office family library and load families into the open project.
 - ✓ means the family is loaded and up to date.
 - **↑ Update** means the library copy has a newer _Version. Select the family and press **Update**, or press **↑ Update All** above the list.
 - ⚠️ means the family is loaded in the project but is not in the library. Press **Save to Library** to add it. It appears in the list after the next Scan.
+- ⚠️ on a family that is in the library means the library has more than one copy of it. Point at ⚠️ to see where. Update All skips it until the extra copies are removed.
 - A red version number means the version parameter is an instance parameter. Change it to a type parameter.
+- Update keeps the values set in the project.
+- **↑ Update All** first lists what will change. While it runs, **Cancel** at the bottom stops it after the current family.
+- After you switch to another project, press ⟳ again. Coming back to the project you checked shows its results again.
+- "Revit is busy" means Revit did not start the request within 10 seconds, usually because a dialog is open. Close it and try again.
 
 Switch to the project window first. The check does not work while a family is open in the Family Editor.
 

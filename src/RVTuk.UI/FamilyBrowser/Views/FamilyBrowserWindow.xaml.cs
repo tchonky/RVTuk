@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
@@ -16,8 +16,8 @@ namespace RVTuk.UI.FamilyBrowser.Views
     public partial class FamilyBrowserWindow : Window
     {
         private AppConfig _config = null!;
-        private readonly Func<IReadOnlyList<ProjectFamilyInfo>> _getProjectFamilies;
-        private readonly Func<string, (bool Success, string? Error)> _loadFamily;
+        private readonly Func<ProjectSnapshot> _getProjectFamilies;
+        private readonly Func<string, string?, (bool Success, string? Error)> _loadFamily;
         private readonly Func<long, string, (bool Success, string? Error)> _rescanFamily;
         private readonly Action<bool, bool> _scan;
         private readonly Func<string, (bool Success, string? Error)> _openInFamilyEditor;
@@ -36,8 +36,8 @@ namespace RVTuk.UI.FamilyBrowser.Views
 
         public FamilyBrowserWindow(
             AppConfig config,
-            Func<IReadOnlyList<ProjectFamilyInfo>> getProjectFamilies,
-            Func<string, (bool Success, string? Error)> loadFamily,
+            Func<ProjectSnapshot> getProjectFamilies,
+            Func<string, string?, (bool Success, string? Error)> loadFamily,
             Func<long, string, (bool Success, string? Error)> rescanFamily,
             Action<bool, bool> scan,
             Func<string, (bool Success, string? Error)> openInFamilyEditor,

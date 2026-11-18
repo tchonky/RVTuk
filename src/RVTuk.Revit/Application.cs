@@ -135,6 +135,21 @@ namespace RVTuk.Revit
             EditProjectFamilyEvent   = ExternalEvent.Create(EditProjectFamilyHandler);
             GetFamilyPreviewsHandler = new GetFamilyPreviewsEventHandler();
             GetFamilyPreviewsEvent   = ExternalEvent.Create(GetFamilyPreviewsHandler);
+
+            // The browser's ✓/↑ badges describe the project the last ⟳ compared: tell it when
+            // another document becomes active or that one closes (cheap: no API work here).
+            // The key is read here, inside the event: the document (and the event args) may be
+            // gone by the time the dispatcher runs the callback.
+            application.ViewActivated += (_, e) =>
+            {
+                var key = KeyOf(e.Document);
+                if (key != null) TellBrowser(vm => vm.ActiveDocumentChanged(key));
+            };
+            application.ControlledApplication.DocumentClosing += (_, e) =>
+            {
+                var key = KeyOf(e.Document);
+                if (key != null) TellBrowser(vm => vm.DocumentClosing(key));
+            };
             AreaExtractHandler = new AreaExtractEventHandler();
             AreaExtractEvent   = ExternalEvent.Create(AreaExtractHandler);
             SelectAreaHandler  = new SelectAreaEventHandler();
@@ -335,6 +350,27 @@ namespace RVTuk.Revit
         }
 
         /// <summary>Appends one entry to %LOCALAPPDATA%\RVTuk\crash.log. Never throws.</summary>
+        private static string? KeyOf(Document doc)
+        {
+            if (BrowserWindow == null) return null;
+            try { return ProjectKey.Of(doc); }
+            catch (Exception ex) { LogDiagnostic($"Family Browser project key failed: {ex}"); return null; }
+        }
+
+        private static void TellBrowser(Action<RVTuk.UI.FamilyBrowser.ViewModels.FamilyBrowserViewModel> tell)
+        {
+            try
+            {
+                var window = BrowserWindow;
+                if (window == null) return;
+                window.Dispatcher.BeginInvoke(new Action(() => { try { tell(window.ViewModel); } catch (Exception ex) { LogDiagnostic($"Family Browser project switch failed: {ex}"); } }));
+            }
+            catch (Exception ex)
+            {
+                LogDiagnostic($"Family Browser project switch failed: {ex}");
+            }
+        }
+
         internal static void LogDiagnostic(string message)
         {
             try

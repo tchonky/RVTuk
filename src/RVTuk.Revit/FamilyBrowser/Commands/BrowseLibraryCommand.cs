@@ -59,7 +59,7 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
             // Create delegates that wrap ExternalEvent ping-pong.
             // These lambdas live in the Revit project (which CAN reference ExternalEvent).
             // FamilyBrowserWindow (UI project) only sees Func<> delegates — no Revit types.
-            Func<IReadOnlyList<ProjectFamilyInfo>> getProjectFamilies = () =>
+            Func<ProjectSnapshot> getProjectFamilies = () =>
             {
                 Application.GetFamiliesHandler.Reset();
                 Raise(Application.GetFamiliesEvent);
@@ -69,9 +69,9 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
                 return Application.GetFamiliesHandler.Result;
             };
 
-            Func<string, (bool Success, string? Error)> loadFamily = path =>
+            Func<string, string?, (bool Success, string? Error)> loadFamily = (path, documentKey) =>
             {
-                Application.LoadFamilyHandler.Prepare(path);
+                Application.LoadFamilyHandler.Prepare(path, documentKey);
                 Raise(Application.LoadFamilyEvent);
                 Application.LoadFamilyHandler.WaitForCompletion();
                 return (Application.LoadFamilyHandler.Success, Application.LoadFamilyHandler.ErrorMessage);
@@ -243,6 +243,8 @@ namespace RVTuk.Revit.FamilyBrowser.Commands
         /// Raises an ExternalEvent for a caller that then waits on its handler. A raise Revit
         /// refuses never reaches the handler, so the wait would block forever (holding whatever
         /// lock the caller is in) — throw instead; every caller reports the message.
+        /// Pending is accepted: an earlier raise whose request was withdrawn (RequestGate) is
+        /// still queued, and that one execution serves the request just prepared.
         /// </summary>
         internal static void Raise(ExternalEvent externalEvent)
         {

@@ -1,4 +1,5 @@
 ﻿// RVTuk.UI/ViewModels/FamilyBrowserItemViewModel.cs
+using System.Collections.Generic;
 using System.Windows.Media.Imaging;
 using RVTuk.Core.FamilyBrowser.Models;
 using RVTuk.Core.FamilyBrowser.Util;
@@ -62,6 +63,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 OnPropertyChanged(nameof(ShowUpToDate));
                 OnPropertyChanged(nameof(ShowUpdateAvailable));
                 OnPropertyChanged(nameof(IsModelOnly));
+                OnPropertyChanged(nameof(ShowDuplicate));
             }
         }
 
@@ -72,6 +74,13 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         // It has no .rfa, no DB row (Id 0), no thumbnail — every library-backed action
         // (load, favourite, edit info, rescan, open in editor) must be disabled for it.
         public bool IsModelOnly => _versionStatus == VersionStatus.ModelOnly;
+
+        // In the project, but the library has several copies of this file name: no verdict,
+        // and Update All leaves it alone until the maintainer removes the extra copies.
+        public bool ShowDuplicate => _versionStatus == VersionStatus.DuplicateInLibrary;
+        private IReadOnlyList<string>? _duplicatePaths;
+        public string? DuplicateToolTip => _duplicatePaths == null ? null
+            : $"{_duplicatePaths.Count} copies in the library:\n" + string.Join("\n", _duplicatePaths);
 
         // Decoded on first bind, not when the list loads: the row list is virtualised, so most
         // rows are never drawn. A bad PNG decodes to null once rather than on every bind.
@@ -92,6 +101,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         // The copy loaded in the project, as of the last Sync — kept so a Rescan can re-judge.
         private ProjectFamilyInfo? _inProject;
+        public string? ProjectVersion => _inProject?.Version;
 
         public FamilyBrowserItemViewModel(FamilyBrowserItem model)
         {
@@ -110,6 +120,15 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             if (loaded.VersionIsInstance) VersionIsInstance = true;
         }
 
+        /// <summary>Marks a library row whose name has several library copies (Sync).</summary>
+        public void MarkDuplicate(ProjectFamilyInfo projectFamily, IReadOnlyList<string> relativePaths)
+        {
+            _inProject = projectFamily;
+            _duplicatePaths = relativePaths;
+            VersionStatus = VersionStatus.DuplicateInLibrary;
+            OnPropertyChanged(nameof(DuplicateToolTip));
+        }
+
         /// <summary>Takes the re-read DB row after a single-family Rescan.</summary>
         public void Refresh(FamilyBrowserItem fresh)
         {
@@ -120,7 +139,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             OnPropertyChanged(nameof(Version));
             OnPropertyChanged(nameof(HasVersion));
             UpdateThumbnail(fresh.ThumbnailPng);
-            if (_inProject != null) CompareWithProject(_inProject);
+            if (_inProject != null && _duplicatePaths == null) CompareWithProject(_inProject);
         }
 
         /// <summary>

@@ -285,7 +285,7 @@ namespace RVTuk.Core.FamilyBrowser.Database
                 // Write the file's real size/date HERE, in the same transaction as the extracted
                 // metadata: a successful extraction is what marks the row current. (FamilyIndexer
                 // inserts a sentinel size/date, so until this commits the family is re-scannable.)
-                using var catCmd = CreateCommand("UPDATE Families SET Category=@cat, IndexedDate=@now, RevitYear=@year, ModifiedDate=@modified, FileSize=@size, ParametersExtracted=1, Version=@version WHERE Id=@id", transaction);
+                using var catCmd = CreateCommand("UPDATE Families SET Category=@cat, IndexedDate=@now, RevitYear=CASE WHEN @year > 0 THEN @year ELSE RevitYear END, ModifiedDate=@modified, FileSize=@size, ParametersExtracted=1, Version=@version WHERE Id=@id", transaction);
                 AddParam(catCmd, "@version", (object?)familyVersion ?? DBNull.Value);
                 AddParam(catCmd, "@cat", category ?? (object)DBNull.Value);
                 AddParam(catCmd, "@now", DateTime.UtcNow.ToString("o"));

@@ -33,8 +33,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         private readonly PersonalFavorites? _favorites;
         private string _libraryStatus = string.Empty;
         private string? _libraryStatusDetail;
-        private readonly Func<IReadOnlyList<ProjectFamilyInfo>> _getProjectFamilies;
-        private readonly Func<string, (bool Success, string? Error)> _loadFamily;
+        private readonly Func<ProjectSnapshot> _getProjectFamilies;
+        private readonly Func<string, string?, (bool Success, string? Error)> _loadFamily;
         private readonly Func<long, string, (bool Success, string? Error)> _rescanFamily;
         private readonly Func<string, (bool Success, string? Error)> _openInFamilyEditor;
         private readonly Func<string, (bool Success, string? Error)> _openModelFamilyInEditor;
@@ -58,6 +58,9 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         private bool _bulkCategoryEdit;
         private bool _rebuildingList;
         private int _outdatedCount;
+        private ProjectComparison? _lastComparison;
+        private string? _comparedDocumentKey;
+        private string? _comparedProjectTitle;
         private string? _instructionsXaml;
         private List<ParameterModel> _parameters = new();
         private string _parameterFilter = string.Empty;
@@ -220,6 +223,17 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         public bool ShowUpdateAll => _outdatedCount > 0;
 
+        /// <summary>The project the last ⟳ compared against (shown on the ⟳ button's tooltip).</summary>
+        public string? ComparedProjectTitle
+        {
+            get => _comparedProjectTitle;
+            private set { SetProperty(ref _comparedProjectTitle, value); OnPropertyChanged(nameof(SyncToolTip)); }
+        }
+
+        public string SyncToolTip => string.IsNullOrEmpty(_comparedProjectTitle)
+            ? "Re-check which families are in the active project and which are outdated"
+            : $"Compared with {_comparedProjectTitle}. Press to re-check the active project.";
+
         public string? InstructionsXaml
         {
             get => _instructionsXaml;
@@ -362,8 +376,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         public FamilyBrowserViewModel(
             AppConfig config,
             BrowserRepository repo,
-            Func<IReadOnlyList<ProjectFamilyInfo>> getProjectFamilies,
-            Func<string, (bool Success, string? Error)> loadFamily,
+            Func<ProjectSnapshot> getProjectFamilies,
+            Func<string, string?, (bool Success, string? Error)> loadFamily,
             Func<long, string, (bool Success, string? Error)> rescanFamily,
             Action<bool, bool> scan,
             Func<string, (bool Success, string? Error)> openInFamilyEditor,
@@ -393,11 +407,16 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             {
                 if (e.PropertyName is nameof(ConfigViewModel.IgnoredSubfoldersText)
                                    or nameof(ConfigViewModel.IgnoredFilePatternsText))
+                {
                     ApplyFilter();
+                    RecountOutdated();
+                }
             };
 
             SyncCommand            = new RelayCommand(Sync, () => !IsSyncing);
-            UpdateAllCommand       = new RelayCommand(UpdateAll,     () => OutdatedCount > 0 && !IsLoading);
+            UpdateAllCommand       = new RelayCommand(UpdateAll,
+                () => OutdatedCount > 0 && !IsLoading && !IsComparisonHidden && _comparedDocumentKey != null);
+            CancelBatchCommand     = new RelayCommand(() => _batchStopReason ??= "Cancelled."); // only visible while a batch runs
             // Model-only rows have no .rfa and no DB row behind them, so library-backed
             // actions stay disabled for them; their own actions are open-from-model
             // (OpenFamilyEditorCommand) and Save to Library (below). Load also serves as
@@ -563,6 +582,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             {
                 List<FamilyBrowserItemViewModel>? newAllItems = null; // stays null if the sync fails
                 int outdated = 0;
+                ProjectComparison? comparison = null;
+                ProjectSnapshot? project = null;
                 try
                 {
                     // Read-only refresh: reload the index and compare it against the open
@@ -577,30 +598,30 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                     // Version check compares the _Version shared parameter: the library value is
                     // captured into the index by the deep scan, the project value is read off the
                     // loaded family's symbols (or a placed instance when the parameter is
-                    // instance-level). A family missing the parameter on either side is simply
-                    // "in project" with no update verdict (FamilyVersionCheck returns false).
-                    // (Families can share a name across categories; first occurrence wins.)
-                    var projectFamilies = new Dictionary<string, ProjectFamilyInfo>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var pf in _getProjectFamilies())
-                        if (!projectFamilies.ContainsKey(pf.Name))
-                            projectFamilies[pf.Name] = pf;
-
-                    var libraryNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    // instance-level). Ignored rows are not part of the library, and a name with
+                    // several library copies gets no verdict (ProjectComparer, tested in Core).
+                    var snapshot = _getProjectFamilies();
+                    var ignored = IgnoredRule();
+                    comparison = ProjectComparer.Compare(items.Select(i => new LibraryEntry
+                    {
+                        Id = i.Id, FileName = i.FileName, RelativePath = i.RelativePath,
+                        Version = i.Version, IsIgnored = ignored(i),
+                    }).ToList(), snapshot.Families);
                     foreach (var item in items)
                     {
-                        var nameNoExt = FamilyFileName.WithoutRfaExtension(item.FileName);
-                        libraryNames.Add(nameNoExt);
-                        if (!projectFamilies.TryGetValue(nameNoExt, out var pf)) continue;
-                        item.CompareWithProject(pf);
+                        if (comparison.Matches.TryGetValue(item.Id, out var pf)) item.CompareWithProject(pf);
+                        else if (comparison.Duplicates.TryGetValue(item.Id, out var paths))
+                            item.MarkDuplicate(projectFamily: snapshot.Families.First(f =>
+                                string.Equals(f.Name, FamilyFileName.WithoutRfaExtension(item.FileName), StringComparison.OrdinalIgnoreCase)), paths);
                         if (item.VersionStatus == VersionStatus.UpdateAvailable) outdated++;
                     }
+                    project = snapshot;
 
                     // Project families with no library counterpart get a synthetic "model only"
                     // row so the browser shows the whole picture, not just the library. The
                     // ".rfa" suffix keeps DisplayName's extension-stripping from eating part of
                     // a family name that contains a dot.
-                    var modelOnly = projectFamilies.Values
-                        .Where(pf => !libraryNames.Contains(pf.Name)).ToList();
+                    var modelOnly = comparison.ModelOnly;
                     if (modelOnly.Count > 0)
                     {
                         // No .rfa on disk to read a thumbnail from — render the loaded type's
@@ -631,6 +652,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 {
                     var finalItems = newAllItems;
                     int finalOutdated = outdated;
+                    var finalComparison = comparison;
+                    var finalProject = project;
                     // Dispatcher.Invoke rethrows delegate exceptions on THIS pool thread, where
                     // anything unhandled kills the whole Revit process — degrade to the same
                     // warning the sync-failure path shows instead.
@@ -649,8 +672,18 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                                     && (i.Id != 0 || string.Equals(i.FileName, selected.FileName, StringComparison.OrdinalIgnoreCase)))
                                     ?? selected;
                             _allItems = finalItems;
+                            _stash = null;
+                            IsComparisonHidden = false;
+                            _lastComparison = finalComparison;
+                            _comparedDocumentKey = finalProject?.DocumentKey;
+                            ComparedProjectTitle = finalProject?.Title;
                             LoadCategories();
                             OutdatedCount = finalOutdated;
+                            // The user switched while ⟳ ran: this comparison is already about
+                            // a project that isn't active.
+                            if (_activeDocumentKey != null && _comparedDocumentKey != null
+                                && _activeDocumentKey != _comparedDocumentKey)
+                                HideComparison();
                             ApplyFilter();
                             OnPropertyChanged(nameof(ShowUpdateInProject));
                         });
@@ -674,29 +707,151 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         private void RecountOutdated()
         {
-            OutdatedCount = _allItems.Count(i => i.VersionStatus == VersionStatus.UpdateAvailable);
+            var ignored = IgnoredRule();
+            OutdatedCount = _allItems.Count(i => i.VersionStatus == VersionStatus.UpdateAvailable && !ignored(i));
             OnPropertyChanged(nameof(ShowUpdateInProject));
         }
 
+        // Twin: LoadFamilyEventHandler.ProjectChangedMessage in RVTuk.Revit (not visible from here).
+        private const string ProjectChangedMessage = "The active project changed. Press ⟳ and try again.";
+        private const string StoppedProjectChanged = "Stopped: another project became active.";
+
         private void UpdateAll()
         {
-            var items = _allItems.Where(i => i.VersionStatus == VersionStatus.UpdateAvailable).ToList();
-            if (items.Count > 0) LoadFamiliesSequentially(items);
+            if (IsComparisonHidden || _comparedDocumentKey == null) return;
+            var ignored = IgnoredRule();
+            var items = _allItems.Where(i => i.VersionStatus == VersionStatus.UpdateAvailable && !ignored(i))
+                .OrderBy(i => i.DisplayName).ToList();
+            if (items.Count == 0) return;
+
+            // ponytail: a plain message box, not a custom dark dialog — swap in a window if the
+            // list ever needs scrolling or per-row choices.
+            const int shown = 25;
+            var text = new System.Text.StringBuilder();
+            text.AppendLine($"Update {items.Count} families in \"{ComparedProjectTitle}\"?");
+            text.AppendLine("Project values are kept.");
+            text.AppendLine();
+            foreach (var i in items.Take(shown))
+                text.AppendLine($"{i.DisplayName}    v{i.ProjectVersion} → v{i.Version}");
+            if (items.Count > shown) text.AppendLine($"…and {items.Count - shown} more.");
+            var skipped = _lastComparison?.SkippedDuplicates ?? Array.Empty<SkippedDuplicate>();
+            if (skipped.Count > 0)
+            {
+                text.AppendLine();
+                text.AppendLine("Skipped — more than one copy in the library:");
+                foreach (var d in skipped) text.AppendLine($"{d.Name}  ({d.RelativePaths.Count} copies)");
+            }
+            if (Warn(text.ToString(), MessageBoxButton.OKCancel, MessageBoxImage.Question, "Update All") != MessageBoxResult.OK)
+                return;
+            LoadFamiliesSequentially(items, _comparedDocumentKey, batch: true);
         }
+
+        // ── Project switch ──────────────────────────────────────────────────────────────
+        // The comparison belongs to the project the last ⟳ looked at. While another document
+        // is active it is hidden (stashed), and coming back restores it without a new Sync.
+        private List<(FamilyBrowserItemViewModel Item, VersionStatus Status)>? _stash;
+        private bool _isComparisonHidden;
+        public bool IsComparisonHidden
+        {
+            get => _isComparisonHidden;
+            private set => SetProperty(ref _isComparisonHidden, value);
+        }
+
+        private string? _activeDocumentKey; // last one Revit reported active (null until a switch)
+
+        public void ActiveDocumentChanged(string documentKey)
+        {
+            _activeDocumentKey = documentKey;
+            if (_comparedDocumentKey == null) return; // nothing compared yet
+            bool isCompared = documentKey == _comparedDocumentKey;
+            if (!isCompared && _stash == null) HideComparison();
+            else if (isCompared && _stash != null) RestoreComparison();
+        }
+
+        public void DocumentClosing(string documentKey)
+        {
+            if (_comparedDocumentKey == null || documentKey != _comparedDocumentKey) return;
+            if (_stash == null) HideComparison();
+            _stash = null; // that project is gone: nothing to come back to
+            _comparedDocumentKey = null;
+            ComparedProjectTitle = null;
+        }
+
+        private void HideComparison()
+        {
+            if (IsBatchRunning) _batchStopReason ??= StoppedProjectChanged;
+            _stash = _allItems.Where(i => i.VersionStatus != VersionStatus.None)
+                .Select(i => (i, i.VersionStatus)).ToList();
+            _allItems = _allItems.Where(i => !i.IsModelOnly).ToList();
+            foreach (var (item, _) in _stash) if (item.Id != 0) item.VersionStatus = VersionStatus.None;
+            IsComparisonHidden = true;
+            RecountOutdated();
+            LoadCategories();
+            ApplyFilter();
+        }
+
+        // While hidden, the visible rows describe no project: a load into another document
+        // shows nothing, and a batch load into the compared project updates the stash.
+        private void MarkLoaded(FamilyBrowserItemViewModel item, string? documentKey)
+        {
+            if (_stash == null) { item.VersionStatus = VersionStatus.UpToDate; return; }
+            if (documentKey == null || documentKey != _comparedDocumentKey) return;
+            int at = _stash.FindIndex(e => ReferenceEquals(e.Item, item));
+            if (at >= 0) _stash[at] = (item, VersionStatus.UpToDate);
+        }
+
+        private void RestoreComparison()
+        {
+            foreach (var (item, status) in _stash!)
+            {
+                item.VersionStatus = status;
+                if (status == VersionStatus.ModelOnly) _allItems.Add(item);
+            }
+            _stash = null;
+            IsComparisonHidden = false;
+            RecountOutdated();
+            LoadCategories();
+            ApplyFilter();
+        }
+
+        // Update All progress in the footer; null when no batch runs.
+        private string? _batchProgressText;
+        public string? BatchProgressText
+        {
+            get => _batchProgressText;
+            private set { SetProperty(ref _batchProgressText, value); OnPropertyChanged(nameof(IsBatchRunning)); }
+        }
+        public bool IsBatchRunning => _batchProgressText != null;
+
+        // Set by Cancel or a project switch; checked between families (the one in progress finishes).
+        private volatile string? _batchStopReason;
+        public ICommand CancelBatchCommand { get; private set; } = null!;
 
         // Loads families one at a time on a single background worker. LoadFamilyHandler is a
         // shared singleton and ExternalEvent.Raise() coalesces, so firing several loads at once
         // (Update All) would race on its state — _loadLock serialises every ping-pong, even
         // across overlapping batches.
-        private void LoadFamiliesSequentially(IReadOnlyList<FamilyBrowserItemViewModel> items)
+        // expectedDocumentKey: Update All passes the project it confirmed, so a load never lands
+        // in another project; single-row Load passes null and loads into whatever is active.
+        private void LoadFamiliesSequentially(IReadOnlyList<FamilyBrowserItemViewModel> items,
+            string? expectedDocumentKey = null, bool batch = false)
         {
             IsLoading = true;
+            _batchStopReason = null;
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 // One report at the end, not a dialog per family (Update All can be dozens).
                 var failures = new List<string>();
-                foreach (var item in items)
+                int done = 0;
+                for (int n = 0; n < items.Count; n++)
                 {
+                    if (_batchStopReason != null) break;
+                    var item = items[n];
+                    if (batch)
+                    {
+                        var progress = $"Updating {n + 1} of {items.Count} — {item.DisplayName}";
+                        _dispatcher.Invoke(() => BatchProgressText = progress);
+                    }
                     var fullPath = Path.Combine(_config.LibraryFolderPath, item.RelativePath);
                     try
                     {
@@ -704,25 +859,40 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                         string? error;
                         lock (_loadLock)
                         {
-                            (success, error) = _loadFamily(fullPath);
+                            (success, error) = _loadFamily(fullPath, expectedDocumentKey);
                         }
                         if (success)
-                            _dispatcher.Invoke(() => item.VersionStatus = VersionStatus.UpToDate);
-                        else
-                            failures.Add($"{item.DisplayName}: {error ?? "Revit did not load the family."}");
+                        {
+                            done++;
+                            _dispatcher.Invoke(() => MarkLoaded(item, expectedDocumentKey));
+                        }
+                        else if (error == ProjectChangedMessage) _batchStopReason = StoppedProjectChanged;
+                        else failures.Add($"{item.DisplayName}: {error ?? "Revit did not load the family."}");
+                    }
+                    catch (RevitBusyException ex)
+                    {
+                        // Every remaining family would wait the same 10 s and fail the same way.
+                        _batchStopReason = ex.Message;
                     }
                     catch (Exception ex)
                     {
                         failures.Add($"{item.DisplayName}: {ex.Message}");
                     }
                 }
+                var stopReason = _batchStopReason;
                 _dispatcher.BeginInvoke(new Action(() =>
                 {
                     IsLoading = false;
+                    BatchProgressText = null;
                     RecountOutdated();
+                    var report = new System.Text.StringBuilder();
+                    if (stopReason != null)
+                        report.Append(batch ? $"Updated {done} of {items.Count}. {stopReason}" : stopReason);
                     if (failures.Count > 0)
-                        Warn("Failed to load:\n\n" + string.Join("\n", failures.Take(10)) +
-                             (failures.Count > 10 ? $"\n…and {failures.Count - 10} more." : ""));
+                        report.Append((report.Length > 0 ? "\n\n" : "") + "Failed to load:\n\n" +
+                            string.Join("\n", failures.Take(10)) +
+                            (failures.Count > 10 ? $"\n…and {failures.Count - 10} more." : ""));
+                    if (report.Length > 0) Warn(report.ToString());
                 }));
             });
         }
@@ -789,6 +959,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                             if (fresh != null)
                             {
                                 item.Refresh(fresh);
+                                if (_stash != null) item.VersionStatus = VersionStatus.None;
                                 LoadCategories();
                                 ApplyFilter();
                                 RecountOutdated();

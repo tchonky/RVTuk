@@ -1,9 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+
+using RVTuk.Core.FamilyBrowser.Util;
 
 namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
 {
@@ -16,7 +18,7 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
     /// </summary>
     public class GetFamilyPreviewsEventHandler : IExternalEventHandler
     {
-        private readonly ManualResetEventSlim _done = new(false);
+        private readonly RequestGate _gate = new();
         private static readonly System.Drawing.Size PreviewSize = new(96, 96);
 
         private IReadOnlyList<string> _familyNames = Array.Empty<string>();
@@ -27,13 +29,14 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
         {
             _familyNames = familyNames;
             Result = new Dictionary<string, byte[]>();
-            _done.Reset();
+            _gate.Begin();
         }
 
-        public void WaitForCompletion() => _done.Wait();
+        public void WaitForCompletion() => _gate.Wait(RequestGate.StartTimeout);
 
         public void Execute(UIApplication app)
         {
+            if (!_gate.TryStart()) return; // withdrawn: the caller already reported "Revit is busy"
             var result = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
             try
             {
@@ -53,7 +56,7 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
             finally
             {
                 Result = result;
-                _done.Set();
+                _gate.Complete();
             }
         }
 

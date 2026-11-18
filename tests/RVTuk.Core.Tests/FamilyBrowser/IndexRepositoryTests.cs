@@ -238,4 +238,28 @@ public class IndexRepositoryTests : IDisposable
             File.SetAttributes(_dbPath, FileAttributes.Normal);
         }
     }
+
+    [Fact]
+    public void UpdateFamilyMetadata_YearZero_KeepsStoredYear()
+    {
+        using var repo = new IndexRepository(_dbPath);
+        long id = repo.InsertFamily("Doors/A.rfa", "A.rfa");
+        var none = new List<ParameterModel>();
+
+        repo.UpdateFamilyMetadata(id, "Doors", none, null, revitYear: 2024);
+        repo.UpdateFamilyMetadata(id, "Doors", none, null, revitYear: 0);
+        Assert.Equal(2024L, StoredYear(id));
+
+        repo.UpdateFamilyMetadata(id, "Doors", none, null, revitYear: 2025);
+        Assert.Equal(2025L, StoredYear(id));
+    }
+
+    private long StoredYear(long id)
+    {
+        using var c = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_dbPath};Pooling=False");
+        c.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT RevitYear FROM Families WHERE Id=" + id;
+        return (long)cmd.ExecuteScalar()!;
+    }
 }
