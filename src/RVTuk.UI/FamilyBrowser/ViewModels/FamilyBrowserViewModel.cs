@@ -58,6 +58,9 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         private bool _bulkCategoryEdit;
         private bool _rebuildingList;
         private int _outdatedCount;
+        private ProjectComparison? _lastComparison;
+        private string? _comparedDocumentKey;
+        private string? _comparedProjectTitle;
         private string? _instructionsXaml;
         private List<ParameterModel> _parameters = new();
         private string _parameterFilter = string.Empty;
@@ -219,6 +222,17 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         }
 
         public bool ShowUpdateAll => _outdatedCount > 0;
+
+        /// <summary>The project the last ⟳ compared against (shown on the ⟳ button's tooltip).</summary>
+        public string? ComparedProjectTitle
+        {
+            get => _comparedProjectTitle;
+            private set { SetProperty(ref _comparedProjectTitle, value); OnPropertyChanged(nameof(SyncToolTip)); }
+        }
+
+        public string SyncToolTip => string.IsNullOrEmpty(_comparedProjectTitle)
+            ? "Re-check which families are in the active project and which are outdated"
+            : $"Compared with {_comparedProjectTitle}. Press to re-check the active project.";
 
         public string? InstructionsXaml
         {
@@ -563,6 +577,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             {
                 List<FamilyBrowserItemViewModel>? newAllItems = null; // stays null if the sync fails
                 int outdated = 0;
+                ProjectComparison? comparison = null;
+                ProjectSnapshot? project = null;
                 try
                 {
                     // Read-only refresh: reload the index and compare it against the open
@@ -577,30 +593,30 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                     // Version check compares the _Version shared parameter: the library value is
                     // captured into the index by the deep scan, the project value is read off the
                     // loaded family's symbols (or a placed instance when the parameter is
-                    // instance-level). A family missing the parameter on either side is simply
-                    // "in project" with no update verdict (FamilyVersionCheck returns false).
-                    // (Families can share a name across categories; first occurrence wins.)
-                    var projectFamilies = new Dictionary<string, ProjectFamilyInfo>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var pf in _getProjectFamilies().Families)
-                        if (!projectFamilies.ContainsKey(pf.Name))
-                            projectFamilies[pf.Name] = pf;
-
-                    var libraryNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    // instance-level). Ignored rows are not part of the library, and a name with
+                    // several library copies gets no verdict (ProjectComparer, tested in Core).
+                    var snapshot = _getProjectFamilies();
+                    var ignored = IgnoredRule();
+                    comparison = ProjectComparer.Compare(items.Select(i => new LibraryEntry
+                    {
+                        Id = i.Id, FileName = i.FileName, RelativePath = i.RelativePath,
+                        Version = i.Version, IsIgnored = ignored(i),
+                    }).ToList(), snapshot.Families);
                     foreach (var item in items)
                     {
-                        var nameNoExt = FamilyFileName.WithoutRfaExtension(item.FileName);
-                        libraryNames.Add(nameNoExt);
-                        if (!projectFamilies.TryGetValue(nameNoExt, out var pf)) continue;
-                        item.CompareWithProject(pf);
+                        if (comparison.Matches.TryGetValue(item.Id, out var pf)) item.CompareWithProject(pf);
+                        else if (comparison.Duplicates.TryGetValue(item.Id, out var paths))
+                            item.MarkDuplicate(projectFamily: snapshot.Families.First(f =>
+                                string.Equals(f.Name, FamilyFileName.WithoutRfaExtension(item.FileName), StringComparison.OrdinalIgnoreCase)), paths);
                         if (item.VersionStatus == VersionStatus.UpdateAvailable) outdated++;
                     }
+                    project = snapshot;
 
                     // Project families with no library counterpart get a synthetic "model only"
                     // row so the browser shows the whole picture, not just the library. The
                     // ".rfa" suffix keeps DisplayName's extension-stripping from eating part of
                     // a family name that contains a dot.
-                    var modelOnly = projectFamilies.Values
-                        .Where(pf => !libraryNames.Contains(pf.Name)).ToList();
+                    var modelOnly = comparison.ModelOnly;
                     if (modelOnly.Count > 0)
                     {
                         // No .rfa on disk to read a thumbnail from — render the loaded type's
@@ -631,6 +647,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 {
                     var finalItems = newAllItems;
                     int finalOutdated = outdated;
+                    var finalComparison = comparison;
+                    var finalProject = project;
                     // Dispatcher.Invoke rethrows delegate exceptions on THIS pool thread, where
                     // anything unhandled kills the whole Revit process — degrade to the same
                     // warning the sync-failure path shows instead.
@@ -649,6 +667,9 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                                     && (i.Id != 0 || string.Equals(i.FileName, selected.FileName, StringComparison.OrdinalIgnoreCase)))
                                     ?? selected;
                             _allItems = finalItems;
+                            _lastComparison = finalComparison;
+                            _comparedDocumentKey = finalProject?.DocumentKey;
+                            ComparedProjectTitle = finalProject?.Title;
                             LoadCategories();
                             OutdatedCount = finalOutdated;
                             ApplyFilter();
