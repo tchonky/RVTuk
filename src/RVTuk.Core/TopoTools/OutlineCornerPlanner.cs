@@ -141,6 +141,20 @@ namespace RVTuk.Core.TopoTools
         }
 
         /// <summary>
+        /// <paramref name="candidates"/> without those at one of <paramref name="spots"/> in plan (X
+        /// and Y each within 0.1 mm): vertices kept out of this run's pass only, with no record. A
+        /// ledgered point that Revit would not delete matched in X, Y and Z, so nobody moved it: it
+        /// must not be raised as a corner in the run whose summary calls it left alone, nor flagged
+        /// by hand for good. Unledgered from now on, it is an ordinary candidate on the next run. No
+        /// record is lost: a ledgered vertex was never a candidate, so it has none.
+        /// </summary>
+        public static IReadOnlyList<XyzPoint> ExceptAt(IReadOnlyList<XyzPoint> candidates, IReadOnlyList<XyzPoint> spots)
+        {
+            if (spots.Count == 0) return candidates;
+            return candidates.Where(candidate => ShapeReplayPlanner.IndexOfXy(spots, candidate) < 0).ToList();
+        }
+
+        /// <summary>
         /// The line points the user moved by hand, as corner records flagged <c>hand</c>. A ledgered
         /// point with no vertex at its X, Y and Z, but a live vertex at its plan spot (X and Y each
         /// within 0.1 mm), was moved up or down by hand: the stale-line cleanup reports it and drops

@@ -110,7 +110,8 @@ namespace RVTuk.Revit.TopoTools
 
             int removed = 0;
             int missing = 0;
-            var leftAlone = new List<XyzPoint>();
+            var movedByHand = new List<XyzPoint>();
+            var undeletable = new List<XyzPoint>();
 
             if (staleLineIds.Count > 0)
             {
@@ -125,7 +126,7 @@ namespace RVTuk.Revit.TopoTools
                         if (match == null)
                         {
                             missing++;
-                            leftAlone.Add(recorded);
+                            movedByHand.Add(recorded);
                             continue;
                         }
 
@@ -136,8 +137,10 @@ namespace RVTuk.Revit.TopoTools
                         }
                         else
                         {
+                            // Found where recorded, so nobody moved it: kept out of this run's
+                            // corner pass only, no record (see OutlineCornerPlanner.ExceptAt).
                             missing++;
-                            leftAlone.Add(recorded);
+                            undeletable.Add(recorded);
                         }
                     }
                     ledger.Remove(lineId);
@@ -155,18 +158,21 @@ namespace RVTuk.Revit.TopoTools
             foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
                 preexisting.Add(SlabShape.ToPoint(vertex.Position));
 
-            // A line point the cleanup reported moved by hand and left alone has just lost its
-            // ledger entry: a hand record keeps the corner pass off it, now and later.
-            if (corners != null && leftAlone.Count > 0)
-                records = records.Concat(OutlineCornerPlanner.HandMovedRecords(leftAlone, preexisting)).ToList();
+            // A line point the cleanup found moved by hand (no vertex where recorded, one at its
+            // plan spot) has just lost its ledger entry: a hand record keeps the corner pass off
+            // it, now and later.
+            if (corners != null && movedByHand.Count > 0)
+                records = records.Concat(OutlineCornerPlanner.HandMovedRecords(movedByHand, preexisting)).ToList();
 
             // Those outline vertices, as they stand before any point is placed. Needed only to test
             // edge points against.
             IReadOnlyList<XyzPoint> cornerVertices = Array.Empty<XyzPoint>();
             if (corners != null && newPointsByLine.Values.Any(points => points.Edge.Count > 0))
             {
-                cornerVertices = OutlineCornerPlanner.Candidates(
-                    preexisting, target.Loops, LedgeredPoints(ledger), Array.Empty<XyzPoint>());
+                cornerVertices = OutlineCornerPlanner.ExceptAt(
+                    OutlineCornerPlanner.Candidates(
+                        preexisting, target.Loops, LedgeredPoints(ledger), Array.Empty<XyzPoint>()),
+                    undeletable);
             }
 
             int added = 0;
@@ -228,19 +234,21 @@ namespace RVTuk.Revit.TopoTools
             {
                 // The points this run placed as new vertices are exactly the ones just recorded.
                 var placedPoints = recordedByLine.Values.SelectMany(points => points).ToList();
-                var (outcome, newlyByHand) =
-                    RunCornerPass(doc, target, editor, corners, ledger, placedPoints, records, ref reference);
+                var (outcome, newlyByHand) = RunCornerPass(
+                    doc, target, editor, corners, ledger, placedPoints, undeletable, records, ref reference);
                 cornersSet = outcome.Set;
                 cornersPutBack = outcome.PutBack;
                 cornersByHand = newlyByHand;
                 lost += outcome.Lost;
 
                 // Switched on for the pass alone, which then changed no corner (the dry run is only
-                // a guess at the flat top): a plain floor again, keeping no record.
+                // a guess at the flat top): a plain floor again, keeping no record and holding no
+                // corner at a line height.
                 if (CornerPassGate.ResetToPlain(wasEnabled, lineWork, element is Floor, outcome.Changed))
                 {
                     editor.ResetSlabShape();
                     WriteCorners(element, Array.Empty<CornerRecord>());
+                    cornersSet = 0;
                 }
             }
 
@@ -257,7 +265,7 @@ namespace RVTuk.Revit.TopoTools
         private static (CornerOutcome Outcome, int NewlyByHand) RunCornerPass(
             Document doc, SlabTarget target, SlabShapeEditor editor, CornerPass corners,
             IReadOnlyDictionary<long, IReadOnlyList<XyzPoint>> ledger, IReadOnlyList<XyzPoint> placedPoints,
-            IReadOnlyList<CornerRecord> records, ref double? reference)
+            IReadOnlyList<XyzPoint> undeletable, IReadOnlyList<CornerRecord> records, ref double? reference)
         {
             var element = target.Element;
             doc.Regenerate();
@@ -266,10 +274,12 @@ namespace RVTuk.Revit.TopoTools
             foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
                 vertices.Add(SlabShape.ToPoint(vertex.Position));
 
-            // Every candidate goes to the plan, unfiltered: a record whose corner is not among them
-            // is dropped.
-            var candidates = OutlineCornerPlanner.Candidates(
-                vertices, target.Loops, LedgeredPoints(ledger), placedPoints);
+            // Every candidate goes to the plan, filtered no further (a record whose corner is not
+            // among them is dropped) — except the points Revit would not delete this run, which
+            // have no record to lose.
+            var candidates = OutlineCornerPlanner.ExceptAt(
+                OutlineCornerPlanner.Candidates(vertices, target.Loops, LedgeredPoints(ledger), placedPoints),
+                undeletable);
             var plan = OutlineCornerPlanner.Plan(candidates, corners.TargetZ, records);
 
             // Each corner reports the Z it actually reached — a failed raise where it still stands —

@@ -755,6 +755,39 @@ public class OutlineCornerPlannerTests
         Assert.Single(records);
     }
 
+    // ---------------------------------------------------------------- ExceptAt (fix round 2, item 1)
+
+    [Fact]
+    public void AVertexRevitWouldNotDeleteIsLeftOutOfThisRunsCandidatesOnly()
+    {
+        // A ledgered point whose DeletePoint failed: nobody moved it, so no hand record — it is
+        // only kept out of this run's pass (with its spot's Z possibly changed since).
+        var candidates = new[] { new XyzPoint(0, 0, 10), new XyzPoint(5, 0, 12.5), new XyzPoint(10, 0, 10) };
+
+        var kept = OutlineCornerPlanner.ExceptAt(candidates, new[] { new XyzPoint(5, 0, 12) });
+
+        Assert.Equal(new[] { candidates[0], candidates[2] }, kept);
+    }
+
+    [Fact]
+    public void ExceptAtMatchesATenthOfAMillimetreOnEachAxisInPlan()
+    {
+        var near = new XyzPoint(5 + 0.09 * Mm, -0.09 * Mm, 1);
+        var off = new XyzPoint(5 + 0.11 * Mm, 0, 1);
+
+        var kept = OutlineCornerPlanner.ExceptAt(new[] { near, off }, new[] { new XyzPoint(5, 0, 12) });
+
+        Assert.Equal(new[] { off }, kept);
+    }
+
+    [Fact]
+    public void ExceptAtNothingKeepsEveryCandidate()
+    {
+        var candidates = new[] { new XyzPoint(0, 0, 10), new XyzPoint(5, 0, 12) };
+
+        Assert.Equal(candidates, OutlineCornerPlanner.ExceptAt(candidates, None));
+    }
+
     [Fact]
     public void AHandMovedLinePointOnTheOutlineIsLeftAloneByThePassAndStaysFlagged()
     {
