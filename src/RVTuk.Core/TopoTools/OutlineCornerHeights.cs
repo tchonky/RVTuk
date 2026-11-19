@@ -98,6 +98,9 @@ namespace RVTuk.Core.TopoTools
                 // kept: a last vertex that would merge replaces the last kept one, and earlier kept
                 // vertices (never the first) within 1e-6 m of it go too, as they would when the line
                 // is read from that end. A line that collapses onto its first vertex is left out.
+                // Inside the line the merge is greedy, so it is not symmetric: where interior
+                // vertices bunch closer than 1e-6 m, the two directions can keep different ones of
+                // them (a sub-micrometre difference in the line; the ends never differ).
                 xs.Clear();
                 ys.Clear();
                 var raw = line.PolylineMetres;
@@ -381,7 +384,9 @@ namespace RVTuk.Core.TopoTools
                 {
                     if (double.IsNaN(tSame)) tSame = WalkToSameHeight(vx, vy, ux, uy, zq1);
                     if (e[c] > tSame) break;
-                    // From below the 2 mm cannot matter: a line touching a sight line that short is within 1 mm of V (step 2).
+                    // A candidate within 2 mm is in view. A line touching a sight line this short lies
+                    // within 1 mm + 1e-9 m of V, so only a line in that nanometre band just past step
+                    // 2's 1 mm can hide it; the clause matters only there.
                     if (Hypot(qx[c] - vx, qy[c] - vy) > InViewShortcut && SightBlocked(vx, vy, qx[c], qy[c], c))
                     {
                         candidate[c] = false;
@@ -408,7 +413,10 @@ namespace RVTuk.Core.TopoTools
                     double ax = ln.Ax[s], ay = ln.Ay[s];
                     double ex = ln.Bx[s] - ax, ey = ln.By[s] - ay;
                     var den = ux * ey - uy * ex;
-                    // 0 here changes nothing: under 1e-12 rad, crossing with both ends over 1 mm aside takes a 2e9 m line.
+                    // 0 here changes nothing: under 1e-12 rad a segment crossing the walk with both ends
+                    // over 1 mm aside is over 2e9 m long; with an end within 1 mm ahead of V the vertex
+                    // clause counts it, and an end within 1 mm behind V puts the segment within 1 mm
+                    // of V, where step 2 has already given the height.
                     if (Math.Abs(den) <= Parallel * Hypot(ex, ey)) continue;
                     double apx = ax - vx, apy = ay - vy;
                     var t = (apx * ey - apy * ex) / den;

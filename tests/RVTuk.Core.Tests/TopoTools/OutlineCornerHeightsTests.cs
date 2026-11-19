@@ -591,6 +591,30 @@ public class OutlineCornerHeightsTests
     }
 
     [Fact]
+    public void ACandidateWithinTwoMillimetresIsInViewEvenPastALineANanometreOutsideStepTwo()
+    {
+        // V at the origin. L1 (41.00) passes 1 mm + 0.2 nm straight below V (just outside step
+        // 2), so the walk goes up. The 43.00 candidate's nearest point Q is 2 mm - 0.1 nm from V,
+        // 4e-4 rad short of square to the walk. Another 41.00 line B starts 1 mm + 0.4 nm from V
+        // towards Q and runs away from the walk (its ends are over 1 mm aside, so the walk does
+        // not meet it). The sight line, 1 mm short of Q, ends 0.5 nm from B's start: it touches
+        // B. But a candidate within 2 mm is in view: L2.
+        var g = Math.PI / 2 - 4e-4;
+        double qx = Math.Sin(g), qy = Math.Cos(g);   // the direction of Q
+        double nx = Math.Cos(g), ny = -Math.Sin(g);  // square to it, away from the walk
+        double b = 0.001 + 0.4e-9, q = 0.002 - 0.1e-9;
+        var rule = OutlineCornerHeights.Prepare(new[]
+        {
+            Line(41.0, (-0.0005, -0.001 - 0.2e-9), (0.0005, -0.001 - 0.2e-9)),
+            Line(41.0, (b * qx, b * qy), (b * qx + 0.0005 * nx, b * qy + 0.0005 * ny)),
+            Line(43.0, (q * qx - 0.0005 * nx, q * qy - 0.0005 * ny), (q * qx + 0.0005 * nx, q * qy + 0.0005 * ny)),
+        });
+
+        var d1 = 0.001 + 0.2e-9;
+        Assert.Equal(41 + 2 * d1 / (d1 + q), HeightOf(rule, 0, 0, "2 mm in view"), 9);
+    }
+
+    [Fact]
     public void TheWalkMeetsANearlyParallelLineOfTheSameHeight()
     {
         // V at the origin, L1 (41.00) 1 m below, so the walk goes up x = 0. A 4 km 41.00 line runs
