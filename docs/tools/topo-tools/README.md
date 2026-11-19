@@ -152,9 +152,13 @@ one, "1 outline corner took its height from the lines."), and those put back: "2
 went back to their own heights." ("1 outline corner went back to its own height."). Neither needs
 attention, so Update stays quiet about them. A corner found moved by hand does need it: "1 outline
 corner moved by hand is left alone." ("2 outline corners moved by hand are left alone."), with the
-warning icon. When no line lies over the element, the first two follow "No topo line in the
-session's view lies over the toposolid or floor being edited.", since a corner shared with a
-neighbour moves even when every line lies over the neighbour.
+warning icon. When no line was applied (none of the view's lines has a point for the element, a
+point that falls on a corner included) and nothing needs attention (no line
+skipped, no point or corner moved by hand, no point not placed, no unlinked text), the summary is
+"No topo line in the session's view lies over the toposolid or floor being edited." followed by
+the first two, since a corner shared with a neighbour moves even when every line lies over the
+neighbour; Update shows it then too, because no line was applied. When something does need
+attention, that opening sentence is left out and the corner sentences come before the problems.
 
 **Where the rule is weak** (all found while testing the rule; a line drawn through or right next to
 the corner settles each, since a corner within 1 mm of a line takes its height):
