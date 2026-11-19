@@ -224,8 +224,14 @@ README (what Update writes, "The one exception", Cancel, the summary lines, the 
 
 ## As built (2026-11-19)
 
-Where the build (commits 8fbe3b0..4df574c) differs from the text above; the README describes the
-build.
+Where the build (commits 8fbe3b0..4df574c, and the final review's fixes 5f41bfe..db5c4d5) differs
+from the text above; the README describes the build.
+
+- **Two readings of the rule** (Task 1). A free end's direction t_E comes from the first vertex
+  whose straight-line distance from E is at least 1 mm, not the length along the line (the two
+  differ only for zigzags shorter than 1 mm; no vector depends on it). Q_j takes the same tie as
+  P_i, which the text gives only for P_i: within 1e-9 m the smaller x, then y, so reversing a line
+  cannot change Q_j.
 
 - **`Apply(CornerPass?)`.** The applier takes one `CornerPass` (the prepared rule, null when the view
   has no readable line, plus the shared elevation of the internal origin) instead of two loose
@@ -241,11 +247,19 @@ build.
   a line height after the run (records not flagged by hand, less raises that missed), those set by
   earlier Updates and those already at their height included, so Accept after a quiet Update still
   names them.
-- **Hand and failed-delete rules.** A ledgered line point found moved by hand (no vertex at its X, Y
-  and Z, one at its plan spot) gets a corner record flagged `hand`, so the pass never raises it. A
-  ledgered point that matched but that Revit would not delete is kept out of that run's pass only,
-  with no record. A record not flagged `hand` whose corner stands at its `ownZ` but off its `setZ`
-  was reset (Reset Shape), not moved by hand: the record is dropped and the corner planned afresh.
+- **Line points are never corners** (final review, fix 1). A vertex at the plan spot (X and Y within
+  0.1 mm) of a point any ledger entry records, for any line or view, is no candidate whatever its Z,
+  not only one matching in X, Y and Z as the text above says: a line point moved by hand, or lifted
+  with the rest by a Height Offset change, is still its line's point.
+- **Hand and failed-delete rules.** A stale line's ledgered point the cleanup did not take out is
+  kept out of that run's pass only, with no record: one found moved by hand (no vertex at its X, Y
+  and Z; counted "moved by hand" once) and one that matched but Revit would not delete. On later
+  runs it is an ordinary vertex: if its line still crosses there, its edge point is not drawn and
+  the 1 mm snap gives it the line's height again (as earlier builds did through the edge point);
+  if the line is gone, it is an ordinary outline corner. No `hand` record is made for line points
+  (an earlier round made one, which froze a point for good after any Z change). A record not
+  flagged `hand` whose corner stands at its `ownZ` but off its `setZ` was reset (Reset Shape), not
+  moved by hand: the record is dropped and the corner planned afresh.
 - **Misses.** A raise records the Z it reached, so a miss is tried again (and counted as not placed)
   at every Update; a put-back that misses keeps a record (`ownZ`, `setZ` = where it stands).
 - **Plain elements.** With shape editing off and no line work, the pass is worked out dry from the
@@ -260,3 +274,11 @@ build.
   record the session dropped (an Update put its corner back) comes back and its corner is raised
   again. The message adds "… and N outline corners" (or "put back N outline corners." with no text
   put back).
+- **Cancel and hand moves since the last Update** (final review, fix 2). A corner standing more than
+  0.1 mm off its current record's `setZ`, off its `ownZ` (there it was reset and is put back like
+  any other) and off the height Cancel would give it was moved by hand after the session's last
+  Update: Cancel leaves it where it stands and keeps its record flagged `hand` there, so it is not
+  reported later. A corner already at the height Cancel would give it is not flagged.
+- **A failed corner step does not block Cancel** (final review, fix 3). Cancel's corner step runs in
+  a sub-transaction; when it throws, it is rolled back, one line is logged, Cancel finishes its
+  other steps, and its message adds "Outline corners could not be put back."
