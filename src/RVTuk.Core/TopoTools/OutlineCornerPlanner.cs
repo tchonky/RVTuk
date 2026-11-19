@@ -313,11 +313,103 @@ namespace RVTuk.Core.TopoTools
         }
 
         /// <summary>
+        /// Cancel's corner step: what puts back the corners the session moved, from the record taken
+        /// when it started (<paramref name="atStart"/>) and the record now (<paramref name="now"/>).
+        /// Lines are not read and the rule is not run, so no corner the session left alone moves.
+        ///
+        /// <para>A corner whose record changed during the session — the start had none, the session
+        /// dropped it (a put-back), or its set height differs by more than 0.1 mm — goes back to the
+        /// start's set height (in <see cref="CornerPlan.Raises"/>, at the start record's plan spot,
+        /// so <see cref="CornerPlan.WithReached"/> keys its record) or, when the start had no record,
+        /// to its own height (in <see cref="CornerPlan.PutBacks"/>). One already within 0.1 mm of
+        /// that height is not moved. A corner flagged by hand, now or at the start, is left alone.
+        /// A corner whose record did not change is not touched, even off its set height (moved by
+        /// hand since the last Update, which that Update flags).</para>
+        ///
+        /// <para>The records become the start's, except that a hand flag set during the session
+        /// stays. A start record whose corner is gone (Edit Boundary) comes back with nothing moved;
+        /// the next Update drops it. Records pair with each other and with
+        /// <paramref name="vertices"/> within 0.1 mm in plan, as in <see cref="Plan"/>, whatever the
+        /// order of any list. Run the result through <see cref="Settle"/>.</para>
+        /// </summary>
+        /// <param name="vertices">Every live vertex of the element.</param>
+        public static CornerPlan Restore(
+            IReadOnlyList<CornerRecord> atStart,
+            IReadOnlyList<CornerRecord> now,
+            IReadOnlyList<XyzPoint> vertices)
+        {
+            var records = new List<CornerRecord>();
+            var wanted = new List<(CornerRecord Spot, bool ToOwn)>();
+
+            var nowPoints = now.Select(r => new XyzPoint(r.X, r.Y, r.SetZ)).ToList();
+            var startIndexOf = PairIndices(nowPoints, atStart);
+            var startTaken = new bool[atStart.Count];
+
+            for (int j = 0; j < now.Count; j++)
+            {
+                var current = now[j];
+                var start = startIndexOf[j] >= 0 ? atStart[startIndexOf[j]] : null;
+                if (startIndexOf[j] >= 0) startTaken[startIndexOf[j]] = true;
+
+                if (current.ByHand)
+                {
+                    records.Add(start != null && start.ByHand ? start : current);
+                    continue;
+                }
+
+                if (start != null)
+                {
+                    records.Add(start);
+                    if (!start.ByHand && Math.Abs(current.SetZ - start.SetZ) > ShapeReplayPlanner.ToleranceFeet)
+                        wanted.Add((start, false));
+                    continue;
+                }
+
+                wanted.Add((current with { SetZ = current.OwnZ }, true));
+            }
+
+            // Start records the session dropped: put back by an Update, or their corner gone.
+            for (int i = 0; i < atStart.Count; i++)
+            {
+                if (startTaken[i]) continue;
+                records.Add(atStart[i]);
+                if (!atStart[i].ByHand) wanted.Add((atStart[i], false));
+            }
+
+            var raises = new List<(XyzPoint At, double ToZ)>();
+            var putBacks = new List<(XyzPoint At, double ToZ)>();
+            var wantedOf = PairIndices(vertices, wanted.Select(w => w.Spot).ToList());
+            for (int v = 0; v < vertices.Count; v++)
+            {
+                if (wantedOf[v] < 0) continue;
+                var (spot, toOwn) = wanted[wantedOf[v]];
+                var vertex = vertices[v];
+                if (Math.Abs(vertex.Z - spot.SetZ) <= ShapeReplayPlanner.ToleranceFeet) continue;
+
+                if (toOwn) putBacks.Add((vertex, spot.SetZ));
+                else raises.Add((new XyzPoint(spot.X, spot.Y, vertex.Z), spot.SetZ));
+            }
+
+            return new CornerPlan(
+                raises.OrderBy(m => m.At.X).ThenBy(m => m.At.Y).ToList(),
+                putBacks.OrderBy(m => m.At.X).ThenBy(m => m.At.Y).ToList(),
+                records.OrderBy(r => r.X).ThenBy(r => r.Y).ToList(),
+                0);
+        }
+
+        /// <summary>
         /// For each candidate, its record or null. Every candidate–record pair within 0.1 mm in plan
         /// is sorted by distance, ties broken by the candidate's X, Y, Z and then the record's
         /// fields, and taken greedily, so the result does not depend on either list's order.
         /// </summary>
         private static CornerRecord?[] PairRecords(
+            IReadOnlyList<XyzPoint> candidates, IReadOnlyList<CornerRecord> records) =>
+            PairIndices(candidates, records)
+                .Select(index => index >= 0 ? records[index] : null)
+                .ToArray();
+
+        /// <summary><see cref="PairRecords"/> as indices into <paramref name="records"/>, -1 for none.</summary>
+        private static int[] PairIndices(
             IReadOnlyList<XyzPoint> candidates, IReadOnlyList<CornerRecord> records)
         {
             var pairs = new List<(int Candidate, int Record, double Distance)>();
@@ -341,12 +433,12 @@ namespace RVTuk.Core.TopoTools
                 .ThenBy(p => records[p.Record].SetZ)
                 .ThenBy(p => records[p.Record].ByHand);
 
-            var recordOf = new CornerRecord?[candidates.Count];
+            var recordOf = Enumerable.Repeat(-1, candidates.Count).ToArray();
             var taken = new bool[records.Count];
             foreach (var pair in ordered)
             {
-                if (recordOf[pair.Candidate] != null || taken[pair.Record]) continue;
-                recordOf[pair.Candidate] = records[pair.Record];
+                if (recordOf[pair.Candidate] >= 0 || taken[pair.Record]) continue;
+                recordOf[pair.Candidate] = pair.Record;
                 taken[pair.Record] = true;
             }
             return recordOf;

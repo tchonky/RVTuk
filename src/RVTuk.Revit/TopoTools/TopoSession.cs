@@ -40,6 +40,12 @@ namespace RVTuk.Revit.TopoTools
         public IReadOnlyDictionary<ElementId, string> TextSnapshot { get; }
 
         /// <summary>
+        /// The target's outline corner record as it was at the start (<see cref="OutlineCornerStore.Raw"/>,
+        /// "" for none), so Cancel can put back the corners the session's Updates moved.
+        /// </summary>
+        public string CornerSnapshot { get; }
+
+        /// <summary>
         /// The last text the updater saw on each height text in the view, trimmed. A text change
         /// counts as typed (and becomes the last typed height) only when it differs from this, so
         /// moves, re-centring and relinking never pass for typing. Seeded from the snapshot.
@@ -71,20 +77,21 @@ namespace RVTuk.Revit.TopoTools
         public bool DontAskOnSave { get; set; }
 
         private TopoSession(Document document, ElementId viewId, ElementId targetId,
-            IReadOnlyDictionary<ElementId, string> textSnapshot)
+            IReadOnlyDictionary<ElementId, string> textSnapshot, string cornerSnapshot)
         {
             Document = document;
             ViewId = viewId;
             TargetId = targetId;
             TextSnapshot = textSnapshot;
+            CornerSnapshot = cornerSnapshot;
             LastSeenTexts = new Dictionary<ElementId, string>();
             foreach (var pair in textSnapshot) LastSeenTexts[pair.Key] = pair.Value.Trim();
         }
 
         /// <summary>
         /// Opens a session on <paramref name="target"/> in <paramref name="view"/>, armed, snapshots
-        /// the view's height texts, switches the updater on and raises <see cref="Started"/>. Throws
-        /// if a session is already open. Needs no transaction.
+        /// the view's height texts and the target's corner record, switches the updater on and
+        /// raises <see cref="Started"/>. Throws if a session is already open. Needs no transaction.
         /// </summary>
         public static TopoSession Start(Document document, ViewPlan view, Element target)
         {
@@ -102,7 +109,7 @@ namespace RVTuk.Revit.TopoTools
                 .Where(HeightTextType.IsHeightText)
                 .ToDictionary(note => note.Id, note => note.Text ?? "");
 
-            var session = new TopoSession(document, view.Id, target.Id, snapshot);
+            var session = new TopoSession(document, view.Id, target.Id, snapshot, OutlineCornerStore.Raw(target));
             Current = session;
             TopoSessionUpdater.Enable();
 

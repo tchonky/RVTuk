@@ -36,8 +36,9 @@ namespace RVTuk.Revit.TopoTools.Commands
         /// transaction stays open across a session, so this is not a rollback. In one transaction,
         /// "Topo Cancel": the session's new topo lines are deleted and their points taken off the
         /// target; the session's other new height texts are deleted; height texts typed over are put
-        /// back. Points that Update applied for lines that still exist stay; the next Update
-        /// reconciles them. The session ends only once that transaction has committed, so a failed
+        /// back; the outline corners the session's Updates moved go back to where they were at its
+        /// start (<see cref="RestoreCorners"/>). Points that Update applied for lines that still
+        /// exist stay; the next Update reconciles them. The session ends only once that transaction has committed, so a failed
         /// Cancel can be pressed again.
         /// </summary>
         internal static Result Cancel()
@@ -51,7 +52,7 @@ namespace RVTuk.Revit.TopoTools.Commands
             }
 
             var doc = session.Document;
-            int linesDeleted, pointsRemoved = 0, textsDeleted, textsRestored = 0;
+            int linesDeleted, pointsRemoved = 0, textsDeleted, textsRestored = 0, cornersRestored;
 
             using (var tx = new Transaction(doc, "Topo Cancel"))
             {
@@ -109,6 +110,10 @@ namespace RVTuk.Revit.TopoTools.Commands
                         textsRestored++;
                     }
 
+                    // 5. The outline corners the session's Updates moved, back where they were at
+                    // its start — from the start's record, never by the rule.
+                    cornersRestored = RestoreCorners(doc, session);
+
                     if (tx.Commit() != TransactionStatus.Committed)
                     {
                         TopoSessionUpdater.Enable();
@@ -135,10 +140,61 @@ namespace RVTuk.Revit.TopoTools.Commands
                 "Topo Edit cancelled. " +
                 $"Deleted {Count(linesDeleted, "new line", "new lines")} and {Count(textsDeleted, "new height text", "new height texts")}, " +
                 $"removed {Count(pointsRemoved, "point", "points")} of those lines, " +
-                $"put back {Count(textsRestored, "changed height", "changed heights")}.\n\n" +
+                $"put back {Count(textsRestored, "changed height", "changed heights")}" +
+                (cornersRestored > 0 ? $" and {Count(cornersRestored, "outline corner", "outline corners")}" : "") +
+                ".\n\n" +
                 "The surface keeps the heights from the last Update for the lines that still exist; " +
                 "the next Update reconciles them.");
             return Result.Succeeded;
+        }
+
+        /// <summary>
+        /// Cancel's corner step, inside its transaction: when the target still exists, can be
+        /// shaped, and its corner record is not what it was at the start of the session, each
+        /// corner whose record changed goes back to the start's set height, or to its own height
+        /// when the start had no record (<see cref="OutlineCornerPlanner.Restore"/>); corners moved
+        /// by hand are left alone. No line is read, so no corner the session left alone moves. The
+        /// record written is the start's, except that a corner that could not be put back keeps a
+        /// record of where it stands, so the next Update does not take it for a hand edit.
+        /// </summary>
+        /// <returns>How many corners reached the height they were put back to.</returns>
+        private static int RestoreCorners(Document doc, TopoSession session)
+        {
+            var element = doc.GetElement(session.TargetId);
+            if (element == null || OutlineCornerStore.Raw(element) == session.CornerSnapshot) return 0;
+
+            // A plain element keeps no corner record that means anything (the next Update drops
+            // it): Reset Shape by hand during the session, which Cancel does not undo.
+            var editor = SlabShape.EditorOf(element);
+            if (editor == null || !editor.IsEnabled) return 0;
+
+            // The deletes above changed the shape: vertices are read after a regenerate
+            // (RaiseVertexTo does not regenerate first).
+            doc.Regenerate();
+            var vertices = new List<XyzPoint>();
+            foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
+                vertices.Add(SlabShape.ToPoint(vertex.Position));
+
+            var plan = OutlineCornerPlanner.Restore(
+                OutlineCornerRecordCodec.Decode(session.CornerSnapshot), OutlineCornerStore.Read(element), vertices);
+
+            // Each corner reports the Z it reached; after a failed raise, where it still stands.
+            double? reference = null;
+            var raised = new Dictionary<(double X, double Y), double>();
+            foreach (var raise in plan.Raises)
+                raised[(raise.At.X, raise.At.Y)] =
+                    TopoPointApplier.RaiseVertexTo(doc, element, editor, raise.At, raise.ToZ, ref reference)?.Z ?? raise.At.Z;
+
+            var putBack = new Dictionary<(double X, double Y), double>();
+            foreach (var back in plan.PutBacks)
+                putBack[(back.At.X, back.At.Y)] =
+                    TopoPointApplier.RaiseVertexTo(doc, element, editor, back.At, back.ToZ, ref reference)?.Z ?? back.At.Z;
+
+            var outcome = OutlineCornerPlanner.Settle(plan, raised, putBack);
+            if (OutlineCornerRecordCodec.Encode(outcome.Records) != OutlineCornerStore.Raw(element))
+                OutlineCornerStore.Write(element, outcome.Records);
+
+            return plan.Raises.Count + plan.PutBacks.Count - outcome.Lost;
         }
 
         private static string Count(int n, string one, string many) => n == 1 ? $"1 {one}" : $"{n} {many}";
