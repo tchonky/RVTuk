@@ -398,6 +398,41 @@ namespace RVTuk.Core.TopoTools
         }
 
         /// <summary>
+        /// The corner record a session starts from, as <see cref="Restore"/> must read it: the stored
+        /// record checked against where the corners really stand, by <see cref="Plan"/>'s own stale
+        /// rules, so Cancel never raises a corner to a height it did not have at the start. With
+        /// shape editing off there is none (a plain element). A record pairs with a vertex within
+        /// 0.1 mm in plan, nearest first; one with no vertex (Edit Boundary) is left out. A record
+        /// flagged by hand is kept as it is. Any other record is kept while its corner stands within
+        /// 0.1 mm of its set height; one whose corner stands at its own height instead was reset
+        /// (Reset Shape) and is left out; one whose corner stands elsewhere was moved by hand and
+        /// is kept flagged by hand, with its set height where the corner stands, so Cancel leaves
+        /// it there. Sorted by X, then Y.
+        /// </summary>
+        /// <param name="vertices">Every live vertex of the element at the start.</param>
+        public static IReadOnlyList<CornerRecord> EffectiveStart(
+            IReadOnlyList<CornerRecord> stored, bool editorEnabled, IReadOnlyList<XyzPoint> vertices)
+        {
+            if (!editorEnabled) return Array.Empty<CornerRecord>();
+
+            var records = new List<CornerRecord>();
+            var recordOf = PairIndices(vertices, stored);
+            for (int v = 0; v < vertices.Count; v++)
+            {
+                if (recordOf[v] < 0) continue;
+                var record = stored[recordOf[v]];
+                double z = vertices[v].Z;
+
+                if (record.ByHand || Math.Abs(z - record.SetZ) <= ShapeReplayPlanner.ToleranceFeet)
+                    records.Add(record);
+                else if (Math.Abs(z - record.OwnZ) > ShapeReplayPlanner.ToleranceFeet)
+                    records.Add(record with { SetZ = z, ByHand = true });
+            }
+
+            return records.OrderBy(r => r.X).ThenBy(r => r.Y).ToList();
+        }
+
+        /// <summary>
         /// For each candidate, its record or null. Every candidate–record pair within 0.1 mm in plan
         /// is sorted by distance, ties broken by the candidate's X, Y, Z and then the record's
         /// fields, and taken greedily, so the result does not depend on either list's order.

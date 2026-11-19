@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
+using RVTuk.Core.TopoTools;
 
 namespace RVTuk.Revit.TopoTools
 {
@@ -40,10 +41,19 @@ namespace RVTuk.Revit.TopoTools
         public IReadOnlyDictionary<ElementId, string> TextSnapshot { get; }
 
         /// <summary>
-        /// The target's outline corner record as it was at the start (<see cref="OutlineCornerStore.Raw"/>,
-        /// "" for none), so Cancel can put back the corners the session's Updates moved.
+        /// The target's outline corner record text as stored at the start
+        /// (<see cref="OutlineCornerStore.Raw"/>, "" for none). Cancel compares it with the record
+        /// it finds to see whether there is anything to put back.
         /// </summary>
         public string CornerSnapshot { get; }
+
+        /// <summary>
+        /// The corner record the session starts from, checked against where the corners stood at
+        /// the start (<see cref="OutlineCornerPlanner.EffectiveStart"/>): a record already stale
+        /// then — Reset Shape, a hand move not yet flagged, a plain element — never makes Cancel
+        /// raise a corner. When the vertices cannot be read it is the stored record as it is.
+        /// </summary>
+        public IReadOnlyList<CornerRecord> CornerStart { get; }
 
         /// <summary>
         /// The last text the updater saw on each height text in the view, trimmed. A text change
@@ -77,13 +87,15 @@ namespace RVTuk.Revit.TopoTools
         public bool DontAskOnSave { get; set; }
 
         private TopoSession(Document document, ElementId viewId, ElementId targetId,
-            IReadOnlyDictionary<ElementId, string> textSnapshot, string cornerSnapshot)
+            IReadOnlyDictionary<ElementId, string> textSnapshot, string cornerSnapshot,
+            IReadOnlyList<CornerRecord> cornerStart)
         {
             Document = document;
             ViewId = viewId;
             TargetId = targetId;
             TextSnapshot = textSnapshot;
             CornerSnapshot = cornerSnapshot;
+            CornerStart = cornerStart;
             LastSeenTexts = new Dictionary<ElementId, string>();
             foreach (var pair in textSnapshot) LastSeenTexts[pair.Key] = pair.Value.Trim();
         }
@@ -109,7 +121,9 @@ namespace RVTuk.Revit.TopoTools
                 .Where(HeightTextType.IsHeightText)
                 .ToDictionary(note => note.Id, note => note.Text ?? "");
 
-            var session = new TopoSession(document, view.Id, target.Id, snapshot, OutlineCornerStore.Raw(target));
+            string cornerSnapshot = OutlineCornerStore.Raw(target);
+            var session = new TopoSession(
+                document, view.Id, target.Id, snapshot, cornerSnapshot, CornerStartOf(target, cornerSnapshot));
             Current = session;
             TopoSessionUpdater.Enable();
 
@@ -143,6 +157,34 @@ namespace RVTuk.Revit.TopoTools
             catch (Exception ex)
             {
                 Application.LogDiagnostic($"TopoSession.Ended handler failed: {ex}");
+            }
+        }
+
+        /// <summary>
+        /// <see cref="CornerStart"/>: the stored record checked against the live vertices. Reading
+        /// needs no transaction; if it fails, the stored record as it is, with one log line.
+        /// </summary>
+        private static IReadOnlyList<CornerRecord> CornerStartOf(Element target, string cornerSnapshot)
+        {
+            var stored = OutlineCornerRecordCodec.Decode(cornerSnapshot);
+            if (stored.Count == 0) return stored;
+
+            try
+            {
+                var editor = SlabShape.EditorOf(target);
+                bool enabled = editor != null && editor.IsEnabled;
+                var vertices = new List<XyzPoint>();
+                if (enabled)
+                {
+                    foreach (SlabShapeVertex vertex in editor!.SlabShapeVertices)
+                        vertices.Add(SlabShape.ToPoint(vertex.Position));
+                }
+                return OutlineCornerPlanner.EffectiveStart(stored, enabled, vertices);
+            }
+            catch (Exception ex)
+            {
+                Application.LogDiagnostic($"TopoSession: reading the corners at the start failed, the stored record is used: {ex.Message}");
+                return stored;
             }
         }
 

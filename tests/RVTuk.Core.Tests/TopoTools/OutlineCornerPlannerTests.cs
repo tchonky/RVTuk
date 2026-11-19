@@ -1188,4 +1188,144 @@ public class OutlineCornerPlannerTests
         var next = OutlineCornerPlanner.Plan(vertices, Always(null), outcome.Records);
         Assert.Equal(0, next.NewlyByHand);
     }
+
+    [Fact]
+    public void WhenTheStartAndTheCurrentRecordAreBothByHandTheStartsIsKept()
+    {
+        var atStart = new CornerRecord(0, 0, 9, 11, true);
+        var now = new CornerRecord(0, 0, 9, 14, true);
+
+        var plan = OutlineCornerPlanner.Restore(new[] { atStart }, new[] { now }, new[] { new XyzPoint(0, 0, 14) });
+
+        Assert.Empty(plan.Raises);
+        Assert.Empty(plan.PutBacks);
+        Assert.Equal(new[] { atStart }, plan.NewRecords);
+    }
+
+    // ---------------------------------------------------------------- EffectiveStart (Task 5, fix round 1)
+
+    [Fact]
+    public void AFreshRecordIsUnchangedByTheEffectiveStart()
+    {
+        var stored = new[]
+        {
+            new CornerRecord(0, 0, 9, 10, false),
+            new CornerRecord(10, 0, 9, 11, true),              // by hand, off its set height
+            new CornerRecord(10, 10, 8, 8.5, false),
+        };
+        var vertices = new[]
+        {
+            new XyzPoint(0, 0, 10 + 0.099 * Mm), new XyzPoint(10, 0, 13), new XyzPoint(10, 10, 8.5),
+            new XyzPoint(5, 5, 3), // no record
+        };
+
+        Assert.Equal(stored, OutlineCornerPlanner.EffectiveStart(stored, true, vertices));
+    }
+
+    [Fact]
+    public void WithShapeEditingOffTheEffectiveStartHasNoRecord()
+    {
+        var stored = new[] { new CornerRecord(0, 0, 9, 10, false) };
+
+        Assert.Empty(OutlineCornerPlanner.EffectiveStart(stored, false, new[] { new XyzPoint(0, 0, 10) }));
+    }
+
+    [Fact]
+    public void ACornerResetBeforeTheSessionLosesItsRecordAtTheStart()
+    {
+        var stored = new[] { new CornerRecord(0, 0, 9, 10, false) };
+
+        var atOwn = OutlineCornerPlanner.EffectiveStart(stored, true, new[] { new XyzPoint(0, 0, 9 + 0.099 * Mm) });
+        var justOff = OutlineCornerPlanner.EffectiveStart(stored, true, new[] { new XyzPoint(0, 0, 9 + 0.101 * Mm) });
+
+        Assert.Empty(atOwn);
+        Assert.Equal(new[] { new CornerRecord(0, 0, 9, 9 + 0.101 * Mm, true) }, justOff);
+    }
+
+    [Fact]
+    public void ACornerMovedByHandBeforeTheSessionIsFlaggedAtTheStartWhereItStands()
+    {
+        var stored = new[] { new CornerRecord(0, 0, 9, 10, false) };
+
+        var start = OutlineCornerPlanner.EffectiveStart(stored, true, new[] { new XyzPoint(0, 0, 13) });
+
+        Assert.Equal(new[] { new CornerRecord(0, 0, 9, 13, true) }, start);
+    }
+
+    [Fact]
+    public void ARecordWithNoCornerIsLeftOutOfTheEffectiveStart()
+    {
+        var stored = new[] { new CornerRecord(0, 0, 9, 10, false), new CornerRecord(10, 0, 9, 10, true) };
+
+        var start = OutlineCornerPlanner.EffectiveStart(stored, true, new[] { new XyzPoint(0.2 * Mm, 0, 10) });
+
+        Assert.Empty(start);
+    }
+
+    [Fact]
+    public void TheEffectiveStartPairsRecordsAndCornersWithinATenthOfAMillimetreInEveryOrder()
+    {
+        var stored = new[]
+        {
+            new CornerRecord(0, 0, 9, 10, false),
+            new CornerRecord(0.15 * Mm, 0, 9, 12, false),
+        };
+        var vertices = new[] { new XyzPoint(0.05 * Mm, 0, 10), new XyzPoint(0.2 * Mm, 0, 12) };
+
+        var expected = OutlineCornerPlanner.EffectiveStart(stored, true, vertices);
+        Assert.Equal(stored, expected);
+
+        foreach (var s in Orders(stored))
+        foreach (var v in Orders(vertices))
+            Assert.Equal(expected, OutlineCornerPlanner.EffectiveStart(s, true, v));
+    }
+
+    [Fact]
+    public void CancelAfterAResetToposolidsUpdateOnlyUndoesTheUpdate()
+    {
+        // Reset Shape outside a session left the corner at its own height 9 with the old record
+        // (set 10). The session's Update planned it as new and raised it to 11.
+        var stored = new[] { new CornerRecord(0, 0, 9, 10, false) };
+        var start = OutlineCornerPlanner.EffectiveStart(stored, true, new[] { new XyzPoint(0, 0, 9) });
+        var update = OutlineCornerPlanner.Plan(new[] { new XyzPoint(0, 0, 9) }, Always(11), stored);
+        var corner = new XyzPoint(0, 0, 11);
+
+        var plan = OutlineCornerPlanner.Restore(start, update.NewRecords, new[] { corner });
+
+        Assert.Empty(plan.Raises);
+        Assert.Equal(new[] { (corner, 9.0) }, plan.PutBacks);
+        Assert.Empty(plan.NewRecords);
+    }
+
+    [Fact]
+    public void CancelAfterAPlainFloorsUpdatePutsItsCornersBackToTheFloorsTop()
+    {
+        // Reset Shape made the floor plain with an earlier session's record left (set 10); the
+        // session's Update switched shape editing on and raised the corner from 9 to 11.
+        var stored = new[] { new CornerRecord(0, 0, 9, 10, false) };
+        var start = OutlineCornerPlanner.EffectiveStart(stored, false, new[] { new XyzPoint(0, 0, 9) });
+        var now = new[] { new CornerRecord(0, 0, 9, 11, false) };
+        var corner = new XyzPoint(0, 0, 11);
+
+        var plan = OutlineCornerPlanner.Restore(start, now, new[] { corner });
+
+        Assert.Empty(plan.Raises);
+        Assert.Equal(new[] { (corner, 9.0) }, plan.PutBacks);
+        Assert.Empty(plan.NewRecords);
+    }
+
+    [Fact]
+    public void CancelLeavesACornerMovedByHandBeforeTheSessionWhereItIs()
+    {
+        var stored = new[] { new CornerRecord(0, 0, 9, 10, false) };
+        var corner = new XyzPoint(0, 0, 13);
+        var start = OutlineCornerPlanner.EffectiveStart(stored, true, new[] { corner });
+        var update = OutlineCornerPlanner.Plan(new[] { corner }, Always(11), stored); // flags it
+
+        var plan = OutlineCornerPlanner.Restore(start, update.NewRecords, new[] { corner });
+
+        Assert.Empty(plan.Raises);
+        Assert.Empty(plan.PutBacks);
+        Assert.Equal(start, plan.NewRecords);
+    }
 }
