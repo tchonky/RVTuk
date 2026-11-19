@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using RVTuk.Core.Shared.Geometry;
 
@@ -10,7 +11,9 @@ namespace RVTuk.Core.TopoTools
     /// plan X, then Y, so the plan (and the stored record text) depends only on the corners, never
     /// on the order Revit lists the vertices in.
     ///
-    /// <para>A raised corner's record carries <c>SetZ</c> = the height asked for. The applier MUST
+    /// <para>A corner left where it is (already within 0.1 mm of its target) is recorded with
+    /// <c>SetZ</c> = its current Z. A raised corner's record carries <c>SetZ</c> = the height asked
+    /// for. The applier MUST
     /// replace it with the Z read back after the raise (<see cref="WithReached"/>): a record whose
     /// <c>SetZ</c> is not where the corner actually sits reads as "moved by hand" on the next run.</para>
     /// </summary>
@@ -25,15 +28,32 @@ namespace RVTuk.Core.TopoTools
         int NewlyByHand)
     {
         /// <summary>
-        /// This plan with <c>SetZ</c> of each record not flagged by hand replaced by the height the
+        /// This plan with <c>SetZ</c> of each raised corner's record replaced by the height the
         /// corner reached, keyed by the corner's exact plan XY (a raise's <c>At.X</c>, <c>At.Y</c>, which
-        /// its record carries unchanged). Records without an entry keep their <c>SetZ</c>.
+        /// its record carries unchanged). Every raise needs an entry — a raise that failed must report
+        /// the Z the corner actually has — and a missing one throws <see cref="ArgumentException"/>
+        /// naming its XY. Entries for corners that were not raised are ignored.
         /// </summary>
         public CornerPlan WithReached(IReadOnlyDictionary<(double X, double Y), double> reachedZByXy)
         {
+            var raised = new HashSet<(double X, double Y)>();
+            foreach (var raise in Raises)
+            {
+                var xy = (raise.At.X, raise.At.Y);
+                if (!reachedZByXy.ContainsKey(xy))
+                {
+                    throw new ArgumentException(
+                        "No reached height for the raised corner at X = " +
+                        raise.At.X.ToString("R", CultureInfo.InvariantCulture) + ", Y = " +
+                        raise.At.Y.ToString("R", CultureInfo.InvariantCulture) + ".",
+                        nameof(reachedZByXy));
+                }
+                raised.Add(xy);
+            }
+
             var records = NewRecords
-                .Select(r => !r.ByHand && reachedZByXy.TryGetValue((r.X, r.Y), out var reached)
-                    ? r with { SetZ = reached }
+                .Select(r => !r.ByHand && raised.Contains((r.X, r.Y))
+                    ? r with { SetZ = reachedZByXy[(r.X, r.Y)] }
                     : r)
                 .ToList();
             return this with { NewRecords = records };
@@ -125,10 +145,13 @@ namespace RVTuk.Core.TopoTools
                 var target = targetZ(corner);
                 if (target.HasValue && !double.IsNaN(target.Value) && !double.IsInfinity(target.Value))
                 {
-                    if (Math.Abs(target.Value - corner.Z) > ShapeReplayPlanner.ToleranceFeet)
-                        raises.Add((corner, target.Value));
+                    // A corner already within 0.1 mm of its target stays put and keeps the height
+                    // it reached (SetZ = where it is), so a re-run writes the same record. A raised
+                    // one gets the target here, which WithReached then replaces.
+                    bool raise = Math.Abs(target.Value - corner.Z) > ShapeReplayPlanner.ToleranceFeet;
+                    if (raise) raises.Add((corner, target.Value));
                     newRecords.Add(new CornerRecord(
-                        corner.X, corner.Y, record?.OwnZ ?? corner.Z, target.Value, false));
+                        corner.X, corner.Y, record?.OwnZ ?? corner.Z, raise ? target.Value : corner.Z, false));
                     continue;
                 }
 

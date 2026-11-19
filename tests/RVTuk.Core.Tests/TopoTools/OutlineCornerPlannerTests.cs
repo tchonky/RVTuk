@@ -213,7 +213,7 @@ public class OutlineCornerPlannerTests
     }
 
     [Fact]
-    public void ACornerAlreadyWithinATenthOfAMillimetreOfItsTargetIsRecordedButNotRaised()
+    public void ACornerAlreadyWithinATenthOfAMillimetreOfItsTargetIsRecordedWhereItIsNotRaised()
     {
         var corner = new XyzPoint(0, 0, 10);
         double target = 10 + 0.09 * Mm;
@@ -221,7 +221,8 @@ public class OutlineCornerPlannerTests
         var plan = OutlineCornerPlanner.Plan(new[] { corner }, Always(target), NoRecords);
 
         Assert.Empty(plan.Raises);
-        Assert.Equal(new[] { new CornerRecord(0, 0, 10, target, false) }, plan.NewRecords);
+        // SetZ is where the corner is, not the target: a re-run must not rewrite the record.
+        Assert.Equal(new[] { new CornerRecord(0, 0, 10, 10, false) }, plan.NewRecords);
 
         var justOver = OutlineCornerPlanner.Plan(new[] { corner }, Always(10 + 0.11 * Mm), NoRecords);
         Assert.Single(justOver.Raises);
@@ -470,6 +471,45 @@ public class OutlineCornerPlannerTests
 
     // ---------------------------------------------------------------- WithReached
 
+    [Theory]
+    [InlineData(0.05 / 304.8)] // lands 0.05 mm above the target
+    [InlineData(1e-12)]        // float noise, in feet
+    [InlineData(-0.05 / 304.8)]
+    public void ACornerThatLandsNearItsTargetKeepsAnIdenticalRecordOnTheNextRun(double landingError)
+    {
+        var candidates = new[] { new XyzPoint(0, 0, 10), new XyzPoint(10, 0, 11) };
+        var records = new[] { new CornerRecord(10, 0, 9, 11, false) };
+        Func<XyzPoint, double?> target = p => p.X == 0 ? 12 : 13;
+
+        var first = OutlineCornerPlanner.Plan(candidates, target, records);
+        Assert.Equal(2, first.Raises.Count);
+        var reached = first.Raises.ToDictionary(m => (m.At.X, m.At.Y), m => m.ToZ + landingError);
+        var stored = first.WithReached(reached);
+        var landed = candidates.Select(c => c with { Z = reached[(c.X, c.Y)] }).ToArray();
+
+        var second = OutlineCornerPlanner.Plan(landed, target, stored.NewRecords);
+
+        Assert.Empty(second.Raises);
+        Assert.Empty(second.PutBacks);
+        Assert.Equal(0, second.NewlyByHand);
+        Assert.Equal(stored.NewRecords, second.NewRecords);
+        Assert.Equal(OutlineCornerRecordCodec.Encode(stored.NewRecords),
+            OutlineCornerRecordCodec.Encode(second.NewRecords));
+    }
+
+    [Fact]
+    public void WithReachedThrowsNamingARaisedCornerItHasNoHeightFor()
+    {
+        var plan = OutlineCornerPlanner.Plan(
+            new[] { new XyzPoint(0, 0, 10), new XyzPoint(1.5, 2.25, 10) }, Always(12), NoRecords);
+
+        var error = Assert.Throws<ArgumentException>(() => plan.WithReached(
+            new Dictionary<(double X, double Y), double> { [(0, 0)] = 12 }));
+
+        Assert.Contains("X = 1.5, Y = 2.25", error.Message);
+        Assert.Equal("reachedZByXy", error.ParamName);
+    }
+
     [Fact]
     public void WithReachedReplacesSetZByTheHeightTheCornerReached()
     {
@@ -485,6 +525,7 @@ public class OutlineCornerPlannerTests
         {
             [(0, 0)] = 11.9,
             [(10, 0)] = 99, // flagged by hand: left as it was
+            [(10, 10)] = 50, // not raised: ignored
         });
 
         Assert.Equal(new[]
