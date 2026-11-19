@@ -617,7 +617,7 @@ Tick each case only once it has actually been checked in Revit.
 
 | Layer | Folder |
 |-------|--------|
-| Core  | `src/RVTuk.Core/TopoTools/` (sampler, line clipper, containment, point deduper (crossings), height label placement, height-text linker, metre height text (`SurveyHeightText`), ledger codec, session report, outline corner rule, planner, pass and record codec (`OutlineCornerHeights`, `OutlineCornerPlanner`, `OutlineCornerPass`, `OutlineCornerRecordCodec`), Modify-tab rule (`ModifyTabPanels`), `Sentence`, converter planner / chainer / parked-parameter codec / report) |
+| Core  | `src/RVTuk.Core/TopoTools/` (sampler, line clipper, containment, point deduper (crossings), height label placement, height-text linker, metre height text (`SurveyHeightText`), ledger codec, session report, outline corner rule, planner, pass and record codec (`OutlineCornerHeights`, `OutlineCornerPlanner`, `CornerPass` and `CornerPassGate` in OutlineCornerPass.cs, `OutlineCornerRecordCodec`), Modify-tab rule (`ModifyTabPanels`), `Sentence`, converter planner / chainer / parked-parameter codec / report) |
 | UI    | none: the pane is gone, the session lives on the ribbon |
 | Revit | `src/RVTuk.Revit/TopoTools/` (`TopoSession`, `TopoSessionUpdater`, `TopoSessionRunner`, `TopoEditPanel`, `ModifyTabHost`, `ModifyTabAccess`, `TopoDocumentEvents`, `TopoSaveGuard`, `TopoIcons`, `HeightTexts`, `HeightTextLinkStore`, `HeightTextType`, `LastTypedHeights`, line style and collector, applier, ledger store, corner store (`OutlineCornerStore`), the commands in `Commands/` (with `TopoSessionActions`: Accept and Cancel as plain calls), and the floor / toposolid converter) |
 | Tests | `tests/RVTuk.Core.Tests/TopoTools/` |
