@@ -1097,6 +1097,27 @@ public class OutlineCornerPlannerTests
     }
 
     [Fact]
+    public void ACornerMovedByHandAfterAnUpdatePutItBackStaysWhereItIs()
+    {
+        // Final review residual 1: the start's record set it to 11 (own 10); the session deleted
+        // its line and an Update put it back to 10, dropping the record; then it was moved by hand
+        // to 15. Cancel leaves it there, flagged.
+        var atStart = new[] { new CornerRecord(0, 0, 10, 11, false) };
+
+        var moved = OutlineCornerPlanner.Restore(atStart, NoRecords, new[] { new XyzPoint(0, 0, 15) });
+        var putBack = OutlineCornerPlanner.Restore(atStart, NoRecords, new[] { new XyzPoint(0, 0, 10) });
+        var alreadyThere = OutlineCornerPlanner.Restore(atStart, NoRecords, new[] { new XyzPoint(0, 0, 11) });
+
+        Assert.Empty(moved.Raises);
+        Assert.Empty(moved.PutBacks);
+        Assert.Equal(new[] { new CornerRecord(0, 0, 10, 15, true) }, moved.NewRecords);
+        Assert.Equal(new[] { (new XyzPoint(0, 0, 10), 11.0) }, putBack.Raises);
+        Assert.Equal(atStart, putBack.NewRecords);
+        Assert.Empty(alreadyThere.Raises);
+        Assert.Equal(atStart, alreadyThere.NewRecords);
+    }
+
+    [Fact]
     public void ACornerMovedByHandToWhereCancelWouldPutItIsNotFlagged()
     {
         // Already at its start height (or, with no start record, at its own height): nothing to

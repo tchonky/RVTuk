@@ -307,7 +307,9 @@ namespace RVTuk.Core.TopoTools
         /// off its current record's set height, off its own height (there it was reset, as
         /// <see cref="Plan"/> reads it, and is put back like any other) and off the height Cancel
         /// would give it, was moved by hand since the last Update, changed record or not: it is left
-        /// where it stands and its record is kept flagged by hand, set height = where it stands.</para>
+        /// where it stands and its record is kept flagged by hand, set height = where it stands. So
+        /// is a corner whose start record an Update dropped (a put-back, which left it at its own
+        /// height) that stands more than 0.1 mm off its own height and off the start's set height.</para>
         ///
         /// <para>The records become the start's, except that a hand flag set during the session
         /// (by an Update, or by this step) stays. A start record whose corner is gone (Edit Boundary) comes back with nothing moved;
@@ -376,12 +378,30 @@ namespace RVTuk.Core.TopoTools
                 wanted.Add((current with { SetZ = current.OwnZ }, true));
             }
 
-            // Start records the session dropped: put back by an Update, or their corner gone.
-            for (int i = 0; i < atStart.Count; i++)
+            // Start records the session dropped: put back by an Update, or their corner gone. A
+            // corner put back stands at its own height; one off it and off the start's set height
+            // was moved by hand since that put-back: left where it stands, flagged there.
+            var dropped = Enumerable.Range(0, atStart.Count).Where(i => !startTaken[i]).ToList();
+            var vertexOfDropped = new XyzPoint?[dropped.Count];
+            var droppedOf = PairIndices(vertices, dropped.Select(i => atStart[i]).ToList());
+            for (int v = 0; v < vertices.Count; v++)
             {
-                if (startTaken[i]) continue;
-                records.Add(atStart[i]);
-                if (!atStart[i].ByHand) wanted.Add((atStart[i], false));
+                if (droppedOf[v] >= 0) vertexOfDropped[droppedOf[v]] = vertices[v];
+            }
+
+            for (int k = 0; k < dropped.Count; k++)
+            {
+                var start = atStart[dropped[k]];
+                if (!start.ByHand && vertexOfDropped[k] is XyzPoint vertexNow &&
+                    Math.Abs(vertexNow.Z - start.OwnZ) > ShapeReplayPlanner.ToleranceFeet &&
+                    Math.Abs(vertexNow.Z - start.SetZ) > ShapeReplayPlanner.ToleranceFeet)
+                {
+                    records.Add(start with { SetZ = vertexNow.Z, ByHand = true });
+                    continue;
+                }
+
+                records.Add(start);
+                if (!start.ByHand) wanted.Add((start, false));
             }
 
             var raises = new List<(XyzPoint At, double ToZ)>();
