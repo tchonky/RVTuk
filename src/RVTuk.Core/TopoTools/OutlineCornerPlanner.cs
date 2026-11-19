@@ -82,8 +82,10 @@ namespace RVTuk.Core.TopoTools
     {
         /// <summary>
         /// The vertices the pass may change: within 1 mm of an edge of any loop (outline or hole),
-        /// not a point the ledger records for any line (X, Y and Z each within 0.1 mm, as the
-        /// applier matches), and not within 1 mm in plan of a point this run placed.
+        /// not at the plan spot of a point the ledger records for any line or view (X and Y each
+        /// within 0.1 mm, whatever its Z: a line point moved up or down by hand, or lifted with the
+        /// rest by a Height Offset change, is still that line's point, never a corner), and not
+        /// within 1 mm in plan of a point this run placed.
         /// </summary>
         /// <param name="loopsFeet">The element's outline and holes, tessellated, in plan.</param>
         /// <param name="ledgered">Every point the element's ledger records, for any line or view.</param>
@@ -103,7 +105,7 @@ namespace RVTuk.Core.TopoTools
                 if (!PolygonContainment.IsNearEdge(
                         loopsFeet, new XyPoint(vertex.X, vertex.Y), ShapeReplayPlanner.EdgeBandFeet))
                     continue;
-                if (IsLedgered(vertex, ledgered)) continue;
+                if (ShapeReplayPlanner.IndexOfXy(ledgered, vertex) >= 0) continue;
                 if (IsNearInPlan(vertex, placedPoints)) continue;
                 candidates.Add(vertex);
             }
@@ -142,43 +144,19 @@ namespace RVTuk.Core.TopoTools
 
         /// <summary>
         /// <paramref name="candidates"/> without those at one of <paramref name="spots"/> in plan (X
-        /// and Y each within 0.1 mm): vertices kept out of this run's pass only, with no record. A
-        /// ledgered point that Revit would not delete matched in X, Y and Z, so nobody moved it: it
-        /// must not be raised as a corner in the run whose summary calls it left alone, nor flagged
-        /// by hand for good. Unledgered from now on, it is an ordinary candidate on the next run. No
+        /// and Y each within 0.1 mm): vertices kept out of this run's pass only, with no record. The
+        /// spots are the stale lines' ledgered points the cleanup did not take out: one Revit would
+        /// not delete (found where recorded, so nobody moved it), and one found moved by hand (no
+        /// vertex at its X, Y and Z, but maybe one at its plan spot). Either must not be raised as a
+        /// corner in the run whose summary calls it left alone, nor flagged by hand for good.
+        /// Unledgered from now on, it is an ordinary candidate on the next run, where its line, if
+        /// it still crosses there, gives it the line's height through the rule's 1 mm snap. No
         /// record is lost: a ledgered vertex was never a candidate, so it has none.
         /// </summary>
         public static IReadOnlyList<XyzPoint> ExceptAt(IReadOnlyList<XyzPoint> candidates, IReadOnlyList<XyzPoint> spots)
         {
             if (spots.Count == 0) return candidates;
             return candidates.Where(candidate => ShapeReplayPlanner.IndexOfXy(spots, candidate) < 0).ToList();
-        }
-
-        /// <summary>
-        /// The line points the user moved by hand, as corner records flagged <c>hand</c>. A ledgered
-        /// point with no vertex at its X, Y and Z, but a live vertex at its plan spot (X and Y each
-        /// within 0.1 mm), was moved up or down by hand: the stale-line cleanup reports it and drops
-        /// its ledger entry, which would make it an unledgered outline vertex the pass may raise. Its
-        /// record (own and set height = where it now stands) keeps the pass off it from now on.
-        /// One record per vertex. A vertex inside the outline gets a record too, which
-        /// <see cref="Plan"/> drops, since only candidates keep theirs.
-        /// </summary>
-        /// <param name="unmatched">The ledgered points the cleanup could not take out.</param>
-        /// <param name="vertices">The live vertices after the cleanup.</param>
-        public static IReadOnlyList<CornerRecord> HandMovedRecords(
-            IReadOnlyList<XyzPoint> unmatched, IReadOnlyList<XyzPoint> vertices)
-        {
-            var found = new HashSet<int>();
-            foreach (var point in unmatched)
-            {
-                int index = ShapeReplayPlanner.IndexOfXy(vertices, point);
-                if (index >= 0) found.Add(index);
-            }
-
-            return found
-                .Select(i => new CornerRecord(vertices[i].X, vertices[i].Y, vertices[i].Z, vertices[i].Z, true))
-                .OrderBy(r => r.X).ThenBy(r => r.Y)
-                .ToList();
         }
 
         /// <summary>
@@ -503,18 +481,6 @@ namespace RVTuk.Core.TopoTools
                 taken[pair.Record] = true;
             }
             return recordOf;
-        }
-
-        private static bool IsLedgered(XyzPoint vertex, IReadOnlyList<XyzPoint> ledgered)
-        {
-            foreach (var point in ledgered)
-            {
-                if (Math.Abs(point.X - vertex.X) <= ShapeReplayPlanner.ToleranceFeet &&
-                    Math.Abs(point.Y - vertex.Y) <= ShapeReplayPlanner.ToleranceFeet &&
-                    Math.Abs(point.Z - vertex.Z) <= ShapeReplayPlanner.ToleranceFeet)
-                    return true;
-            }
-            return false;
         }
 
         private static bool IsNearInPlan(XyzPoint vertex, IReadOnlyList<XyzPoint> points)

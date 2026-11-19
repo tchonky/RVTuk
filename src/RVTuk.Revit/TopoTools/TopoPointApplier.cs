@@ -110,8 +110,8 @@ namespace RVTuk.Revit.TopoTools
 
             int removed = 0;
             int missing = 0;
-            var movedByHand = new List<XyzPoint>();
             var undeletable = new List<XyzPoint>();
+            var keptOut = new List<XyzPoint>();
 
             if (staleLineIds.Count > 0)
             {
@@ -125,8 +125,10 @@ namespace RVTuk.Revit.TopoTools
                         var match = FindVertex(live, recorded);
                         if (match == null)
                         {
+                            // Moved by hand (or deleted): counted once, kept out of this run's
+                            // corner pass only, no record (see OutlineCornerPlanner.ExceptAt).
                             missing++;
-                            movedByHand.Add(recorded);
+                            keptOut.Add(recorded);
                             continue;
                         }
 
@@ -141,6 +143,7 @@ namespace RVTuk.Revit.TopoTools
                             // corner pass only, no record (see OutlineCornerPlanner.ExceptAt).
                             missing++;
                             undeletable.Add(recorded);
+                            keptOut.Add(recorded);
                         }
                     }
                     ledger.Remove(lineId);
@@ -158,14 +161,10 @@ namespace RVTuk.Revit.TopoTools
             foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
                 preexisting.Add(SlabShape.ToPoint(vertex.Position));
 
-            // A line point the cleanup found moved by hand (no vertex where recorded, one at its
-            // plan spot) has just lost its ledger entry: a hand record keeps the corner pass off
-            // it, now and later.
-            if (corners != null && movedByHand.Count > 0)
-                records = records.Concat(OutlineCornerPlanner.HandMovedRecords(movedByHand, preexisting)).ToList();
-
             // Those outline vertices, as they stand before any point is placed. Needed only to test
-            // edge points against.
+            // edge points against. A point Revit would not delete is left out, so its line's edge
+            // point reuses it; one moved by hand stays in, so the edge point there is not drawn
+            // and the vertex stays where the user put it in this run.
             IReadOnlyList<XyzPoint> cornerVertices = Array.Empty<XyzPoint>();
             if (corners != null && newPointsByLine.Values.Any(points => points.Edge.Count > 0))
             {
@@ -235,7 +234,7 @@ namespace RVTuk.Revit.TopoTools
                 // The points this run placed as new vertices are exactly the ones just recorded.
                 var placedPoints = recordedByLine.Values.SelectMany(points => points).ToList();
                 var (outcome, newlyByHand) = RunCornerPass(
-                    doc, target, editor, corners, ledger, placedPoints, undeletable, records, ref reference);
+                    doc, target, editor, corners, ledger, placedPoints, keptOut, records, ref reference);
                 cornersSet = outcome.Set;
                 cornersPutBack = outcome.PutBack;
                 cornersByHand = newlyByHand;
@@ -265,7 +264,7 @@ namespace RVTuk.Revit.TopoTools
         private static (CornerOutcome Outcome, int NewlyByHand) RunCornerPass(
             Document doc, SlabTarget target, SlabShapeEditor editor, CornerPass corners,
             IReadOnlyDictionary<long, IReadOnlyList<XyzPoint>> ledger, IReadOnlyList<XyzPoint> placedPoints,
-            IReadOnlyList<XyzPoint> undeletable, IReadOnlyList<CornerRecord> records, ref double? reference)
+            IReadOnlyList<XyzPoint> keptOut, IReadOnlyList<CornerRecord> records, ref double? reference)
         {
             var element = target.Element;
             doc.Regenerate();
@@ -275,11 +274,11 @@ namespace RVTuk.Revit.TopoTools
                 vertices.Add(SlabShape.ToPoint(vertex.Position));
 
             // Every candidate goes to the plan, filtered no further (a record whose corner is not
-            // among them is dropped) — except the points Revit would not delete this run, which
-            // have no record to lose.
+            // among them is dropped) — except the stale lines' points the cleanup did not take out
+            // (Revit would not delete them, or they were moved by hand), which have no record to lose.
             var candidates = OutlineCornerPlanner.ExceptAt(
                 OutlineCornerPlanner.Candidates(vertices, target.Loops, LedgeredPoints(ledger), placedPoints),
-                undeletable);
+                keptOut);
             var plan = OutlineCornerPlanner.Plan(candidates, corners.TargetZ, records);
 
             // Each corner reports the Z it actually reached — a failed raise where it still stands —

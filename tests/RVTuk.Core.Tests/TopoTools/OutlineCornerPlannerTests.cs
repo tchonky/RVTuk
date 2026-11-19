@@ -103,10 +103,12 @@ public class OutlineCornerPlannerTests
     }
 
     [Fact]
-    public void AVertexTheLedgerRecordsInXYAndZIsNotACandidate()
+    public void AVertexTheLedgerRecordsAtItsPlanSpotIsNotACandidateWhateverItsZ()
     {
+        // Final review fix 1: a line point is never a corner, however far it was moved up or down.
         var recorded = new XyzPoint(0, 0, 10);
         var sameSpotOtherHeight = new XyzPoint(10, 0, 10.2); // Z off by far more than 0.1 mm
+        var elsewhere = new XyzPoint(10, 10, 10);
         var ledgered = new[]
         {
             new XyzPoint(0.09 * Mm, -0.09 * Mm, 10 + 0.09 * Mm),
@@ -114,13 +116,13 @@ public class OutlineCornerPlannerTests
         };
 
         var candidates = OutlineCornerPlanner.Candidates(
-            new[] { recorded, sameSpotOtherHeight }, SquareWithHole, ledgered, None);
+            new[] { recorded, sameSpotOtherHeight, elsewhere }, SquareWithHole, ledgered, None);
 
-        Assert.Equal(new[] { sameSpotOtherHeight }, candidates);
+        Assert.Equal(new[] { elsewhere }, candidates);
     }
 
     [Fact]
-    public void LedgerMatchUsesATenthOfAMillimetreOnEachAxis()
+    public void LedgerMatchUsesATenthOfAMillimetreOnEachAxisInPlanAndIgnoresZ()
     {
         var vertex = new XyzPoint(0, 0, 10);
 
@@ -128,8 +130,30 @@ public class OutlineCornerPlannerTests
             new[] { vertex }, SquareWithHole, new[] { new XyzPoint(0.11 * Mm, 0, 10) }, None));
         Assert.Single(OutlineCornerPlanner.Candidates(
             new[] { vertex }, SquareWithHole, new[] { new XyzPoint(0, 0.11 * Mm, 10) }, None));
-        Assert.Single(OutlineCornerPlanner.Candidates(
-            new[] { vertex }, SquareWithHole, new[] { new XyzPoint(0, 0, 10 + 0.11 * Mm) }, None));
+        Assert.Empty(OutlineCornerPlanner.Candidates(
+            new[] { vertex }, SquareWithHole, new[] { new XyzPoint(0.09 * Mm, 0.09 * Mm, 10 + 0.11 * Mm) }, None));
+        Assert.Empty(OutlineCornerPlanner.Candidates(
+            new[] { vertex }, SquareWithHole, new[] { new XyzPoint(0, 0, 25) }, None));
+    }
+
+    [Fact]
+    public void AHandMovedPointOfALineInAnotherViewIsNotACandidate()
+    {
+        // Final review fix 1, the two-view case: view B's line point on the outline (ledgered at
+        // 12) was moved to 13.5 by hand. An Update in view A does not clean view B's line up, so
+        // the ledger still records 12 there: the vertex is not a corner, and view A's rule (20)
+        // does not raise it, now or on any later Update in view A.
+        var moved = new XyzPoint(5, 0, 13.5);
+        var corner = new XyzPoint(0, 0, 10);
+        var ledgeredInViewB = new[] { new XyzPoint(5, 0, 12) };
+
+        var candidates = OutlineCornerPlanner.Candidates(
+            new[] { corner, moved }, SquareWithHole, ledgeredInViewB, None);
+        var plan = OutlineCornerPlanner.Plan(candidates, Always(20), NoRecords);
+
+        Assert.Equal(new[] { corner }, candidates);
+        Assert.Equal(new[] { (corner, 20.0) }, plan.Raises);
+        Assert.DoesNotContain(plan.NewRecords, r => r.X == 5);
     }
 
     [Fact]
@@ -713,48 +737,6 @@ public class OutlineCornerPlannerTests
         Assert.Equal(new[] { record }, plan.NewRecords);
     }
 
-    // ---------------------------------------------------------------- HandMovedRecords (fix round 1, item 1)
-
-    [Fact]
-    public void ALedgeredPointFoundAtItsSpotButAnotherHeightBecomesAHandRecord()
-    {
-        var unmatched = new[] { new XyzPoint(5, 0, 12) };
-        var vertices = new[] { new XyzPoint(0, 0, 10), new XyzPoint(5, 0, 13.5), new XyzPoint(10, 0, 10) };
-
-        var records = OutlineCornerPlanner.HandMovedRecords(unmatched, vertices);
-
-        Assert.Equal(new[] { new CornerRecord(5, 0, 13.5, 13.5, true) }, records);
-    }
-
-    [Fact]
-    public void ALedgeredPointWithNoVertexAtItsSpotGivesNoRecord()
-    {
-        var records = OutlineCornerPlanner.HandMovedRecords(
-            new[] { new XyzPoint(5, 0, 12) },
-            new[] { new XyzPoint(5 + 0.11 * Mm, 0, 13), new XyzPoint(5, 0.11 * Mm, 13) });
-
-        Assert.Empty(records);
-    }
-
-    [Fact]
-    public void TheSpotIsATenthOfAMillimetreOnEachAxis()
-    {
-        var vertex = new XyzPoint(5 + 0.09 * Mm, -0.09 * Mm, 13);
-
-        var records = OutlineCornerPlanner.HandMovedRecords(new[] { new XyzPoint(5, 0, 12) }, new[] { vertex });
-
-        Assert.Equal(new[] { new CornerRecord(vertex.X, vertex.Y, 13, 13, true) }, records);
-    }
-
-    [Fact]
-    public void TwoLedgeredPointsAtOneVertexGiveOneRecord()
-    {
-        var records = OutlineCornerPlanner.HandMovedRecords(
-            new[] { new XyzPoint(5, 0, 12), new XyzPoint(5, 0, 11) }, new[] { new XyzPoint(5, 0, 13) });
-
-        Assert.Single(records);
-    }
-
     // ---------------------------------------------------------------- ExceptAt (fix round 2, item 1)
 
     [Fact]
@@ -789,23 +771,67 @@ public class OutlineCornerPlannerTests
     }
 
     [Fact]
-    public void AHandMovedLinePointOnTheOutlineIsLeftAloneByThePassAndStaysFlagged()
+    public void AStaleLinesPointFoundMovedIsLeftOutOfThisRunsPassAndIsACandidateOnTheNextRun()
     {
-        // The line's ledger entry is gone, so the vertex is an outline candidate; its hand record
-        // keeps the pass off it, now and on every later run, and it is not reported a second time.
-        var vertex = new XyzPoint(5, 0, 13.5);
-        var hand = OutlineCornerPlanner.HandMovedRecords(new[] { new XyzPoint(5, 0, 12) }, new[] { vertex });
-        bool asked = false;
+        // Final review fix 1: the cleanup found no vertex at the point's X, Y and Z but one at its
+        // plan spot, reported it moved by hand and dropped its ledger entry. This run's pass leaves
+        // it alone with no record; the next run it is an ordinary outline vertex, and its line
+        // (still crossing there, so the rule's 1 mm snap gives it 12) takes it back.
+        var moved = new XyzPoint(5, 0, 13.5);
+        var corner = new XyzPoint(0, 0, 10);
+        var vertices = new[] { corner, moved };
+        var movedSpots = new[] { new XyzPoint(5, 0, 12) };
+        bool askedForMoved = false;
+        Func<XyzPoint, double?> target = p =>
+        {
+            if (p.X == 5) askedForMoved = true;
+            return p.X == 5 ? 12 : null;
+        };
 
-        var plan = OutlineCornerPlanner.Plan(new[] { vertex }, _ => { asked = true; return 20; }, hand);
-        var next = OutlineCornerPlanner.Plan(new[] { vertex }, Always(20), plan.NewRecords);
+        var thisRun = OutlineCornerPlanner.Plan(
+            OutlineCornerPlanner.ExceptAt(OutlineCornerPlanner.Candidates(vertices, SquareWithHole, None, None), movedSpots),
+            target, NoRecords);
 
-        Assert.Empty(plan.Raises);
-        Assert.Equal(hand, plan.NewRecords);
-        Assert.Equal(0, plan.NewlyByHand);
-        Assert.False(asked);
-        Assert.Empty(next.Raises);
-        Assert.Equal(hand, next.NewRecords);
+        Assert.Empty(thisRun.Raises);
+        Assert.Empty(thisRun.NewRecords);
+        Assert.Equal(0, thisRun.NewlyByHand);
+        Assert.False(askedForMoved);
+
+        var nextRun = OutlineCornerPlanner.Plan(
+            OutlineCornerPlanner.Candidates(vertices, SquareWithHole, None, None), target, thisRun.NewRecords);
+
+        Assert.Equal(new[] { (moved, 12.0) }, nextRun.Raises);
+        Assert.Equal(new[] { new CornerRecord(5, 0, 13.5, 12, false) }, nextRun.NewRecords);
+        Assert.Equal(0, nextRun.NewlyByHand);
+    }
+
+    [Fact]
+    public void AHeightOffsetShiftOfALedgeredEdgePointHealsOnTheNextUpdate()
+    {
+        // Final review fix 1: a Height Offset change lifts every vertex by 0.3, the line's own
+        // edge point (ledgered at 12) included. The first Update in the line's view finds it moved
+        // (counted once, no record); the second gives it the line's height again, and the third
+        // changes nothing. It is never frozen as a hand-moved corner.
+        var shifted = new XyzPoint(5, 0, 12.3);
+        var movedSpots = new[] { new XyzPoint(5, 0, 12) };
+        Func<XyzPoint, double?> line = p => p.X == 5 ? 12 : null;
+
+        var first = OutlineCornerPlanner.Plan(
+            OutlineCornerPlanner.ExceptAt(OutlineCornerPlanner.Candidates(new[] { shifted }, SquareWithHole, None, None), movedSpots),
+            line, NoRecords);
+        var second = OutlineCornerPlanner.Plan(
+            OutlineCornerPlanner.Candidates(new[] { shifted }, SquareWithHole, None, None), line, first.NewRecords);
+        var settled = OutlineCornerPlanner.Settle(second, Reached((5, 0, 12)), Reached());
+        var third = OutlineCornerPlanner.Plan(
+            OutlineCornerPlanner.Candidates(new[] { shifted with { Z = 12 } }, SquareWithHole, None, None),
+            line, settled.Records);
+
+        Assert.Empty(first.NewRecords);
+        Assert.Equal(new[] { (shifted, 12.0) }, second.Raises);
+        Assert.Empty(third.Raises);
+        Assert.Equal(settled.Records, third.NewRecords);
+        Assert.DoesNotContain(third.NewRecords, r => r.ByHand);
+        Assert.Equal(0, first.NewlyByHand + second.NewlyByHand + third.NewlyByHand);
     }
 
     // ---------------------------------------------------------------- Settle (fix round 1, items 2, 4, 6)
