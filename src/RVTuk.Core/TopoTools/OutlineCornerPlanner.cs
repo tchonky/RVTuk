@@ -332,7 +332,8 @@ namespace RVTuk.Core.TopoTools
         /// <paramref name="vertices"/> within 0.1 mm in plan, as in <see cref="Plan"/>, whatever the
         /// order of any list. Run the result through <see cref="Settle"/>.</para>
         /// </summary>
-        /// <param name="vertices">Every live vertex of the element.</param>
+        /// <param name="vertices">The element's live vertices on its outline (<see cref="OnOutline"/>),
+        /// all of them when the outline cannot be read.</param>
         public static CornerPlan Restore(
             IReadOnlyList<CornerRecord> atStart,
             IReadOnlyList<CornerRecord> now,
@@ -409,7 +410,8 @@ namespace RVTuk.Core.TopoTools
         /// is kept flagged by hand, with its set height where the corner stands, so Cancel leaves
         /// it there. Sorted by X, then Y.
         /// </summary>
-        /// <param name="vertices">Every live vertex of the element at the start.</param>
+        /// <param name="vertices">The element's live vertices on its outline at the start
+        /// (<see cref="OnOutline"/>), all of them when the outline cannot be read.</param>
         public static IReadOnlyList<CornerRecord> EffectiveStart(
             IReadOnlyList<CornerRecord> stored, bool editorEnabled, IReadOnlyList<XyzPoint> vertices)
         {

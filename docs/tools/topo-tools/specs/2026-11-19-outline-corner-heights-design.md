@@ -221,3 +221,42 @@ README (what Update writes, "The one exception", Cancel, the summary lines, the 
 - Whether raises are batched (snapshot once, as `SlabShape.Raise`) or regenerate per vertex; settle
   by the Revit check.
 - Splitting the work into tasks; the rule's port first, against the vectors.
+
+## As built (2026-11-19)
+
+Where the build (commits 8fbe3b0..4df574c) differs from the text above; the README describes the
+build.
+
+- **`Apply(CornerPass?)`.** The applier takes one `CornerPass` (the prepared rule, null when the view
+  has no readable line, plus the shared elevation of the internal origin) instead of two loose
+  parameters; a null `CornerPass` runs no corner pass at all (Cancel's step 2). With a null rule the
+  pass still puts back recorded corners.
+- **Candidates and line ends.** A vertex is kept out only within 1 mm (plan) of a point this run
+  *placed* as a new vertex, not of every line point. An edge point within 1 mm of a candidate vertex
+  is not drawn at all (rather than reusing the vertex); the rule's 1 mm snap raises and records that
+  vertex, so "points added" no longer counts it.
+- **Accept's count and copy.** The sentences are the plan's: "N outline corners took their heights
+  from the lines.", "N outline corners went back to their own heights.", "N outline corners moved by
+  hand are left alone." (singular forms in `TopoSessionReport`). The first counts every corner holding
+  a line height after the run (records not flagged by hand, less raises that missed), those set by
+  earlier Updates and those already at their height included, so Accept after a quiet Update still
+  names them.
+- **Hand and failed-delete rules.** A ledgered line point found moved by hand (no vertex at its X, Y
+  and Z, one at its plan spot) gets a corner record flagged `hand`, so the pass never raises it. A
+  ledgered point that matched but that Revit would not delete is kept out of that run's pass only,
+  with no record. A record not flagged `hand` whose corner stands at its `ownZ` but off its `setZ`
+  was reset (Reset Shape), not moved by hand: the record is dropped and the corner planned afresh.
+- **Misses.** A raise records the Z it reached, so a miss is tried again (and counted as not placed)
+  at every Update; a put-back that misses keeps a record (`ownZ`, `setZ` = where it stands).
+- **Plain elements.** With shape editing off and no line work, the pass is worked out dry from the
+  sketch's corners at the flat top (level plus height offset, else the bounding box top); a floor
+  switched on for the pass alone whose corners then did not move gets `ResetSlabShape()`. Records on
+  an element whose shape editing is off are ignored and overwritten.
+- **Cancel.** The start copy is normalised at Start (`EffectiveStart`): against the vertices on the
+  outline, a record already stale then (Reset Shape, a hand move not yet flagged, shape editing off)
+  is dropped or flagged, so Cancel never raises a corner to a height it did not have. Cancel's step
+  runs when `CancelHasCornerWork` says so (the record changed, or the start copy was stale), only on
+  vertices on the outline (`OnOutline`), and not when the element was plain when Cancel began. A start
+  record the session dropped (an Update put its corner back) comes back and its corner is raised
+  again. The message adds "… and N outline corners" (or "put back N outline corners." with no text
+  put back).
