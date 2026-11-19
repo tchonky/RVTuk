@@ -37,7 +37,8 @@ namespace RVTuk.Revit.TopoTools.Commands
         /// "Topo Cancel": the session's new topo lines are deleted and their points taken off the
         /// target; the session's other new height texts are deleted; height texts typed over are put
         /// back; the outline corners the session's Updates moved go back to where they were at its
-        /// start (<see cref="RestoreCorners"/>). Points that Update applied for lines that still
+        /// start (<see cref="RestoreCorners"/>; when that step fails it alone is skipped, and the
+        /// message says "Outline corners could not be put back."). Points that Update applied for lines that still
         /// exist stay; the next Update reconciles them. The session ends only once that transaction
         /// has committed, so a failed Cancel can be pressed again.
         /// </summary>
@@ -53,6 +54,7 @@ namespace RVTuk.Revit.TopoTools.Commands
 
             var doc = session.Document;
             int linesDeleted, pointsRemoved = 0, textsDeleted, textsRestored = 0, cornersRestored;
+            bool cornersFailed;
 
             using (var tx = new Transaction(doc, "Topo Cancel"))
             {
@@ -115,8 +117,9 @@ namespace RVTuk.Revit.TopoTools.Commands
                     }
 
                     // 5. The outline corners the session's Updates moved, back where they were at
-                    // its start — from the start's record, never by the rule.
-                    cornersRestored = RestoreCorners(doc, session, shapedBefore);
+                    // its start — from the start's record, never by the rule. A failure here costs
+                    // the corners only: their step is rolled back and Cancel goes on.
+                    cornersRestored = RestoreCornersOrSkip(doc, session, shapedBefore, out cornersFailed);
 
                     if (tx.Commit() != TransactionStatus.Committed)
                     {
@@ -144,10 +147,39 @@ namespace RVTuk.Revit.TopoTools.Commands
                 "Topo Edit cancelled. " +
                 $"Deleted {Count(linesDeleted, "new line", "new lines")} and {Count(textsDeleted, "new height text", "new height texts")}, " +
                 $"removed {Count(pointsRemoved, "point", "points")} of those lines, " +
-                $"put back {PutBack(textsRestored, cornersRestored)}.\n\n" +
+                $"put back {PutBack(textsRestored, cornersRestored)}." +
+                (cornersFailed ? " Outline corners could not be put back." : "") + "\n\n" +
                 "The surface keeps the heights from the last Update for the lines that still exist; " +
                 "the next Update reconciles them.");
             return Result.Succeeded;
+        }
+
+        /// <summary>
+        /// <see cref="RestoreCorners"/> in a sub-transaction: when it throws, what it changed is
+        /// rolled back, one line is logged, and Cancel carries on with no corner put back
+        /// (<paramref name="failed"/> true, so its message says so).
+        /// </summary>
+        private static int RestoreCornersOrSkip(Document doc, TopoSession session, bool shapedBefore, out bool failed)
+        {
+            failed = false;
+            using (var sub = new SubTransaction(doc))
+            {
+                try
+                {
+                    sub.Start();
+                    int restored = RestoreCorners(doc, session, shapedBefore);
+                    sub.Commit();
+                    return restored;
+                }
+                catch (Exception ex)
+                {
+                    if (sub.HasStarted() && !sub.HasEnded()) sub.RollBack();
+                    failed = true;
+                    Application.LogDiagnostic(
+                        $"Topo Cancel: outline corners not put back: {ex.GetType().Name}: {ex.Message.Replace('\n', ' ').Replace('\r', ' ')}");
+                    return 0;
+                }
+            }
         }
 
         /// <summary>
