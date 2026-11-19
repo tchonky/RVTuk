@@ -188,8 +188,9 @@ the start, never from the lines, so it cannot move a corner the session left alo
 by hand stays where it is: one moved before the session (flagged when the session starts), one an
 Update of the session reported, and one moved after the session's last Update. That last one
 stands more than 0.1 mm off the height that Update gave it, off its own height and off the height
-Cancel would give it; whenever Cancel has corners to look at (their record changed during the
-session), it flags that corner where it stands, so later Updates leave it alone without reporting
+Cancel would give it; whenever Cancel has corners to look at (the corner record changed during
+the session, or a corner already stood off its record when the session started), it flags that
+corner where it stands, so later Updates leave it alone without reporting
 it; otherwise the next Update reports it, as after any hand move. Its message counts the corners
 put back: "put back 1 changed height and 2 outline corners." ("put back 2 outline corners." when no
 typed height was put back; no corner part when no corner moved). If putting the corners back fails,
@@ -517,7 +518,7 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 106 | A toposolid whose corners an earlier session set: in a new session type another height on their line, Update (the corners move), Reset Shape on the toposolid, then Cancel | The corners go back up to the earlier session's heights, not where Reset Shape put them (a known limit, not a bug) | [ ] | [ ] | [ ] | [ ] |
 | 107 | **Every year.** Rows 86, 87, 24 and 97 | Each passes as written. They check that `ModifySubElement` takes an outline corner of a toposolid and of a floor, measured from the same unshaped top as an edge point. Report it if a corner does not move at all (the summary then counts it among the points that "could not be placed"), or if every corner lands off its expected height by one same amount | [ ] | [ ] | [ ] | [ ] |
 | 108 | A toposolid with a height offset other than 0, and a floor on a level above 0 with a height offset other than 0: on each, a line ending on an outline corner, at a known height; Update | The corner reads the line's height within 1 mm (point readout, Elevation Base = Survey Point), as the line's own points do (rows 19 and 73); the summary has no "could not be placed" | [ ] | [ ] | [ ] | [ ] |
-| 109 | During a session, after an Update that set a corner, move it with Modify Sub Elements and Cancel with no Update between; once with a corner only this session set, once with one an earlier session set | The corner stays where you put it both times, and Cancel's message does not count it. A later session's Update leaves it there and does not report it | [ ] | [ ] | [ ] | [ ] |
+| 109 | In a session, type another height on a corner's line and Update, so the Update moves that corner; move it with Modify Sub Elements and Cancel with no Update between. Once with a corner only this session set, once with one an earlier session set | The corner stays where you put it both times, and Cancel's message does not count it. A later session's Update leaves it there and does not report it | [ ] | [ ] | [ ] | [ ] |
 
 Items 19 and 20 are the two floor facts nothing has verified yet; if a floor wants an offset from
 its top, floors need their own Z conversion.
