@@ -133,8 +133,9 @@ twice changes nothing the second time.
   takes them all for moved by hand (backlog); its line points are reported once and then follow
   their lines again.
 - **Floors** get the same, with one difference: a plain floor (shape editing off) is switched to
-  shape editing only when one of its corners takes a height from the lines, so a floor none of
-  whose corners takes a height from the lines stays a plain floor. That is judged before anything
+  shape editing only when the lines move one of its corners by more than 0.1 mm, however far they
+  are (there is no reach limit), so a floor none of whose corners takes a height from the lines
+  stays a plain floor. That is judged before anything
   is switched on, from the floor's flat top (its level plus its height offset); on a plain floor
   whose top is not flat at that height the guess can be wrong (unchecked in Revit). A floor switched
   on for its corners alone, whose corners then did not move, is made plain again.
@@ -423,7 +424,7 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 21 | Two chained lines meeting on the outline; Update twice | Neither Update shows a summary: a "moved by hand" warning on the second would bring one up | [ ] | [ ] | [ ] | [ ] |
 | 22 | During a session, draw a filled region and a masking region | Their boundaries keep their own style and get no height texts | [ ] | [ ] | [ ] | [ ] |
 | 23 | Draw a line, Ctrl+Z it, place an ordinary text note in the view; then Cancel | The text note stays | [ ] | [ ] | [ ] | [ ] |
-| 24 | Session on a plain floor with no line over it: first with no line near it, then with lines on one side of it only, more than 5 cm from its corners; Update each time | The floor is not made shape-edited (Modify Sub Elements shows no points): a floor none of whose corners takes a height from the lines stays a plain floor | [ ] | [ ] | [ ] | [ ] |
+| 24 | Session on a plain floor with no line over it: first with no topo line in the view, then with lines on one side of it only, more than 5 cm from its corners; Update each time | The floor is not made shape-edited (Modify Sub Elements shows no points): a floor none of whose corners takes a height from the lines stays a plain floor | [ ] | [ ] | [ ] | [ ] |
 | 25 | Make Revit roll an Update back (press Cancel in a Revit error dialog during Update) | "Nothing was applied — Revit rolled the change back."; the session stays open | [ ] | [ ] | [ ] | [ ] |
 | 26 | Type 50 in Spacing **without** Enter, click Update; restart Revit | Denser points on that Update, and 50 after the restart. If not, Revit does not hand over text before Enter: say so in the tooltip and drop the read-back | [ ] | [ ] | [ ] | [ ] |
 | 27 | Two lines at 42.75 and 43.00 sharing an end point inside the element; Update twice, then ✓ | One point there at 43.00. Neither Update shows a summary: a crossing alone needs no attention, and a "moved by hand" warning would bring one up. ✓'s summary says "1 point where lines cross took the higher line's height." | [ ] | [ ] | [ ] | [ ] |
