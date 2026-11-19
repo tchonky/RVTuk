@@ -1,11 +1,18 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using RVTuk.Core.Shared.Geometry;
 
 namespace RVTuk.Core.TopoTools
 {
     /// <summary>
-    /// What one corner pass does to an element's outline, in internal feet.
+    /// What one corner pass does to an element's outline, in internal feet. Every list is sorted by
+    /// plan X, then Y, so the plan (and the stored record text) depends only on the corners, never
+    /// on the order Revit lists the vertices in.
+    ///
+    /// <para>A raised corner's record carries <c>SetZ</c> = the height asked for. The applier MUST
+    /// replace it with the Z read back after the raise (<see cref="WithReached"/>): a record whose
+    /// <c>SetZ</c> is not where the corner actually sits reads as "moved by hand" on the next run.</para>
     /// </summary>
     /// <param name="Raises">Corners to move to the height the lines give them.</param>
     /// <param name="PutBacks">Corners no line influences any more, back to their own height.</param>
@@ -15,7 +22,23 @@ namespace RVTuk.Core.TopoTools
         IReadOnlyList<(XyzPoint At, double ToZ)> Raises,
         IReadOnlyList<(XyzPoint At, double ToZ)> PutBacks,
         IReadOnlyList<CornerRecord> NewRecords,
-        int NewlyByHand);
+        int NewlyByHand)
+    {
+        /// <summary>
+        /// This plan with <c>SetZ</c> of each record not flagged by hand replaced by the height the
+        /// corner reached, keyed by the corner's exact plan XY (a raise's <c>At.X</c>, <c>At.Y</c>, which
+        /// its record carries unchanged). Records without an entry keep their <c>SetZ</c>.
+        /// </summary>
+        public CornerPlan WithReached(IReadOnlyDictionary<(double X, double Y), double> reachedZByXy)
+        {
+            var records = NewRecords
+                .Select(r => !r.ByHand && reachedZByXy.TryGetValue((r.X, r.Y), out var reached)
+                    ? r with { SetZ = reached }
+                    : r)
+                .ToList();
+            return this with { NewRecords = records };
+        }
+    }
 
     /// <summary>
     /// The outline corner pass of a Topo Tools Update, without Revit: which vertices of the edited
@@ -59,11 +82,17 @@ namespace RVTuk.Core.TopoTools
         }
 
         /// <summary>
-        /// Decides the pass for each candidate. Records are matched to candidates by plan XY within
-        /// 1 mm; a record without a candidate (Edit Boundary, Reset Shape) is dropped.
+        /// Decides the pass for each candidate. A record pairs with a candidate within 0.1 mm in
+        /// plan: a record stores its corner's live XY exactly, so anything farther is another corner.
+        /// Pairs are chosen nearest first, whatever the order of either list.
+        ///
+        /// <para>A record whose corner is not among <paramref name="candidates"/> is dropped (Edit
+        /// Boundary, Reset Shape). So the applier must pass every outline vertex that is not ledgered
+        /// and not within 1 mm of a placed point — exactly <see cref="Candidates"/> — and never filter
+        /// them further, or it erases the own heights of the corners it left out.</para>
         /// </summary>
         /// <param name="targetZ">The internal Z a candidate should take, or null when no line
-        /// influences it. Not asked for corners moved by hand.</param>
+        /// influences it; a non-finite value counts as null. Not asked for corners moved by hand.</param>
         public static CornerPlan Plan(
             IReadOnlyList<XyzPoint> candidates,
             Func<XyzPoint, double?> targetZ,
@@ -72,12 +101,13 @@ namespace RVTuk.Core.TopoTools
             var raises = new List<(XyzPoint At, double ToZ)>();
             var putBacks = new List<(XyzPoint At, double ToZ)>();
             var newRecords = new List<CornerRecord>();
-            var used = new bool[records.Count];
+            var recordOf = PairRecords(candidates, records);
             int newlyByHand = 0;
 
-            foreach (var corner in candidates)
+            for (int i = 0; i < candidates.Count; i++)
             {
-                var record = TakeRecord(corner, records, used);
+                var corner = candidates[i];
+                var record = recordOf[i];
 
                 if (record != null && record.ByHand)
                 {
@@ -93,7 +123,7 @@ namespace RVTuk.Core.TopoTools
                 }
 
                 var target = targetZ(corner);
-                if (target.HasValue)
+                if (target.HasValue && !double.IsNaN(target.Value) && !double.IsInfinity(target.Value))
                 {
                     if (Math.Abs(target.Value - corner.Z) > ShapeReplayPlanner.ToleranceFeet)
                         raises.Add((corner, target.Value));
@@ -106,27 +136,51 @@ namespace RVTuk.Core.TopoTools
                     putBacks.Add((corner, record.OwnZ));
             }
 
-            return new CornerPlan(raises, putBacks, newRecords, newlyByHand);
+            return new CornerPlan(
+                raises.OrderBy(m => m.At.X).ThenBy(m => m.At.Y).ToList(),
+                putBacks.OrderBy(m => m.At.X).ThenBy(m => m.At.Y).ToList(),
+                newRecords.OrderBy(r => r.X).ThenBy(r => r.Y).ToList(),
+                newlyByHand);
         }
 
-        /// <summary>The nearest unused record within 1 mm of the corner in plan, marked used.</summary>
-        private static CornerRecord? TakeRecord(XyzPoint corner, IReadOnlyList<CornerRecord> records, bool[] used)
+        /// <summary>
+        /// For each candidate, its record or null. Every candidate–record pair within 0.1 mm in plan
+        /// is sorted by distance, ties broken by the candidate's X, Y, Z and then the record's
+        /// fields, and taken greedily, so the result does not depend on either list's order.
+        /// </summary>
+        private static CornerRecord?[] PairRecords(
+            IReadOnlyList<XyzPoint> candidates, IReadOnlyList<CornerRecord> records)
         {
-            int best = -1;
-            double bestDistance = double.MaxValue;
-            for (int i = 0; i < records.Count; i++)
+            var pairs = new List<(int Candidate, int Record, double Distance)>();
+            for (int c = 0; c < candidates.Count; c++)
             {
-                if (used[i]) continue;
-                double distance = PlanDistance(corner.X, corner.Y, records[i].X, records[i].Y);
-                if (distance <= ShapeReplayPlanner.EdgeBandFeet && distance < bestDistance)
+                for (int r = 0; r < records.Count; r++)
                 {
-                    best = i;
-                    bestDistance = distance;
+                    double distance = PlanDistance(candidates[c].X, candidates[c].Y, records[r].X, records[r].Y);
+                    if (distance <= ShapeReplayPlanner.ToleranceFeet) pairs.Add((c, r, distance));
                 }
             }
-            if (best < 0) return null;
-            used[best] = true;
-            return records[best];
+
+            var ordered = pairs
+                .OrderBy(p => p.Distance)
+                .ThenBy(p => candidates[p.Candidate].X)
+                .ThenBy(p => candidates[p.Candidate].Y)
+                .ThenBy(p => candidates[p.Candidate].Z)
+                .ThenBy(p => records[p.Record].X)
+                .ThenBy(p => records[p.Record].Y)
+                .ThenBy(p => records[p.Record].OwnZ)
+                .ThenBy(p => records[p.Record].SetZ)
+                .ThenBy(p => records[p.Record].ByHand);
+
+            var recordOf = new CornerRecord?[candidates.Count];
+            var taken = new bool[records.Count];
+            foreach (var pair in ordered)
+            {
+                if (recordOf[pair.Candidate] != null || taken[pair.Record]) continue;
+                recordOf[pair.Candidate] = records[pair.Record];
+                taken[pair.Record] = true;
+            }
+            return recordOf;
         }
 
         private static bool IsLedgered(XyzPoint vertex, IReadOnlyList<XyzPoint> ledgered)

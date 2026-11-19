@@ -25,6 +25,28 @@ public class OutlineCornerPlannerTests
 
     private static Func<XyzPoint, double?> Always(double? z) => _ => z;
 
+    private static IEnumerable<T[]> Orders<T>(IReadOnlyList<T> items)
+    {
+        if (items.Count <= 1)
+        {
+            yield return items.ToArray();
+            yield break;
+        }
+        for (int i = 0; i < items.Count; i++)
+        {
+            var rest = items.Where((_, j) => j != i).ToArray();
+            foreach (var tail in Orders(rest)) yield return new[] { items[i] }.Concat(tail).ToArray();
+        }
+    }
+
+    private static void AssertSamePlan(CornerPlan expected, CornerPlan actual)
+    {
+        Assert.Equal(expected.Raises, actual.Raises);
+        Assert.Equal(expected.PutBacks, actual.PutBacks);
+        Assert.Equal(expected.NewRecords, actual.NewRecords);
+        Assert.Equal(expected.NewlyByHand, actual.NewlyByHand);
+    }
+
     // ---------------------------------------------------------------- Candidates
 
     [Fact]
@@ -51,6 +73,31 @@ public class OutlineCornerPlannerTests
             new[] { inside, justInside, new XyzPoint(2, 2, 10) }, SquareWithHole, None, None);
 
         Assert.Equal(new[] { justInside }, candidates);
+    }
+
+    [Fact]
+    public void TheEdgeBandIsOneMillimetre()
+    {
+        var at09 = new XyzPoint(0.9 * Mm, 5, 10);
+        var at11 = new XyzPoint(1.1 * Mm, 5, 10);
+        var holeAt09 = new XyzPoint(5, 6 - 0.9 * Mm, 10);
+        var holeAt11 = new XyzPoint(5, 6 - 1.1 * Mm, 10);
+
+        var candidates = OutlineCornerPlanner.Candidates(
+            new[] { at09, at11, holeAt09, holeAt11 }, SquareWithHole, None, None);
+
+        Assert.Equal(new[] { at09, holeAt09 }, candidates);
+    }
+
+    [Fact]
+    public void ThePlacedPointBandIsOneMillimetre()
+    {
+        var vertex = new XyzPoint(5, 0, 10);
+
+        Assert.Empty(OutlineCornerPlanner.Candidates(
+            new[] { vertex }, SquareWithHole, None, new[] { new XyzPoint(5 + 0.9 * Mm, 0, 10) }));
+        Assert.Single(OutlineCornerPlanner.Candidates(
+            new[] { vertex }, SquareWithHole, None, new[] { new XyzPoint(5 + 1.1 * Mm, 0, 10) }));
     }
 
     [Fact]
@@ -257,11 +304,12 @@ public class OutlineCornerPlannerTests
     }
 
     [Fact]
-    public void RecordsMatchCandidatesWithinOneMillimetreInPlan()
+    public void RecordsPairWithCandidatesWithinATenthOfAMillimetreInPlan()
     {
+        // A record stores its corner's live XY exactly, so 0.1 mm is ample.
         var corner = new XyzPoint(0, 0, 12);
-        var near = new CornerRecord(0.6 * Mm, 0.6 * Mm, 10, 12, false); // 0.85 mm
-        var far = new CornerRecord(0.8 * Mm, 0.8 * Mm, 10, 12, false); // 1.13 mm
+        var near = new CornerRecord(0.06 * Mm, 0.06 * Mm, 10, 12, false); // 0.085 mm
+        var far = new CornerRecord(0.08 * Mm, 0.08 * Mm, 10, 12, false); // 0.113 mm
 
         var matched = OutlineCornerPlanner.Plan(new[] { corner }, Always(null), new[] { near });
         Assert.Equal(new[] { (corner, 10.0) }, matched.PutBacks);
@@ -269,6 +317,185 @@ public class OutlineCornerPlannerTests
         var unmatched = OutlineCornerPlanner.Plan(new[] { corner }, Always(null), new[] { far });
         Assert.Empty(unmatched.PutBacks);
         Assert.Empty(unmatched.NewRecords);
+    }
+
+    [Fact]
+    public void TheNearestRecordWins()
+    {
+        var corner = new XyzPoint(0, 0, 12);
+        var nearer = new CornerRecord(0.03 * Mm, 0, 10, 12, false);
+        var farther = new CornerRecord(0, 0.08 * Mm, 11, 12, false);
+
+        foreach (var records in Orders(new[] { farther, nearer }))
+        {
+            var plan = OutlineCornerPlanner.Plan(new[] { corner }, Always(null), records);
+            Assert.Equal(new[] { (corner, 10.0) }, plan.PutBacks);
+        }
+    }
+
+    [Fact]
+    public void ACornerMovedByHandAndLeftAloneIsFlaggedNotPutBack()
+    {
+        var corner = new XyzPoint(0, 0, 15);
+        var record = new CornerRecord(0, 0, 10, 12, false);
+
+        var plan = OutlineCornerPlanner.Plan(new[] { corner }, Always(null), new[] { record });
+
+        Assert.Empty(plan.Raises);
+        Assert.Empty(plan.PutBacks);
+        Assert.Equal(new[] { record with { ByHand = true } }, plan.NewRecords);
+        Assert.Equal(1, plan.NewlyByHand);
+    }
+
+    [Fact]
+    public void TheRecordFollowsTheLiveCornersXy()
+    {
+        var corner = new XyzPoint(1, 2, 12);
+        var record = new CornerRecord(1 + 0.05 * Mm, 2, 10, 12, false);
+
+        var plan = OutlineCornerPlanner.Plan(new[] { corner }, Always(14), new[] { record });
+
+        Assert.Equal(new[] { (corner, 14.0) }, plan.Raises);
+        Assert.Equal(new[] { new CornerRecord(1, 2, 10, 14, false) }, plan.NewRecords);
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void ANonFiniteTargetCountsAsLeftAlone(double bad)
+    {
+        var recorded = new XyzPoint(0, 0, 12);
+        var unrecorded = new XyzPoint(10, 0, 10);
+
+        var plan = OutlineCornerPlanner.Plan(
+            new[] { recorded, unrecorded }, Always(bad), new[] { new CornerRecord(0, 0, 10, 12, false) });
+
+        Assert.Empty(plan.Raises);
+        Assert.Equal(new[] { (recorded, 10.0) }, plan.PutBacks);
+        Assert.Empty(plan.NewRecords);
+    }
+
+    [Fact]
+    public void EveryListIsSortedByXThenY()
+    {
+        var candidates = new[]
+        {
+            new XyzPoint(10, 10, 10), new XyzPoint(0, 10, 10), new XyzPoint(10, 0, 10), new XyzPoint(0, 0, 10),
+            new XyzPoint(5, 5, 12), new XyzPoint(5, 1, 12),
+        };
+        var records = new[] { new CornerRecord(5, 5, 11, 12, false), new CornerRecord(5, 1, 11, 12, false) };
+        Func<XyzPoint, double?> target = p => p.X == 5 ? null : 20;
+
+        var plan = OutlineCornerPlanner.Plan(candidates, target, records);
+
+        Assert.Equal(new[] { (0.0, 0.0), (0.0, 10.0), (10.0, 0.0), (10.0, 10.0) },
+            plan.Raises.Select(m => (m.At.X, m.At.Y)));
+        Assert.Equal(new[] { (5.0, 1.0), (5.0, 5.0) }, plan.PutBacks.Select(m => (m.At.X, m.At.Y)));
+        Assert.Equal(new[] { (0.0, 0.0), (0.0, 10.0), (10.0, 0.0), (10.0, 10.0) },
+            plan.NewRecords.Select(r => (r.X, r.Y)));
+    }
+
+    // Reviewers' scene (a): two outline vertices 0.9 mm apart, only B recorded.
+    [Fact]
+    public void TwoCornersNearOneAnotherEachKeepTheirOwnRecordInEveryOrder()
+    {
+        var a = new XyzPoint(0, 0, 10);
+        var b = new XyzPoint(0.9 * Mm, 0, 12);
+        var records = new[] { new CornerRecord(0.9 * Mm, 0, 9, 12, false) };
+
+        var expected = new CornerPlan(
+            new[] { (a, 12.0) },
+            Array.Empty<(XyzPoint, double)>(),
+            new[] { new CornerRecord(0, 0, 10, 12, false), new CornerRecord(0.9 * Mm, 0, 9, 12, false) },
+            0);
+
+        foreach (var candidates in Orders(new[] { a, b }))
+            AssertSamePlan(expected, OutlineCornerPlanner.Plan(candidates, Always(12), records));
+    }
+
+    // Reviewers' scene (b): a record halfway between two corners belongs to neither.
+    [Fact]
+    public void ARecordBetweenTwoCornersIsDroppedInEveryOrder()
+    {
+        var a = new XyzPoint(0, 0, 12);
+        var b = new XyzPoint(1.5 * Mm, 0, 10);
+        var records = new[] { new CornerRecord(0.75 * Mm, 0, 10, 12, false) };
+
+        var expected = new CornerPlan(
+            Array.Empty<(XyzPoint, double)>(), Array.Empty<(XyzPoint, double)>(), NoRecords, 0);
+
+        foreach (var candidates in Orders(new[] { a, b }))
+            AssertSamePlan(expected, OutlineCornerPlanner.Plan(candidates, Always(null), records));
+    }
+
+    // Reviewers' scene (c): one corner, two records either side of it.
+    [Fact]
+    public void RecordsHalfAMillimetreEitherSideOfACornerAreNotItsInEveryOrder()
+    {
+        var corner = new XyzPoint(0, 0, 12);
+        var records = new[]
+        {
+            new CornerRecord(-0.5 * Mm, 0, 10, 12, false), new CornerRecord(0.5 * Mm, 0, 11, 12, false),
+        };
+
+        var expected = new CornerPlan(
+            new[] { (corner, 14.0) },
+            Array.Empty<(XyzPoint, double)>(),
+            new[] { new CornerRecord(0, 0, 12, 14, false) },
+            0);
+
+        foreach (var order in Orders(records))
+            AssertSamePlan(expected, OutlineCornerPlanner.Plan(new[] { corner }, Always(14), order));
+    }
+
+    [Fact]
+    public void RecordsEquallyNearACornerPairByTheRecordsXInEveryOrder()
+    {
+        var corner = new XyzPoint(0, 0, 12);
+        var records = new[]
+        {
+            new CornerRecord(0.05 * Mm, 0, 11, 12, false), new CornerRecord(-0.05 * Mm, 0, 10, 12, false),
+        };
+
+        var expected = new CornerPlan(
+            new[] { (corner, 14.0) },
+            Array.Empty<(XyzPoint, double)>(),
+            new[] { new CornerRecord(0, 0, 10, 14, false) },
+            0);
+
+        foreach (var order in Orders(records))
+            AssertSamePlan(expected, OutlineCornerPlanner.Plan(new[] { corner }, Always(14), order));
+    }
+
+    // ---------------------------------------------------------------- WithReached
+
+    [Fact]
+    public void WithReachedReplacesSetZByTheHeightTheCornerReached()
+    {
+        var raised = new XyzPoint(0, 0, 10);
+        var handled = new XyzPoint(10, 0, 15);
+        var untouched = new XyzPoint(10, 10, 10);
+        var records = new[] { new CornerRecord(10, 0, 9, 12, false) };
+
+        var plan = OutlineCornerPlanner.Plan(new[] { raised, handled, untouched },
+            p => p.Y == 10 ? 10 : 12, records);
+
+        var reached = plan.WithReached(new Dictionary<(double X, double Y), double>
+        {
+            [(0, 0)] = 11.9,
+            [(10, 0)] = 99, // flagged by hand: left as it was
+        });
+
+        Assert.Equal(new[]
+        {
+            new CornerRecord(0, 0, 10, 11.9, false),
+            new CornerRecord(10, 0, 9, 12, true),
+            new CornerRecord(10, 10, 10, 10, false),
+        }, reached.NewRecords);
+        Assert.Same(plan.Raises, reached.Raises);
+        Assert.Same(plan.PutBacks, reached.PutBacks);
+        Assert.Equal(plan.NewlyByHand, reached.NewlyByHand);
     }
 
     [Fact]
