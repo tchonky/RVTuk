@@ -41,6 +41,26 @@ Features:
 - **Productivity tools** — interactive room renumbering; auto-dimensioning (folds in the separate `KKimensions` project).
 - **Instructions** — editable in-Revit pages with visual tips and how-to guidance.
 
+## Branches
+
+Decided by Daniel on 2026-11-19: one long-lived branch per tool, plus `master`.
+
+| Tool | Branch |
+|------|--------|
+| Family Browser | `family-browser` |
+| Rishui Zamin (Area Calc, KKarea) | `rishui-zamin` |
+| DWG Exporter | `dwg-exporter` |
+| Auto Dimensions | `auto-dimensions` |
+| Topo Tools (with Floor ⇄ Topo) | `topo-tools` |
+| Room Floors | `room-floors` |
+| Round Positions | `round-positions` |
+| Neo Properties | `neo-properties` |
+
+- Work on a tool happens on its branch. Merge it into `master` when it is ready, then bring the branch up to date with `master` before the next piece of work. Do not create other branches, one per task or feature.
+- Work that touches no single tool (build scripts, installer, Shared code, toolkit docs) goes on `master`.
+- Work in `D:\Coding\RVTuk` itself, switching branches there. Never create worktree folders. `Deploy.ps1` builds whatever branch is checked out, so say which branch to deploy.
+- Branches kept for Daniel to review, outside this scheme: `family-browser-acc` (an ACC view-only commit that is not in `master`), `parked/addin-split-tools-step` (the parked Tools add-in step), `topo-probe-2026-11-17` (the throwaway Topo probe, never merged), and `archive/project-review-improvements-24x1gs` (on GitHub only). Do not delete them, and do not build on them, without his say-so.
+
 ## Build
 
 A solution file (`RVTuk.sln`) is present with five solution configurations — `Release2023` through `Release2027` (there is no standard `Debug`/`Release`). Build the whole solution per config:
