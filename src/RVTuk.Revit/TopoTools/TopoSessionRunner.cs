@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
+using RVTuk.Core.Shared.Geometry;
 using RVTuk.Core.TopoTools;
 
 namespace RVTuk.Revit.TopoTools
@@ -11,6 +12,11 @@ namespace RVTuk.Revit.TopoTools
     /// ignored — not applied and not reported — though, being in the view, its earlier points on
     /// this element (if it has since moved off it) are still cleaned by the applier. Where lines
     /// put points on one plan spot, the highest is kept (<see cref="TopoPointDeduper"/>).
+    ///
+    /// Every line of the view with a readable height also goes, as drawn, to the outline corner rule
+    /// (<see cref="OutlineCornerHeights"/>), whether or not it crosses the element: a corner shared
+    /// with a neighbour must move even when the lines lie over the neighbour. An unreadable height
+    /// is reported only for a line over the element; elsewhere it is left out silently.
     /// </summary>
     public static class TopoSessionRunner
     {
@@ -33,15 +39,26 @@ namespace RVTuk.Revit.TopoTools
             var lines = TopoLineCollector.Collect(doc, view);
             var lineIdsInView = lines.Select(line => line.LineId).ToList();
             var newPointsByLine = new Dictionary<long, LinePointsZ>();
+            var cornerLines = new List<CornerLine>();
 
             foreach (var line in lines)
             {
+                var text = heightTextByLine.TryGetValue(line.LineId, out var raw) ? raw ?? "" : "";
+                bool readable = SurveyHeightText.TryParse(text, out double sharedFeet);
+                if (readable)
+                {
+                    cornerLines.Add(new CornerLine(
+                        sharedFeet * SurveyHeightText.MetresPerFoot,
+                        line.CornerPolyline
+                            .Select(xy => new XyPoint(xy.X * SurveyHeightText.MetresPerFoot, xy.Y * SurveyHeightText.MetresPerFoot))
+                            .ToList()));
+                }
+
                 var points = TopoLineClipper.Points(
                     line.Polyline, target.Loops, spacingFeet, ShapeReplayPlanner.EdgeBandFeet);
                 if (points.IsEmpty) continue;
 
-                var text = heightTextByLine.TryGetValue(line.LineId, out var raw) ? raw ?? "" : "";
-                if (!SurveyHeightText.TryParse(text, out double sharedFeet))
+                if (!readable)
                 {
                     report.UnreadableHeights.Add(text);
                     continue;
@@ -57,11 +74,16 @@ namespace RVTuk.Revit.TopoTools
             // lines cross (or chain on the outline) the rule is ours, not whatever Revit merges.
             var deduped = TopoPointDeduper.Dedupe(newPointsByLine);
 
+            // Null when the view has no readable line: the corner pass then only puts back what
+            // earlier Updates set.
+            var corners = cornerLines.Count > 0 ? OutlineCornerHeights.Prepare(cornerLines) : null;
+
             var outcome = TopoPointApplier.Apply(
                 target,
                 lineIdsInView,
                 deduped.Kept,
-                lineId => doc.GetElement(new ElementId(lineId)) != null);
+                lineId => doc.GetElement(new ElementId(lineId)) != null,
+                new CornerPass(corners, sharedElevationOfInternalZero));
 
             report.LinesApplied = newPointsByLine.Count;
             report.PointsAdded = outcome.Added;
@@ -69,6 +91,9 @@ namespace RVTuk.Revit.TopoTools
             report.PointsMovedByHand = outcome.Missing;
             report.PointsLost = outcome.Lost;
             report.PointsDroppedAtCrossings = deduped.DroppedForHigher;
+            report.CornersSet = outcome.CornersSet;
+            report.CornersPutBack = outcome.CornersPutBack;
+            report.CornersByHand = outcome.CornersByHand;
             return report;
         }
     }

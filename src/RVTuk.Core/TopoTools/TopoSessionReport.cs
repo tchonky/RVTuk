@@ -9,10 +9,12 @@ namespace RVTuk.Core.TopoTools
     /// the Update button only when <see cref="ShowAfterUpdate"/> is true. Kept in Core and tested,
     /// as the only account the user gets of what an Update applied.
     ///
-    /// Sentences are joined by a single space, in this order: applied, crossings, skipped, moved by
-    /// hand, lost, unlinked, Survey Point marker; when nothing was applied and there is no
-    /// problem, <see cref="NothingOverTarget"/> stands in for all but the marker's, which alone can
-    /// follow it.
+    /// Sentences are joined by a single space, in this order: applied, crossings, corners set,
+    /// corners put back, skipped, moved by hand, corners moved by hand, lost, unlinked, Survey Point
+    /// marker; when nothing was applied and there is no problem, <see cref="NothingOverTarget"/>
+    /// stands in for the applied sentence and only the corners set and put back and the marker's
+    /// can follow it (a corner shared with a neighbour moves even when every line lies over the
+    /// neighbour).
     /// </summary>
     public sealed class TopoSessionReport
     {
@@ -34,6 +36,18 @@ namespace RVTuk.Core.TopoTools
 
         public int UnlinkedTexts { get; set; }
 
+        /// <summary>Outline corners raised or lowered to the height the lines give them (spec
+        /// 2026-11-19). The rule, not a problem: no warning.</summary>
+        public int CornersSet { get; set; }
+
+        /// <summary>Outline corners no line influences any more, put back to their own height. Not a
+        /// problem either.</summary>
+        public int CornersPutBack { get; set; }
+
+        /// <summary>Outline corners found moved by hand in this run (flagged now): left alone from
+        /// now on, and a problem, so the Update says so once.</summary>
+        public int CornersByHand { get; set; }
+
         /// <summary>The Survey Point marker's own height (its Elev) in metres, or null for no note.
         /// Heights are measured like a Survey Point level, not from the marker, so a marker at least
         /// half a millimetre off 0 is named in the last sentence, rounded to the millimetre: a note,
@@ -41,7 +55,8 @@ namespace RVTuk.Core.TopoTools
         public double? SurveyPointMarkerMetres { get; set; }
 
         public bool HasProblems =>
-            UnreadableHeights.Count > 0 || PointsMovedByHand > 0 || PointsLost > 0 || UnlinkedTexts > 0;
+            UnreadableHeights.Count > 0 || PointsMovedByHand > 0 || PointsLost > 0 || UnlinkedTexts > 0 ||
+            CornersByHand > 0;
 
         /// <summary>
         /// Whether the Update button shows this summary: only when it names a problem or nothing was
@@ -64,7 +79,10 @@ namespace RVTuk.Core.TopoTools
             }
             else if (!HasProblems)
             {
-                return markerNote == null ? NothingOverTarget : NothingOverTarget + " " + markerNote;
+                sentences.Add(NothingOverTarget);
+                AddCornersSetAndPutBack(sentences);
+                if (markerNote != null) sentences.Add(markerNote);
+                return string.Join(" ", sentences);
             }
 
             if (PointsDroppedAtCrossings > 0)
@@ -72,6 +90,8 @@ namespace RVTuk.Core.TopoTools
                 sentences.Add(Count(PointsDroppedAtCrossings, "point", "points") +
                     " where lines cross took the higher line's height.");
             }
+
+            AddCornersSetAndPutBack(sentences);
 
             if (UnreadableHeights.Count > 0)
             {
@@ -96,6 +116,13 @@ namespace RVTuk.Core.TopoTools
                     : PointsMovedByHand + " earlier points had been moved by hand and were left alone.");
             }
 
+            if (CornersByHand > 0)
+            {
+                sentences.Add(CornersByHand == 1
+                    ? "1 outline corner moved by hand is left alone."
+                    : CornersByHand + " outline corners moved by hand are left alone.");
+            }
+
             if (PointsLost > 0)
                 sentences.Add(Count(PointsLost, "point", "points") + " could not be placed.");
 
@@ -109,6 +136,23 @@ namespace RVTuk.Core.TopoTools
             if (markerNote != null) sentences.Add(markerNote);
 
             return string.Join(" ", sentences);
+        }
+
+        private void AddCornersSetAndPutBack(List<string> sentences)
+        {
+            if (CornersSet > 0)
+            {
+                sentences.Add(CornersSet == 1
+                    ? "1 outline corner took its height from the lines."
+                    : CornersSet + " outline corners took their heights from the lines.");
+            }
+
+            if (CornersPutBack > 0)
+            {
+                sentences.Add(CornersPutBack == 1
+                    ? "1 outline corner went back to its own height."
+                    : CornersPutBack + " outline corners went back to their own heights.");
+            }
         }
 
         /// <summary>

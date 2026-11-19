@@ -86,7 +86,7 @@ namespace RVTuk.Revit.TopoTools.Commands
                     {
                         var outcome = TopoPointApplier.Apply(
                             target, removed, new Dictionary<long, LinePointsZ>(),
-                            lineId => !removed.Contains(lineId));
+                            lineId => !removed.Contains(lineId), corners: null);
                         pointsRemoved = outcome.Removed;
                     }
 

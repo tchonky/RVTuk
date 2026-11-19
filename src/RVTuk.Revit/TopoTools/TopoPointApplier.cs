@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
+using RVTuk.Core.Shared.Geometry;
 using RVTuk.Core.TopoTools;
 
 namespace RVTuk.Revit.TopoTools
@@ -10,8 +11,32 @@ namespace RVTuk.Revit.TopoTools
     /// <param name="Added">Points placed at their height.</param>
     /// <param name="Removed">Earlier points of re-applied or deleted lines, taken out.</param>
     /// <param name="Missing">Earlier points no longer found where recorded: moved by hand.</param>
-    /// <param name="Lost">Points that could not be placed, or not at their height.</param>
-    public sealed record ApplyOutcome(int Added, int Removed, int Missing, int Lost);
+    /// <param name="Lost">Points that could not be placed, or not at their height — outline corners
+    /// the corner pass could not bring within 0.1 mm of their height included.</param>
+    /// <param name="CornersSet">Outline corners raised or lowered to the height the lines give them.</param>
+    /// <param name="CornersPutBack">Outline corners no line influences any more, back at their own height.</param>
+    /// <param name="CornersByHand">Outline corners found moved by hand in this run, flagged and left alone.</param>
+    public sealed record ApplyOutcome(
+        int Added, int Removed, int Missing, int Lost,
+        int CornersSet = 0, int CornersPutBack = 0, int CornersByHand = 0);
+
+    /// <summary>
+    /// What the outline corner pass of one Update needs (spec 2026-11-19): the rule prepared from
+    /// the view's lines, null when the view has no line with a readable height (the pass then only
+    /// puts back what earlier Updates set), and the shared elevation of the internal origin, which
+    /// turns the rule's shared metres into internal Z as <see cref="TopoSessionRunner"/> does.
+    /// </summary>
+    public sealed record CornerPass(OutlineCornerHeights? Heights, double SharedElevationOfInternalZero)
+    {
+        /// <summary>The internal Z the rule gives a vertex, or null when it is left alone.</summary>
+        internal double? TargetZ(XyzPoint vertex)
+        {
+            if (Heights == null) return null;
+            double? metres = Heights.HeightAt(new XyPoint(
+                vertex.X * SurveyHeightText.MetresPerFoot, vertex.Y * SurveyHeightText.MetresPerFoot));
+            return metres == null ? null : metres.Value / SurveyHeightText.MetresPerFoot - SharedElevationOfInternalZero;
+        }
+    }
 
     /// <summary>
     /// Writes one toposolid's or floor's points, and the only place that copes with a point having
@@ -27,6 +52,12 @@ namespace RVTuk.Revit.TopoTools
     /// outline cannot (one such point fails the whole batch), so each is drawn with the deprecated
     /// <c>DrawPoint</c> on the current surface and then raised with <c>ModifySubElement</c> — whose
     /// offset is measured from the element's unshaped top, not from the vertex (probe, Revit 2024).
+    ///
+    /// After the line points comes the outline corner pass (spec 2026-11-19): every outline vertex
+    /// the tool did not place takes the height the lines give it (<see cref="OutlineCornerHeights"/>),
+    /// or goes back to its own height when no line influences it any more, remembered in
+    /// <see cref="OutlineCornerStore"/>. <see cref="OutlineCornerPlanner"/> decides; this class only
+    /// raises.
     /// </summary>
     public static class TopoPointApplier
     {
@@ -36,13 +67,17 @@ namespace RVTuk.Revit.TopoTools
         /// <summary>
         /// Caller must already be inside a transaction. <paramref name="newPointsByLine"/> must
         /// put at most one point on any plan spot (<see cref="TopoPointDeduper"/>): every point
-        /// given is placed.
+        /// given is placed, except an edge point within 1 mm of an outline vertex the corner pass
+        /// may change, which is left to that pass.
         /// </summary>
+        /// <param name="corners">The corner pass's inputs; null runs no corner pass at all (Cancel,
+        /// which collects no lines).</param>
         public static ApplyOutcome Apply(
             SlabTarget target,
             IReadOnlyCollection<long> lineIdsInView,
             IReadOnlyDictionary<long, LinePointsZ> newPointsByLine,
-            Func<long, bool> lineStillExists)
+            Func<long, bool> lineStillExists,
+            CornerPass? corners)
         {
             var element = target.Element;
             var doc = element.Document;
@@ -60,13 +95,39 @@ namespace RVTuk.Revit.TopoTools
             var staleLineIds = ledger.Keys
                 .Where(lineId => inView.Contains(lineId) || !lineStillExists(lineId))
                 .ToList();
+            bool lineWork = staleLineIds.Count > 0 || newPointsByLine.Values.Sum(Count) > 0;
 
-            // Nothing to add and nothing to take out: leave the element as it is, so a floor with
-            // no lines over it is not switched to shape editing.
-            if (staleLineIds.Count == 0 && newPointsByLine.Values.Sum(Count) == 0)
-                return new ApplyOutcome(0, 0, 0, 0);
+            // A plain element (shape editing off) keeps no corner record that still means anything:
+            // its shape was never edited, or Reset Shape threw it away. Its old records are dropped.
+            bool wasEnabled = editor.IsEnabled;
+            var records = wasEnabled ? OutlineCornerStore.Read(element) : Array.Empty<CornerRecord>();
 
-            if (!editor.IsEnabled)
+            // Nothing to add and nothing to take out: leave the element as it is unless the corner
+            // pass has work, so a floor none of whose corners takes a height from the lines is not
+            // switched to shape editing. For a plain element that is worked out from its outline at
+            // its flat top before anything is switched on (ruling R2).
+            if (!lineWork)
+            {
+                if (corners == null) return new ApplyOutcome(0, 0, 0, 0);
+                if (!wasEnabled)
+                {
+                    double? flatZ = FlatTop(element);
+                    bool needed = corners.Heights != null &&
+                        (flatZ == null ||
+                         OutlineCornerPlanner.NeedsShapeEditing(target.Loops, flatZ.Value, corners.TargetZ));
+                    if (!needed)
+                    {
+                        WriteCorners(element, Array.Empty<CornerRecord>());
+                        return new ApplyOutcome(0, 0, 0, 0);
+                    }
+                }
+                else if (corners.Heights == null && records.Count == 0)
+                {
+                    return new ApplyOutcome(0, 0, 0, 0);
+                }
+            }
+
+            if (!wasEnabled)
             {
                 editor.Enable();
                 doc.Regenerate();
@@ -101,13 +162,23 @@ namespace RVTuk.Revit.TopoTools
             }
 
             // The ledger records only points this run created. A vertex that already stood at a
-            // point's plan position before the run (an outline corner, a point added by hand, a
-            // point of a line in another view) is raised or reused but never ledgered: otherwise a
-            // later run would delete a vertex this tool does not own, or report it "moved by hand"
-            // on every run because Revit merged our point into it.
+            // point's plan position before the run (a point added by hand, a point of a line in
+            // another view) is raised or reused but never ledgered: otherwise a later run would
+            // delete a vertex this tool does not own, or report it "moved by hand" on every run
+            // because Revit merged our point into it. An outline vertex the corner pass may change
+            // is not even raised here: that pass raises and records it (below).
             var preexisting = new List<XyzPoint>();
             foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
                 preexisting.Add(SlabShape.ToPoint(vertex.Position));
+
+            // Those outline vertices, as they stand before any point is placed. Needed only to test
+            // edge points against.
+            IReadOnlyList<XyzPoint> cornerVertices = Array.Empty<XyzPoint>();
+            if (corners != null && newPointsByLine.Values.Any(points => points.Edge.Count > 0))
+            {
+                cornerVertices = OutlineCornerPlanner.Candidates(
+                    preexisting, target.Loops, LedgeredPoints(ledger), Array.Empty<XyzPoint>());
+            }
 
             int added = 0;
             int lost = 0;
@@ -132,6 +203,11 @@ namespace RVTuk.Revit.TopoTools
             {
                 foreach (var point in entry.Value.Edge)
                 {
+                    // An outline vertex within 1 mm: not drawn (Revit would merge the two) and not
+                    // a placed point, so the corner pass gives that vertex the line's height through
+                    // the rule's 1 mm snap and remembers it (ruling R1).
+                    if (OutlineCornerPlanner.IsLeftToCornerPass(point, cornerVertices)) continue;
+
                     int index = ShapeReplayPlanner.IndexOfXy(preexisting, point);
                     XyzPoint? existing = index >= 0 ? preexisting[index] : null;
 
@@ -156,9 +232,112 @@ namespace RVTuk.Revit.TopoTools
                 if (entry.Value.Count > 0) ledger[entry.Key] = entry.Value;
             }
 
-            TopoLedgerStore.Write(element, ledger);
-            return new ApplyOutcome(added, removed, missing, lost);
+            int cornersSet = 0;
+            int cornersPutBack = 0;
+            int cornersByHand = 0;
+            if (corners != null)
+            {
+                // The points this run placed as new vertices are exactly the ones just recorded.
+                var placedPoints = recordedByLine.Values.SelectMany(points => points).ToList();
+                var pass = RunCornerPass(doc, target, editor, corners, ledger, placedPoints, records, ref reference);
+                cornersSet = pass.Set;
+                cornersPutBack = pass.PutBack;
+                cornersByHand = pass.ByHand;
+                lost += pass.Lost;
+
+                // Switched on for the pass alone, which then moved nothing (the dry run reads the
+                // outline's tessellation, the editor has only its real vertices): a plain floor
+                // again, as SlabShape.Replay leaves one, keeping no record. A toposolid is left as
+                // it is.
+                if (!wasEnabled && !lineWork && pass.Moved == 0 && element is Floor)
+                {
+                    editor.ResetSlabShape();
+                    WriteCorners(element, Array.Empty<CornerRecord>());
+                }
+            }
+
+            if (lineWork) TopoLedgerStore.Write(element, ledger);
+            return new ApplyOutcome(added, removed, missing, lost, cornersSet, cornersPutBack, cornersByHand);
         }
+
+        /// <summary>
+        /// The corner pass, after every line point is placed: read the live vertices, let the
+        /// planner decide, raise and put back one vertex at a time (<see cref="RaiseVertexTo"/>,
+        /// which regenerates after each), and store the record in the same transaction. A raise or
+        /// a put-back that ends more than 0.1 mm off counts as lost; it is not retried in this run.
+        /// </summary>
+        /// <returns>Corners set, put back, newly found moved by hand, lost, and how many raises and
+        /// put-backs were tried.</returns>
+        private static (int Set, int PutBack, int ByHand, int Lost, int Moved) RunCornerPass(
+            Document doc, SlabTarget target, SlabShapeEditor editor, CornerPass corners,
+            IReadOnlyDictionary<long, IReadOnlyList<XyzPoint>> ledger, IReadOnlyList<XyzPoint> placedPoints,
+            IReadOnlyList<CornerRecord> records, ref double? reference)
+        {
+            var element = target.Element;
+            doc.Regenerate();
+
+            var vertices = new List<XyzPoint>();
+            foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
+                vertices.Add(SlabShape.ToPoint(vertex.Position));
+
+            // Every candidate goes to the plan, unfiltered: a record whose corner is not among them
+            // is dropped.
+            var candidates = OutlineCornerPlanner.Candidates(
+                vertices, target.Loops, LedgeredPoints(ledger), placedPoints);
+            var plan = OutlineCornerPlanner.Plan(candidates, corners.TargetZ, records);
+
+            int set = 0;
+            int lost = 0;
+            var reached = new Dictionary<(double X, double Y), double>();
+            foreach (var raise in plan.Raises)
+            {
+                // A raise that failed reports the Z the corner actually has, so its record is not
+                // read as "moved by hand" next time.
+                double z = RaiseVertexTo(doc, element, editor, raise.At, raise.ToZ, ref reference)?.Z ?? raise.At.Z;
+                reached[(raise.At.X, raise.At.Y)] = z;
+                if (Math.Abs(z - raise.ToZ) <= MatchToleranceFeet) set++;
+                else lost++;
+            }
+
+            var newRecords = plan.WithReached(reached).NewRecords.ToList();
+
+            int putBack = 0;
+            foreach (var back in plan.PutBacks)
+            {
+                double z = RaiseVertexTo(doc, element, editor, back.At, back.ToZ, ref reference)?.Z ?? back.At.Z;
+                if (Math.Abs(z - back.ToZ) <= MatchToleranceFeet)
+                {
+                    putBack++;
+                    continue;
+                }
+
+                // Not back at its own height: its record stays, where the corner now stands, so the
+                // own height is not forgotten and the next Update tries again.
+                lost++;
+                newRecords.Add(new CornerRecord(back.At.X, back.At.Y, back.ToZ, z, false));
+            }
+
+            WriteCorners(element, newRecords.OrderBy(r => r.X).ThenBy(r => r.Y).ToList());
+            return (set, putBack, plan.NewlyByHand, lost, plan.Raises.Count + plan.PutBacks.Count);
+        }
+
+        /// <summary>Writes the corner record only when its text changes, so a pass with nothing to
+        /// record leaves an element that never had one untouched.</summary>
+        private static void WriteCorners(Element element, IReadOnlyList<CornerRecord> records)
+        {
+            if (OutlineCornerRecordCodec.Encode(records) == OutlineCornerStore.Raw(element)) return;
+            OutlineCornerStore.Write(element, records);
+        }
+
+        private static List<XyzPoint> LedgeredPoints(IReadOnlyDictionary<long, IReadOnlyList<XyzPoint>> ledger) =>
+            ledger.Values.SelectMany(points => points).ToList();
+
+        /// <summary>
+        /// Where a plain element's outline vertices sit while its shape editing is off: the
+        /// <see cref="ReferenceGuess"/>, else the top of its bounding box; null when neither can be read.
+        /// </summary>
+        private static double? FlatTop(Element element) =>
+            ReferenceGuess(element) ?? element.get_BoundingBox(null)?.Max.Z;
 
         private static int Count(LinePointsZ points) => points.Interior.Count + points.Edge.Count;
 
@@ -217,12 +396,10 @@ namespace RVTuk.Revit.TopoTools
         }
 
         /// <summary>
-        /// Draws a point on the outline and raises it to <paramref name="target"/>'s Z.
-        /// <c>ModifySubElement</c>'s offset is measured from the element's unshaped top, which is
-        /// guessed (level + height offset) until the first raise reveals it as resulting Z − offset
-        /// used; a raise that misses by more than 0.1 mm is corrected once with the revealed value.
-        /// When <paramref name="existing"/> is given, a vertex already stands there (an outline
-        /// corner, say): nothing is drawn and that vertex is raised instead.
+        /// Draws a point on the outline and raises it to <paramref name="target"/>'s Z (see
+        /// <see cref="RaiseVertexTo"/>). When <paramref name="existing"/> is given, a vertex already
+        /// stands there (a point of a line in another view, say): nothing is drawn and that vertex
+        /// is raised instead.
         /// </summary>
         /// <returns>Where the point ended up, or null when no point could be drawn or found.</returns>
         private static XyzPoint? PlaceEdgePoint(
@@ -260,10 +437,37 @@ namespace RVTuk.Revit.TopoTools
             }
             if (drawn == null) return null;
 
-            var at = SlabShape.ToPoint(drawn.Position);
-            double offset = target.Z - (reference ?? ReferenceGuess(element) ?? at.Z);
+            return RaiseVertex(doc, element, editor, drawn, target.Z, ref reference);
+        }
 
-            var result = Raise(doc, editor, drawn, at, offset);
+        /// <summary>
+        /// Raises (or lowers) the vertex at <paramref name="at"/> (plan XY within 0.1 mm) to
+        /// <paramref name="targetZ"/> and reads where it ended up. <c>ModifySubElement</c>'s offset
+        /// is measured from the element's unshaped top, which is guessed (level + height offset)
+        /// until the first raise reveals it as resulting Z − offset used, kept in
+        /// <paramref name="reference"/> for the raises after it; a raise that misses by more than
+        /// 0.1 mm is corrected once with the revealed value. Regenerates after each raise. The
+        /// vertices are read as they stand, so a caller that changed the shape since its last
+        /// regenerate must regenerate first. Caller must be inside a transaction.
+        /// </summary>
+        /// <returns>Where the vertex ended up — after a failed raise, where it still stands — or
+        /// null when no vertex is found at <paramref name="at"/>.</returns>
+        internal static XyzPoint? RaiseVertexTo(
+            Document doc, Element element, SlabShapeEditor editor, XyzPoint at, double targetZ,
+            ref double? reference)
+        {
+            var vertex = SlabShape.VertexAt(editor, at);
+            return vertex == null ? null : RaiseVertex(doc, element, editor, vertex, targetZ, ref reference);
+        }
+
+        private static XyzPoint? RaiseVertex(
+            Document doc, Element element, SlabShapeEditor editor, SlabShapeVertex vertex, double targetZ,
+            ref double? reference)
+        {
+            var at = SlabShape.ToPoint(vertex.Position);
+            double offset = targetZ - (reference ?? ReferenceGuess(element) ?? at.Z);
+
+            var result = Raise(doc, editor, vertex, at, offset);
             if (result == null)
             {
                 // The raise failed: the point may still be there, at the surface.
@@ -272,9 +476,9 @@ namespace RVTuk.Revit.TopoTools
             }
 
             reference = result.Value.Z - offset;
-            if (Math.Abs(result.Value.Z - target.Z) > MatchToleranceFeet)
+            if (Math.Abs(result.Value.Z - targetZ) > MatchToleranceFeet)
             {
-                offset = target.Z - reference.Value;
+                offset = targetZ - reference.Value;
                 var corrected = Raise(doc, editor, null, at, offset);
                 if (corrected != null) result = corrected;
             }

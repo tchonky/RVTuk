@@ -577,4 +577,70 @@ public class OutlineCornerPlannerTests
         Assert.Equal(0, second.NewlyByHand);
         Assert.Equal(first.NewRecords, second.NewRecords);
     }
+
+    // ---------------------------------------------------------------- IsLeftToCornerPass (ruling R1)
+
+    [Fact]
+    public void AnEdgePointWithinOneMillimetreOfAnOutlineVertexIsLeftToTheCornerPass()
+    {
+        var corners = new[] { new XyzPoint(10, 0, 3), new XyzPoint(0, 0, 3) };
+
+        Assert.True(OutlineCornerPlanner.IsLeftToCornerPass(new XyzPoint(0, 0, 7), corners));
+        Assert.True(OutlineCornerPlanner.IsLeftToCornerPass(new XyzPoint(0.6 * Mm, 0.79 * Mm, 7), corners));
+        Assert.True(OutlineCornerPlanner.IsLeftToCornerPass(new XyzPoint(10 - 0.999 * Mm, 0, 7), corners));
+    }
+
+    [Fact]
+    public void AnEdgePointMoreThanOneMillimetreFromEveryOutlineVertexIsDrawn()
+    {
+        var corners = new[] { new XyzPoint(10, 0, 3), new XyzPoint(0, 0, 3) };
+
+        Assert.False(OutlineCornerPlanner.IsLeftToCornerPass(new XyzPoint(1.001 * Mm, 0, 3), corners));
+        Assert.False(OutlineCornerPlanner.IsLeftToCornerPass(new XyzPoint(0.75 * Mm, 0.75 * Mm, 3), corners));
+        Assert.False(OutlineCornerPlanner.IsLeftToCornerPass(new XyzPoint(5, 0, 3), corners));
+        Assert.False(OutlineCornerPlanner.IsLeftToCornerPass(new XyzPoint(0, 0, 3), None));
+    }
+
+    // ---------------------------------------------------------------- NeedsShapeEditing (ruling R2)
+
+    [Fact]
+    public void APlainOutlineNoLineInfluencesNeedsNoShapeEditing()
+    {
+        Assert.False(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHole, 3, Always(null)));
+    }
+
+    [Fact]
+    public void APlainOutlineWhoseCornersTheLinesLeaveWithinATenthOfAMillimetreNeedsNoShapeEditing()
+    {
+        Assert.False(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHole, 3, Always(3 + 0.099 * Mm)));
+        Assert.False(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHole, 3, Always(3 - 0.099 * Mm)));
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void ANonFiniteTargetNeedsNoShapeEditing(double bad)
+    {
+        Assert.False(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHole, 3, Always(bad)));
+    }
+
+    [Fact]
+    public void OneOutlinePointTheLinesMoveNeedsShapeEditing()
+    {
+        // The hole's corner (6, 6) only, by a little more than a tenth of a millimetre.
+        Func<XyzPoint, double?> target = v => v.X == 6 && v.Y == 6 ? 3 + 0.101 * Mm : null;
+
+        Assert.True(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHole, 3, target));
+    }
+
+    [Fact]
+    public void EveryLoopPointIsAskedAtTheFlatHeight()
+    {
+        var asked = new List<XyzPoint>();
+        OutlineCornerPlanner.NeedsShapeEditing(SquareWithHole, 3, v => { asked.Add(v); return null; });
+
+        Assert.Equal(
+            SquareWithHole.SelectMany(loop => loop).Select(p => new XyzPoint(p.X, p.Y, 3)).OrderBy(p => p.X).ThenBy(p => p.Y),
+            asked.OrderBy(p => p.X).ThenBy(p => p.Y));
+    }
 }

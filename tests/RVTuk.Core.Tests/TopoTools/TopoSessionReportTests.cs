@@ -420,4 +420,125 @@ public class TopoSessionReportTests
     {
         Assert.True(new TopoSessionReport { SurveyPointMarkerMetres = 10 }.ShowAfterUpdate);
     }
+
+    // ---- outline corners (spec 2026-11-19) ---------------------------------------------------
+
+    [Theory]
+    [InlineData(1, "1 outline corner took its height from the lines.")]
+    [InlineData(2, "2 outline corners took their heights from the lines.")]
+    [InlineData(11, "11 outline corners took their heights from the lines.")]
+    public void SaysHowManyOutlineCornersTookTheirHeightFromTheLines(int n, string sentence)
+    {
+        var report = new TopoSessionReport { LinesApplied = 1, PointsAdded = 2, CornersSet = n };
+
+        Assert.Equal("1 line applied: 2 points added, 0 replaced. " + sentence, report.Summarise());
+    }
+
+    [Theory]
+    [InlineData(1, "1 outline corner went back to its own height.")]
+    [InlineData(2, "2 outline corners went back to their own heights.")]
+    [InlineData(11, "11 outline corners went back to their own heights.")]
+    public void SaysHowManyOutlineCornersWentBackToTheirOwnHeight(int n, string sentence)
+    {
+        var report = new TopoSessionReport { LinesApplied = 1, PointsAdded = 2, CornersPutBack = n };
+
+        Assert.Equal("1 line applied: 2 points added, 0 replaced. " + sentence, report.Summarise());
+    }
+
+    [Theory]
+    [InlineData(1, "1 outline corner moved by hand is left alone.")]
+    [InlineData(2, "2 outline corners moved by hand are left alone.")]
+    [InlineData(11, "11 outline corners moved by hand are left alone.")]
+    public void SaysHowManyOutlineCornersMovedByHandAreLeftAlone(int n, string sentence)
+    {
+        var report = new TopoSessionReport { LinesApplied = 1, PointsAdded = 2, CornersByHand = n };
+
+        Assert.Equal("1 line applied: 2 points added, 0 replaced. " + sentence, report.Summarise());
+    }
+
+    [Fact]
+    public void NoCornerSentenceWhenNoCornerChanged()
+    {
+        var summary = new TopoSessionReport { LinesApplied = 1, PointsAdded = 2 }.Summarise();
+
+        Assert.DoesNotContain("corner", summary);
+    }
+
+    [Fact]
+    public void CornersSetOrPutBackAreNoProblemAndKeepUpdateQuiet()
+    {
+        var set = new TopoSessionReport { LinesApplied = 1, PointsAdded = 2, CornersSet = 3 };
+        var putBack = new TopoSessionReport { LinesApplied = 1, PointsAdded = 2, CornersPutBack = 3 };
+        var both = new TopoSessionReport { LinesApplied = 1, CornersSet = 1, CornersPutBack = 1 };
+
+        foreach (var report in new[] { set, putBack, both })
+        {
+            Assert.False(report.HasProblems);
+            Assert.False(report.ShowAfterUpdate);
+        }
+    }
+
+    [Fact]
+    public void ACornerMovedByHandIsAProblemAndShowsTheSummaryAfterUpdate()
+    {
+        var report = new TopoSessionReport { LinesApplied = 1, PointsAdded = 2, CornersByHand = 1 };
+
+        Assert.True(report.HasProblems);
+        Assert.True(report.ShowAfterUpdate);
+    }
+
+    [Fact]
+    public void CornerSentencesTakeTheirPlacesAndTheMarkerNoteStillComesLast()
+    {
+        var report = new TopoSessionReport
+        {
+            LinesApplied = 2,
+            PointsAdded = 7,
+            PointsDroppedAtCrossings = 1,
+            PointsMovedByHand = 1,
+            PointsLost = 1,
+            UnlinkedTexts = 1,
+            CornersSet = 2,
+            CornersPutBack = 1,
+            CornersByHand = 2,
+            SurveyPointMarkerMetres = 10,
+        };
+        report.UnreadableHeights.Add("x");
+
+        Assert.Equal(
+            "2 lines applied: 7 points added, 0 replaced. " +
+            "1 point where lines cross took the higher line's height. " +
+            "2 outline corners took their heights from the lines. " +
+            "1 outline corner went back to its own height. " +
+            "1 line skipped: ‎'x'‎ is not a height in metres. " +
+            "1 earlier point had been moved by hand and was left alone. " +
+            "2 outline corners moved by hand are left alone. " +
+            "1 point could not be placed. " +
+            "1 height text is not linked to any line and was left alone. " +
+            Marker,
+            report.Summarise());
+    }
+
+    [Fact]
+    public void CornersSetWithNoLineOverTheTargetFollowTheNothingOverSentence()
+    {
+        // A corner shared with a neighbour moves even when every line lies over the neighbour.
+        var report = new TopoSessionReport { CornersSet = 1, CornersPutBack = 2, SurveyPointMarkerMetres = 10 };
+
+        Assert.Equal(
+            TopoSessionReport.NothingOverTarget + " " +
+            "1 outline corner took its height from the lines. " +
+            "2 outline corners went back to their own heights. " +
+            Marker,
+            report.Summarise());
+        Assert.False(report.HasProblems);
+    }
+
+    [Fact]
+    public void ACornerMovedByHandWithNoLineOverTheTargetIsNamedWithoutTheNothingOverSentence()
+    {
+        var report = new TopoSessionReport { CornersByHand = 1 };
+
+        Assert.Equal("1 outline corner moved by hand is left alone.", report.Summarise());
+    }
 }

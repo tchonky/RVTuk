@@ -1090,4 +1090,49 @@ public class OutlineCornerHeightsTests
         Assert.True(times.Min() < TimeSpan.FromSeconds(limitSeconds),
             $"{scene}: best of three runs over {limitSeconds} s: {text}");
     }
+
+    // ---- the arcs' 1 mm chord rule (spec, "The rule": inputs) ----------------------------------
+
+    [Theory]
+    [InlineData(Math.PI / 2, 1.0, 18)]     // 1.5708 / (2·acos(0.999)) = 17.56
+    [InlineData(Math.PI, 10.0, 112)]       // 3.1416 / (2·acos(0.9999)) = 111.07
+    [InlineData(0.1, 1000.0, 36)]          // 0.1 / (2·acos(1 − 1e-6)) = 35.36
+    [InlineData(Math.PI / 2, 0.0005, 1)]   // r ≤ 0.5 mm: any chord is within 1 mm
+    [InlineData(Math.PI / 2, 0.0004, 1)]   // 1 − 0.001/r = −1.5: no acos
+    [InlineData(Math.PI / 2, 0.0001, 1)]
+    [InlineData(0.0, 5.0, 1)]
+    public void AnArcTakesTheFewestChordsThatStayWithinAMillimetre(double sweep, double radius, int expected)
+    {
+        Assert.Equal(expected, OutlineCornerHeights.ArcChordCount(sweep, radius));
+    }
+
+    [Fact]
+    public void EveryArcsChordsStayWithinAMillimetreAndOneFewerWouldNot()
+    {
+        foreach (var radius in new[] { 0.001, 0.01, 0.3, 1.0, 2.5, 7.0, 40.0, 333.0, 5000.0 })
+        {
+            foreach (var sweep in new[] { 0.01, 0.2, 1.0, Math.PI / 2, 3.0, 2 * Math.PI })
+            {
+                int n = OutlineCornerHeights.ArcChordCount(sweep, radius);
+                Assert.True(Sagitta(radius, sweep / n) <= 0.001 + 1e-12, $"r {radius}, sweep {sweep}: {n}");
+                if (n > 1)
+                    Assert.True(Sagitta(radius, sweep / (n - 1)) > 0.001, $"r {radius}, sweep {sweep}: {n} not the fewest");
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(double.NaN, 1.0)]
+    [InlineData(1.0, double.NaN)]
+    [InlineData(double.PositiveInfinity, 1.0)]
+    [InlineData(1.0, double.PositiveInfinity)]
+    [InlineData(-1.0, 1.0)]
+    [InlineData(1.0, -1.0)]
+    public void AnArcThatIsNoArcTakesOneChord(double sweep, double radius)
+    {
+        Assert.Equal(1, OutlineCornerHeights.ArcChordCount(sweep, radius));
+    }
+
+    /// <summary>How far a chord over <paramref name="angle"/> strays from its arc.</summary>
+    private static double Sagitta(double radius, double angle) => radius * (1 - Math.Cos(angle / 2));
 }

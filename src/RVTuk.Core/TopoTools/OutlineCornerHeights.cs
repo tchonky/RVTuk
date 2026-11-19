@@ -64,6 +64,27 @@ namespace RVTuk.Core.TopoTools
         /// placed, stored or drawn; they only take part in <see cref="HeightAt"/>.</summary>
         public IReadOnlyList<CornerLine> Bridges { get; }
 
+        /// <summary>
+        /// How many equal chords an arc of the rule's input takes: the fewest whose deviation from
+        /// the arc is at most 1 mm, n = ceil(sweep / (2·acos(1 − 0.001/r))). The rule's lines are
+        /// tessellated by this, not by Revit's <c>Curve.Tessellate</c>, whose tolerance is unchecked.
+        /// An arc with a radius of at most 0.5 mm, or no usable sweep or radius, takes one chord.
+        /// </summary>
+        /// <param name="sweepRadians">The arc's angle.</param>
+        /// <param name="radiusMetres">Its radius.</param>
+        public static int ArcChordCount(double sweepRadians, double radiusMetres)
+        {
+            if (!(sweepRadians > 0) || !(radiusMetres > 0) ||
+                double.IsInfinity(sweepRadians) || double.IsInfinity(radiusMetres))
+                return 1;
+
+            double cosine = 1 - SameSpot / radiusMetres;
+            if (cosine <= -1) return 1;
+
+            double n = Math.Ceiling(sweepRadians / (2 * Math.Acos(cosine)));
+            return n < 1 ? 1 : n > int.MaxValue ? int.MaxValue : (int)n;
+        }
+
         /// <summary>Step −1 (cleaning) and step 0 (bridges), once per Update.</summary>
         public static OutlineCornerHeights Prepare(IReadOnlyList<CornerLine> lines)
         {

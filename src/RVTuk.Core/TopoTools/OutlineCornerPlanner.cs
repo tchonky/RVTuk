@@ -13,9 +13,9 @@ namespace RVTuk.Core.TopoTools
     ///
     /// <para>A corner left where it is (already within 0.1 mm of its target) is recorded with
     /// <c>SetZ</c> = its current Z. A raised corner's record carries <c>SetZ</c> = the height asked
-    /// for. The applier MUST
-    /// replace it with the Z read back after the raise (<see cref="WithReached"/>): a record whose
-    /// <c>SetZ</c> is not where the corner actually sits reads as "moved by hand" on the next run.</para>
+    /// for. The applier MUST replace it with the Z read back after the raise
+    /// (<see cref="WithReached"/>): a record whose <c>SetZ</c> is not where the corner actually sits
+    /// reads as "moved by hand" on the next run.</para>
     /// </summary>
     /// <param name="Raises">Corners to move to the height the lines give them.</param>
     /// <param name="PutBacks">Corners no line influences any more, back to their own height.</param>
@@ -99,6 +99,39 @@ namespace RVTuk.Core.TopoTools
                 candidates.Add(vertex);
             }
             return candidates;
+        }
+
+        /// <summary>
+        /// Whether a line's edge point is left to the corner pass rather than drawn: an outline
+        /// vertex the pass may change stands within 1 mm of it in plan (Revit merges points closer
+        /// than about 0.8 mm). Not drawn, the point is not among the placed points either, so that
+        /// vertex stays a candidate, and the rule's 1 mm on-line snap gives it the line's height —
+        /// recorded, so it goes back when the line goes.
+        /// </summary>
+        /// <param name="cornerVertices">The vertices the pass may change, before any point is
+        /// placed: <see cref="Candidates"/> with no placed points.</param>
+        public static bool IsLeftToCornerPass(XyzPoint edgePoint, IReadOnlyList<XyzPoint> cornerVertices) =>
+            IsNearInPlan(edgePoint, cornerVertices);
+
+        /// <summary>
+        /// For an element whose shape editing is off (a plain floor), whether the pass would raise
+        /// any outline point, worked out without switching it on: each point of the loops, at the
+        /// element's flat height, through <see cref="Plan"/> with no records (a plain element keeps
+        /// none: its shape was never edited, or Reset Shape threw it away). Only when this is true
+        /// is the editor switched on, so a floor none of whose corners takes a height from the lines
+        /// stays a plain floor.
+        /// </summary>
+        /// <param name="loopsFeet">The element's outline and holes, tessellated, in plan.</param>
+        /// <param name="flatZ">The element's top while it is plain, internal feet.</param>
+        public static bool NeedsShapeEditing(
+            IReadOnlyList<IReadOnlyList<XyPoint>> loopsFeet, double flatZ, Func<XyzPoint, double?> targetZ)
+        {
+            var points = new List<XyzPoint>();
+            foreach (var loop in loopsFeet)
+            {
+                foreach (var point in loop) points.Add(new XyzPoint(point.X, point.Y, flatZ));
+            }
+            return Plan(points, targetZ, Array.Empty<CornerRecord>()).Raises.Count > 0;
         }
 
         /// <summary>
