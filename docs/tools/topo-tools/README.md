@@ -117,7 +117,10 @@ twice changes nothing the second time.
 - **Edit Boundary** drops the record of a corner it moved or removed, silently; a corner at a new
   spot starts afresh. **Reset Shape** on a toposolid is not a hand edit: the next Update starts the
   corners afresh, with no "moved by hand" for them (the line points' own "earlier points had been
-  moved by hand" sentence still appears, since Reset Shape moved them too). Changing the Height
+  moved by hand" sentence still appears, since Reset Shape moved them too). The tool takes a corner
+  for reset only when it stands within 0.1 mm of its recorded own height. A toposolid whose Reset
+  Shape puts its corners anywhere else (one built from survey points, say) has them read as moved
+  by hand, left alone for good (backlog). Changing the Height
   Offset of a shape-edited floor moves every corner off its recorded height, so the next Update
   takes them all for moved by hand (backlog).
 - **Floors** get the same, with one difference: a plain floor (shape editing off) is switched to
@@ -481,7 +484,7 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 91 | Two toposolids sharing an outline corner, lines over only one of them: a session on each in turn, Update, ✓ | The shared corner gets the same height in both sessions, also in the one whose toposolid no line crosses ("No topo line … being edited. 1 outline corner took its height from the lines.", or more corners) | [ ] | [ ] | [ ] | [ ] |
 | 92 | A toposolid with a cut-out, between lines of different heights; Update | The cut-out's corners take heights between the lines too | [ ] | [ ] | [ ] | [ ] |
 | 93 | After an Update that set corners, Edit Boundary and move one corner; Update | The moved corner takes the lines' height at its new spot; nothing says "moved by hand" | [ ] | [ ] | [ ] | [ ] |
-| 94 | Reset Shape on a toposolid after an Update that set corners, then Update | The corners take the lines' heights again, with no "outline corner moved by hand". The line points' own "earlier points had been moved by hand" sentence still appears, since Reset Shape moved them too; this row checks the corners only | [ ] | [ ] | [ ] | [ ] |
+| 94 | Reset Shape on a toposolid sketched flat (not built from survey points) after an Update that set corners, then Update | The corners take the lines' heights again, with no "outline corner moved by hand". The line points' own "earlier points had been moved by hand" sentence still appears, since Reset Shape moved them too; this row checks the corners only | [ ] | [ ] | [ ] | [ ] |
 | 95 | An arc topo line ending on, or passing through, an outline corner; Update | The corner is at the line's height within 5 mm | [ ] | [ ] | [ ] | [ ] |
 | 96 | A toposolid whose corner the build before 2026-11-19 raised onto a line's end (Update with that build, then deploy this one): Update; delete the line; Update | The corner stays at the line's height after the delete, with no "moved by hand": it was recorded with that height as its own | [ ] | [ ] | [ ] | [ ] |
 | 97 | A plain floor between two lines of different heights, no line over it; Update | Shape editing is switched on and the corners take heights between the lines; the summary shows ("No topo line … being edited. N outline corners took their heights from the lines.") | [ ] | [ ] | [ ] | [ ] |
@@ -492,7 +495,7 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 102 | During a session, after an Update, move a corner with Modify Sub Elements; Update (it is reported); Cancel | The corner stays where you put it, and Cancel's message does not count it | [ ] | [ ] | [ ] | [ ] |
 | 103 | Cancel a session whose Updates moved no corner | The message has no "outline corner" part | [ ] | [ ] | [ ] | [ ] |
 | 104 | A plain floor whose corners a session's Update raised, then Cancel | The corners are back at the floor's top; the floor stays shape-edited (a known limit) | [ ] | [ ] | [ ] | [ ] |
-| 105 | Reset Shape on a toposolid whose corners an earlier session set, outside any session; then a session: Update, Cancel | The corners are back at the heights they had when the session started (their own), not at the older record's | [ ] | [ ] | [ ] | [ ] |
+| 105 | Reset Shape on a toposolid sketched flat (not built from survey points) whose corners an earlier session set, outside any session; then a session: Update, Cancel | The corners are back at the heights they had when the session started (their own), not at the older record's. On a toposolid built from survey points, Reset Shape may put corners off their own heights; then the Update reports them moved by hand and leaves them, and Cancel leaves them too | [ ] | [ ] | [ ] | [ ] |
 | 106 | A toposolid whose corners an earlier session set: in a new session type another height on their line, Update (the corners move), Reset Shape on the toposolid, then Cancel | The corners go back up to the earlier session's heights, not where Reset Shape put them (a known limit, not a bug) | [ ] | [ ] | [ ] | [ ] |
 | 107 | **Every year.** Rows 86, 87, 24 and 97 | As there: `ModifySubElement` takes an outline corner of a toposolid and of a floor, measured from the same unshaped top as an edge point. A corner that does not move, or lands off by the same amount everywhere, goes back to the design | [ ] | [ ] | [ ] | [ ] |
 | 108 | A toposolid with a height offset other than 0, and a floor on a level above 0 with a height offset other than 0: Update with lines at known heights | The corners' heights match the lines', as the points do in rows 19 and 73 | [ ] | [ ] | [ ] | [ ] |

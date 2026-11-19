@@ -212,6 +212,12 @@ plan [2026-11-17-topo-edit-follows-session.md](plans/2026-11-17-topo-edit-follow
 - **Outline corners: hand the moved-by-hand corners back.** A corner flagged as moved by hand is left
   alone for good, and an edge point at that spot is skipped; nothing clears the flag yet (a button,
   or "clear when the corner is put back on its set height").
+- **Outline corners: Reset Shape that puts corners off their own heights.** A corner counts as reset
+  only when it stands within 0.1 mm of its recorded own height. On a toposolid whose Reset Shape
+  puts the corners elsewhere (one built from survey points, say) they read as moved by hand and
+  freeze until such flags can be cleared (the item above). Check in Revit where Reset Shape puts a
+  survey toposolid's corners; if elsewhere, tell a reset from a hand edit another way (every corner
+  of the element off its set height at once, say).
 - **Outline corners: a Height Offset change on a shape-edited floor** moves every corner off its
   recorded height, so the next Update takes them all for moved by hand and freezes them. Telling an
   offset change from a hand edit (every corner off by the same amount) would fix it.
