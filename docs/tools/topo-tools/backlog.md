@@ -58,6 +58,20 @@ points; whether a `SlabShapeVertex` wrapper stays usable after a sibling vertex 
 existing vertex and run Update twice; the summary must not accumulate "moved by hand" counts.
 (Superseded in intent by "coincident points should average" below.)
 
+**The outline corner pass (2026-11-19)** is built, with Core tests on all three frameworks (the
+rule pinned by the reference's 698 points), but not checked in Revit: checklist rows 86–109, row 24
+as reworded for it, and Floor ⇄ Topo row 25. What only Revit can answer:
+- whether `ModifySubElement` takes an outline corner of a toposolid and of a floor, measured from
+  the same unshaped top as an edge point (rows 86, 87, 97 and 107), and whether the heights hold at a
+  level or height offset other than 0 (row 108);
+- whether a plain floor's flat top (level plus height offset) is where its corners stand, which
+  decides whether an Update switches its shape editing on (rows 24 and 97);
+- `ResetSlabShape()` on a floor switched on for its corners alone, and `DeleteEntity` on an element
+  whose corner record is emptied;
+- whether a toposolid's shape editing can be off at all (the same test covers both kinds);
+- whether raising the corners one at a time, with a regenerate after each, is fast enough on a
+  survey toposolid with a long boundary.
+
 ## To check: Floor ⇄ Topo converter (2026-09-29)
 
 Work through the checklist in [README.md](README.md#in-revit-checklist-floor--topo). The two
@@ -84,18 +98,31 @@ Also unverified, and only visible in Revit:
 - `ShapeReplayPlanner.Plan` de-duplicates with a linear scan (O(n²)); bucket on an XY grid, as
   `TopoPointDeduper` now does, if survey toposolids of tens of thousands of points turn out slow
   (Floor ⇄ Topo checklist 5/8b).
-- **A pre-existing vertex raised by Update keeps its height.** An edge point that lands on a vertex
-  the tool did not create (an outline corner, a hand-placed point) is raised but not recorded, so it is
-  never deleted by mistake. The cost: when the line moves away or is deleted, that vertex keeps the
-  line's height. Fix if it matters: record the vertex's original Z in the ledger and put it back.
 - **Two views sharing an outline point on one element:** raising a vertex for this view's line changes
-  the Z another view's line recorded, so that view's next Update reports one false "moved by hand".
+  the Z another view's line recorded, so that view's next Update reports one false "moved by hand"
+  (the point then follows that view's line again from the Update after).
   The crossing rule weighs only the lines of the session's view, so it does not help here.
 - **An interior point merged into an existing vertex still counts as "added".**
 
 - **Revit 2026/2027 edge points are unverified.** Those APIs no longer have `DrawPoint`, so the
   edit session (like the converter) uses `AddPoint` there. Whether it accepts a point on the outline
   is unchecked; a refused point counts as lost. Check in 2026 before relying on edge points there.
+
+## Done in the outline corner pass (2026-11-19)
+
+Spec [2026-11-19-outline-corner-heights-design.md](specs/2026-11-19-outline-corner-heights-design.md),
+plan [2026-11-19-outline-corner-heights.md](plans/2026-11-19-outline-corner-heights.md).
+
+- Every Update and Accept gives each outline point the tool did not place (the outline's and the
+  holes' corners) the height the lines around it imply, by the rule in the spec, and puts it back to
+  its own height when no line influences it any more. The own height is kept in a schema of its own,
+  `RVTukTopoToolsOutlineHeights`. Cancel puts back the corners the session moved.
+- **Closed: "a pre-existing vertex raised by Update keeps its height"** (an outline vertex an edge
+  point landed on was raised, never recorded, and kept the line's height after the line moved or was
+  deleted). Such a vertex is now a corner with a record, and goes back to its own height. True for
+  corners first set by this build: one raised by an earlier build is recorded with the line's height
+  as its own, so it stays there. A vertex that another view's line owns is still raised the old way,
+  unrecorded (see "Two views sharing an outline point" above).
 
 ## Done in the follow-the-session pass (2026-11-17 and 18)
 
@@ -173,6 +200,50 @@ plan [2026-11-17-topo-edit-follows-session.md](plans/2026-11-17-topo-edit-follow
 - The Modify-tab shortcut's selection flag is refreshed only by SelectionChanged; if README row 47
   shows a shortcut left over after switching models, re-read or clear it on ViewActivated when the
   document changes.
+- **Outline corners: the rule's weaknesses not fixed** (spec 2026-11-19, "Known weaknesses"; each
+  settled by drawing a line through or beside the corner):
+  - *Stopped-line jump:* past the free end of a line that stops between a lower and a higher line, a
+    corner pairs with whichever is nearer and can jump by half the step (0.57 m two metres past a
+    stopped contour).
+  - *Wall-top pull:* a retaining wall's top line in the view pulls corners along its foot up (45.65
+    instead of 41.40 beside a 5 m wall); a corner a few cm inside a wall-top line is read across the
+    wall.
+  - *Flat valley axis:* along the axis of a swale, a spur or a U opening onto a lower line, the height
+    stays at the contour (40.50 where 40.30 is right).
+- **Outline corners: hand the moved-by-hand corners back.** A corner flagged as moved by hand is left
+  alone for good, and an edge point at that spot is skipped; nothing clears the flag yet (a button,
+  or "clear when the corner is put back on its set height").
+- **Outline corners: Reset Shape that puts corners off their own heights.** A corner counts as reset
+  only when it stands within 0.1 mm of its recorded own height. On a toposolid whose Reset Shape
+  puts the corners elsewhere (one built from survey points, say) they read as moved by hand and
+  freeze until such flags can be cleared (the item above). Check in Revit where Reset Shape puts a
+  survey toposolid's corners; if elsewhere, tell a reset from a hand edit another way (every corner
+  of the element off its set height at once, say).
+- **Outline corners: a Height Offset change on a shape-edited floor** moves every corner off its
+  recorded height, so the next Update takes them all for moved by hand and freezes them. Telling an
+  offset change from a hand edit (every corner off by the same amount) would fix it.
+- **Outline corners: batch the raises.** The pass regenerates after each corner it raises (as edge
+  points do); a survey toposolid with a long boundary may be slow. Snapshot once, as
+  `SlabShape.Raise` does, if the Revit check says so.
+- **Cancel leaves a once-plain floor shape-edited.** Its corners go back to its top, but the floor
+  stays shape-edited. Making it plain again needs an "enabled at the start" snapshot and no surviving
+  ledger.
+- **A floor switched on for its corners alone stays shape-edited once they go back.** When a later
+  Update puts every corner back to its own height (its lines deleted or moved away), the floor keeps
+  shape editing on with nothing raised. Making it plain again needs to know that it was switched on
+  for its corners alone (no ledger, no other point of ours).
+- **Cancel does not name the corners it could not put back.** They count nowhere in its message;
+  the next Update takes them from where they stand.
+- **A vertex freed by a failed `DeletePoint` keeps the dead line's height.** A ledgered point Revit
+  would not delete is kept out of that run's corner pass; on the next run, if it is on the outline,
+  it is an ordinary corner and is recorded with the line's height as its own, so it never goes back
+  to the height it had before that line. Check in Revit how often
+  `DeletePoint` fails before doing anything.
+- **Outline corners: report the hand moves Cancel flags.** A corner moved by hand before a session
+  that is then cancelled without an Update is flagged by hand in the start copy (`EffectiveStart`),
+  and Cancel writes that flag; a corner moved by hand after the session's last Update is flagged by
+  Cancel itself (final review, fix 2). Neither is ever reported. Cancel could name them, or leave
+  the record unflagged so that the next Update reports the move once.
 - **Tidy-ups:** one helper for the `%LOCALAPPDATA%\RVTuk` folder (ModifyTabHost's switch files and
   Application's crash.log build it separately), and one definition of the toolkit's orange
   (TopoLineStyle and TopoIcons).

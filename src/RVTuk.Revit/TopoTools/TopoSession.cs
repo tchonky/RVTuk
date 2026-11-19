@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
+using RVTuk.Core.TopoTools;
 
 namespace RVTuk.Revit.TopoTools
 {
@@ -40,6 +41,21 @@ namespace RVTuk.Revit.TopoTools
         public IReadOnlyDictionary<ElementId, string> TextSnapshot { get; }
 
         /// <summary>
+        /// The target's outline corner record text as stored at the start
+        /// (<see cref="OutlineCornerStore.Raw"/>, "" for none). Cancel compares it with the record
+        /// it finds to see whether there is anything to put back.
+        /// </summary>
+        public string CornerSnapshot { get; }
+
+        /// <summary>
+        /// The corner record the session starts from, checked against where the corners stood at
+        /// the start (<see cref="OutlineCornerPlanner.EffectiveStart"/>): a record already stale
+        /// then — Reset Shape, a hand move not yet flagged, a plain element — never makes Cancel
+        /// raise a corner. When the vertices cannot be read it is the stored record as it is.
+        /// </summary>
+        public IReadOnlyList<CornerRecord> CornerStart { get; }
+
+        /// <summary>
         /// The last text the updater saw on each height text in the view, trimmed. A text change
         /// counts as typed (and becomes the last typed height) only when it differs from this, so
         /// moves, re-centring and relinking never pass for typing. Seeded from the snapshot.
@@ -71,20 +87,23 @@ namespace RVTuk.Revit.TopoTools
         public bool DontAskOnSave { get; set; }
 
         private TopoSession(Document document, ElementId viewId, ElementId targetId,
-            IReadOnlyDictionary<ElementId, string> textSnapshot)
+            IReadOnlyDictionary<ElementId, string> textSnapshot, string cornerSnapshot,
+            IReadOnlyList<CornerRecord> cornerStart)
         {
             Document = document;
             ViewId = viewId;
             TargetId = targetId;
             TextSnapshot = textSnapshot;
+            CornerSnapshot = cornerSnapshot;
+            CornerStart = cornerStart;
             LastSeenTexts = new Dictionary<ElementId, string>();
             foreach (var pair in textSnapshot) LastSeenTexts[pair.Key] = pair.Value.Trim();
         }
 
         /// <summary>
         /// Opens a session on <paramref name="target"/> in <paramref name="view"/>, armed, snapshots
-        /// the view's height texts, switches the updater on and raises <see cref="Started"/>. Throws
-        /// if a session is already open. Needs no transaction.
+        /// the view's height texts and the target's corner record, switches the updater on and
+        /// raises <see cref="Started"/>. Throws if a session is already open. Needs no transaction.
         /// </summary>
         public static TopoSession Start(Document document, ViewPlan view, Element target)
         {
@@ -102,7 +121,9 @@ namespace RVTuk.Revit.TopoTools
                 .Where(HeightTextType.IsHeightText)
                 .ToDictionary(note => note.Id, note => note.Text ?? "");
 
-            var session = new TopoSession(document, view.Id, target.Id, snapshot);
+            string cornerSnapshot = OutlineCornerStore.Raw(target);
+            var session = new TopoSession(
+                document, view.Id, target.Id, snapshot, cornerSnapshot, CornerStartOf(target, cornerSnapshot));
             Current = session;
             TopoSessionUpdater.Enable();
 
@@ -137,6 +158,46 @@ namespace RVTuk.Revit.TopoTools
             {
                 Application.LogDiagnostic($"TopoSession.Ended handler failed: {ex}");
             }
+        }
+
+        /// <summary>
+        /// <see cref="CornerStart"/>: the stored record checked against the live vertices. Reading
+        /// needs no transaction; if it fails, the stored record as it is, with one log line.
+        /// </summary>
+        private static IReadOnlyList<CornerRecord> CornerStartOf(Element target, string cornerSnapshot)
+        {
+            var stored = OutlineCornerRecordCodec.Decode(cornerSnapshot);
+            if (stored.Count == 0) return stored;
+
+            try
+            {
+                var editor = SlabShape.EditorOf(target);
+                bool enabled = editor != null && editor.IsEnabled;
+                var vertices = new List<XyzPoint>();
+                if (enabled)
+                {
+                    foreach (SlabShapeVertex vertex in editor!.SlabShapeVertices)
+                        vertices.Add(SlabShape.ToPoint(vertex.Position));
+                }
+                return OutlineCornerPlanner.EffectiveStart(stored, enabled, OutlineVertices(target, vertices));
+            }
+            catch (Exception ex)
+            {
+                Application.LogDiagnostic($"TopoSession: reading the corners at the start failed, the stored record is used: {ex.Message}");
+                return stored;
+            }
+        }
+
+        /// <summary>
+        /// The vertices a corner record can belong to: those within 1 mm of the element's outline
+        /// or holes (<see cref="OutlineCornerPlanner.OnOutline"/>), all of them when the outline
+        /// cannot be read. For Start and Cancel alike.
+        /// </summary>
+        internal static IReadOnlyList<XyzPoint> OutlineVertices(Element element, IReadOnlyList<XyzPoint> vertices)
+        {
+            if (vertices.Count == 0) return vertices;
+            var target = SlabTarget.From(element.Document, element);
+            return target == null ? vertices : OutlineCornerPlanner.OnOutline(vertices, target.Loops);
         }
 
         /// <summary>True when <paramref name="document"/> is this session's document.</summary>

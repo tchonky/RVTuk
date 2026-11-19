@@ -60,14 +60,15 @@ Hidden lines and hidden texts still count: both are found by owner view, not by 
 "1 line skipped: '42,7x' is not a height in metres.", and that line's earlier points are removed).
 It writes only to the toposolid or floor being edited. Points held by lines that no longer take
 part (deleted, moved off the element, unreadable) are removed; other toposolids and floors are never
-touched. The one exception: a vertex that was already there (an outline corner) is raised but never
-recorded, so it keeps the height when its line goes away — the tool never deletes a point it did
-not create. A line partly over the element counts only for the part over it, with a point on the
-outline at the line's height so neighbouring toposolids meet at the same height; the drawn line is
-never split. One transaction per Update, so one Ctrl+Z undoes it. Update shows no summary unless
-something needs attention (a skipped line, a point moved by hand or not placed, a text linked to no
-line) or no line was applied, since a silent Update would then hide why nothing changed; ✓ always
-shows it. Refusals, a rolled-back Update and failures keep their messages.
+touched. The element's own outline corners take their heights from the lines too, and go back to
+their own heights when no line influences them any more (see "Outline corners follow the lines"
+below); the tool never deletes a point it did not create. A line partly over the element counts
+only for the part over it, with a point on the outline at the line's height so neighbouring
+toposolids meet at the same height; the drawn line is never split. One transaction per Update, so
+one Ctrl+Z undoes it. Update shows no summary unless something needs attention (a skipped line, a
+point or an outline corner moved by hand, a point not placed, a text linked to no line) or no line
+was applied, since a silent Update would then hide why nothing changed; ✓ always shows it.
+Refusals, a rolled-back Update and failures keep their messages.
 
 **Where lines cross, the higher point wins.** Two points on the same plan spot (within 1 mm) — two
 contours crossing, a line crossing itself, chained lines meeting on the outline — become one point
@@ -78,12 +79,130 @@ two points nearly coincide, and the ledger records one point where one point exi
 alone does not bring up Update's summary. Points near a crossing but not on the same spot all
 stay, so a bank or a wall drawn as two lines comes out as a steep slope.
 
+**Outline corners follow the lines** (since 2026-11-19; spec
+[2026-11-19-outline-corner-heights-design.md](specs/2026-11-19-outline-corner-heights-design.md)).
+After the line points, every Update and Accept gives each point of the outline that the tool did not
+place — the corners of the outline and of its holes, and a point you put on the outline yourself —
+the height the lines around it imply. It sits at the height of the nearest line, moved towards the
+next line of another height it can see beyond itself, in proportion to the two distances. Where
+lines of one height stop on both sides of a gap (a building, a cut-out, a path), they count as one
+line drawn straight across. A corner within 1 mm of a line takes that line's height (the highest,
+where several meet). A corner with no line beyond its nearest line keeps its own height, unless it
+is within 5 cm of that line: then it takes the line's height, so two outlines sketched a few mm
+apart do not open a crack. There is no reach limit: a corner 30 m from every line still moves if
+lines lie on both sides of it. Every line of the session's view with a readable height counts, as
+drawn, whether or not it crosses the element, so a corner shared with a neighbouring toposolid gets
+the same height in the session of each; lines in other views do not count, and an unreadable height
+on a line over no part of the element is left out silently. So an Update or Accept in another view
+of the same element works out its corners from that view's lines alone: it can put back to their
+own heights corners the first view's lines set (the first view's next Update raises them again).
+The element keeps one corner record, whichever view wrote it last. Points inside the outline (a survey's,
+or ones placed with Modify Sub Elements) and the points the ledger records for any line (at their
+spot in plan, whatever their height) are never changed by the corner pass. The heights depend only on the lines, never on where the corners stand, so an Update run
+twice changes nothing the second time.
+
+- **Each corner remembers its own height,** the one it had before the tool first moved it, in the
+  `RVTukTopoToolsOutlineHeights` record on the element. When no line influences it any more (its
+  line deleted or moved away, or nothing left beyond its nearest line) it goes back to that height.
+- **A line that ends on a corner** (within 1 mm) gives it the line's height the same way, and is
+  remembered. No edge point is drawn there, so "points added" is lower than before by the number of
+  line ends on corners, and a line whose only point on the element would sit on a corner reads
+  "0 points added". Corners that earlier builds raised onto a line's end (raised, never recorded)
+  are first recorded with the line's height as their own, so deleting that line later leaves them
+  where they are.
+- **A corner that cannot be brought within 0.1 mm of its height** counts among the points that
+  "could not be placed", and is tried again, and warned about, at every Update.
+- **Moved by hand.** A corner you move with Modify Sub Elements after the tool set it is left alone
+  for good, and the next Update says so once. There is no way yet to hand such a corner back to the
+  tool (backlog). A line's own point on the outline moved by hand is not frozen: the next Update in
+  the line's view reports it once, "1 earlier point had been moved by hand and was left alone.", and
+  leaves it where you put it; from the Update after, it follows its line again, as in earlier
+  builds. If the line still crosses there, the point takes the line's height through the 1 mm snap
+  and is recorded like any corner the lines set (so when the line goes, it goes back to where you
+  had put it); if the line is gone, it is an ordinary outline corner. While the ledger records a line's
+  point, the point is no corner, however far it was moved: an Update in another view leaves it
+  alone.
+- **Edit Boundary** drops the record of a corner it moved or removed, silently. A corner at a new
+  spot starts afresh: its new record's own height is the height it stands at when the next Update
+  first finds it there, which for a raised corner Edit Boundary moved may be the line height it
+  had, not its height before the tool first moved it. **Reset Shape** on a toposolid is not a hand edit: the next Update starts the
+  corners afresh, with no "moved by hand" for them (the line points' own "earlier points had been
+  moved by hand" sentence still appears, since Reset Shape moved them too). The tool takes a corner
+  for reset only when it stands within 0.1 mm of its recorded own height. A toposolid whose Reset
+  Shape puts its corners anywhere else (one built from survey points, say) has them read as moved
+  by hand, left alone for good (backlog). Changing the Height
+  Offset of a shape-edited floor moves every corner off its recorded height, so the next Update
+  takes them all for moved by hand (backlog); its line points are reported once and then follow
+  their lines again.
+- **Floors** get the same, with one difference: a plain floor (shape editing off) is switched to
+  shape editing only when the lines move one of its corners by more than 0.1 mm, however far they
+  are (there is no reach limit), so a floor none of whose corners takes a height from the lines
+  stays a plain floor. That is judged before anything
+  is switched on, from the floor's flat top (its level plus its height offset); on a plain floor
+  whose top is not flat at that height the guess can be wrong (unchecked in Revit). A floor switched
+  on for its corners alone, whose corners then did not move, is made plain again.
+- **Arc lines:** the rule reads its own version of an arc, in chords whose ends lie on the arc and
+  which stray at most 1 mm from it. A corner on the drawn arc is therefore within 1 mm of the rule's
+  line and takes the line's height through the 1 mm snap. Only a corner up to 1 mm off the drawn
+  arc can be up to 2 mm from the rule's line and miss the snap; it then takes practically the
+  line's height, moved towards the next line by d / (d + D) of the step between them, d (at most
+  2 mm) being its distance from the rule's line and D its distance to the next line.
+
+**The summary.** Accept's summary names the corners that hold a line's height after the run,
+those set by earlier Updates included: "3 outline corners took their heights from the lines." (for
+one, "1 outline corner took its height from the lines."), and those put back: "2 outline corners
+went back to their own heights." ("1 outline corner went back to its own height."). Neither needs
+attention, so Update stays quiet about them. A corner found moved by hand does need it: "1 outline
+corner moved by hand is left alone." ("2 outline corners moved by hand are left alone."), with the
+warning icon. When no line was applied (none of the view's lines has a point for the element, a
+point that falls on a corner included) and nothing needs attention (no line
+skipped, no point or corner moved by hand, no point not placed, no unlinked text), the summary is
+"No topo line in the session's view lies over the toposolid or floor being edited." followed by
+the first two, since a corner shared with a neighbour moves even when every line lies over the
+neighbour; Update shows it then too, because no line was applied. When something does need
+attention, that opening sentence is left out and the corner sentences come before the problems.
+
+**Where the rule is weak** (all found while testing the rule; a line drawn through or right next to
+the corner settles each, since a corner within 1 mm of a line takes its height):
+- Past the free end of a line that stops between a lower and a higher line, a corner pairs with
+  whichever is nearer and can jump by half the step between them (0.57 m two metres past a stopped
+  contour). Draw the line on to the corner.
+- A retaining wall's top line drawn in the view pulls the corners along its foot up (45.65 instead
+  of 41.40 beside a 5 m wall), and a corner sketched a few cm inside a wall-top line is read across
+  the wall. Draw a short line at the foot's height beside those corners, or snap the outline to the
+  line.
+- Along the axis of a swale, a spur or a U opening onto a lower line, the height stays at the
+  contour (40.50 where 40.30 is right).
+- A neighbouring area's line passing beside a corner can beat the contour straight across.
+- With no reach limit, far corners between distant areas move (42.50 over an existing 47.00 knoll).
+
 **Cancel** works by snapshot, because no transaction can stay open across user interaction. In one
 transaction it deletes the lines and texts the session created, removes those lines' points from
 the element through the ledger, and puts back the text of every height edited during the session.
 Points that *surviving* lines got from an earlier Update stay: the surface keeps the heights from
-the last Update for the lines that still exist, and the next Update reconciles them. Cancel deletes
-only what is still a topo line or height text of the session's view, and the session ends only once
+the last Update for the lines that still exist, and the next Update reconciles them. In the same
+transaction Cancel puts back the outline corners the session's Updates moved, to where they stood
+when the session started: a corner an earlier session set goes back to that session's height, and
+one this session set first goes back to its own height. It works from the corner record taken at
+the start, never from the lines, so it cannot move a corner the session left alone. A corner moved
+by hand stays where it is: one moved before the session (flagged when the session starts), one an
+Update of the session reported, and one moved after the session's last Update. That last one
+stands more than 0.1 mm off the height that Update gave it, off its own height and off the height
+Cancel would give it; whenever Cancel has corners to look at (the corner record changed during
+the session, or a corner already stood off its record when the session started), it flags that
+corner where it stands, so later Updates leave it alone without reporting
+it; otherwise the next Update reports it, as after any hand move. Its message counts the corners
+put back: "put back 1 changed height and 2 outline corners." ("put back 2 outline corners." when no
+typed height was put back; no corner part when no corner moved). If putting the corners back fails,
+Cancel still does everything else, leaves every corner as it was, and adds "Outline corners could
+not be put back." Limits: Cancel puts back only corners still on the outline (one moved off it by
+Edit Boundary during the session is not); corners it could not put back are not named, and the next
+Update takes them from where they stand; after Reset Shape on a toposolid during the session,
+Cancel raises the corners an earlier session set and this session's Updates moved back to that
+earlier session's heights, and leaves every other corner where Reset Shape put it (one not put at
+its recorded own height counts as moved by hand); a floor that was plain when the session started
+gets its corners back at its top but stays shape-edited (backlog). Cancel deletes only what is still a
+topo line or height text of the session's view, and the session ends only once
 its transaction has committed, so a failed Cancel can be pressed again. The session also ends by
 itself, keeping everything, once its document has closed (a close called off at "Save changes?"
 keeps the session), or when a view of another document is activated.
@@ -174,10 +293,21 @@ recorded point that has moved was moved by hand: it is left alone and reported.
 orphans its points; on the element a run sees a line id that no longer resolves and cleans up. It
 also means a line merely absent from the scanned view is never mistaken for a deleted one.
 
+**The outline corners have a record of their own.** A corner belongs to no line, so it is not in the
+ledger: a second schema on the element, `RVTukTopoToolsOutlineHeights`, holds for each corner the
+tool moved its plan position, its own height, the height the tool last gave it, and whether it was
+moved by hand. A separate schema rather than a key inside the ledger text, because an older build
+rewrites the ledger and would erase it. Floor ⇄ Topo copies every KnafoKlimor entity, so it carries
+this one too. Corner heights come from a rule over the lines, not from a triangulation of their
+points like the one Revit builds: a corner just past a line's end falls outside every triangle,
+which is the fold this pass removes.
+
 **An edge point is raised relative to the unshaped top.** Probed in Revit 2024: `DrawPoint` at the
 surface Z works, but `ModifySubElement` measures its offset from the element's unshaped top, not
 from the vertex's current height. So an edge point's offset is target Z minus that reference, which
-is read back after the first raise and corrected once if needed.
+is read back after the first raise and corrected once if needed. Outline corners are raised the same
+way, sharing that reference; whether `ModifySubElement` measures a corner from the same top is
+unchecked in Revit (checklist row 107).
 
 **The styles create themselves.** `_DP-Topo Line` and the `_DP-Topo Height` text type (a duplicate
 of the project's default text type) are made when a session starts, if missing, in the toolkit's
@@ -247,7 +377,9 @@ Revit 2024: the API places custom panels only on Add-Ins, on Analyze, or on a ta
 itself. Revit 2024–2027 — `Toposolid` does not exist in 2023, so KKarea never ships it. **The
 edit session was tried in Revit 2024 on 2026-11-16 and reported working**; the rows below are not
 yet ticked one by one. The follow-the-session pass of 2026-11-17 is built but not yet checked in
-Revit: its probe ran on a throwaway build (Revit 2024, 2026-11-18).
+Revit: its probe ran on a throwaway build (Revit 2024, 2026-11-18). The outline corner pass of
+2026-11-19 is built, with Core tests on all three frameworks, but not yet checked in Revit (rows
+86–108).
 
 **Names:** code `TopoTools`; ribbon buttons "Topo Tools" and "Floor ⇄ Topo" (RVTuk panel, internal
 names `TopoTools` and `FloorTopoConvert`); panel `Topo Edit` (`TopoCancel`, `TopoAccept`,
@@ -256,7 +388,8 @@ names `TopoTools` and `FloorTopoConvert`); panel `Topo Edit` (`TopoCancel`, `Top
 button's name); Modify-tab shortcut panel `RVTuk_ContextualTopoTools` (AdWindows, posting only the
 RVTuk panel's Topo Tools command); the Modify-tab copy of Topo Edit shares Topo Edit's source, so
 it has the same source Id and the same buttons; line style `_DP-Topo Line`; text type
-`_DP-Topo Height`; schemas `RVTukTopoHeightTextLink`, `RVTukTopoToolsPointLedger`; updater
+`_DP-Topo Height`; schemas `RVTukTopoHeightTextLink`, `RVTukTopoToolsPointLedger`,
+`RVTukTopoToolsOutlineHeights` (GUID `cca5f35d-98c8-466c-9175-4d51afe00df1`, field `CornersByXy`); updater
 `0aa14034-8c77-48a4-b5d6-dca41ed6da08`; fail-safe switch files `topo-modify-tab-off`,
 `topo-modify-copy-off`.
 
@@ -270,7 +403,8 @@ RVTuk panel's buttons, Topo Tools among them, are in it, so they can take a shor
 Tick each case only once it has actually been checked in that year's Revit: 2024 first (deploy with
 `.\Deploy.ps1 2024` from an elevated shell, Revit closed), then 2025, 2026 and 2027 as Revit is at
 hand. Rows 29–85 check the follow-the-session pass of 2026-11-17, and rows 2, 3, 4, 6, 9, 18, 21,
-27 and 28 were reworded for it. "Report it" marks a result the design did not expect: it goes back
+27 and 28 were reworded for it. Rows 86–109 check the outline corner pass of 2026-11-19, and row 24
+was reworded for it. "Report it" marks a result the design did not expect: it goes back
 to the design rather than being ticked. UIFramework 2025 could not be read for that pass, so in
 2025 run at least rows 18, 62, 65, 66, 69 and 70.
 
@@ -299,7 +433,7 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 21 | Two chained lines meeting on the outline; Update twice | Neither Update shows a summary: a "moved by hand" warning on the second would bring one up | [ ] | [ ] | [ ] | [ ] |
 | 22 | During a session, draw a filled region and a masking region | Their boundaries keep their own style and get no height texts | [ ] | [ ] | [ ] | [ ] |
 | 23 | Draw a line, Ctrl+Z it, place an ordinary text note in the view; then Cancel | The text note stays | [ ] | [ ] | [ ] | [ ] |
-| 24 | Session on a floor with no lines over it; Update | The floor is not made shape-edited | [ ] | [ ] | [ ] | [ ] |
+| 24 | Session on a plain floor with no line over it: first with no topo line in the view, then with lines on one side of it only, more than 5 cm from its corners; Update each time | The floor is not made shape-edited (Modify Sub Elements shows no points): a floor none of whose corners takes a height from the lines stays a plain floor | [ ] | [ ] | [ ] | [ ] |
 | 25 | Make Revit roll an Update back (press Cancel in a Revit error dialog during Update) | "Nothing was applied — Revit rolled the change back."; the session stays open | [ ] | [ ] | [ ] | [ ] |
 | 26 | Type 50 in Spacing **without** Enter, click Update; restart Revit | Denser points on that Update, and 50 after the restart. If not, Revit does not hand over text before Enter: say so in the tooltip and drop the read-back | [ ] | [ ] | [ ] | [ ] |
 | 27 | Two lines at 42.75 and 43.00 sharing an end point inside the element; Update twice, then ✓ | One point there at 43.00. Neither Update shows a summary: a crossing alone needs no attention, and a "moved by hand" warning would bring one up. ✓'s summary says "1 point where lines cross took the higher line's height." | [ ] | [ ] | [ ] | [ ] |
@@ -361,6 +495,30 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 83 | In a new project, run Auto Dimensions | `_DP-Dim Outer`, `_DP-Dim Inner` and `_DP-Dim Ref` keep Revit's default colour | [ ] | [ ] | [ ] | [ ] |
 | 84 | **Floor ⇄ Topo.** During a session on a floor, select it with another floor and press Floor ⇄ Topo | The summary skips the session's floor: "Floor N: a Topo Edit session is open on it; Accept or Cancel it first"; the other floor converts | [ ] | [ ] | [ ] | [ ] |
 | 85 | After all the rows above | crash.log has no line with "keep their text", "keeps its first icon", "folds to its first icon", "Topo Edit copy is off", "did not switch", "switch to the Add-Ins tab is off" or "Modify-tab panels disabled", apart from row 69's "switched off by topo-modify-tab-off" | [ ] | [ ] | [ ] | [ ] |
+| 86 | **Outline corners.** Daniel's toposolid of 2026-11-18 (lines at 41.00 and 43.00, three corners at 41.02): Update, then ✓ | The three corners read 41.20, 41.50 and 42.89 within 2 cm. Update shows no dialog; ✓'s summary includes "N outline corners took their heights from the lines." | [ ] | [ ] | [ ] | [ ] |
+| 87 | Note the corner's height first (Modify Sub Elements, the point readout with Elevation Base = Survey Point). Then the view's only line drawn from inside the element to end exactly on that outline corner (snapped): Update; delete the line; Update | After the first Update the corner reads the line's height within 1 mm, and no dialog shows. The second shows "No topo line in the session's view lies over the toposolid or floor being edited. 1 outline corner went back to its own height.", the corner reads the noted height within 1 mm, and Modify Sub Elements shows the same points around it as before the line was drawn | [ ] | [ ] | [ ] | [ ] |
+| 88 | Update twice with nothing changed, then ✓ | The second Update shows no dialog and moves nothing: every corner's height is as the first Update left it. ✓'s summary still names the corners ("N outline corners took their heights from the lines."), and nothing says "moved by hand" | [ ] | [ ] | [ ] | [ ] |
+| 89 | After an Update that set a corner, move it up 0.5 m with Modify Sub Elements; Update; Update again; then draw a line ending on it, Update | The first Update shows the summary with the warning icon and "1 outline corner moved by hand is left alone." The corner stays where you put it through every later Update, which do not mention it again | [ ] | [ ] | [ ] | [ ] |
+| 90 | Move one of a line's own points on the outline up with Modify Sub Elements; Update; Update again | The first Update shows "1 earlier point had been moved by hand and was left alone." and the point stays where you put it. The second shows no dialog and puts the point back at the line's height (Modify Sub Elements: within 1 mm of it) | [ ] | [ ] | [ ] | [ ] |
+| 91 | Two toposolids sharing an outline corner, lines over only one of them: a session on each in turn, Update, ✓ | The shared corner gets the same height in both sessions, also in the one whose toposolid no line crosses ("No topo line … being edited. 1 outline corner took its height from the lines.", or more corners) | [ ] | [ ] | [ ] | [ ] |
+| 92 | A toposolid with a cut-out, between lines of different heights; Update | The cut-out's corners take heights between the lines too | [ ] | [ ] | [ ] | [ ] |
+| 93 | After an Update that set corners, Edit Boundary and move one of those corners; note its height (point readout) before the next Update; Update; then delete the lines and Update | The moved corner takes the lines' height at its new spot, and nothing says "moved by hand". After the lines are deleted it goes back to the noted height within 1 mm (its new own height, possibly the line height it had), not to its height before the first Update | [ ] | [ ] | [ ] | [ ] |
+| 94 | Reset Shape on a toposolid sketched flat (not built from survey points) after an Update that set corners, then Update | The corners take the lines' heights again, with no "outline corner moved by hand". The line points' own "earlier points had been moved by hand" sentence still appears, since Reset Shape moved them too; on a second Update the line's points on the outline are back at the line's height, with no "moved by hand" | [ ] | [ ] | [ ] | [ ] |
+| 95 | An arc topo line ending on, or passing through, an outline corner (snapped to it); Update | The corner is at the line's height (Modify Sub Elements: within 1 mm of it), since a corner on the arc takes the 1 mm snap | [ ] | [ ] | [ ] | [ ] |
+| 96 | A toposolid whose corner the build before 2026-11-19 raised onto a line's end (Update with that build, then deploy this one): Update; delete the line; Update | The corner stays at the line's height after the delete, with no "moved by hand": it was recorded with that height as its own | [ ] | [ ] | [ ] | [ ] |
+| 97 | A plain floor between two lines of different heights, no line over it; Update | Shape editing is switched on and the corners take heights between the lines; the summary shows ("No topo line … being edited. N outline corners took their heights from the lines.") | [ ] | [ ] | [ ] | [ ] |
+| 98 | (Dropped in the final review of 2026-11-19: no setup could make it fail, since a floor switched on for nothing is made plain again. The dry run on a plain floor's real corners is covered by Core tests and rows 24 and 97.) | — | — | — | — | — |
+| 99 | **Cancel and corners.** On an element whose corners no session has set: move a line between two Updates so a corner moves twice (no height typed); Cancel | The corner is back at its own height, and the element keeps no `RVTukTopoToolsOutlineHeights` entity (RevitLookup). Cancel's message includes "put back 1 outline corner." (more if more corners moved) | [ ] | [ ] | [ ] | [ ] |
+| 100 | A corner an earlier session set to 41.20; in a new session type another height on its line so an Update moves it to 41.50; Cancel | The corner is back at 41.20. With that one corner moved, the message includes "put back 1 changed height and 1 outline corner." | [ ] | [ ] | [ ] | [ ] |
+| 101 | A corner an earlier session set: in a new session delete the line that set it, Update (the corner goes back to its own height), then Cancel | The corner is back at the earlier session's height (the line stays deleted; the next Update puts the corner back again) | [ ] | [ ] | [ ] | [ ] |
+| 102 | During a session, after an Update, move a corner with Modify Sub Elements; Update (it is reported); Cancel | The corner stays where you put it, and Cancel's message does not count it | [ ] | [ ] | [ ] | [ ] |
+| 103 | Cancel a session whose Updates moved no corner | The message has no "outline corner" part | [ ] | [ ] | [ ] | [ ] |
+| 104 | A plain floor whose corners a session's Update raised, then Cancel | The corners are back at the floor's top; the floor stays shape-edited (a known limit) | [ ] | [ ] | [ ] | [ ] |
+| 105 | Reset Shape on a toposolid sketched flat (not built from survey points) whose corners an earlier session set, outside any session; then a session: Update, Cancel | The corners are back at the heights they had when the session started (their own), not at the older record's. On a toposolid built from survey points, Reset Shape may put corners off their own heights; then the Update reports them moved by hand and leaves them, and Cancel leaves them too | [ ] | [ ] | [ ] | [ ] |
+| 106 | A toposolid whose corners an earlier session set: in a new session type another height on their line, Update (the corners move), Reset Shape on the toposolid, then Cancel | The corners go back up to the earlier session's heights, not where Reset Shape put them (a known limit, not a bug) | [ ] | [ ] | [ ] | [ ] |
+| 107 | **Every year.** Rows 86, 87, 24 and 97 | Each passes as written. They check that `ModifySubElement` takes an outline corner of a toposolid and of a floor, measured from the same unshaped top as an edge point. Report it if a corner does not move at all (the summary then counts it among the points that "could not be placed"), or if every corner lands off its expected height by one same amount | [ ] | [ ] | [ ] | [ ] |
+| 108 | A toposolid with a height offset other than 0, and a floor on a level above 0 with a height offset other than 0: on each, a line ending on an outline corner, at a known height; Update | The corner reads the line's height within 1 mm (point readout, Elevation Base = Survey Point), as the line's own points do (rows 19 and 73); the summary has no "could not be placed" | [ ] | [ ] | [ ] | [ ] |
+| 109 | In a session, type another height on a corner's line and Update, so the Update moves that corner; move it with Modify Sub Elements and Cancel with no Update between. Once with a corner only this session set, once with one an earlier session set | The corner stays where you put it both times, and Cancel's message does not count it. A later session's Update leaves it there and does not report it | [ ] | [ ] | [ ] | [ ] |
 
 Items 19 and 20 are the two floor facts nothing has verified yet; if a floor wants an offset from
 its top, floors need their own Z conversion.
@@ -386,7 +544,7 @@ everything below *except* the type.
   a floor's *Structural* flag or a Floors-only shared parameter, is **parked** in Extensible
   Storage (`ParkedParameterStore`) and put back on the return trip.
 - **RVTuk's own storage:** the point ledger, so Update stays idempotent across a round
-  trip, and the Room Floor link.
+  trip, the outline corner record (`RVTukTopoToolsOutlineHeights`), and the Room Floor link.
 - **Pinned.**
 
 **Lost:**
@@ -456,14 +614,15 @@ Tick each case only once it has actually been checked in Revit.
 | 22 | Nothing relevant selected, press Floor ⇄ Topo | "Select floors or toposolids first." | [ ] | [ ] |
 | 23 | The summary after any conversion | A TaskDialog lists what was converted, skipped and lost; no line ends in ".." | [ ] | [ ] |
 | 24 | A flat toposolid (no points added) → floor | A plain floor: shape editing is off (no Modify Sub Elements points); a shape-edited toposolid still comes back shape-edited | [ ] | [ ] |
+| 25 | A toposolid whose outline corners a session set → floor → toposolid; a session on it, Update, ✓ | The corners keep their heights both ways; ✓'s summary names them ("N outline corners took their heights from the lines.") and nothing says "moved by hand" | [ ] | [ ] |
 
 ## Code
 
 | Layer | Folder |
 |-------|--------|
-| Core  | `src/RVTuk.Core/TopoTools/` (sampler, line clipper, containment, point deduper (crossings), height label placement, height-text linker, metre height text (`SurveyHeightText`), ledger codec, session report, Modify-tab rule (`ModifyTabPanels`), `Sentence`, converter planner / chainer / parked-parameter codec / report) |
+| Core  | `src/RVTuk.Core/TopoTools/` (sampler, line clipper, containment, point deduper (crossings), height label placement, height-text linker, metre height text (`SurveyHeightText`), ledger codec, session report, outline corner rule, planner, pass and record codec (`OutlineCornerHeights`, `OutlineCornerPlanner`, `CornerPass` and `CornerPassGate` in OutlineCornerPass.cs, `OutlineCornerRecordCodec`), Modify-tab rule (`ModifyTabPanels`), `Sentence`, converter planner / chainer / parked-parameter codec / report) |
 | UI    | none: the pane is gone, the session lives on the ribbon |
-| Revit | `src/RVTuk.Revit/TopoTools/` (`TopoSession`, `TopoSessionUpdater`, `TopoSessionRunner`, `TopoEditPanel`, `ModifyTabHost`, `ModifyTabAccess`, `TopoDocumentEvents`, `TopoSaveGuard`, `TopoIcons`, `HeightTexts`, `HeightTextLinkStore`, `HeightTextType`, `LastTypedHeights`, line style and collector, applier, ledger store, the commands in `Commands/` (with `TopoSessionActions`: Accept and Cancel as plain calls), and the floor / toposolid converter) |
+| Revit | `src/RVTuk.Revit/TopoTools/` (`TopoSession`, `TopoSessionUpdater`, `TopoSessionRunner`, `TopoEditPanel`, `ModifyTabHost`, `ModifyTabAccess`, `TopoDocumentEvents`, `TopoSaveGuard`, `TopoIcons`, `HeightTexts`, `HeightTextLinkStore`, `HeightTextType`, `LastTypedHeights`, line style and collector, applier, ledger store, corner store (`OutlineCornerStore`), the commands in `Commands/` (with `TopoSessionActions`: Accept and Cancel as plain calls), and the floor / toposolid converter) |
 | Tests | `tests/RVTuk.Core.Tests/TopoTools/` |
 
 `XyPoint` moved to `src/RVTuk.Core/Shared/Geometry/` when this tool was built — Auto Dimensions and
@@ -473,6 +632,8 @@ project's first records, and net48 has no such marker type in its BCL.
 
 ## Docs
 
+- [specs/2026-11-19-outline-corner-heights-design.md](specs/2026-11-19-outline-corner-heights-design.md) — outline corners follow the lines: the rule, the corner record, Cancel (current design, with an "As built" note); its reference implementation [specs/2026-11-19-outline-corner-heights-reference.py](specs/2026-11-19-outline-corner-heights-reference.py)
+- [plans/2026-11-19-outline-corner-heights.md](plans/2026-11-19-outline-corner-heights.md) — its implementation plan
 - [specs/2026-11-17-topo-edit-follows-session-design.md](specs/2026-11-17-topo-edit-follows-session-design.md) — the Topo Edit panel follows the session onto the Modify tab; the session dialog, arming and the save prompt; heights in metres; the quiet Update (current design, with the probe results of 2026-11-18)
 - [plans/2026-11-17-topo-edit-follows-session.md](plans/2026-11-17-topo-edit-follows-session.md) — its implementation plan
 - [specs/2026-11-15-topo-edit-session-design.md](specs/2026-11-15-topo-edit-session-design.md) — the edit session (its base design, with the probe results of 2026-11-16; amended by the 2026-11-17 design)

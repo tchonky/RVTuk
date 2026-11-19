@@ -26,7 +26,9 @@ applied to the toposolids under them, in the active view, re-runnably.
 
 **Out of v1** (each a clean addition on this foundation, none of it designed here): creating
 toposolids; reading contours from an imported survey DWG (reuses the sampler and router untouched);
-subdivisions and split lines/creases; multi-view scope; editing points the tool did not make.
+subdivisions and split lines/creases; multi-view scope; editing points the tool did not make
+(superseded for the outline's own points on 2026-11-19: Update now gives them the lines' heights
+and puts them back; see [2026-11-19-outline-corner-heights-design.md](2026-11-19-outline-corner-heights-design.md)).
 
 **Revit 2024/2025 only.** Toposolid does not exist in 2023, so KKarea never sees this tool.
 

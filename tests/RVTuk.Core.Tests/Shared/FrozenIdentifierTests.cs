@@ -40,10 +40,13 @@ public class FrozenIdentifierTests
         1|new Guid("309b77b4-64cd-45c7-bd73-d6a81b1f85ae")
         1|SchemaName = "RVTukTopoToolsParkedParameters"
         1|FieldName = "Entries"
-        4|AddSimpleField(FieldName, typeof(string))
-        6|builder.SetVendorId("KnafoKlimor");
-        6|builder.SetReadAccessLevel(AccessLevel.Public);
-        6|builder.SetWriteAccessLevel(AccessLevel.Public);
+        1|new Guid("cca5f35d-98c8-466c-9175-4d51afe00df1")
+        1|SchemaName = "RVTukTopoToolsOutlineHeights"
+        1|FieldName = "CornersByXy"
+        5|AddSimpleField(FieldName, typeof(string))
+        7|builder.SetVendorId("KnafoKlimor");
+        7|builder.SetReadAccessLevel(AccessLevel.Public);
+        7|builder.SetWriteAccessLevel(AccessLevel.Public);
         1|OurVendorId = "KnafoKlimor"
         1|new DockablePaneId(new Guid("e5d47b31-2c8a-4f16-b0d9-73a5e91c46f2"))
         1|new DockablePaneId(new Guid("88a9c4fa-9c6a-4b02-b169-701be8358090"))

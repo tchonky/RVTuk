@@ -2,11 +2,17 @@ using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
 using RVTuk.Core.Shared.Geometry;
+using RVTuk.Core.TopoTools;
 
 namespace RVTuk.Revit.TopoTools
 {
     /// <summary>One topo line as the session needs it: its id and where it goes.</summary>
-    public sealed record TopoLineCandidate(long LineId, IReadOnlyList<XyPoint> Polyline);
+    /// <param name="Polyline">Revit's tessellation, which the clipper and the sampler read.</param>
+    /// <param name="CornerPolyline">The same line for the outline corner rule: an arc by the rule's
+    /// own 1 mm chord count (<see cref="OutlineCornerHeights.ArcChordCount"/>), any other curve as
+    /// <paramref name="Polyline"/>. Plan feet, like it.</param>
+    public sealed record TopoLineCandidate(
+        long LineId, IReadOnlyList<XyPoint> Polyline, IReadOnlyList<XyPoint> CornerPolyline);
 
     /// <summary>
     /// Reads the view's topo lines. Detail curves only: a model line given the _DP-Topo Line style
@@ -45,10 +51,30 @@ namespace RVTuk.Revit.TopoTools
                     .ToList();
                 if (polyline.Count < 2) continue;
 
-                candidates.Add(new TopoLineCandidate(line.Id.Value, polyline));
+                candidates.Add(new TopoLineCandidate(line.Id.Value, polyline, CornerPolyline(curve) ?? polyline));
             }
 
             return candidates;
+        }
+
+        /// <summary>
+        /// A bound arc in equal chords that stray at most 1 mm from it, or null for any other curve
+        /// (whose Revit tessellation stands). The arc lies in the plan view's sketch plane, so its
+        /// plan projection is the same arc.
+        /// </summary>
+        private static IReadOnlyList<XyPoint>? CornerPolyline(Curve curve)
+        {
+            if (curve is not Arc arc || !arc.IsBound || !(arc.Radius > 0)) return null;
+
+            int n = CornerPass.ArcChordCount(arc.Length, arc.Radius);
+
+            var points = new List<XyPoint>(n + 1);
+            for (int i = 0; i <= n; i++)
+            {
+                var point = arc.Evaluate((double)i / n, true);
+                points.Add(new XyPoint(point.X, point.Y));
+            }
+            return points;
         }
     }
 }
