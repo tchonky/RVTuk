@@ -139,10 +139,12 @@ twice changes nothing the second time.
   is switched on, from the floor's flat top (its level plus its height offset); on a plain floor
   whose top is not flat at that height the guess can be wrong (unchecked in Revit). A floor switched
   on for its corners alone, whose corners then did not move, is made plain again.
-- **Arc lines:** the rule reads its own version of an arc, in chords at most 1 mm off the curve, so
-  a corner on a curved line can sit up to about 2 mm from the rule's line and miss the 1 mm snap.
-  It then takes practically the line's height, moved towards the next line by 2 mm's share of the
-  distance to it.
+- **Arc lines:** the rule reads its own version of an arc, in chords whose ends lie on the arc and
+  which stray at most 1 mm from it. A corner on the drawn arc is therefore within 1 mm of the rule's
+  line and takes the line's height through the 1 mm snap. Only a corner up to 1 mm off the drawn
+  arc can be up to 2 mm from the rule's line and miss the snap; it then takes practically the
+  line's height, moved towards the next line by d / (d + D) of the step between them, d (at most
+  2 mm) being its distance from the rule's line and D its distance to the next line.
 
 **The summary.** Accept's summary names the corners that hold a line's height after the run,
 those set by earlier Updates included: "3 outline corners took their heights from the lines." (for
@@ -495,10 +497,10 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 92 | A toposolid with a cut-out, between lines of different heights; Update | The cut-out's corners take heights between the lines too | [ ] | [ ] | [ ] | [ ] |
 | 93 | After an Update that set corners, Edit Boundary and move one corner; Update | The moved corner takes the lines' height at its new spot; nothing says "moved by hand" | [ ] | [ ] | [ ] | [ ] |
 | 94 | Reset Shape on a toposolid sketched flat (not built from survey points) after an Update that set corners, then Update | The corners take the lines' heights again, with no "outline corner moved by hand". The line points' own "earlier points had been moved by hand" sentence still appears, since Reset Shape moved them too; on a second Update the line's points on the outline are back at the line's height, with no "moved by hand" | [ ] | [ ] | [ ] | [ ] |
-| 95 | An arc topo line ending on, or passing through, an outline corner; Update | The corner is at the line's height within 5 mm | [ ] | [ ] | [ ] | [ ] |
+| 95 | An arc topo line ending on, or passing through, an outline corner (snapped to it); Update | The corner is at the line's height (Modify Sub Elements: within 1 mm of it), since a corner on the arc takes the 1 mm snap | [ ] | [ ] | [ ] | [ ] |
 | 96 | A toposolid whose corner the build before 2026-11-19 raised onto a line's end (Update with that build, then deploy this one): Update; delete the line; Update | The corner stays at the line's height after the delete, with no "moved by hand": it was recorded with that height as its own | [ ] | [ ] | [ ] | [ ] |
 | 97 | A plain floor between two lines of different heights, no line over it; Update | Shape editing is switched on and the corners take heights between the lines; the summary shows ("No topo line … being edited. N outline corners took their heights from the lines.") | [ ] | [ ] | [ ] | [ ] |
-| 98 | A plain floor with an arc in its outline, and lines at the floor's own height on both sides of it; Update twice | Still a plain floor after both (Modify Sub Elements shows no points) | [ ] | [ ] | [ ] | [ ] |
+| 98 | (Dropped in the final review of 2026-11-19: no setup could make it fail, since a floor switched on for nothing is made plain again. The dry run on a plain floor's real corners is covered by Core tests and rows 24 and 97.) | — | — | — | — | — |
 | 99 | **Cancel and corners.** On an element whose corners no session has set: move a line between two Updates so a corner moves twice (no height typed); Cancel | The corner is back at its own height, and the element keeps no `RVTukTopoToolsOutlineHeights` entity (RevitLookup). Cancel's message includes "put back 1 outline corner." (more if more corners moved) | [ ] | [ ] | [ ] | [ ] |
 | 100 | A corner an earlier session set to 41.20; in a new session type another height on its line so an Update moves it to 41.50; Cancel | The corner is back at 41.20. With that one corner moved, the message includes "put back 1 changed height and 1 outline corner." | [ ] | [ ] | [ ] | [ ] |
 | 101 | A corner an earlier session set: in a new session delete the line that set it, Update (the corner goes back to its own height), then Cancel | The corner is back at the earlier session's height (the line stays deleted; the next Update puts the corner back again) | [ ] | [ ] | [ ] | [ ] |

@@ -65,7 +65,7 @@ as reworded for it, and Floor ⇄ Topo row 25. What only Revit can answer:
   the same unshaped top as an edge point (rows 86, 87, 97 and 107), and whether the heights hold at a
   level or height offset other than 0 (row 108);
 - whether a plain floor's flat top (level plus height offset) is where its corners stand, which
-  decides whether an Update switches its shape editing on (rows 24, 97 and 98);
+  decides whether an Update switches its shape editing on (rows 24 and 97);
 - `ResetSlabShape()` on a floor switched on for its corners alone, and `DeleteEntity` on an element
   whose corner record is emptied;
 - whether a toposolid's shape editing can be off at all (the same test covers both kinds);
