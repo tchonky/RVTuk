@@ -301,11 +301,14 @@ namespace RVTuk.Core.TopoTools
         /// so <see cref="CornerPlan.WithReached"/> keys its record) or, when the start had no record,
         /// to its own height (in <see cref="CornerPlan.PutBacks"/>). One already within 0.1 mm of
         /// that height is not moved. A corner flagged by hand, now or at the start, is left alone.
-        /// A corner whose record did not change is not touched, even off its set height (moved by
-        /// hand since the last Update, which that Update flags).</para>
+        /// A corner whose record did not change is not touched. A corner standing more than 0.1 mm
+        /// off its current record's set height, off its own height (there it was reset, as
+        /// <see cref="Plan"/> reads it, and is put back like any other) and off the height Cancel
+        /// would give it, was moved by hand since the last Update, changed record or not: it is left
+        /// where it stands and its record is kept flagged by hand, set height = where it stands.</para>
         ///
         /// <para>The records become the start's, except that a hand flag set during the session
-        /// stays. A start record whose corner is gone (Edit Boundary) comes back with nothing moved;
+        /// (by an Update, or by this step) stays. A start record whose corner is gone (Edit Boundary) comes back with nothing moved;
         /// the next Update drops it. Records pair with each other and with
         /// <paramref name="vertices"/> within 0.1 mm in plan, as in <see cref="Plan"/>, whatever the
         /// order of any list. Run the result through <see cref="Settle"/>.</para>
@@ -324,6 +327,14 @@ namespace RVTuk.Core.TopoTools
             var startIndexOf = PairIndices(nowPoints, atStart);
             var startTaken = new bool[atStart.Count];
 
+            // The corner each current record belongs to, when it is still there.
+            var vertexOfNow = new XyzPoint?[now.Count];
+            var nowOf = PairIndices(vertices, now);
+            for (int v = 0; v < vertices.Count; v++)
+            {
+                if (nowOf[v] >= 0) vertexOfNow[nowOf[v]] = vertices[v];
+            }
+
             for (int j = 0; j < now.Count; j++)
             {
                 var current = now[j];
@@ -334,6 +345,22 @@ namespace RVTuk.Core.TopoTools
                 {
                     records.Add(start != null && start.ByHand ? start : current);
                     continue;
+                }
+
+                // Off the set height the last Update gave it, not at its own height (Reset Shape,
+                // as Plan reads it) and not already where Cancel would put it: moved by hand since
+                // that Update. Left where it stands, flagged there.
+                if (start is not { ByHand: true } && vertexOfNow[j] is XyzPoint vertexNow)
+                {
+                    double z = vertexNow.Z;
+                    double destination = start?.SetZ ?? current.OwnZ;
+                    if (Math.Abs(z - current.SetZ) > ShapeReplayPlanner.ToleranceFeet &&
+                        Math.Abs(z - current.OwnZ) > ShapeReplayPlanner.ToleranceFeet &&
+                        Math.Abs(z - destination) > ShapeReplayPlanner.ToleranceFeet)
+                    {
+                        records.Add(current with { SetZ = z, ByHand = true });
+                        continue;
+                    }
                 }
 
                 if (start != null)

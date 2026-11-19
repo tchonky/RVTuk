@@ -1044,10 +1044,10 @@ public class OutlineCornerPlannerTests
     }
 
     [Fact]
-    public void UnchangedRecordsGiveAnEmptyPlanEvenForACornerOffItsSetHeight()
+    public void UnchangedRecordsGiveAnEmptyPlanAndACornerOffItsSetHeightIsFlaggedWhereItStands()
     {
         // The corner at (10, 0) stands off its set height (moved by hand after the last Update,
-        // not yet flagged): its record did not change, so Cancel does not touch it.
+        // not yet flagged): Cancel does not touch it, and flags it where it stands.
         var records = new[] { new CornerRecord(0, 0, 9, 10, false), new CornerRecord(10, 0, 9, 10, false) };
 
         var plan = OutlineCornerPlanner.Restore(records, records,
@@ -1055,8 +1055,76 @@ public class OutlineCornerPlannerTests
 
         Assert.Empty(plan.Raises);
         Assert.Empty(plan.PutBacks);
-        Assert.Equal(records, plan.NewRecords);
+        Assert.Equal(new[] { records[0], new CornerRecord(10, 0, 9, 13, true) }, plan.NewRecords);
         Assert.Equal(0, plan.NewlyByHand);
+    }
+
+    [Fact]
+    public void ACornerTheSessionSetFirstAndMovedByHandAfterTheLastUpdateStaysWhereItIs()
+    {
+        // Final review fix 2, case A: no record at the start; the session's Update set it to 12
+        // (own height 10); then it was moved by hand to 15. Cancel leaves it there, flagged.
+        var now = new[] { new CornerRecord(0, 0, 10, 12, false) };
+        var corner = new XyzPoint(0, 0, 15);
+
+        var plan = OutlineCornerPlanner.Restore(NoRecords, now, new[] { corner });
+
+        Assert.Empty(plan.Raises);
+        Assert.Empty(plan.PutBacks);
+        Assert.Equal(new[] { new CornerRecord(0, 0, 10, 15, true) }, plan.NewRecords);
+    }
+
+    [Fact]
+    public void ACornerAnEarlierSessionSetAndMovedByHandAfterTheLastUpdateStaysWhereItIs()
+    {
+        // Final review fix 2, case B: the start's record set it to 11; the session's Update to
+        // 12; then it was moved by hand to 15. Cancel leaves it there, flagged.
+        var atStart = new[] { new CornerRecord(0, 0, 10, 11, false) };
+        var now = new[] { new CornerRecord(0, 0, 10, 12, false) };
+        var corner = new XyzPoint(0, 0, 15);
+
+        var plan = OutlineCornerPlanner.Restore(atStart, now, new[] { corner });
+        var outcome = OutlineCornerPlanner.Settle(plan, Reached(), Reached());
+
+        Assert.Empty(plan.Raises);
+        Assert.Empty(plan.PutBacks);
+        Assert.Equal(new[] { new CornerRecord(0, 0, 10, 15, true) }, outcome.Records);
+
+        // The next Update leaves it alone too.
+        var next = OutlineCornerPlanner.Plan(new[] { corner }, Always(20), outcome.Records);
+        Assert.Empty(next.Raises);
+        Assert.Empty(next.PutBacks);
+    }
+
+    [Fact]
+    public void ACornerMovedByHandToWhereCancelWouldPutItIsNotFlagged()
+    {
+        // Already at its start height (or, with no start record, at its own height): nothing to
+        // move, and nothing to flag.
+        var atStart = new[] { new CornerRecord(0, 0, 10, 11, false) };
+        var now = new[] { new CornerRecord(0, 0, 10, 12, false) };
+
+        var toStart = OutlineCornerPlanner.Restore(atStart, now, new[] { new XyzPoint(0, 0, 11) });
+        var toOwn = OutlineCornerPlanner.Restore(NoRecords, now, new[] { new XyzPoint(0, 0, 10) });
+
+        Assert.Empty(toStart.Raises);
+        Assert.Equal(atStart, toStart.NewRecords);
+        Assert.Empty(toOwn.PutBacks);
+        Assert.Empty(toOwn.NewRecords);
+    }
+
+    [Fact]
+    public void ACornerResetToItsOwnHeightDuringTheSessionIsRaisedBackToItsStartHeight()
+    {
+        // At its own height, off its set height: Reset Shape (as Plan reads it), not a hand move.
+        var atStart = new[] { new CornerRecord(0, 0, 10, 11, false) };
+        var now = new[] { new CornerRecord(0, 0, 10, 12, false) };
+        var corner = new XyzPoint(0, 0, 10);
+
+        var plan = OutlineCornerPlanner.Restore(atStart, now, new[] { corner });
+
+        Assert.Equal(new[] { (corner, 11.0) }, plan.Raises);
+        Assert.Equal(atStart, plan.NewRecords);
     }
 
     [Fact]
@@ -1073,12 +1141,13 @@ public class OutlineCornerPlannerTests
     public void ASetHeightWithinATenthOfAMillimetreOfTheStartsIsUnchanged()
     {
         var atStart = new[] { new CornerRecord(0, 0, 9, 10, false) };
-        var corner = new XyzPoint(0, 0, 13);
+        var near = new XyzPoint(0, 0, 10 + 0.099 * Mm);
+        var corner = new XyzPoint(0, 0, 10 + 0.101 * Mm);
 
         var plan = OutlineCornerPlanner.Restore(atStart,
-            new[] { new CornerRecord(0, 0, 9, 10 + 0.099 * Mm, false) }, new[] { corner });
+            new[] { new CornerRecord(0, 0, 9, near.Z, false) }, new[] { near });
         var moved = OutlineCornerPlanner.Restore(atStart,
-            new[] { new CornerRecord(0, 0, 9, 10 + 0.101 * Mm, false) }, new[] { corner });
+            new[] { new CornerRecord(0, 0, 9, corner.Z, false) }, new[] { corner });
 
         Assert.Empty(plan.Raises);
         Assert.Equal(atStart, plan.NewRecords);
@@ -1093,6 +1162,8 @@ public class OutlineCornerPlannerTests
 
         var raise = OutlineCornerPlanner.Restore(atStart, now, new[] { new XyzPoint(0, 0, 10 + 0.099 * Mm) });
         var putBack = OutlineCornerPlanner.Restore(NoRecords, now, new[] { new XyzPoint(0, 0, 9 - 0.099 * Mm) });
+        // Just off it, and far off the set height 12 the last Update gave it: moved by hand since
+        // (final review fix 2), so left where it stands and flagged.
         var raiseJustOff = OutlineCornerPlanner.Restore(atStart, now, new[] { new XyzPoint(0, 0, 10 + 0.101 * Mm) });
         var putBackJustOff = OutlineCornerPlanner.Restore(NoRecords, now, new[] { new XyzPoint(0, 0, 9 - 0.101 * Mm) });
 
@@ -1100,8 +1171,10 @@ public class OutlineCornerPlannerTests
         Assert.Equal(atStart, raise.NewRecords);
         Assert.Empty(putBack.PutBacks);
         Assert.Empty(putBack.NewRecords);
-        Assert.Single(raiseJustOff.Raises);
-        Assert.Single(putBackJustOff.PutBacks);
+        Assert.Empty(raiseJustOff.Raises);
+        Assert.Equal(new[] { new CornerRecord(0, 0, 9, 10 + 0.101 * Mm, true) }, raiseJustOff.NewRecords);
+        Assert.Empty(putBackJustOff.PutBacks);
+        Assert.Equal(new[] { new CornerRecord(0, 0, 9, 9 - 0.101 * Mm, true) }, putBackJustOff.NewRecords);
     }
 
     [Fact]
