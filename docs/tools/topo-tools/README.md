@@ -114,12 +114,12 @@ twice changes nothing the second time.
   "could not be placed", and is tried again, and warned about, at every Update.
 - **Moved by hand.** A corner you move with Modify Sub Elements after the tool set it is left alone
   for good, and the next Update says so once. There is no way yet to hand such a corner back to the
-  tool (backlog). A line's own point moved by hand is not frozen: the next Update in the line's view
-  reports it once, "1 earlier point had been moved by hand and was left alone.", and leaves it where
-  you put it; from the Update after, it follows its line again, as in earlier builds. On the
-  outline, if the line still crosses there, it takes the line's height through the 1 mm snap and is
-  recorded like any corner the lines set (so when the line goes, it goes back to where you had put
-  it); if the line is gone, it is an ordinary outline corner. While the ledger records a line's
+  tool (backlog). A line's own point on the outline moved by hand is not frozen: the next Update in
+  the line's view reports it once, "1 earlier point had been moved by hand and was left alone.", and
+  leaves it where you put it; from the Update after, it follows its line again, as in earlier
+  builds. If the line still crosses there, the point takes the line's height through the 1 mm snap
+  and is recorded like any corner the lines set (so when the line goes, it goes back to where you
+  had put it); if the line is gone, it is an ordinary outline corner. While the ledger records a line's
   point, the point is no corner, however far it was moved: an Update in another view leaves it
   alone.
 - **Edit Boundary** drops the record of a corner it moved or removed, silently. A corner at a new
