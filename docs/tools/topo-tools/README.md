@@ -122,8 +122,10 @@ twice changes nothing the second time.
   it); if the line is gone, it is an ordinary outline corner. While the ledger records a line's
   point, the point is no corner, however far it was moved: an Update in another view leaves it
   alone.
-- **Edit Boundary** drops the record of a corner it moved or removed, silently; a corner at a new
-  spot starts afresh. **Reset Shape** on a toposolid is not a hand edit: the next Update starts the
+- **Edit Boundary** drops the record of a corner it moved or removed, silently. A corner at a new
+  spot starts afresh: its new record's own height is the height it stands at when the next Update
+  first finds it there, which for a raised corner Edit Boundary moved may be the line height it
+  had, not its height before the tool first moved it. **Reset Shape** on a toposolid is not a hand edit: the next Update starts the
   corners afresh, with no "moved by hand" for them (the line points' own "earlier points had been
   moved by hand" sentence still appears, since Reset Shape moved them too). The tool takes a corner
   for reset only when it stands within 0.1 mm of its recorded own height. A toposolid whose Reset
@@ -499,7 +501,7 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 90 | Move one of a line's own points on the outline up with Modify Sub Elements; Update; Update again | The first Update shows "1 earlier point had been moved by hand and was left alone." and the point stays where you put it. The second shows no dialog and puts the point back at the line's height (Modify Sub Elements: within 1 mm of it) | [ ] | [ ] | [ ] | [ ] |
 | 91 | Two toposolids sharing an outline corner, lines over only one of them: a session on each in turn, Update, ✓ | The shared corner gets the same height in both sessions, also in the one whose toposolid no line crosses ("No topo line … being edited. 1 outline corner took its height from the lines.", or more corners) | [ ] | [ ] | [ ] | [ ] |
 | 92 | A toposolid with a cut-out, between lines of different heights; Update | The cut-out's corners take heights between the lines too | [ ] | [ ] | [ ] | [ ] |
-| 93 | After an Update that set corners, Edit Boundary and move one corner; Update | The moved corner takes the lines' height at its new spot; nothing says "moved by hand" | [ ] | [ ] | [ ] | [ ] |
+| 93 | After an Update that set corners, Edit Boundary and move one of those corners; note its height (point readout) before the next Update; Update; then delete the lines and Update | The moved corner takes the lines' height at its new spot, and nothing says "moved by hand". After the lines are deleted it goes back to the noted height within 1 mm (its new own height, possibly the line height it had), not to its height before the first Update | [ ] | [ ] | [ ] | [ ] |
 | 94 | Reset Shape on a toposolid sketched flat (not built from survey points) after an Update that set corners, then Update | The corners take the lines' heights again, with no "outline corner moved by hand". The line points' own "earlier points had been moved by hand" sentence still appears, since Reset Shape moved them too; on a second Update the line's points on the outline are back at the line's height, with no "moved by hand" | [ ] | [ ] | [ ] | [ ] |
 | 95 | An arc topo line ending on, or passing through, an outline corner (snapped to it); Update | The corner is at the line's height (Modify Sub Elements: within 1 mm of it), since a corner on the arc takes the 1 mm snap | [ ] | [ ] | [ ] | [ ] |
 | 96 | A toposolid whose corner the build before 2026-11-19 raised onto a line's end (Update with that build, then deploy this one): Update; delete the line; Update | The corner stays at the line's height after the delete, with no "moved by hand": it was recorded with that height as its own | [ ] | [ ] | [ ] | [ ] |
