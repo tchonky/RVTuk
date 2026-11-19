@@ -94,8 +94,8 @@ lines lie on both sides of it. Every line of the session's view with a readable 
 drawn, whether or not it crosses the element, so a corner shared with a neighbouring toposolid gets
 the same height in the session of each; lines in other views do not count, and an unreadable height
 on a line over no part of the element is left out silently. Points inside the outline (a survey's,
-or ones placed with Modify Sub Elements) and the points the ledger records for any line are never
-changed. The heights depend only on the lines, never on where the corners stand, so an Update run
+or ones placed with Modify Sub Elements) and the points the ledger records for any line (at their
+spot in plan, whatever their height) are never changed by the corner pass. The heights depend only on the lines, never on where the corners stand, so an Update run
 twice changes nothing the second time.
 
 - **Each corner remembers its own height,** the one it had before the tool first moved it, in the
@@ -110,10 +110,15 @@ twice changes nothing the second time.
 - **A corner that cannot be brought within 0.1 mm of its height** counts among the points that
   "could not be placed", and is tried again, and warned about, at every Update.
 - **Moved by hand.** A corner you move with Modify Sub Elements after the tool set it is left alone
-  for good, and the next Update says so once. A line's own point on the outline moved by hand is
-  left alone for good too, reported once as "1 earlier point had been moved by hand and was left
-  alone." An edge point of a line at such a spot is not drawn. There is no way yet to hand such a
-  corner back to the tool (backlog).
+  for good, and the next Update says so once. There is no way yet to hand such a corner back to the
+  tool (backlog). A line's own point moved by hand is not frozen: the next Update in the line's view
+  reports it once, "1 earlier point had been moved by hand and was left alone.", and leaves it where
+  you put it; from the Update after, it follows its line again, as in earlier builds. On the
+  outline, if the line still crosses there, it takes the line's height through the 1 mm snap and is
+  recorded like any corner the lines set (so when the line goes, it goes back to where you had put
+  it); if the line is gone, it is an ordinary outline corner. While the ledger records a line's
+  point, the point is no corner, however far it was moved: an Update in another view leaves it
+  alone.
 - **Edit Boundary** drops the record of a corner it moved or removed, silently; a corner at a new
   spot starts afresh. **Reset Shape** on a toposolid is not a hand edit: the next Update starts the
   corners afresh, with no "moved by hand" for them (the line points' own "earlier points had been
@@ -122,7 +127,8 @@ twice changes nothing the second time.
   Shape puts its corners anywhere else (one built from survey points, say) has them read as moved
   by hand, left alone for good (backlog). Changing the Height
   Offset of a shape-edited floor moves every corner off its recorded height, so the next Update
-  takes them all for moved by hand (backlog).
+  takes them all for moved by hand (backlog); its line points are reported once and then follow
+  their lines again.
 - **Floors** get the same, with one difference: a plain floor (shape editing off) is switched to
   shape editing only when one of its corners takes a height from the lines, so a floor none of
   whose corners takes a height from the lines stays a plain floor. That is judged before anything
@@ -480,11 +486,11 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 87 | The view's only line drawn from inside the element to end exactly on an outline corner (snapped): Update; delete the line; Update | After the first Update the corner is at the line's height, and no dialog shows. The second shows "No topo line in the session's view lies over the toposolid or floor being edited. 1 outline corner went back to its own height.", the corner is back at its own height, and no other point near it is gone | [ ] | [ ] | [ ] | [ ] |
 | 88 | Update twice with nothing changed, then ✓ | The second Update shows no dialog and moves nothing: every corner's height is as the first Update left it. ✓'s summary still names the corners ("N outline corners took their heights from the lines."), and nothing says "moved by hand" | [ ] | [ ] | [ ] | [ ] |
 | 89 | After an Update that set a corner, move it up 0.5 m with Modify Sub Elements; Update; Update again; then draw a line ending on it, Update | The first Update shows the summary with the warning icon and "1 outline corner moved by hand is left alone." The corner stays where you put it through every later Update, which do not mention it again | [ ] | [ ] | [ ] | [ ] |
-| 90 | Move one of a line's own points on the outline up with Modify Sub Elements; Update; Update again | "1 earlier point had been moved by hand and was left alone." on the first Update only; the point stays where you put it on both, and on later Updates | [ ] | [ ] | [ ] | [ ] |
+| 90 | Move one of a line's own points on the outline up with Modify Sub Elements; Update; Update again | The first Update shows "1 earlier point had been moved by hand and was left alone." and the point stays where you put it. The second shows no dialog and puts the point back at the line's height (Modify Sub Elements: within 1 mm of it) | [ ] | [ ] | [ ] | [ ] |
 | 91 | Two toposolids sharing an outline corner, lines over only one of them: a session on each in turn, Update, ✓ | The shared corner gets the same height in both sessions, also in the one whose toposolid no line crosses ("No topo line … being edited. 1 outline corner took its height from the lines.", or more corners) | [ ] | [ ] | [ ] | [ ] |
 | 92 | A toposolid with a cut-out, between lines of different heights; Update | The cut-out's corners take heights between the lines too | [ ] | [ ] | [ ] | [ ] |
 | 93 | After an Update that set corners, Edit Boundary and move one corner; Update | The moved corner takes the lines' height at its new spot; nothing says "moved by hand" | [ ] | [ ] | [ ] | [ ] |
-| 94 | Reset Shape on a toposolid sketched flat (not built from survey points) after an Update that set corners, then Update | The corners take the lines' heights again, with no "outline corner moved by hand". The line points' own "earlier points had been moved by hand" sentence still appears, since Reset Shape moved them too; this row checks the corners only | [ ] | [ ] | [ ] | [ ] |
+| 94 | Reset Shape on a toposolid sketched flat (not built from survey points) after an Update that set corners, then Update | The corners take the lines' heights again, with no "outline corner moved by hand". The line points' own "earlier points had been moved by hand" sentence still appears, since Reset Shape moved them too; on a second Update the line's points on the outline are back at the line's height, with no "moved by hand" | [ ] | [ ] | [ ] | [ ] |
 | 95 | An arc topo line ending on, or passing through, an outline corner; Update | The corner is at the line's height within 5 mm | [ ] | [ ] | [ ] | [ ] |
 | 96 | A toposolid whose corner the build before 2026-11-19 raised onto a line's end (Update with that build, then deploy this one): Update; delete the line; Update | The corner stays at the line's height after the delete, with no "moved by hand": it was recorded with that height as its own | [ ] | [ ] | [ ] | [ ] |
 | 97 | A plain floor between two lines of different heights, no line over it; Update | Shape editing is switched on and the corners take heights between the lines; the summary shows ("No topo line … being edited. N outline corners took their heights from the lines.") | [ ] | [ ] | [ ] | [ ] |

@@ -99,7 +99,8 @@ Also unverified, and only visible in Revit:
   `TopoPointDeduper` now does, if survey toposolids of tens of thousands of points turn out slow
   (Floor ⇄ Topo checklist 5/8b).
 - **Two views sharing an outline point on one element:** raising a vertex for this view's line changes
-  the Z another view's line recorded, so that view's next Update reports one false "moved by hand".
+  the Z another view's line recorded, so that view's next Update reports one false "moved by hand"
+  (the point then follows that view's line again from the Update after).
   The crossing rule weighs only the lines of the session's view, so it does not help here.
 - **An interior point merged into an existing vertex still counts as "added".**
 
