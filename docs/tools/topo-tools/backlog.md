@@ -228,6 +228,10 @@ plan [2026-11-17-topo-edit-follows-session.md](plans/2026-11-17-topo-edit-follow
 - **Cancel leaves a once-plain floor shape-edited.** Its corners go back to its top, but the floor
   stays shape-edited. Making it plain again needs an "enabled at the start" snapshot and no surviving
   ledger.
+- **A floor switched on for its corners alone stays shape-edited once they go back.** When a later
+  Update puts every corner back to its own height (its lines deleted or moved away), the floor keeps
+  shape editing on with nothing raised. Making it plain again needs to know that it was switched on
+  for its corners alone (no ledger, no other point of ours).
 - **Cancel does not name the corners it could not put back.** They count nowhere in its message;
   the next Update takes them from where they stand.
 - **A vertex freed by a failed `DeletePoint` keeps the dead line's height.** A ledgered point Revit
@@ -235,6 +239,11 @@ plan [2026-11-17-topo-edit-follows-session.md](plans/2026-11-17-topo-edit-follow
   it is an ordinary corner and is recorded with the line's height as its own, so it never goes back
   to the height it had before that line. Check in Revit how often
   `DeletePoint` fails before doing anything.
+- **Outline corners: report the hand moves Cancel flags.** A corner moved by hand before a session
+  that is then cancelled without an Update is flagged by hand in the start copy (`EffectiveStart`),
+  and Cancel writes that flag; a corner moved by hand after the session's last Update is flagged by
+  Cancel itself (final review, fix 2). Neither is ever reported. Cancel could name them, or leave
+  the record unflagged so that the next Update reports the move once.
 - **Tidy-ups:** one helper for the `%LOCALAPPDATA%\RVTuk` folder (ModifyTabHost's switch files and
   Application's crash.log build it separately), and one definition of the toolkit's orange
   (TopoLineStyle and TopoIcons).
