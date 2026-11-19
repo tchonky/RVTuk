@@ -93,7 +93,10 @@ apart do not open a crack. There is no reach limit: a corner 30 m from every lin
 lines lie on both sides of it. Every line of the session's view with a readable height counts, as
 drawn, whether or not it crosses the element, so a corner shared with a neighbouring toposolid gets
 the same height in the session of each; lines in other views do not count, and an unreadable height
-on a line over no part of the element is left out silently. Points inside the outline (a survey's,
+on a line over no part of the element is left out silently. So an Update or Accept in another view
+of the same element works out its corners from that view's lines alone: it can put back to their
+own heights corners the first view's lines set (the first view's next Update raises them again).
+The element keeps one corner record, whichever view wrote it last. Points inside the outline (a survey's,
 or ones placed with Modify Sub Elements) and the points the ledger records for any line (at their
 spot in plan, whatever their height) are never changed by the corner pass. The heights depend only on the lines, never on where the corners stand, so an Update run
 twice changes nothing the second time.
