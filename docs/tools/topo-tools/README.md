@@ -163,14 +163,23 @@ the last Update for the lines that still exist, and the next Update reconciles t
 transaction Cancel puts back the outline corners the session's Updates moved, to where they stood
 when the session started: a corner an earlier session set goes back to that session's height, and
 one this session set first goes back to its own height. It works from the corner record taken at
-the start, never from the lines, so it cannot move a corner the session left alone, and a corner
-moved by hand stays where it is. Its message counts them: "put back 1 changed height and 2 outline
-corners." ("put back 2 outline corners." when no typed height was put back; no corner part when no
-corner moved). Limits: Cancel puts back only corners still on the outline (one moved off it by Edit
-Boundary during the session is not); corners it could not put back are not named, and the next
-Update takes them from where they stand; a toposolid you reset by hand (Reset Shape) during the
-session is raised back to its start heights; a floor that was plain when the session started gets
-its corners back at its top but stays shape-edited (backlog). Cancel deletes only what is still a
+the start, never from the lines, so it cannot move a corner the session left alone. A corner moved
+by hand stays where it is: one moved before the session (flagged when the session starts), one an
+Update of the session reported, and one moved after the session's last Update. That last one
+stands more than 0.1 mm off the height that Update gave it, off its own height and off the height
+Cancel would give it; whenever Cancel has corners to look at (their record changed during the
+session), it flags that corner where it stands, so later Updates leave it alone without reporting
+it; otherwise the next Update reports it, as after any hand move. Its message counts the corners
+put back: "put back 1 changed height and 2 outline corners." ("put back 2 outline corners." when no
+typed height was put back; no corner part when no corner moved). If putting the corners back fails,
+Cancel still does everything else, leaves every corner as it was, and adds "Outline corners could
+not be put back." Limits: Cancel puts back only corners still on the outline (one moved off it by
+Edit Boundary during the session is not); corners it could not put back are not named, and the next
+Update takes them from where they stand; after Reset Shape on a toposolid during the session,
+Cancel raises the corners an earlier session set and this session's Updates moved back to that
+earlier session's heights, and leaves every other corner where Reset Shape put it (one not put at
+its recorded own height counts as moved by hand); a floor that was plain when the session started
+gets its corners back at its top but stays shape-edited (backlog). Cancel deletes only what is still a
 topo line or height text of the session's view, and the session ends only once
 its transaction has committed, so a failed Cancel can be pressed again. The session also ends by
 itself, keeping everything, once its document has closed (a close called off at "Save changes?"
@@ -372,7 +381,7 @@ RVTuk panel's buttons, Topo Tools among them, are in it, so they can take a shor
 Tick each case only once it has actually been checked in that year's Revit: 2024 first (deploy with
 `.\Deploy.ps1 2024` from an elevated shell, Revit closed), then 2025, 2026 and 2027 as Revit is at
 hand. Rows 29–85 check the follow-the-session pass of 2026-11-17, and rows 2, 3, 4, 6, 9, 18, 21,
-27 and 28 were reworded for it. Rows 86–108 check the outline corner pass of 2026-11-19, and row 24
+27 and 28 were reworded for it. Rows 86–109 check the outline corner pass of 2026-11-19, and row 24
 was reworded for it. "Report it" marks a result the design did not expect: it goes back
 to the design rather than being ticked. UIFramework 2025 could not be read for that pass, so in
 2025 run at least rows 18, 62, 65, 66, 69 and 70.
@@ -484,9 +493,10 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 103 | Cancel a session whose Updates moved no corner | The message has no "outline corner" part | [ ] | [ ] | [ ] | [ ] |
 | 104 | A plain floor whose corners a session's Update raised, then Cancel | The corners are back at the floor's top; the floor stays shape-edited (a known limit) | [ ] | [ ] | [ ] | [ ] |
 | 105 | Reset Shape on a toposolid whose corners an earlier session set, outside any session; then a session: Update, Cancel | The corners are back at the heights they had when the session started (their own), not at the older record's | [ ] | [ ] | [ ] | [ ] |
-| 106 | During a session, after an Update that set corners, Reset Shape on the toposolid; then Cancel | The corners go back up to the heights they had when the session started (a known limit, not a bug) | [ ] | [ ] | [ ] | [ ] |
+| 106 | A toposolid whose corners an earlier session set: in a new session type another height on their line, Update (the corners move), Reset Shape on the toposolid, then Cancel | The corners go back up to the earlier session's heights, not where Reset Shape put them (a known limit, not a bug) | [ ] | [ ] | [ ] | [ ] |
 | 107 | **Every year.** Rows 86, 87, 24 and 97 | As there: `ModifySubElement` takes an outline corner of a toposolid and of a floor, measured from the same unshaped top as an edge point. A corner that does not move, or lands off by the same amount everywhere, goes back to the design | [ ] | [ ] | [ ] | [ ] |
 | 108 | A toposolid with a height offset other than 0, and a floor on a level above 0 with a height offset other than 0: Update with lines at known heights | The corners' heights match the lines', as the points do in rows 19 and 73 | [ ] | [ ] | [ ] | [ ] |
+| 109 | During a session, after an Update that set a corner, move it with Modify Sub Elements and Cancel with no Update between; once with a corner only this session set, once with one an earlier session set | The corner stays where you put it both times, and Cancel's message does not count it. A later session's Update leaves it there and does not report it | [ ] | [ ] | [ ] | [ ] |
 
 Items 19 and 20 are the two floor facts nothing has verified yet; if a floor wants an offset from
 its top, floors need their own Z conversion.

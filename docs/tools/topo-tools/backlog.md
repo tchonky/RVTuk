@@ -59,7 +59,7 @@ existing vertex and run Update twice; the summary must not accumulate "moved by 
 (Superseded in intent by "coincident points should average" below.)
 
 **The outline corner pass (2026-11-19)** is built, with Core tests on all three frameworks (the
-rule pinned by the reference's 698 points), but not checked in Revit: checklist rows 86–108, row 24
+rule pinned by the reference's 698 points), but not checked in Revit: checklist rows 86–109, row 24
 as reworded for it, and Floor ⇄ Topo row 25. What only Revit can answer:
 - whether `ModifySubElement` takes an outline corner of a toposolid and of a floor, measured from
   the same unshaped top as an edge point (rows 86, 87, 97 and 107), and whether the heights hold at a
