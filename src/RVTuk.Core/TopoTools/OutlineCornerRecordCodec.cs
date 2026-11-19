@@ -62,7 +62,10 @@ namespace RVTuk.Core.TopoTools
 
         private static string Format(double value) => value.ToString("R", CultureInfo.InvariantCulture);
 
+        // A non-finite number (NaN, ±Infinity, or an overflow that net8+ parses as Infinity) makes
+        // the entry malformed: no corner sits at such a place or height.
         private static bool TryParse(string text, out double value) =>
-            double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+            double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
+            !double.IsNaN(value) && !double.IsInfinity(value);
     }
 }

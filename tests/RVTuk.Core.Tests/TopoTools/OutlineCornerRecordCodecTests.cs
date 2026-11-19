@@ -55,6 +55,10 @@ public class OutlineCornerRecordCodecTests
     [InlineData("a,b,c,d,0")]
     [InlineData("1,2,3,4,maybe")]
     [InlineData("1,2,3,4,0,9")]
+    [InlineData("1,2,NaN,4,0")]
+    [InlineData("Infinity,2,3,4,0")]
+    [InlineData("1,-Infinity,3,4,0")]
+    [InlineData("1,2,3,1e999,0")]
     [InlineData("")]
     public void MalformedEntriesAreSkippedAndTheWellFormedRestSurvives(string bad)
     {
