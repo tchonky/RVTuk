@@ -32,14 +32,20 @@ namespace RVTuk.Core.TopoTools
         private const double ShortPart = 1e-9;        // far parts no longer than this are ignored
         private const double CleanSpot = 1e-6;        // consecutive vertices closer than this merge
         private const double InViewShortcut = 0.002;  // a candidate this close is in view
-        private const double Parallel = 1e-12;        // |cross(u, d)| ≤ 1e-12·|d|: the walk skips the segment
-        private const double RayParam = 1e-12;        // the walk's segment parameter tolerance (as the reference)
+        private const double Parallel = 1e-12;        // |cross(u, d)| ≤ 1e-12·|d|: the walk skips the segment (the vertex clause covers it)
         private static readonly double FacingCos = Math.Cos(60.0 * Math.PI / 180.0);
+
+        // Speed only, never a value: segments are pruned in runs of this many by their box, and a
+        // box is "further" only by more than this round-off margin (local coordinates stay within a
+        // site, so a computed distance is never short of its box's by anywhere near 1e-10 m).
+        private const int ChunkSize = 16;
+        private const double PruneMargin = 1e-10;
 
         private readonly Line[] _all;   // the drawn lines, then the bridges
         private readonly double _ox;
         private readonly double _oy;
         private readonly int _maxSegments;
+        private readonly int _maxChunks;
 
         private OutlineCornerHeights(Line[] all, double ox, double oy, IReadOnlyList<CornerLine> bridges)
         {
@@ -47,7 +53,11 @@ namespace RVTuk.Core.TopoTools
             _ox = ox;
             _oy = oy;
             Bridges = bridges;
-            foreach (var ln in all) _maxSegments = Math.Max(_maxSegments, ln.Ax.Length);
+            foreach (var ln in all)
+            {
+                _maxSegments = Math.Max(_maxSegments, ln.Ax.Length);
+                _maxChunks = Math.Max(_maxChunks, ln.CMinX.Length);
+            }
         }
 
         /// <summary>The bridges of step 0, in the callers' coordinates (metres), at their height. Never
@@ -59,9 +69,16 @@ namespace RVTuk.Core.TopoTools
         {
             if (lines is null) throw new ArgumentNullException(nameof(lines));
 
+            // A line with a height or a coordinate that is not a finite number is left out whole.
+            var usable = new List<CornerLine>(lines.Count);
+            foreach (var line in lines)
+            {
+                if (IsUsable(line)) usable.Add(line);
+            }
+
             // The local origin: the bounding-box minimum, rounded to whole metres.
             double minX = double.PositiveInfinity, minY = double.PositiveInfinity;
-            foreach (var line in lines)
+            foreach (var line in usable)
             {
                 foreach (var p in line.PolylineMetres)
                 {
@@ -72,17 +89,29 @@ namespace RVTuk.Core.TopoTools
             var ox = double.IsInfinity(minX) ? 0.0 : Math.Round(minX);
             var oy = double.IsInfinity(minY) ? 0.0 : Math.Round(minY);
 
-            var drawn = new List<Line>(lines.Count);
+            var drawn = new List<Line>(usable.Count);
             var xs = new List<double>();
             var ys = new List<double>();
-            foreach (var line in lines)
+            foreach (var line in usable)
             {
+                // Consecutive vertices closer than 1e-6 m merge. Both raw end vertices are always
+                // kept (a last vertex that would merge replaces the last kept one), so the ends do
+                // not depend on the drawing direction.
                 xs.Clear();
                 ys.Clear();
-                foreach (var p in line.PolylineMetres)
+                var raw = line.PolylineMetres;
+                for (var k = 0; k < raw.Count; k++)
                 {
-                    double x = p.X - ox, y = p.Y - oy;
-                    if (xs.Count > 0 && Hypot(x - xs[xs.Count - 1], y - ys[ys.Count - 1]) < CleanSpot) continue;
+                    double x = raw[k].X - ox, y = raw[k].Y - oy;
+                    if (xs.Count > 0 && Hypot(x - xs[xs.Count - 1], y - ys[ys.Count - 1]) < CleanSpot)
+                    {
+                        if (k == raw.Count - 1 && xs.Count >= 2)
+                        {
+                            xs[xs.Count - 1] = x;
+                            ys[ys.Count - 1] = y;
+                        }
+                        continue;
+                    }
                     xs.Add(x);
                     ys.Add(y);
                 }
@@ -107,6 +136,20 @@ namespace RVTuk.Core.TopoTools
             drawn.CopyTo(all, 0);
             bridges.CopyTo(all, drawn.Count);
             return new OutlineCornerHeights(all, ox, oy, published);
+        }
+
+        /// <summary>A height and every coordinate finite (and the height small enough to count in
+        /// tenths of a millimetre without overflow).</summary>
+        private static bool IsUsable(CornerLine? line)
+        {
+            if (line?.PolylineMetres is null) return false;
+            var h = line.HeightMetres;
+            if (double.IsNaN(h) || double.IsInfinity(h) || Math.Abs(h) > 1e9) return false;
+            foreach (var p in line.PolylineMetres)
+            {
+                if (double.IsNaN(p.X) || double.IsInfinity(p.X) || double.IsNaN(p.Y) || double.IsInfinity(p.Y)) return false;
+            }
+            return true;
         }
 
         // ---- step 0: bridges ------------------------------------------------------------------
@@ -231,9 +274,10 @@ namespace RVTuk.Core.TopoTools
             double vx = v.X - _ox, vy = v.Y - _oy;
 
             // 1. The nearest point of every line. 2. On a line: the highest such line's height.
-            // A line whose bounding box is further than both 1 mm and (the nearest line found so
-            // far + 1e-9 m) can be neither on V nor in step 3's set: its distance stays infinite.
-            var scratch = new double[_maxSegments];
+            // A line further than both 1 mm and (the nearest line found so far + 1e-9 m) can be
+            // neither on V nor in step 3's set: its distance stays infinite. The line whose box is
+            // nearest goes first, so the bound tightens early.
+            var buffers = new Buffers(_maxSegments, _maxChunks);
             var d = new double[n];
             var px = new double[n];
             var py = new double[n];
@@ -241,7 +285,7 @@ namespace RVTuk.Core.TopoTools
             var first = 0;
             for (var i = 0; i < n; i++)
             {
-                lowerBound[i] = _all[i].BoxDistance(vx, vy) - 1e-12; // round-off margin
+                lowerBound[i] = _all[i].BoxDistance(vx, vy) - PruneMargin;
                 if (lowerBound[i] < lowerBound[first]) first = i;
             }
             var onLine = long.MinValue;
@@ -249,12 +293,13 @@ namespace RVTuk.Core.TopoTools
             for (var k = 0; k < n; k++)
             {
                 var i = k == 0 ? first : (k == first ? 0 : k);
-                if (lowerBound[i] > SameSpot && lowerBound[i] > dMin + Tie)
+                var bound = Math.Max(SameSpot, dMin + Tie);
+                if (lowerBound[i] > bound)
                 {
                     d[i] = double.PositiveInfinity;
                     continue;
                 }
-                Nearest(_all[i], vx, vy, scratch, out d[i], out px[i], out py[i]);
+                Nearest(_all[i], vx, vy, bound, buffers, out d[i], out px[i], out py[i]);
                 if (d[i] <= SameSpot && _all[i].Zq > onLine) onLine = _all[i].Zq;
                 if (d[i] < dMin) dMin = d[i];
             }
@@ -287,7 +332,7 @@ namespace RVTuk.Core.TopoTools
             var anyCandidate = false;
             for (var j = 0; j < n; j++)
             {
-                if (!FarNearest(_all[j], vx, vy, ux, uy, scratch, out e[j], out qx[j], out qy[j])) continue;
+                if (!FarNearest(_all[j], vx, vy, ux, uy, buffers, out e[j], out qx[j], out qy[j])) continue;
                 if (e[j] < farMin) farMin = e[j];
                 if (Math.Abs(_all[j].Zq - zq1) > SameZ)
                 {
@@ -351,7 +396,7 @@ namespace RVTuk.Core.TopoTools
                     double apx = ax - vx, apy = ay - vy;
                     var t = (apx * ey - apy * ex) / den;
                     var r = (apx * uy - apy * ux) / den;
-                    if (t > 0 && r >= -RayParam && r <= 1 + RayParam && t < best) best = t;
+                    if (t > 0 && r >= 0 && r <= 1 && t < best) best = t; // meets the segment; its ends are also the vertex clause's
                 }
                 for (var k = 0; k < ln.Xs.Length; k++)
                 {
@@ -400,6 +445,28 @@ namespace RVTuk.Core.TopoTools
                     MaxX = Math.Max(MaxX, xs[k]);
                     MaxY = Math.Max(MaxY, ys[k]);
                 }
+                var chunks = (m + ChunkSize - 1) / ChunkSize;
+                CMinX = new double[chunks];
+                CMinY = new double[chunks];
+                CMaxX = new double[chunks];
+                CMaxY = new double[chunks];
+                for (var c = 0; c < chunks; c++)
+                {
+                    int k0 = c * ChunkSize, k1 = Math.Min(k0 + ChunkSize, m); // vertices k0..k1
+                    double lx = double.PositiveInfinity, ly = double.PositiveInfinity;
+                    double hx = double.NegativeInfinity, hy = double.NegativeInfinity;
+                    for (var k = k0; k <= k1; k++)
+                    {
+                        lx = Math.Min(lx, xs[k]);
+                        ly = Math.Min(ly, ys[k]);
+                        hx = Math.Max(hx, xs[k]);
+                        hy = Math.Max(hy, ys[k]);
+                    }
+                    CMinX[c] = lx;
+                    CMinY[c] = ly;
+                    CMaxX[c] = hx;
+                    CMaxY[c] = hy;
+                }
                 for (var s = 0; s < m; s++)
                 {
                     double ax = xs[s], ay = ys[s], bx = xs[s + 1], by = ys[s + 1];
@@ -430,6 +497,12 @@ namespace RVTuk.Core.TopoTools
             public double MinY { get; }
             public double MaxX { get; }
             public double MaxY { get; }
+
+            /// <summary>The bounding box of each run of <see cref="ChunkSize"/> segments.</summary>
+            public double[] CMinX { get; }
+            public double[] CMinY { get; }
+            public double[] CMaxX { get; }
+            public double[] CMaxY { get; }
 
             /// <summary>The distance from (x, y) to the bounding box: never more than the distance
             /// to the polyline.</summary>
@@ -471,30 +544,105 @@ namespace RVTuk.Core.TopoTools
             return best;
         }
 
+        /// <summary>One <see cref="HeightAt"/> call's working space: a distance per segment and a
+        /// state per chunk (a squared box gap; infinite = skipped; −1 = measured).</summary>
+        private sealed class Buffers
+        {
+            public Buffers(int segments, int chunks)
+            {
+                Segment = new double[segments];
+                Chunk = new double[chunks];
+            }
+
+            public double[] Segment { get; }
+            public double[] Chunk { get; }
+        }
+
+        private const double Measured = -1.0;
+
+        /// <summary>The squared distance from (x, y) to a box (0 inside).</summary>
+        private static double BoxGap2(double x, double y, double minX, double minY, double maxX, double maxY)
+        {
+            var dx = x < minX ? minX - x : (x > maxX ? x - maxX : 0.0);
+            var dy = y < minY ? minY - y : (y > maxY ? y - maxY : 0.0);
+            return dx * dx + dy * dy;
+        }
+
+        /// <summary>A box this (squared) gap away lies further than <paramref name="limit"/>, by more
+        /// than the round-off margin: every point inside it is further than the limit too.</summary>
+        private static bool GapBeyond(double gap2, double limit)
+        {
+            if (double.IsInfinity(limit)) return false;
+            var l = limit + PruneMargin;
+            return gap2 > l * l;
+        }
+
+        private static bool SegmentBeyond(Line ln, int s, double vx, double vy, double limit) =>
+            !double.IsInfinity(limit)
+            && GapBeyond(BoxGap2(vx, vy, ln.Ax[s], Math.Min(ln.Ay[s], ln.By[s]), ln.Bx[s], Math.Max(ln.Ay[s], ln.By[s])), limit);
+
         /// <summary>Step 1: the distance from v to the polyline and its nearest point; equally near
         /// points (within 1e-9 m) give the one with the smaller x, then the smaller y.
-        /// <paramref name="scratch"/> holds each segment's distance between the two passes.</summary>
-        private static void Nearest(Line ln, double vx, double vy, double[] scratch,
+        /// A line further than <paramref name="bound"/> cannot matter: its distance comes back
+        /// infinite. The chunk whose box is nearest is measured first; then chunks and segments
+        /// that can be neither the nearest nor equally near (their box is further than the nearest
+        /// so far + 1e-9 m, or than the bound + 1e-9 m) are skipped, so the result is the same as
+        /// measuring every segment.</summary>
+        private static void Nearest(Line ln, double vx, double vy, double bound, Buffers buffers,
             out double d, out double px, out double py)
         {
             d = double.PositiveInfinity;
-            for (var s = 0; s < ln.Ax.Length; s++)
-            {
-                var dd = SegNearest(vx, vy, ln.Ax[s], ln.Ay[s], ln.Bx[s], ln.By[s], out _, out _);
-                scratch[s] = dd;
-                if (dd < d) d = dd;
-            }
             px = py = double.NaN;
-            var found = false;
-            for (var s = 0; s < ln.Ax.Length; s++)
+            var scratch = buffers.Segment;
+            var chunk = buffers.Chunk;
+            var segments = ln.Ax.Length;
+            var chunks = ln.CMinX.Length;
+            var first = 0;
+            for (var c = 0; c < chunks; c++)
             {
-                if (scratch[s] > d + Tie) continue;
-                SegNearest(vx, vy, ln.Ax[s], ln.Ay[s], ln.Bx[s], ln.By[s], out var x, out var y);
-                if (!found || x < px || (x == px && y < py))
+                chunk[c] = BoxGap2(vx, vy, ln.CMinX[c], ln.CMinY[c], ln.CMaxX[c], ln.CMaxY[c]);
+                if (chunk[c] < chunk[first]) first = c;
+            }
+            for (var k = 0; k < chunks; k++)
+            {
+                var c = k == 0 ? first : (k == first ? 0 : k);
+                if (GapBeyond(chunk[c], Math.Min(d, bound) + Tie))
                 {
-                    px = x;
-                    py = y;
-                    found = true;
+                    chunk[c] = double.PositiveInfinity;
+                    continue;
+                }
+                chunk[c] = Measured;
+                for (int s = c * ChunkSize, s1 = Math.Min(s + ChunkSize, segments); s < s1; s++)
+                {
+                    if (SegmentBeyond(ln, s, vx, vy, Math.Min(d, bound) + Tie))
+                    {
+                        scratch[s] = double.PositiveInfinity;
+                        continue;
+                    }
+                    var dd = SegNearest(vx, vy, ln.Ax[s], ln.Ay[s], ln.Bx[s], ln.By[s], out _, out _);
+                    scratch[s] = dd;
+                    if (dd < d) d = dd;
+                }
+            }
+            if (d > bound)
+            {
+                d = double.PositiveInfinity;
+                return;
+            }
+            var found = false;
+            for (var c = 0; c < chunks; c++)
+            {
+                if (chunk[c] != Measured) continue;
+                for (int s = c * ChunkSize, s1 = Math.Min(s + ChunkSize, segments); s < s1; s++)
+                {
+                    if (scratch[s] > d + Tie) continue;
+                    SegNearest(vx, vy, ln.Ax[s], ln.Ay[s], ln.Bx[s], ln.By[s], out var x, out var y);
+                    if (!found || x < px || (x == px && y < py))
+                    {
+                        px = x;
+                        py = y;
+                        found = true;
+                    }
                 }
             }
         }
@@ -522,34 +670,75 @@ namespace RVTuk.Core.TopoTools
             return true;
         }
 
+        /// <summary>The largest (P − V)·u over a box: its best corner. It bounds every vertex's s,
+        /// also in floating point (each term is monotone in its coordinate), so a box at or below
+        /// the far side's margin holds no far part.</summary>
+        private static double FarReach(double vx, double vy, double ux, double uy,
+            double minX, double minY, double maxX, double maxY) =>
+            Math.Max(ux * (maxX - vx), ux * (minX - vx)) + Math.Max(uy * (maxY - vy), uy * (minY - vy));
+
         /// <summary>Step 4: the nearest point of the line's far part (equally near, within 1e-9 m:
-        /// the smaller x, then y); false when the line has no far part.</summary>
-        private static bool FarNearest(Line ln, double vx, double vy, double ux, double uy, double[] scratch,
+        /// the smaller x, then y); false when the line has no far part. Boxes wholly on the near
+        /// side are skipped; the chunk whose box is nearest is measured first, and once a far part
+        /// is found, chunks and segments further than it + 1e-9 m are skipped: they can be neither
+        /// the nearest nor equally near, and the line already has a far part.</summary>
+        private static bool FarNearest(Line ln, double vx, double vy, double ux, double uy, Buffers buffers,
             out double e, out double qx, out double qy)
         {
             e = double.PositiveInfinity;
             qx = qy = double.NaN;
-            // The whole box on the near side: no far part. The box's best corner bounds every
-            // vertex's s, also in floating point (each term is monotone in its coordinate).
-            var sBox = Math.Max(ux * (ln.MaxX - vx), ux * (ln.MinX - vx))
-                + Math.Max(uy * (ln.MaxY - vy), uy * (ln.MinY - vy));
-            if (sBox - FarEps <= 0) return false;
-            for (var s = 0; s < ln.Ax.Length; s++)
+            if (FarReach(vx, vy, ux, uy, ln.MinX, ln.MinY, ln.MaxX, ln.MaxY) - FarEps <= 0) return false;
+            var scratch = buffers.Segment;
+            var chunk = buffers.Chunk;
+            var segments = ln.Ax.Length;
+            var chunks = ln.CMinX.Length;
+            var first = -1;
+            for (var c = 0; c < chunks; c++)
             {
-                scratch[s] = FarSegment(ln, s, vx, vy, ux, uy, out var dd, out _, out _) ? dd : double.PositiveInfinity;
-                if (scratch[s] < e) e = scratch[s];
+                if (FarReach(vx, vy, ux, uy, ln.CMinX[c], ln.CMinY[c], ln.CMaxX[c], ln.CMaxY[c]) - FarEps <= 0)
+                {
+                    chunk[c] = double.PositiveInfinity;
+                    continue;
+                }
+                chunk[c] = BoxGap2(vx, vy, ln.CMinX[c], ln.CMinY[c], ln.CMaxX[c], ln.CMaxY[c]);
+                if (first < 0 || chunk[c] < chunk[first]) first = c;
+            }
+            if (first < 0) return false;
+            for (var k = 0; k < chunks; k++)
+            {
+                var c = k == 0 ? first : (k == first ? 0 : k);
+                if (double.IsInfinity(chunk[c]) || GapBeyond(chunk[c], e + Tie))
+                {
+                    chunk[c] = double.PositiveInfinity;
+                    continue;
+                }
+                chunk[c] = Measured;
+                for (int s = c * ChunkSize, s1 = Math.Min(s + ChunkSize, segments); s < s1; s++)
+                {
+                    if (SegmentBeyond(ln, s, vx, vy, e + Tie))
+                    {
+                        scratch[s] = double.PositiveInfinity;
+                        continue;
+                    }
+                    scratch[s] = FarSegment(ln, s, vx, vy, ux, uy, out var dd, out _, out _) ? dd : double.PositiveInfinity;
+                    if (scratch[s] < e) e = scratch[s];
+                }
             }
             if (double.IsInfinity(e)) return false;
             var found = false;
-            for (var s = 0; s < ln.Ax.Length; s++)
+            for (var c = 0; c < chunks; c++)
             {
-                if (scratch[s] > e + Tie) continue;
-                FarSegment(ln, s, vx, vy, ux, uy, out _, out var x, out var y);
-                if (!found || x < qx || (x == qx && y < qy))
+                if (chunk[c] != Measured) continue;
+                for (int s = c * ChunkSize, s1 = Math.Min(s + ChunkSize, segments); s < s1; s++)
                 {
-                    qx = x;
-                    qy = y;
-                    found = true;
+                    if (scratch[s] > e + Tie) continue;
+                    FarSegment(ln, s, vx, vy, ux, uy, out _, out var x, out var y);
+                    if (!found || x < qx || (x == qx && y < qy))
+                    {
+                        qx = x;
+                        qy = y;
+                        found = true;
+                    }
                 }
             }
             return true;
@@ -566,11 +755,16 @@ namespace RVTuk.Core.TopoTools
             double loX = Math.Min(px, qx) - Touch, hiX = Math.Max(px, qx) + Touch;
             double loY = Math.Min(py, qy) - Touch, hiY = Math.Max(py, qy) + Touch;
             if (ln.MaxX < loX || ln.MinX > hiX || ln.MaxY < loY || ln.MinY > hiY) return false;
-            for (var s = 0; s < ln.Ax.Length; s++)
+            var segments = ln.Ax.Length;
+            for (var c = 0; c < ln.CMinX.Length; c++)
             {
-                double ax = ln.Ax[s], ay = ln.Ay[s], bx = ln.Bx[s], by = ln.By[s];
-                if (Math.Max(ax, bx) < loX || Math.Min(ax, bx) > hiX || Math.Max(ay, by) < loY || Math.Min(ay, by) > hiY) continue;
-                if (SegmentsTouch(px, py, qx, qy, ax, ay, bx, by)) return true;
+                if (ln.CMaxX[c] < loX || ln.CMinX[c] > hiX || ln.CMaxY[c] < loY || ln.CMinY[c] > hiY) continue;
+                for (int s = c * ChunkSize, s1 = Math.Min(s + ChunkSize, segments); s < s1; s++)
+                {
+                    double ax = ln.Ax[s], ay = ln.Ay[s], bx = ln.Bx[s], by = ln.By[s];
+                    if (Math.Max(ax, bx) < loX || Math.Min(ax, bx) > hiX || Math.Max(ay, by) < loY || Math.Min(ay, by) > hiY) continue;
+                    if (SegmentsTouch(px, py, qx, qy, ax, ay, bx, by)) return true;
+                }
             }
             return false;
         }
