@@ -23,6 +23,8 @@ public class OutlineCornerPlannerTests
         new[] { new XyPoint(4, 4), new XyPoint(6, 4), new XyPoint(6, 6), new XyPoint(4, 6) },
     };
 
+    private static readonly IReadOnlyList<XyPoint> SquareWithHoleCorners = SquareWithHole.SelectMany(loop => loop).ToList();
+
     private static Func<XyzPoint, double?> Always(double? z) => _ => z;
 
     private static IEnumerable<T[]> Orders<T>(IReadOnlyList<T> items)
@@ -606,14 +608,14 @@ public class OutlineCornerPlannerTests
     [Fact]
     public void APlainOutlineNoLineInfluencesNeedsNoShapeEditing()
     {
-        Assert.False(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHole, 3, Always(null)));
+        Assert.False(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHoleCorners, 3, Always(null)));
     }
 
     [Fact]
     public void APlainOutlineWhoseCornersTheLinesLeaveWithinATenthOfAMillimetreNeedsNoShapeEditing()
     {
-        Assert.False(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHole, 3, Always(3 + 0.099 * Mm)));
-        Assert.False(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHole, 3, Always(3 - 0.099 * Mm)));
+        Assert.False(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHoleCorners, 3, Always(3 + 0.099 * Mm)));
+        Assert.False(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHoleCorners, 3, Always(3 - 0.099 * Mm)));
     }
 
     [Theory]
@@ -621,7 +623,7 @@ public class OutlineCornerPlannerTests
     [InlineData(double.PositiveInfinity)]
     public void ANonFiniteTargetNeedsNoShapeEditing(double bad)
     {
-        Assert.False(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHole, 3, Always(bad)));
+        Assert.False(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHoleCorners, 3, Always(bad)));
     }
 
     [Fact]
@@ -630,17 +632,270 @@ public class OutlineCornerPlannerTests
         // The hole's corner (6, 6) only, by a little more than a tenth of a millimetre.
         Func<XyzPoint, double?> target = v => v.X == 6 && v.Y == 6 ? 3 + 0.101 * Mm : null;
 
-        Assert.True(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHole, 3, target));
+        Assert.True(OutlineCornerPlanner.NeedsShapeEditing(SquareWithHoleCorners, 3, target));
     }
 
     [Fact]
-    public void EveryLoopPointIsAskedAtTheFlatHeight()
+    public void EveryOutlineCornerIsAskedAtTheFlatHeight()
     {
         var asked = new List<XyzPoint>();
-        OutlineCornerPlanner.NeedsShapeEditing(SquareWithHole, 3, v => { asked.Add(v); return null; });
+        OutlineCornerPlanner.NeedsShapeEditing(SquareWithHoleCorners, 3, v => { asked.Add(v); return null; });
 
         Assert.Equal(
             SquareWithHole.SelectMany(loop => loop).Select(p => new XyzPoint(p.X, p.Y, 3)).OrderBy(p => p.X).ThenBy(p => p.Y),
             asked.OrderBy(p => p.X).ThenBy(p => p.Y));
+    }
+
+    // ---------------------------------------------------------------- Reset Shape (fix round 1, item 3)
+
+    [Fact]
+    public void ARecordedCornerBackAtItsOwnHeightWasResetAndIsPlannedAsANewCorner()
+    {
+        // Reset Shape put the corner back to its own height: not a hand edit.
+        var corner = new XyzPoint(0, 0, 10);
+        var record = new CornerRecord(0, 0, 10, 12, false);
+
+        var plan = OutlineCornerPlanner.Plan(new[] { corner }, Always(12), new[] { record });
+
+        Assert.Equal(new[] { (corner, 12.0) }, plan.Raises);
+        Assert.Equal(new[] { new CornerRecord(0, 0, 10, 12, false) }, plan.NewRecords);
+        Assert.Equal(0, plan.NewlyByHand);
+    }
+
+    [Fact]
+    public void AResetCornerNoLineInfluencesLosesItsRecordAndIsNotPutBack()
+    {
+        var corner = new XyzPoint(0, 0, 10 + 0.09 * Mm);
+        var record = new CornerRecord(0, 0, 10, 12, false);
+
+        var plan = OutlineCornerPlanner.Plan(new[] { corner }, Always(null), new[] { record });
+
+        Assert.Empty(plan.Raises);
+        Assert.Empty(plan.PutBacks);
+        Assert.Empty(plan.NewRecords);
+        Assert.Equal(0, plan.NewlyByHand);
+    }
+
+    [Fact]
+    public void AResetCornerStartsAFreshRecordWithItsCurrentHeight()
+    {
+        double now = 10 - 0.09 * Mm;
+        var corner = new XyzPoint(0, 0, now);
+        var record = new CornerRecord(0, 0, 10, 12, false);
+
+        var plan = OutlineCornerPlanner.Plan(new[] { corner }, Always(14), new[] { record });
+
+        Assert.Equal(new[] { new CornerRecord(0, 0, now, 14, false) }, plan.NewRecords);
+    }
+
+    [Fact]
+    public void ACornerJustOverATenthOfAMillimetreFromItsOwnHeightIsStillMovedByHand()
+    {
+        var corner = new XyzPoint(0, 0, 10 + 0.11 * Mm);
+        var record = new CornerRecord(0, 0, 10, 12, false);
+
+        var plan = OutlineCornerPlanner.Plan(new[] { corner }, Always(12), new[] { record });
+
+        Assert.Empty(plan.Raises);
+        Assert.Equal(new[] { record with { ByHand = true } }, plan.NewRecords);
+        Assert.Equal(1, plan.NewlyByHand);
+    }
+
+    [Fact]
+    public void ACornerFlaggedByHandBackAtItsOwnHeightStaysFlagged()
+    {
+        var corner = new XyzPoint(0, 0, 10);
+        var record = new CornerRecord(0, 0, 10, 12, true);
+
+        var plan = OutlineCornerPlanner.Plan(new[] { corner }, Always(12), new[] { record });
+
+        Assert.Empty(plan.Raises);
+        Assert.Equal(new[] { record }, plan.NewRecords);
+    }
+
+    // ---------------------------------------------------------------- HandMovedRecords (fix round 1, item 1)
+
+    [Fact]
+    public void ALedgeredPointFoundAtItsSpotButAnotherHeightBecomesAHandRecord()
+    {
+        var unmatched = new[] { new XyzPoint(5, 0, 12) };
+        var vertices = new[] { new XyzPoint(0, 0, 10), new XyzPoint(5, 0, 13.5), new XyzPoint(10, 0, 10) };
+
+        var records = OutlineCornerPlanner.HandMovedRecords(unmatched, vertices);
+
+        Assert.Equal(new[] { new CornerRecord(5, 0, 13.5, 13.5, true) }, records);
+    }
+
+    [Fact]
+    public void ALedgeredPointWithNoVertexAtItsSpotGivesNoRecord()
+    {
+        var records = OutlineCornerPlanner.HandMovedRecords(
+            new[] { new XyzPoint(5, 0, 12) },
+            new[] { new XyzPoint(5 + 0.11 * Mm, 0, 13), new XyzPoint(5, 0.11 * Mm, 13) });
+
+        Assert.Empty(records);
+    }
+
+    [Fact]
+    public void TheSpotIsATenthOfAMillimetreOnEachAxis()
+    {
+        var vertex = new XyzPoint(5 + 0.09 * Mm, -0.09 * Mm, 13);
+
+        var records = OutlineCornerPlanner.HandMovedRecords(new[] { new XyzPoint(5, 0, 12) }, new[] { vertex });
+
+        Assert.Equal(new[] { new CornerRecord(vertex.X, vertex.Y, 13, 13, true) }, records);
+    }
+
+    [Fact]
+    public void TwoLedgeredPointsAtOneVertexGiveOneRecord()
+    {
+        var records = OutlineCornerPlanner.HandMovedRecords(
+            new[] { new XyzPoint(5, 0, 12), new XyzPoint(5, 0, 11) }, new[] { new XyzPoint(5, 0, 13) });
+
+        Assert.Single(records);
+    }
+
+    [Fact]
+    public void AHandMovedLinePointOnTheOutlineIsLeftAloneByThePassAndStaysFlagged()
+    {
+        // The line's ledger entry is gone, so the vertex is an outline candidate; its hand record
+        // keeps the pass off it, now and on every later run, and it is not reported a second time.
+        var vertex = new XyzPoint(5, 0, 13.5);
+        var hand = OutlineCornerPlanner.HandMovedRecords(new[] { new XyzPoint(5, 0, 12) }, new[] { vertex });
+        bool asked = false;
+
+        var plan = OutlineCornerPlanner.Plan(new[] { vertex }, _ => { asked = true; return 20; }, hand);
+        var next = OutlineCornerPlanner.Plan(new[] { vertex }, Always(20), plan.NewRecords);
+
+        Assert.Empty(plan.Raises);
+        Assert.Equal(hand, plan.NewRecords);
+        Assert.Equal(0, plan.NewlyByHand);
+        Assert.False(asked);
+        Assert.Empty(next.Raises);
+        Assert.Equal(hand, next.NewRecords);
+    }
+
+    // ---------------------------------------------------------------- Settle (fix round 1, items 2, 4, 6)
+
+    private static Dictionary<(double X, double Y), double> Reached(params (double X, double Y, double Z)[] entries) =>
+        entries.ToDictionary(e => (e.X, e.Y), e => e.Z);
+
+    [Fact]
+    public void CornersSetCountsEveryCornerHoldingALineHeightRaisedNowOrEarlier()
+    {
+        var candidates = new[]
+        {
+            new XyzPoint(0, 0, 10),   // raised now
+            new XyzPoint(10, 0, 12),  // recorded earlier, already at its target
+            new XyzPoint(10, 10, 15), // moved by hand
+        };
+        var records = new[] { new CornerRecord(10, 0, 9, 12, false), new CornerRecord(10, 10, 9, 12, false) };
+        var plan = OutlineCornerPlanner.Plan(candidates, Always(12), records);
+
+        var outcome = OutlineCornerPlanner.Settle(plan, Reached((0, 0, 12)), Reached());
+
+        Assert.Equal(2, outcome.Set);
+        Assert.Equal(0, outcome.PutBack);
+        Assert.Equal(0, outcome.Lost);
+        Assert.Equal(1, outcome.Changed);
+    }
+
+    [Fact]
+    public void ARaiseThatEndsOffItsHeightIsLostNotSetAndRecordsWhereItIs()
+    {
+        var plan = OutlineCornerPlanner.Plan(new[] { new XyzPoint(0, 0, 10) }, Always(12), NoRecords);
+
+        var outcome = OutlineCornerPlanner.Settle(plan, Reached((0, 0, 11)), Reached());
+
+        Assert.Equal(0, outcome.Set);
+        Assert.Equal(1, outcome.Lost);
+        Assert.Equal(1, outcome.Changed);
+        Assert.Equal(new[] { new CornerRecord(0, 0, 10, 11, false) }, outcome.Records);
+    }
+
+    [Fact]
+    public void ARaiseThatDidNotMoveTheCornerChangedNothing()
+    {
+        var plan = OutlineCornerPlanner.Plan(new[] { new XyzPoint(0, 0, 10) }, Always(12), NoRecords);
+
+        var outcome = OutlineCornerPlanner.Settle(plan, Reached((0, 0, 10 + 0.09 * Mm)), Reached());
+
+        Assert.Equal(1, outcome.Lost);
+        Assert.Equal(0, outcome.Changed);
+    }
+
+    [Fact]
+    public void APutBackThatArrivesIsCountedAndLeavesNoRecord()
+    {
+        var plan = OutlineCornerPlanner.Plan(
+            new[] { new XyzPoint(0, 0, 12) }, Always(null), new[] { new CornerRecord(0, 0, 10, 12, false) });
+
+        var outcome = OutlineCornerPlanner.Settle(plan, Reached(), Reached((0, 0, 10 + 0.05 * Mm)));
+
+        Assert.Equal(1, outcome.PutBack);
+        Assert.Equal(0, outcome.Set);
+        Assert.Equal(0, outcome.Lost);
+        Assert.Equal(1, outcome.Changed);
+        Assert.Empty(outcome.Records);
+    }
+
+    [Fact]
+    public void APutBackThatFailsKeepsARecordWithTheOwnHeightWhereTheCornerNowStands()
+    {
+        var plan = OutlineCornerPlanner.Plan(
+            new[] { new XyzPoint(0, 0, 12) }, Always(null), new[] { new CornerRecord(0, 0, 10, 12, false) });
+
+        var outcome = OutlineCornerPlanner.Settle(plan, Reached(), Reached((0, 0, 12)));
+
+        Assert.Equal(0, outcome.PutBack);
+        Assert.Equal(1, outcome.Lost);
+        Assert.Equal(0, outcome.Changed);
+        Assert.Equal(new[] { new CornerRecord(0, 0, 10, 12, false) }, outcome.Records);
+
+        // The next run, with no line still, tries again rather than calling it moved by hand.
+        var next = OutlineCornerPlanner.Plan(new[] { new XyzPoint(0, 0, 12) }, Always(null), outcome.Records);
+        Assert.Equal(new[] { (new XyzPoint(0, 0, 12), 10.0) }, next.PutBacks);
+        Assert.Equal(0, next.NewlyByHand);
+    }
+
+    [Fact]
+    public void SettledRecordsAreSortedByXThenY()
+    {
+        var candidates = new[] { new XyzPoint(10, 0, 12), new XyzPoint(0, 5, 10), new XyzPoint(0, 0, 12) };
+        var records = new[] { new CornerRecord(10, 0, 9, 12, false), new CornerRecord(0, 0, 9, 12, false) };
+        Func<XyzPoint, double?> target = p => p.Y == 5 ? 11 : null;
+        var plan = OutlineCornerPlanner.Plan(candidates, target, records);
+
+        // Both put-backs fail; the raise arrives.
+        var outcome = OutlineCornerPlanner.Settle(plan, Reached((0, 5, 11)), Reached((0, 0, 12), (10, 0, 12)));
+
+        Assert.Equal(new[] { (0.0, 0.0), (0.0, 5.0), (10.0, 0.0) }, outcome.Records.Select(r => (r.X, r.Y)));
+    }
+
+    [Fact]
+    public void SettleThrowsNamingAPutBackItHasNoHeightFor()
+    {
+        var plan = OutlineCornerPlanner.Plan(
+            new[] { new XyzPoint(1.5, 2.25, 12) }, Always(null), new[] { new CornerRecord(1.5, 2.25, 10, 12, false) });
+
+        var error = Assert.Throws<ArgumentException>(() => OutlineCornerPlanner.Settle(plan, Reached(), Reached()));
+
+        Assert.Contains("X = 1.5, Y = 2.25", error.Message);
+    }
+
+    [Fact]
+    public void AReRunWithNothingChangedStillCountsTheCornersSet()
+    {
+        // Accept after a quiet Update names the corners holding a line height (item 2).
+        var corner = new XyzPoint(0, 0, 10);
+        var first = OutlineCornerPlanner.Plan(new[] { corner }, Always(12), NoRecords);
+        var settled = OutlineCornerPlanner.Settle(first, Reached((0, 0, 12)), Reached());
+
+        var second = OutlineCornerPlanner.Plan(new[] { corner with { Z = 12 } }, Always(12), settled.Records);
+        var again = OutlineCornerPlanner.Settle(second, Reached(), Reached());
+
+        Assert.Equal(1, again.Set);
+        Assert.Equal(0, again.Changed);
+        Assert.Equal(settled.Records, again.Records);
     }
 }

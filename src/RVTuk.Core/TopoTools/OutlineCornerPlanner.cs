@@ -60,6 +60,15 @@ namespace RVTuk.Core.TopoTools
         }
     }
 
+    /// <summary>A corner pass as carried out (<see cref="OutlineCornerPlanner.Settle"/>), in internal feet.</summary>
+    /// <param name="Records">The element's corner record after the pass, sorted by X, then Y.</param>
+    /// <param name="Set">Corners that hold a height the lines gave them after this run, raised now
+    /// or earlier (records not flagged by hand, less the raises that ended off their height).</param>
+    /// <param name="PutBack">Corners put back to their own height in this run.</param>
+    /// <param name="Lost">Raises and put-backs that ended more than 0.1 mm off their height.</param>
+    /// <param name="Changed">Corners this run actually moved, by more than 0.1 mm.</param>
+    public sealed record CornerOutcome(IReadOnlyList<CornerRecord> Records, int Set, int PutBack, int Lost, int Changed);
+
     /// <summary>
     /// The outline corner pass of a Topo Tools Update, without Revit: which vertices of the edited
     /// toposolid or floor it may touch, and, given the height each should take (rule N, or none),
@@ -115,23 +124,103 @@ namespace RVTuk.Core.TopoTools
 
         /// <summary>
         /// For an element whose shape editing is off (a plain floor), whether the pass would raise
-        /// any outline point, worked out without switching it on: each point of the loops, at the
-        /// element's flat height, through <see cref="Plan"/> with no records (a plain element keeps
-        /// none: its shape was never edited, or Reset Shape threw it away). Only when this is true
-        /// is the editor switched on, so a floor none of whose corners takes a height from the lines
-        /// stays a plain floor.
+        /// any outline corner, worked out without switching it on: each corner, at the element's
+        /// flat height, through <see cref="Plan"/> with no records (a plain element keeps none: its
+        /// shape was never edited, or Reset Shape threw it away). Only when this is true is the
+        /// editor switched on, so a floor none of whose corners takes a height from the lines stays
+        /// a plain floor.
         /// </summary>
-        /// <param name="loopsFeet">The element's outline and holes, tessellated, in plan.</param>
+        /// <param name="outlineCornersFeet">The outline's and holes' real corners in plan (each
+        /// sketch curve's start), not their tessellation: an arc's inner points are no vertices.</param>
         /// <param name="flatZ">The element's top while it is plain, internal feet.</param>
         public static bool NeedsShapeEditing(
-            IReadOnlyList<IReadOnlyList<XyPoint>> loopsFeet, double flatZ, Func<XyzPoint, double?> targetZ)
+            IReadOnlyList<XyPoint> outlineCornersFeet, double flatZ, Func<XyzPoint, double?> targetZ)
         {
-            var points = new List<XyzPoint>();
-            foreach (var loop in loopsFeet)
-            {
-                foreach (var point in loop) points.Add(new XyzPoint(point.X, point.Y, flatZ));
-            }
+            var points = outlineCornersFeet.Select(point => new XyzPoint(point.X, point.Y, flatZ)).ToList();
             return Plan(points, targetZ, Array.Empty<CornerRecord>()).Raises.Count > 0;
+        }
+
+        /// <summary>
+        /// The line points the user moved by hand, as corner records flagged <c>hand</c>. A ledgered
+        /// point with no vertex at its X, Y and Z, but a live vertex at its plan spot (X and Y each
+        /// within 0.1 mm), was moved up or down by hand: the stale-line cleanup reports it and drops
+        /// its ledger entry, which would make it an unledgered outline vertex the pass may raise. Its
+        /// record (own and set height = where it now stands) keeps the pass off it from now on.
+        /// One record per vertex. A vertex inside the outline gets a record too, which
+        /// <see cref="Plan"/> drops, since only candidates keep theirs.
+        /// </summary>
+        /// <param name="unmatched">The ledgered points the cleanup could not take out.</param>
+        /// <param name="vertices">The live vertices after the cleanup.</param>
+        public static IReadOnlyList<CornerRecord> HandMovedRecords(
+            IReadOnlyList<XyzPoint> unmatched, IReadOnlyList<XyzPoint> vertices)
+        {
+            var found = new HashSet<int>();
+            foreach (var point in unmatched)
+            {
+                int index = ShapeReplayPlanner.IndexOfXy(vertices, point);
+                if (index >= 0) found.Add(index);
+            }
+
+            return found
+                .Select(i => new CornerRecord(vertices[i].X, vertices[i].Y, vertices[i].Z, vertices[i].Z, true))
+                .OrderBy(r => r.X).ThenBy(r => r.Y)
+                .ToList();
+        }
+
+        /// <summary>
+        /// The plan as the applier carried it out, given the Z each raised and each put-back corner
+        /// was read back at (keyed by its exact plan XY, as <see cref="CornerPlan.WithReached"/>):
+        /// the records to store and what to report. A raise or put-back more than 0.1 mm off its
+        /// height is lost; a put-back that is lost keeps its record (own height, set height = where
+        /// it stands) so the next Update tries again rather than forgetting the own height. Throws
+        /// <see cref="ArgumentException"/> when a raise or put-back has no reached height.
+        /// </summary>
+        public static CornerOutcome Settle(
+            CornerPlan plan,
+            IReadOnlyDictionary<(double X, double Y), double> raisedZByXy,
+            IReadOnlyDictionary<(double X, double Y), double> putBackZByXy)
+        {
+            var records = plan.WithReached(raisedZByXy).NewRecords.ToList();
+
+            int lostRaises = 0;
+            int changed = 0;
+            foreach (var raise in plan.Raises)
+            {
+                double z = raisedZByXy[(raise.At.X, raise.At.Y)];
+                if (Math.Abs(z - raise.ToZ) > ShapeReplayPlanner.ToleranceFeet) lostRaises++;
+                if (Math.Abs(z - raise.At.Z) > ShapeReplayPlanner.ToleranceFeet) changed++;
+            }
+
+            // Every record not flagged by hand holds a height the lines gave it this run.
+            int set = records.Count(r => !r.ByHand) - lostRaises;
+
+            int putBack = 0;
+            int lostPutBacks = 0;
+            foreach (var back in plan.PutBacks)
+            {
+                if (!putBackZByXy.TryGetValue((back.At.X, back.At.Y), out double z))
+                {
+                    throw new ArgumentException(
+                        "No reached height for the corner put back at X = " +
+                        back.At.X.ToString("R", CultureInfo.InvariantCulture) + ", Y = " +
+                        back.At.Y.ToString("R", CultureInfo.InvariantCulture) + ".",
+                        nameof(putBackZByXy));
+                }
+
+                if (Math.Abs(z - back.At.Z) > ShapeReplayPlanner.ToleranceFeet) changed++;
+                if (Math.Abs(z - back.ToZ) <= ShapeReplayPlanner.ToleranceFeet)
+                {
+                    putBack++;
+                    continue;
+                }
+
+                lostPutBacks++;
+                records.Add(new CornerRecord(back.At.X, back.At.Y, back.ToZ, z, false));
+            }
+
+            return new CornerOutcome(
+                records.OrderBy(r => r.X).ThenBy(r => r.Y).ToList(),
+                set, putBack, lostRaises + lostPutBacks, changed);
         }
 
         /// <summary>
@@ -161,6 +250,16 @@ namespace RVTuk.Core.TopoTools
             {
                 var corner = candidates[i];
                 var record = recordOf[i];
+
+                // Back at its own height but not at the one set: Reset Shape (or an undo outside the
+                // session) put it back, which is not a hand edit. The record goes; the corner is
+                // planned as a new one.
+                if (record != null && !record.ByHand &&
+                    Math.Abs(corner.Z - record.SetZ) > ShapeReplayPlanner.ToleranceFeet &&
+                    Math.Abs(corner.Z - record.OwnZ) <= ShapeReplayPlanner.ToleranceFeet)
+                {
+                    record = null;
+                }
 
                 if (record != null && record.ByHand)
                 {

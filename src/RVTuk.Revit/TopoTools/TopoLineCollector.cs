@@ -66,8 +66,7 @@ namespace RVTuk.Revit.TopoTools
         {
             if (curve is not Arc arc || !arc.IsBound || !(arc.Radius > 0)) return null;
 
-            int n = OutlineCornerHeights.ArcChordCount(
-                arc.Length / arc.Radius, arc.Radius * SurveyHeightText.MetresPerFoot);
+            int n = CornerPass.ArcChordCount(arc.Length, arc.Radius);
 
             var points = new List<XyPoint>(n + 1);
             for (int i = 0; i <= n; i++)

@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
-using RVTuk.Core.Shared.Geometry;
 using RVTuk.Core.TopoTools;
 
 namespace RVTuk.Revit.TopoTools
@@ -13,30 +12,13 @@ namespace RVTuk.Revit.TopoTools
     /// <param name="Missing">Earlier points no longer found where recorded: moved by hand.</param>
     /// <param name="Lost">Points that could not be placed, or not at their height — outline corners
     /// the corner pass could not bring within 0.1 mm of their height included.</param>
-    /// <param name="CornersSet">Outline corners raised or lowered to the height the lines give them.</param>
-    /// <param name="CornersPutBack">Outline corners no line influences any more, back at their own height.</param>
+    /// <param name="CornersSet">Outline corners that hold a height the lines gave them after this
+    /// run, raised now or by an earlier Update (<see cref="CornerOutcome.Set"/>).</param>
+    /// <param name="CornersPutBack">Outline corners no line influences any more, put back to their own height in this run.</param>
     /// <param name="CornersByHand">Outline corners found moved by hand in this run, flagged and left alone.</param>
     public sealed record ApplyOutcome(
         int Added, int Removed, int Missing, int Lost,
         int CornersSet = 0, int CornersPutBack = 0, int CornersByHand = 0);
-
-    /// <summary>
-    /// What the outline corner pass of one Update needs (spec 2026-11-19): the rule prepared from
-    /// the view's lines, null when the view has no line with a readable height (the pass then only
-    /// puts back what earlier Updates set), and the shared elevation of the internal origin, which
-    /// turns the rule's shared metres into internal Z as <see cref="TopoSessionRunner"/> does.
-    /// </summary>
-    public sealed record CornerPass(OutlineCornerHeights? Heights, double SharedElevationOfInternalZero)
-    {
-        /// <summary>The internal Z the rule gives a vertex, or null when it is left alone.</summary>
-        internal double? TargetZ(XyzPoint vertex)
-        {
-            if (Heights == null) return null;
-            double? metres = Heights.HeightAt(new XyPoint(
-                vertex.X * SurveyHeightText.MetresPerFoot, vertex.Y * SurveyHeightText.MetresPerFoot));
-            return metres == null ? null : metres.Value / SurveyHeightText.MetresPerFoot - SharedElevationOfInternalZero;
-        }
-    }
 
     /// <summary>
     /// Writes one toposolid's or floor's points, and the only place that copes with a point having
@@ -104,27 +86,20 @@ namespace RVTuk.Revit.TopoTools
 
             // Nothing to add and nothing to take out: leave the element as it is unless the corner
             // pass has work, so a floor none of whose corners takes a height from the lines is not
-            // switched to shape editing. For a plain element that is worked out from its outline at
-            // its flat top before anything is switched on (ruling R2).
-            if (!lineWork)
+            // switched to shape editing. For a plain element that is worked out from its outline's
+            // corners at its flat top before anything is switched on (ruling R2); with no flat top
+            // to read, a rule counts as work.
+            var start = CornerPassGate.Start(lineWork, corners, wasEnabled, records.Count, () =>
             {
-                if (corners == null) return new ApplyOutcome(0, 0, 0, 0);
-                if (!wasEnabled)
-                {
-                    double? flatZ = FlatTop(element);
-                    bool needed = corners.Heights != null &&
-                        (flatZ == null ||
-                         OutlineCornerPlanner.NeedsShapeEditing(target.Loops, flatZ.Value, corners.TargetZ));
-                    if (!needed)
-                    {
-                        WriteCorners(element, Array.Empty<CornerRecord>());
-                        return new ApplyOutcome(0, 0, 0, 0);
-                    }
-                }
-                else if (corners.Heights == null && records.Count == 0)
-                {
-                    return new ApplyOutcome(0, 0, 0, 0);
-                }
+                double? flatZ = FlatTop(element);
+                return flatZ == null ||
+                    OutlineCornerPlanner.NeedsShapeEditing(target.Corners, flatZ.Value, corners!.TargetZ);
+            });
+            if (start == CornerPassStart.Skip) return new ApplyOutcome(0, 0, 0, 0);
+            if (start == CornerPassStart.DropRecords)
+            {
+                WriteCorners(element, Array.Empty<CornerRecord>());
+                return new ApplyOutcome(0, 0, 0, 0);
             }
 
             if (!wasEnabled)
@@ -135,6 +110,7 @@ namespace RVTuk.Revit.TopoTools
 
             int removed = 0;
             int missing = 0;
+            var leftAlone = new List<XyzPoint>();
 
             if (staleLineIds.Count > 0)
             {
@@ -149,12 +125,20 @@ namespace RVTuk.Revit.TopoTools
                         if (match == null)
                         {
                             missing++;
+                            leftAlone.Add(recorded);
                             continue;
                         }
 
                         live.Remove(match);
-                        if (match.IsValidObject && editor.DeletePoint(match)) removed++;
-                        else missing++;
+                        if (match.IsValidObject && editor.DeletePoint(match))
+                        {
+                            removed++;
+                        }
+                        else
+                        {
+                            missing++;
+                            leftAlone.Add(recorded);
+                        }
                     }
                     ledger.Remove(lineId);
                 }
@@ -170,6 +154,11 @@ namespace RVTuk.Revit.TopoTools
             var preexisting = new List<XyzPoint>();
             foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
                 preexisting.Add(SlabShape.ToPoint(vertex.Position));
+
+            // A line point the cleanup reported moved by hand and left alone has just lost its
+            // ledger entry: a hand record keeps the corner pass off it, now and later.
+            if (corners != null && leftAlone.Count > 0)
+                records = records.Concat(OutlineCornerPlanner.HandMovedRecords(leftAlone, preexisting)).ToList();
 
             // Those outline vertices, as they stand before any point is placed. Needed only to test
             // edge points against.
@@ -239,17 +228,16 @@ namespace RVTuk.Revit.TopoTools
             {
                 // The points this run placed as new vertices are exactly the ones just recorded.
                 var placedPoints = recordedByLine.Values.SelectMany(points => points).ToList();
-                var pass = RunCornerPass(doc, target, editor, corners, ledger, placedPoints, records, ref reference);
-                cornersSet = pass.Set;
-                cornersPutBack = pass.PutBack;
-                cornersByHand = pass.ByHand;
-                lost += pass.Lost;
+                var (outcome, newlyByHand) =
+                    RunCornerPass(doc, target, editor, corners, ledger, placedPoints, records, ref reference);
+                cornersSet = outcome.Set;
+                cornersPutBack = outcome.PutBack;
+                cornersByHand = newlyByHand;
+                lost += outcome.Lost;
 
-                // Switched on for the pass alone, which then moved nothing (the dry run reads the
-                // outline's tessellation, the editor has only its real vertices): a plain floor
-                // again, as SlabShape.Replay leaves one, keeping no record. A toposolid is left as
-                // it is.
-                if (!wasEnabled && !lineWork && pass.Moved == 0 && element is Floor)
+                // Switched on for the pass alone, which then changed no corner (the dry run is only
+                // a guess at the flat top): a plain floor again, keeping no record.
+                if (CornerPassGate.ResetToPlain(wasEnabled, lineWork, element is Floor, outcome.Changed))
                 {
                     editor.ResetSlabShape();
                     WriteCorners(element, Array.Empty<CornerRecord>());
@@ -263,12 +251,10 @@ namespace RVTuk.Revit.TopoTools
         /// <summary>
         /// The corner pass, after every line point is placed: read the live vertices, let the
         /// planner decide, raise and put back one vertex at a time (<see cref="RaiseVertexTo"/>,
-        /// which regenerates after each), and store the record in the same transaction. A raise or
-        /// a put-back that ends more than 0.1 mm off counts as lost; it is not retried in this run.
+        /// which regenerates after each), let the planner settle what was reached, and store the
+        /// record in the same transaction. Nothing is retried in this run.
         /// </summary>
-        /// <returns>Corners set, put back, newly found moved by hand, lost, and how many raises and
-        /// put-backs were tried.</returns>
-        private static (int Set, int PutBack, int ByHand, int Lost, int Moved) RunCornerPass(
+        private static (CornerOutcome Outcome, int NewlyByHand) RunCornerPass(
             Document doc, SlabTarget target, SlabShapeEditor editor, CornerPass corners,
             IReadOnlyDictionary<long, IReadOnlyList<XyzPoint>> ledger, IReadOnlyList<XyzPoint> placedPoints,
             IReadOnlyList<CornerRecord> records, ref double? reference)
@@ -286,39 +272,19 @@ namespace RVTuk.Revit.TopoTools
                 vertices, target.Loops, LedgeredPoints(ledger), placedPoints);
             var plan = OutlineCornerPlanner.Plan(candidates, corners.TargetZ, records);
 
-            int set = 0;
-            int lost = 0;
-            var reached = new Dictionary<(double X, double Y), double>();
+            // Each corner reports the Z it actually reached — a failed raise where it still stands —
+            // so its record is not read as "moved by hand" next time.
+            var raised = new Dictionary<(double X, double Y), double>();
             foreach (var raise in plan.Raises)
-            {
-                // A raise that failed reports the Z the corner actually has, so its record is not
-                // read as "moved by hand" next time.
-                double z = RaiseVertexTo(doc, element, editor, raise.At, raise.ToZ, ref reference)?.Z ?? raise.At.Z;
-                reached[(raise.At.X, raise.At.Y)] = z;
-                if (Math.Abs(z - raise.ToZ) <= MatchToleranceFeet) set++;
-                else lost++;
-            }
+                raised[(raise.At.X, raise.At.Y)] = RaiseVertexTo(doc, element, editor, raise.At, raise.ToZ, ref reference)?.Z ?? raise.At.Z;
 
-            var newRecords = plan.WithReached(reached).NewRecords.ToList();
-
-            int putBack = 0;
+            var putBack = new Dictionary<(double X, double Y), double>();
             foreach (var back in plan.PutBacks)
-            {
-                double z = RaiseVertexTo(doc, element, editor, back.At, back.ToZ, ref reference)?.Z ?? back.At.Z;
-                if (Math.Abs(z - back.ToZ) <= MatchToleranceFeet)
-                {
-                    putBack++;
-                    continue;
-                }
+                putBack[(back.At.X, back.At.Y)] = RaiseVertexTo(doc, element, editor, back.At, back.ToZ, ref reference)?.Z ?? back.At.Z;
 
-                // Not back at its own height: its record stays, where the corner now stands, so the
-                // own height is not forgotten and the next Update tries again.
-                lost++;
-                newRecords.Add(new CornerRecord(back.At.X, back.At.Y, back.ToZ, z, false));
-            }
-
-            WriteCorners(element, newRecords.OrderBy(r => r.X).ThenBy(r => r.Y).ToList());
-            return (set, putBack, plan.NewlyByHand, lost, plan.Raises.Count + plan.PutBacks.Count);
+            var outcome = OutlineCornerPlanner.Settle(plan, raised, putBack);
+            WriteCorners(element, outcome.Records);
+            return (outcome, plan.NewlyByHand);
         }
 
         /// <summary>Writes the corner record only when its text changes, so a pass with nothing to

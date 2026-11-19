@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.DB;
-using RVTuk.Core.Shared.Geometry;
 using RVTuk.Core.TopoTools;
 
 namespace RVTuk.Revit.TopoTools
@@ -45,14 +44,7 @@ namespace RVTuk.Revit.TopoTools
             {
                 var text = heightTextByLine.TryGetValue(line.LineId, out var raw) ? raw ?? "" : "";
                 bool readable = SurveyHeightText.TryParse(text, out double sharedFeet);
-                if (readable)
-                {
-                    cornerLines.Add(new CornerLine(
-                        sharedFeet * SurveyHeightText.MetresPerFoot,
-                        line.CornerPolyline
-                            .Select(xy => new XyPoint(xy.X * SurveyHeightText.MetresPerFoot, xy.Y * SurveyHeightText.MetresPerFoot))
-                            .ToList()));
-                }
+                if (readable) cornerLines.Add(CornerPass.Line(sharedFeet, line.CornerPolyline));
 
                 var points = TopoLineClipper.Points(
                     line.Polyline, target.Loops, spacingFeet, ShapeReplayPlanner.EdgeBandFeet);

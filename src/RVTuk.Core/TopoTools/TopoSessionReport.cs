@@ -36,12 +36,13 @@ namespace RVTuk.Core.TopoTools
 
         public int UnlinkedTexts { get; set; }
 
-        /// <summary>Outline corners raised or lowered to the height the lines give them (spec
-        /// 2026-11-19). The rule, not a problem: no warning.</summary>
+        /// <summary>Outline corners that hold a height the lines gave them after this run, raised by
+        /// it or by an earlier Update (spec 2026-11-19), so Accept after a quiet Update still names
+        /// them. The rule, not a problem: no warning, so a re-run stays quiet.</summary>
         public int CornersSet { get; set; }
 
-        /// <summary>Outline corners no line influences any more, put back to their own height. Not a
-        /// problem either.</summary>
+        /// <summary>Outline corners no line influences any more, put back to their own height in this
+        /// run. Not a problem either.</summary>
         public int CornersPutBack { get; set; }
 
         /// <summary>Outline corners found moved by hand in this run (flagged now): left alone from

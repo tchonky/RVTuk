@@ -10,10 +10,12 @@ namespace RVTuk.Revit.TopoTools
     /// </summary>
     public sealed class SlabTarget
     {
-        private SlabTarget(Element element, IReadOnlyList<IReadOnlyList<XyPoint>> loops)
+        private SlabTarget(
+            Element element, IReadOnlyList<IReadOnlyList<XyPoint>> loops, IReadOnlyList<XyPoint> corners)
         {
             Element = element;
             Loops = loops;
+            Corners = corners;
         }
 
         /// <summary>A <see cref="Toposolid"/> or a <see cref="Floor"/>.</summary>
@@ -21,6 +23,13 @@ namespace RVTuk.Revit.TopoTools
 
         /// <summary>The outline, outer loop and holes, as tessellated plan points.</summary>
         public IReadOnlyList<IReadOnlyList<XyPoint>> Loops { get; }
+
+        /// <summary>
+        /// The outline's and holes' real corners: each sketch curve's start point, as
+        /// SlabShape reads a sloped floor's corners. Not the tessellation, whose inner points on an
+        /// arc are no vertices of the element.
+        /// </summary>
+        public IReadOnlyList<XyPoint> Corners { get; }
 
         public long Id => Element.Id.Value;
 
@@ -35,8 +44,9 @@ namespace RVTuk.Revit.TopoTools
             else if (element is Floor floor) sketchId = floor.SketchId;
             else return null;
 
-            var loops = ReadLoops(doc, sketchId);
-            return loops.Count == 0 ? null : new SlabTarget(element, loops);
+            var corners = new List<XyPoint>();
+            var loops = ReadLoops(doc, sketchId, corners);
+            return loops.Count == 0 ? null : new SlabTarget(element, loops, corners);
         }
 
         /// <summary>
@@ -44,7 +54,8 @@ namespace RVTuk.Revit.TopoTools
         /// repeat their shared endpoint — harmless, and
         /// <see cref="RVTuk.Core.TopoTools.PolygonContainment"/> is written to tolerate exactly that.
         /// </summary>
-        private static IReadOnlyList<IReadOnlyList<XyPoint>> ReadLoops(Document doc, ElementId sketchId)
+        private static IReadOnlyList<IReadOnlyList<XyPoint>> ReadLoops(
+            Document doc, ElementId sketchId, List<XyPoint> corners)
         {
             var loops = new List<IReadOnlyList<XyPoint>>();
 
@@ -53,14 +64,19 @@ namespace RVTuk.Revit.TopoTools
             foreach (CurveArray loop in sketch.Profile)
             {
                 var points = new List<XyPoint>();
+                var starts = new List<XyPoint>();
                 foreach (Curve curve in loop)
                 {
+                    var start = curve.GetEndPoint(0);
+                    starts.Add(new XyPoint(start.X, start.Y));
                     foreach (var point in curve.Tessellate())
                     {
                         points.Add(new XyPoint(point.X, point.Y));
                     }
                 }
-                if (points.Count >= 3) loops.Add(points);
+                if (points.Count < 3) continue;
+                loops.Add(points);
+                corners.AddRange(starts);
             }
 
             return loops;
