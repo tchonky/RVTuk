@@ -216,7 +216,7 @@ namespace RVTuk.Revit.TopoTools.Commands
             if (editor == null || !shapedBefore || !editor.IsEnabled) return 0;
 
             // The deletes above changed the shape: vertices are read after a regenerate
-            // (RaiseVertexTo does not regenerate first).
+            // (CarryOut does not regenerate first).
             doc.Regenerate();
             var vertices = new List<XyzPoint>();
             foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
@@ -225,21 +225,8 @@ namespace RVTuk.Revit.TopoTools.Commands
             var plan = OutlineCornerPlanner.Restore(
                 session.CornerStart, OutlineCornerStore.Read(element), TopoSession.OutlineVertices(element, vertices));
 
-            // Each corner reports the Z it reached; after a failed raise, where it still stands.
             double? reference = null;
-            var raised = new Dictionary<(double X, double Y), double>();
-            foreach (var raise in plan.Raises)
-                raised[(raise.At.X, raise.At.Y)] =
-                    TopoPointApplier.RaiseVertexTo(doc, element, editor, raise.At, raise.ToZ, ref reference)?.Z ?? raise.At.Z;
-
-            var putBack = new Dictionary<(double X, double Y), double>();
-            foreach (var back in plan.PutBacks)
-                putBack[(back.At.X, back.At.Y)] =
-                    TopoPointApplier.RaiseVertexTo(doc, element, editor, back.At, back.ToZ, ref reference)?.Z ?? back.At.Z;
-
-            var outcome = OutlineCornerPlanner.Settle(plan, raised, putBack);
-            if (OutlineCornerRecordCodec.Encode(outcome.Records) != OutlineCornerStore.Raw(element))
-                OutlineCornerStore.Write(element, outcome.Records);
+            var outcome = TopoPointApplier.CarryOut(doc, element, editor, plan, ref reference);
 
             return plan.Raises.Count + plan.PutBacks.Count - outcome.Lost;
         }

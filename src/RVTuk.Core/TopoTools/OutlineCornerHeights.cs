@@ -192,12 +192,11 @@ namespace RVTuk.Core.TopoTools
 
         private readonly struct End
         {
-            public End(int line, double x, double y, double tx, double ty, long zq)
+            public End(double x, double y, double tx, double ty, long zq)
             {
-                Line = line; X = x; Y = y; Tx = tx; Ty = ty; Zq = zq;
+                X = x; Y = y; Tx = tx; Ty = ty; Zq = zq;
             }
 
-            public int Line { get; }
             public double X { get; }
             public double Y { get; }
             public double Tx { get; }
@@ -284,7 +283,7 @@ namespace RVTuk.Core.TopoTools
 
             double dx = ex - ln.Xs[back], dy = ey - ln.Ys[back];
             var len = Hypot(dx, dy);
-            ends.Add(new End(i, ex, ey, dx / len, dy / len, ln.Zq));
+            ends.Add(new End(ex, ey, dx / len, dy / len, ln.Zq));
         }
 
         private static bool Faces(List<End> ends, int a, int b, out double g)

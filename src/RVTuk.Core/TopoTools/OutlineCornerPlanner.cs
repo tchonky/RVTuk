@@ -13,8 +13,9 @@ namespace RVTuk.Core.TopoTools
     ///
     /// <para>A corner left where it is (already within 0.1 mm of its target) is recorded with
     /// <c>SetZ</c> = its current Z. A raised corner's record carries <c>SetZ</c> = the height asked
-    /// for. The applier MUST replace it with the Z read back after the raise
-    /// (<see cref="WithReached"/>): a record whose <c>SetZ</c> is not where the corner actually sits
+    /// for. The applier MUST replace it with the Z read back after the raise, which it does by
+    /// passing the plan through <see cref="OutlineCornerPlanner.Settle"/> (that calls
+    /// <see cref="WithReached"/>): a record whose <c>SetZ</c> is not where the corner actually sits
     /// reads as "moved by hand" on the next run.</para>
     /// </summary>
     /// <param name="Raises">Corners to move to the height the lines give them.</param>
@@ -221,9 +222,10 @@ namespace RVTuk.Core.TopoTools
         /// Pairs are chosen nearest first, whatever the order of either list.
         ///
         /// <para>A record whose corner is not among <paramref name="candidates"/> is dropped (Edit
-        /// Boundary, Reset Shape). So the applier must pass every outline vertex that is not ledgered
-        /// and not within 1 mm of a placed point — exactly <see cref="Candidates"/> — and never filter
-        /// them further, or it erases the own heights of the corners it left out.</para>
+        /// Boundary, Reset Shape). So the applier passes <see cref="Candidates"/>, filtered further
+        /// only by <see cref="ExceptAt"/> (stale lines' points the cleanup did not take out, which
+        /// were ledgered and so have no record). Leaving out any other vertex would erase the own
+        /// height of its record.</para>
         /// </summary>
         /// <param name="targetZ">The internal Z a candidate should take, or null when no line
         /// influences it; a non-finite value counts as null. Not asked for corners moved by hand.</param>

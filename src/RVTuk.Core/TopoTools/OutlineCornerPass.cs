@@ -12,6 +12,8 @@ namespace RVTuk.Core.TopoTools
     /// turns the rule's shared metres into internal Z as the session runner does. Also the
     /// conversions from Revit's internal feet into the rule's metres.
     /// </summary>
+    /// <param name="SharedElevationOfInternalZero">The shared (survey) elevation of internal Z = 0,
+    /// in internal feet.</param>
     public sealed record CornerPass(OutlineCornerHeights? Heights, double SharedElevationOfInternalZero)
     {
         /// <summary>The internal Z the rule gives a vertex (internal feet), or null when it is left alone.</summary>

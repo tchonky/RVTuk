@@ -257,9 +257,7 @@ namespace RVTuk.Revit.TopoTools
 
         /// <summary>
         /// The corner pass, after every line point is placed: read the live vertices, let the
-        /// planner decide, raise and put back one vertex at a time (<see cref="RaiseVertexTo"/>,
-        /// which regenerates after each), let the planner settle what was reached, and store the
-        /// record in the same transaction. Nothing is retried in this run.
+        /// planner decide, and carry the plan out (<see cref="CarryOut"/>) in the same transaction. Nothing is retried in this run.
         /// </summary>
         private static (CornerOutcome Outcome, int NewlyByHand) RunCornerPass(
             Document doc, SlabTarget target, SlabShapeEditor editor, CornerPass corners,
@@ -280,9 +278,21 @@ namespace RVTuk.Revit.TopoTools
                 OutlineCornerPlanner.Candidates(vertices, target.Loops, LedgeredPoints(ledger), placedPoints),
                 keptOut);
             var plan = OutlineCornerPlanner.Plan(candidates, corners.TargetZ, records);
+            return (CarryOut(doc, element, editor, plan, ref reference), plan.NewlyByHand);
+        }
 
-            // Each corner reports the Z it actually reached — a failed raise where it still stands —
-            // so its record is not read as "moved by hand" next time.
+        /// <summary>
+        /// Carries out a corner plan (an Update's pass, or Cancel's restore): raises and puts back
+        /// one vertex at a time (<see cref="RaiseVertexTo"/>, which does not regenerate first, so a
+        /// caller that changed the shape since its last regenerate must regenerate before), lets
+        /// the planner settle what was reached, and writes the record when its text changes. Each
+        /// corner reports the Z it actually reached — after a failed raise, where it still stands —
+        /// so its record is not read as "moved by hand" next time. Caller must be inside a
+        /// transaction.
+        /// </summary>
+        internal static CornerOutcome CarryOut(
+            Document doc, Element element, SlabShapeEditor editor, CornerPlan plan, ref double? reference)
+        {
             var raised = new Dictionary<(double X, double Y), double>();
             foreach (var raise in plan.Raises)
                 raised[(raise.At.X, raise.At.Y)] = RaiseVertexTo(doc, element, editor, raise.At, raise.ToZ, ref reference)?.Z ?? raise.At.Z;
@@ -293,7 +303,7 @@ namespace RVTuk.Revit.TopoTools
 
             var outcome = OutlineCornerPlanner.Settle(plan, raised, putBack);
             WriteCorners(element, outcome.Records);
-            return (outcome, plan.NewlyByHand);
+            return outcome;
         }
 
         /// <summary>Writes the corner record only when its text changes, so a pass with nothing to
@@ -427,7 +437,7 @@ namespace RVTuk.Revit.TopoTools
         /// </summary>
         /// <returns>Where the vertex ended up — after a failed raise, where it still stands — or
         /// null when no vertex is found at <paramref name="at"/>.</returns>
-        internal static XyzPoint? RaiseVertexTo(
+        private static XyzPoint? RaiseVertexTo(
             Document doc, Element element, SlabShapeEditor editor, XyzPoint at, double targetZ,
             ref double? reference)
         {
