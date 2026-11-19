@@ -95,8 +95,9 @@ namespace RVTuk.Core.TopoTools
             foreach (var line in usable)
             {
                 // Consecutive vertices closer than 1e-6 m merge. Both raw end vertices are always
-                // kept (a last vertex that would merge replaces the last kept one), so the ends do
-                // not depend on the drawing direction.
+                // kept: a last vertex that would merge replaces the last kept one, and earlier kept
+                // vertices (never the first) within 1e-6 m of it go too, as they would when the line
+                // is read from that end. A line that collapses onto its first vertex is left out.
                 xs.Clear();
                 ys.Clear();
                 var raw = line.PolylineMetres;
@@ -109,6 +110,17 @@ namespace RVTuk.Core.TopoTools
                         {
                             xs[xs.Count - 1] = x;
                             ys[ys.Count - 1] = y;
+                            while (xs.Count >= 2 && Hypot(x - xs[xs.Count - 2], y - ys[ys.Count - 2]) < CleanSpot)
+                            {
+                                if (xs.Count == 2)
+                                {
+                                    xs.RemoveAt(1);   // collapsed: one vertex left, the line is left out
+                                    ys.RemoveAt(1);
+                                    break;
+                                }
+                                xs.RemoveAt(xs.Count - 2);
+                                ys.RemoveAt(ys.Count - 2);
+                            }
                         }
                         continue;
                     }
@@ -241,6 +253,7 @@ namespace RVTuk.Core.TopoTools
             for (var j = 0; j < drawn.Count; j++)
             {
                 if (j == i || Math.Abs(drawn[j].Zq - ln.Zq) > SameZ) continue;
+                // A prefilter for the next line: a wider margin changes nothing.
                 if (!drawn[j].BoxNear(ex, ey, SameSpot)) continue;
                 if (DistanceToLine(drawn[j], ex, ey) <= SameSpot) return;
             }
@@ -259,6 +272,7 @@ namespace RVTuk.Core.TopoTools
             if (Math.Abs(e.Zq - f.Zq) > SameZ) return false;
             double dx = f.X - e.X, dy = f.Y - e.Y;
             g = Hypot(dx, dy);
+            // From below the 1 mm cannot matter: ends of one height 1 mm apart are either one closed line or not free.
             if (g <= SameSpot) return false;
             return dx * e.Tx + dy * e.Ty >= FacingCos * g && -dx * f.Tx - dy * f.Ty >= FacingCos * g;
         }
@@ -293,6 +307,7 @@ namespace RVTuk.Core.TopoTools
             for (var k = 0; k < n; k++)
             {
                 var i = k == 0 ? first : (k == first ? 0 : k);
+                // Pruning only: a larger bound changes nothing; a smaller one would drop a line on V or in the tie set.
                 var bound = Math.Max(SameSpot, dMin + Tie);
                 if (lowerBound[i] > bound)
                 {
@@ -366,6 +381,7 @@ namespace RVTuk.Core.TopoTools
                 {
                     if (double.IsNaN(tSame)) tSame = WalkToSameHeight(vx, vy, ux, uy, zq1);
                     if (e[c] > tSame) break;
+                    // From below the 2 mm cannot matter: a line touching a sight line that short is within 1 mm of V (step 2).
                     if (Hypot(qx[c] - vx, qy[c] - vy) > InViewShortcut && SightBlocked(vx, vy, qx[c], qy[c], c))
                     {
                         candidate[c] = false;
@@ -392,6 +408,7 @@ namespace RVTuk.Core.TopoTools
                     double ax = ln.Ax[s], ay = ln.Ay[s];
                     double ex = ln.Bx[s] - ax, ey = ln.By[s] - ay;
                     var den = ux * ey - uy * ex;
+                    // 0 here changes nothing: under 1e-12 rad, crossing with both ends over 1 mm aside takes a 2e9 m line.
                     if (Math.Abs(den) <= Parallel * Hypot(ex, ey)) continue;
                     double apx = ax - vx, apy = ay - vy;
                     var t = (apx * ey - apy * ex) / den;
@@ -606,6 +623,7 @@ namespace RVTuk.Core.TopoTools
             for (var k = 0; k < chunks; k++)
             {
                 var c = k == 0 ? first : (k == first ? 0 : k);
+                // Pruning only: a looser limit changes nothing; a tighter one would drop an equal P.
                 if (GapBeyond(chunk[c], Math.Min(d, bound) + Tie))
                 {
                     chunk[c] = double.PositiveInfinity;
@@ -614,6 +632,7 @@ namespace RVTuk.Core.TopoTools
                 chunk[c] = Measured;
                 for (int s = c * ChunkSize, s1 = Math.Min(s + ChunkSize, segments); s < s1; s++)
                 {
+                    // Pruning only: a looser limit changes nothing; a tighter one would drop an equal P.
                     if (SegmentBeyond(ln, s, vx, vy, Math.Min(d, bound) + Tie))
                     {
                         scratch[s] = double.PositiveInfinity;
@@ -687,6 +706,7 @@ namespace RVTuk.Core.TopoTools
         {
             e = double.PositiveInfinity;
             qx = qy = double.NaN;
+            // Pruning only: a smaller margin changes nothing; a larger one would drop a far part.
             if (FarReach(vx, vy, ux, uy, ln.MinX, ln.MinY, ln.MaxX, ln.MaxY) - FarEps <= 0) return false;
             var scratch = buffers.Segment;
             var chunk = buffers.Chunk;
@@ -695,6 +715,7 @@ namespace RVTuk.Core.TopoTools
             var first = -1;
             for (var c = 0; c < chunks; c++)
             {
+                // Pruning only: a smaller margin changes nothing; a larger one would drop a far part.
                 if (FarReach(vx, vy, ux, uy, ln.CMinX[c], ln.CMinY[c], ln.CMaxX[c], ln.CMaxY[c]) - FarEps <= 0)
                 {
                     chunk[c] = double.PositiveInfinity;
@@ -707,6 +728,7 @@ namespace RVTuk.Core.TopoTools
             for (var k = 0; k < chunks; k++)
             {
                 var c = k == 0 ? first : (k == first ? 0 : k);
+                // Pruning only: a looser limit changes nothing; a tighter one would drop an equal Q.
                 if (double.IsInfinity(chunk[c]) || GapBeyond(chunk[c], e + Tie))
                 {
                     chunk[c] = double.PositiveInfinity;
@@ -715,6 +737,7 @@ namespace RVTuk.Core.TopoTools
                 chunk[c] = Measured;
                 for (int s = c * ChunkSize, s1 = Math.Min(s + ChunkSize, segments); s < s1; s++)
                 {
+                    // Pruning only: a looser limit changes nothing; a tighter one would drop an equal Q.
                     if (SegmentBeyond(ln, s, vx, vy, e + Tie))
                     {
                         scratch[s] = double.PositiveInfinity;
@@ -752,6 +775,7 @@ namespace RVTuk.Core.TopoTools
                 (px, qx) = (qx, px);
                 (py, qy) = (qy, py);
             }
+            // A prefilter: a wider margin changes nothing; a narrower one is caught by the touch tests.
             double loX = Math.Min(px, qx) - Touch, hiX = Math.Max(px, qx) + Touch;
             double loY = Math.Min(py, qy) - Touch, hiY = Math.Max(py, qy) + Touch;
             if (ln.MaxX < loX || ln.MinX > hiX || ln.MaxY < loY || ln.MinY > hiY) return false;

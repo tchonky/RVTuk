@@ -373,8 +373,10 @@ public class OutlineCornerHeightsTests
     // ---- every number of the rule, at its edge ----------------------------------------------
 
     [Theory]
-    [InlineData(0.049, 41.0)]   // nothing beyond, within 5 cm: the line's height
-    [InlineData(0.051, null)]   // nothing beyond, further: left alone
+    [InlineData(0.049, 41.0)]          // nothing beyond, within 5 cm: the line's height
+    [InlineData(0.051, null)]          // nothing beyond, further: left alone
+    [InlineData(0.0500000005, 41.0)]   // 5 cm + 0.5 nm: within the 1e-9 m tie
+    [InlineData(0.050000002, null)]    // 5 cm + 2 nm: past it
     public void NothingBeyondTakesTheLineOnlyWithinFiveCentimetres(double y, double? expected)
     {
         var rule = OutlineCornerHeights.Prepare(new[] { Line(41.0, (-10, 0), (10, 0)) });
@@ -490,14 +492,18 @@ public class OutlineCornerHeightsTests
     }
 
     [Theory]
-    [InlineData(0.5e-9, null)]        // inside the 1e-9 m margin: not on the far side
-    [InlineData(2e-9, 41.666667)]     // past it: the line beyond counts
-    public void TheFarSideStartsANanometrePastTheCorner(double y, double? expected)
+    [InlineData(false, 0.5e-9, null)]        // inside the 1e-9 m margin: not on the far side
+    [InlineData(false, 2e-9, 41.666667)]     // past it: the line beyond counts
+    // With a rise at its far end the line reaches well into the far side, so only the segment's
+    // own ends decide: inside the margin only the rise counts, 10 m away.
+    [InlineData(true, 0.5e-9, 41.181818)]
+    [InlineData(true, 2e-9, 41.666667)]
+    public void TheFarSideStartsANanometrePastTheCorner(bool rise, double y, double? expected)
     {
         var rule = OutlineCornerHeights.Prepare(new[]
         {
             Line(41.0, (-10, -1), (10, -1)),
-            Line(43.0, (2, y), (10, y)),
+            rise ? Line(43.0, (2, y), (10, y), (10, 5)) : Line(43.0, (2, y), (10, y)),
         });
 
         var h = rule.HeightAt(new XyPoint(0, 0));
@@ -524,15 +530,40 @@ public class OutlineCornerHeightsTests
     }
 
     [Theory]
-    [InlineData(0.5e-9, 0)]   // the 43.00 line stops 0.5 nm short of the gap's line: it touches
-    [InlineData(2e-9, 1)]     // 2 nm short: the bridge passes
-    public void SegmentsWithinANanometreTouch(double gap, int bridges)
+    // The bridge's test segment runs from (-0.999, 0) to (0.999, 0). A 43.00 line ends or passes
+    // `gap` from it, once for each of the four endpoint-to-segment distances. Square to the axes
+    // (turn 0) the boxes are flat, so the box check alone decides; turned 30 degrees the boxes
+    // overlap and the distances decide.
+    [InlineData(0, "its first end above", 0.5e-9, 0)]
+    [InlineData(0, "its first end above", 2e-9, 1)]
+    [InlineData(0, "its second end below", 0.5e-9, 0)]
+    [InlineData(0, "its second end below", 2e-9, 1)]
+    [InlineData(0, "past the test segment's first end", 0.5e-9, 0)]
+    [InlineData(0, "past the test segment's first end", 2e-9, 1)]
+    [InlineData(0, "past the test segment's second end", 0.5e-9, 0)]
+    [InlineData(0, "past the test segment's second end", 2e-9, 1)]
+    [InlineData(30, "its first end above", 0.5e-9, 0)]
+    [InlineData(30, "its first end above", 2e-9, 1)]
+    [InlineData(30, "its second end below", 0.5e-9, 0)]
+    [InlineData(30, "its second end below", 2e-9, 1)]
+    [InlineData(30, "past the test segment's first end", 0.5e-9, 0)]
+    [InlineData(30, "past the test segment's first end", 2e-9, 1)]
+    [InlineData(30, "past the test segment's second end", 0.5e-9, 0)]
+    [InlineData(30, "past the test segment's second end", 2e-9, 1)]
+    public void SegmentsWithinANanometreTouch(double turn, string where, double gap, int bridges)
     {
+        var blocker = where switch
+        {
+            "its first end above" => TurnedLine(turn, 43.0, (0, gap), (0, 5)),
+            "its second end below" => TurnedLine(turn, 43.0, (0, -5), (0, -gap)),
+            "past the test segment's first end" => TurnedLine(turn, 43.0, (-0.999 - gap, -5), (-0.999 - gap, 5)),
+            _ => TurnedLine(turn, 43.0, (0.999 + gap, -5), (0.999 + gap, 5)),
+        };
         var rule = OutlineCornerHeights.Prepare(new[]
         {
-            Line(41.0, (-10, 0), (-1, 0)),
-            Line(41.0, (1, 0), (10, 0)),
-            Line(43.0, (0, gap), (0, 5)),
+            TurnedLine(turn, 41.0, (-10, 0), (-1, 0)),
+            TurnedLine(turn, 41.0, (1, 0), (10, 0)),
+            blocker,
         });
 
         Assert.Equal(bridges, rule.Bridges.Count);
@@ -577,27 +608,422 @@ public class OutlineCornerHeightsTests
         Assert.Equal(41.0, HeightOf(rule, 0, 0, "walk"), 9);
     }
 
+    // ---- each clause of the rule, at its edge -------------------------------------------------
+    // The constants above are shared by several clauses; each scene below moves one clause across
+    // its threshold. Lines A (41.00, ends at the origin heading +x) and B (41.00, ends at (10, 0)
+    // heading -x) face each other across a gap unless the scene says otherwise.
+
+    private static CornerLine LineA() => Line(41.0, (-10, 0), (0, 0));
+    private static CornerLine LineB() => Line(41.0, (20, 0), (10, 0));
+
+    [Theory]
+    [InlineData(0.0009, 0)]   // A's ends 0.9 mm apart: A is closed, has no ends, no bridge
+    [InlineData(0.0011, 1)]   // 1.1 mm: open, its end at the origin bridges to B
+    public void ALineWhoseEndsAreWithinOneMillimetreIsClosed(double gap, int bridges)
+    {
+        var rule = OutlineCornerHeights.Prepare(new[]
+        {
+            Line(41.0, (0, 0), (-10, 0), (-10, -5), (0, -5), (0, -gap)),
+            LineB(),
+        });
+
+        Assert.Equal(bridges, rule.Bridges.Count);
+    }
+
+    /// <summary>(x, y) turned by <paramref name="degrees"/> about the origin.</summary>
+    private static (double X, double Y) Turn(double degrees, double x, double y)
+    {
+        var a = degrees * Math.PI / 180.0;
+        return (x * Math.Cos(a) - y * Math.Sin(a), x * Math.Sin(a) + y * Math.Cos(a));
+    }
+
+    private static CornerLine TurnedLine(double degrees, double z, params (double X, double Y)[] pts) =>
+        new(z, pts.Select(p => Turn(degrees, p.X, p.Y)).Select(p => new XyPoint(p.X, p.Y)).ToList());
+
+    [Theory]
+    // A and B turned 30 degrees, so both the x and the y part of the 1 mm count.
+    [InlineData(true, 0.0009, 1)]    // a 43.00 line across the gap 0.9 mm from A's end: inside the 1 mm left out
+    [InlineData(true, 0.0011, 0)]    // 1.1 mm: it crosses the tested part
+    [InlineData(false, 0.0009, 1)]   // the same at B's end
+    [InlineData(false, 0.0011, 0)]
+    public void TheBridgeIsTestedOneMillimetreShortOfEachEnd(bool atA, double c, int bridges)
+    {
+        const double turn = 30;
+        var x = atA ? c : 10 - c;
+        var rule = OutlineCornerHeights.Prepare(new[]
+        {
+            TurnedLine(turn, 41.0, (-10, 0), (0, 0)),
+            TurnedLine(turn, 41.0, (20, 0), (10, 0)),
+            TurnedLine(turn, 43.0, (x, -1), (x, 1)),
+        });
+
+        Assert.Equal(bridges, rule.Bridges.Count);
+    }
+
+    [Theory]
+    [InlineData(0.0009, 1)]   // the last vertex but one is 0.9 mm back: the direction comes from (-10, 0)
+    [InlineData(0.0011, 0)]   // 1.1 mm back: from it, 70 degrees off B
+    public void AnEndsDirectionComesFromTheFirstVertexOneMillimetreBack(double g, int bridges)
+    {
+        var a = 70.0 * Math.PI / 180.0;
+        var rule = OutlineCornerHeights.Prepare(new[]
+        {
+            Line(41.0, (-10, 0), (-g * Math.Cos(a), -g * Math.Sin(a)), (0, 0)),
+            LineB(),
+        });
+
+        Assert.Equal(bridges, rule.Bridges.Count);
+    }
+
+    [Theory]
+    // Another 41.00 line `h` from A's end: above it, or a U round it (so the end lies inside the
+    // other line's box and only the distance decides).
+    [InlineData(false, 0.0009, 0)]   // 0.9 mm: the end is not free
+    [InlineData(false, 0.0011, 1)]   // 1.1 mm: free, so it bridges to B
+    [InlineData(true, 0.0009, 0)]
+    [InlineData(true, 0.0011, 1)]
+    public void AnEndIsFreeWithNoLineOfItsHeightWithinOneMillimetre(bool round, double h, int bridges)
+    {
+        var other = round
+            ? Line(41.0, (-h, -0.01), (-h, h), (h, h), (h, 0.01))
+            : Line(41.0, (0, h), (0, 5));
+        var rule = OutlineCornerHeights.Prepare(new[] { LineA(), LineB(), other });
+
+        Assert.Equal(bridges, rule.Bridges.Count);
+    }
+
+    [Theory]
+    [InlineData(0.0004, 0)]   // that line at 41.0004 counts as the same height: not free
+    [InlineData(0.0005, 0)]
+    [InlineData(0.0006, 1)]   // 41.0006 is another height: free
+    public void AnEndIsFreeOfLinesOfAnotherHeight(double dz, int bridges)
+    {
+        var rule = OutlineCornerHeights.Prepare(new[] { LineA(), LineB(), Line(41.0 + dz, (0, 0.0005), (0, 5)) });
+
+        Assert.Equal(bridges, rule.Bridges.Count);
+    }
+
+    [Theory]
+    [InlineData(0.0009, 0)]   // ends 0.9 mm apart are not free (each line is within 1 mm of the other end)
+    [InlineData(0.0015, 1)]   // 1.5 mm: free, more than 1 mm apart, so they bridge
+    public void EndsMoreThanOneMillimetreApartBridge(double g, int bridges)
+    {
+        var rule = OutlineCornerHeights.Prepare(new[] { LineA(), Line(41.0, (10 + g, 0), (g, 0)) });
+
+        Assert.Equal(bridges, rule.Bridges.Count);
+    }
+
+    [Theory]
+    [InlineData(0.0004, 1)]   // a line at 41.0004 across the gap is the bridge's height: no block
+    [InlineData(0.0005, 1)]
+    [InlineData(0.0006, 0)]   // 41.0006 blocks
+    public void OnlyALineOfAnotherHeightBlocksABridge(double dz, int bridges)
+    {
+        var rule = OutlineCornerHeights.Prepare(new[] { LineA(), LineB(), Line(41.0 + dz, (5, -1), (5, 1)) });
+
+        Assert.Equal(bridges, rule.Bridges.Count);
+    }
+
+    [Theory]
+    [InlineData(0.5e-9, 8.660254)]   // B2's end is 0.5 nm further than B1's: equal, so the smaller x
+    [InlineData(2e-9, 10.0)]         // 2 nm further: B1's end, the nearer
+    public void AnEndPicksTheNearestFacingEndWithinANanometreBySmallerX(double delta, double otherEndX)
+    {
+        // A's end faces B1's end (10, 0) straight ahead and B2's end 30 degrees up, both pointing
+        // back at it; B1 and B2 do not face each other.
+        var a = 30.0 * Math.PI / 180.0;
+        var k = 1 + delta / 10;
+        double fx = 10 * Math.Cos(a) * k, fy = 10 * Math.Sin(a) * k;
+        var rule = OutlineCornerHeights.Prepare(new[]
+        {
+            LineA(),
+            Line(41.0, (20, 0), (10, 0)),
+            Line(41.0, (fx + 10 * Math.Cos(a), fy + 10 * Math.Sin(a)), (fx, fy)),
+        });
+
+        var bridge = Assert.Single(rule.Bridges);
+        Assert.Equal(otherEndX, bridge.PolylineMetres.Max(p => p.X), 6);
+    }
+
+    [Theory]
+    [InlineData(true)]    // a nearer end 70 degrees off A's heading, pointing at A's end
+    [InlineData(false)]   // a nearer end on A's heading, pointing 70 degrees off A's end
+    public void BothEndsMustFaceEachOtherWithinSixtyDegrees(bool offAsHeading)
+    {
+        // Either way the nearer end does not face A's end, so A still bridges to B. A test that
+        // checked only one of the two ends would let A pick the nearer end and lose the bridge.
+        var a = 70.0 * Math.PI / 180.0;
+        var nearer = offAsHeading
+            ? Line(41.0, (10 * Math.Cos(a), 10 * Math.Sin(a)), (5 * Math.Cos(a), 5 * Math.Sin(a)))
+            : Line(41.0, (5 + 5 * Math.Cos(a), -5 * Math.Sin(a)), (5, 0));
+        var rule = OutlineCornerHeights.Prepare(new[] { LineA(), LineB(), nearer });
+
+        var bridge = Assert.Single(rule.Bridges);
+        Assert.Equal(10.0, bridge.PolylineMetres.Max(p => p.X), 9);
+    }
+
+    [Fact]
+    public void ALineOnTheCornerIsFoundEvenWhenANearerLowerLineIsMeasuredFirst()
+    {
+        // 41.00 passes 0.2 mm from V, 43.00 0.8 mm: both are on V; the higher wins.
+        var rule = OutlineCornerHeights.Prepare(new[]
+        {
+            Line(41.0, (-10, -0.0002), (10, -0.0002)),
+            Line(43.0, (-10, 0.0008), (10, 0.0008)),
+        });
+
+        Assert.Equal(43.0, HeightOf(rule, 0, 0, "on two lines"), 9);
+    }
+
+    [Theory]
+    // V at the origin. Line A (43.00) passes 1 m + delta below it, its nearest point (0, -1 - delta);
+    // line B (41.00) passes 1 m to one side. Equally near, A is L1 (the higher): u = +y and B beyond
+    // gives 42.00. B nearer: L1 = B, u points away from A, nothing beyond: left alone.
+    // With the decoy (a 41.00 line 3 m away whose box holds V, so it is measured first) A is
+    // measured before B too; the decoy is then the only line beyond B, at B's height: 41.00.
+    [InlineData(-1.0, 0.5e-9, false, 42.0)]
+    [InlineData(-1.0, 2e-9, false, null)]
+    [InlineData(1.0, 0.5e-9, false, 42.0)]
+    [InlineData(1.0, 2e-9, false, null)]
+    [InlineData(-1.0, 0.5e-9, true, 42.0)]
+    [InlineData(-1.0, 2e-9, true, 41.0)]
+    [InlineData(1.0, 0.5e-9, true, 42.0)]
+    [InlineData(1.0, 2e-9, true, 41.0)]
+    public void TheNearestLinesWithinANanometreGiveTheHighest(double side, double delta, bool decoy, double? expected)
+    {
+        var a = side < 0 ? Line(43.0, (-0.5, -1 - delta), (0, -1 - delta)) : Line(43.0, (0, -1 - delta), (0.5, -1 - delta));
+        var b = Line(41.0, (side, 0), (side, 1));
+        var rule = OutlineCornerHeights.Prepare(decoy
+            ? new[] { b, a, Line(41.0, (-3, 0.5), (-3, -3), (0.5, -3)) }
+            : new[] { a, b });
+
+        var h = rule.HeightAt(new XyPoint(0, 0));
+
+        Assert.Empty(rule.Bridges);
+        if (expected is null) Assert.True(h is null, $"side {side}, delta {delta}, decoy {decoy}: took {h}");
+        else Assert.Equal(expected.Value, HeightOf(rule, 0, 0, $"side {side}, delta {delta}, decoy {decoy}"), 6);
+    }
+
+    [Theory]
+    // As above with delta 0: A (43.00) and B (43.00 - dz, to the left) are equally near.
+    [InlineData(0.0004, null)]      // within 0.5 mm of the highest: both stay, B has the smaller x: nothing beyond
+    [InlineData(0.0005, null)]
+    [InlineData(0.0006, 42.9997)]   // B drops out: L1 = A, B beyond
+    public void TheNearestLinesWithinHalfAMillimetreOfTheHighestStay(double dz, double? expected)
+    {
+        var rule = OutlineCornerHeights.Prepare(new[]
+        {
+            Line(43.0, (-0.5, -1), (0, -1)),
+            Line(43.0 - dz, (-1, 0), (-1, 1)),
+        });
+
+        var h = rule.HeightAt(new XyPoint(0, 0));
+
+        Assert.Empty(rule.Bridges);
+        if (expected is null) Assert.True(h is null, $"dz {dz}: took {h}");
+        else Assert.Equal(expected.Value, HeightOf(rule, 0, 0, $"dz {dz}"), 9);
+    }
+
+    [Theory]
+    // L1 (41.00) 0.5 m below V; 43.00 at y = 1 and 45.00 at y = 1 + delta, both straight beyond.
+    [InlineData(0.5e-9, 42.333333)]   // equally near: the higher, 45.00
+    [InlineData(2e-9, 41.666667)]     // 43.00 nearer
+    public void CandidatesWithinANanometreGoHigherFirst(double delta, double expected)
+    {
+        var rule = OutlineCornerHeights.Prepare(new[]
+        {
+            Line(41.0, (-10, -0.5), (10, -0.5)),
+            Line(43.0, (-10, 1), (10, 1)),
+            Line(45.0, (-10, 1 + delta), (10, 1 + delta)),
+        });
+
+        Assert.Equal(expected, HeightOf(rule, 0, 0, $"delta {delta}"), 6);
+    }
+
+    [Theory]
+    // L1 (41.00) 0.5 m below V; another 41.00 line at y = 1 (the nearest thing beyond, and the walk
+    // meets it at t = 1); 43.00 at y = 1 + delta.
+    [InlineData(0.5e-9, 41.666667)]   // within 1e-9 of the nearest beyond: L2 at once
+    [InlineData(2e-9, 41.0)]          // beyond the walk's meeting: no L2
+    public void ACandidateWithinANanometreOfTheNearestBeyondIsL2AtOnce(double delta, double expected)
+    {
+        var rule = OutlineCornerHeights.Prepare(new[]
+        {
+            Line(41.0, (-10, -0.5), (10, -0.5)),
+            Line(41.0, (-10, 1), (10, 1)),
+            Line(43.0, (-10, 1 + delta), (10, 1 + delta)),
+        });
+
+        Assert.Equal(expected, HeightOf(rule, 0, 0, $"delta {delta}"), 6);
+    }
+
+    [Theory]
+    [InlineData(0.0009, 41.0)]        // a 41.00 vertex 0.9 mm beside the walk: met at t = 3, 43.00 is beyond
+    [InlineData(0.0011, 41.331954)]   // 1.1 mm: not met; 43.00 at (-0.5, 5) is in view
+    public void TheWalkMeetsAVertexWithinOneMillimetreOfIt(double w, double expected)
+    {
+        var rule = OutlineCornerHeights.Prepare(new[]
+        {
+            Line(41.0, (-10, -1), (10, -1)),
+            Line(41.0, (w, 3), (5, 3)),
+            Line(43.0, (-10, 5), (-0.5, 5)),
+        });
+
+        Assert.Equal(expected, HeightOf(rule, 0, 0, $"w {w}"), 6);
+    }
+
+    [Theory]
+    // L1 (41.00) 1 m below V. A 41.00 line at 1.27 m hides line S from V; S crosses the walk at
+    // y = 3 m. 43.00 at (3, 5) is in view, past S's crossing.
+    [InlineData(0.0005, 41.0)]        // S at 41.0005 is h1's height: the walk meets it, 43.00 is beyond
+    [InlineData(0.0006, 41.292785)]   // S at 41.0006 is another height (hidden): the walk goes on
+    public void TheWalkMeetsOnlyLinesOfL1sHeight(double dz, double expected)
+    {
+        var rule = OutlineCornerHeights.Prepare(new[]
+        {
+            Line(41.0, (-10, -1), (10, -1)),
+            Line(41.0, (-0.8, 1.25), (-0.2, 1.25)),
+            Line(41.0 + dz, (-1, 2.5), (1, 3.5)),
+            Line(43.0, (3, 5), (10, 5)),
+        });
+
+        Assert.Equal(expected, HeightOf(rule, 0, 0, $"dz {dz}"), 6);
+    }
+
+    [Theory]
+    // L1 (41.00) 1 m below V; 43.00's nearest point is (3, 4), 5 m out. A 41.00 line crosses the
+    // sight line `b` before that point.
+    [InlineData(0.0009, 41.333333)]   // inside the last 1 mm, which the sight line leaves out: in view
+    [InlineData(0.0011, 41.0)]        // 1.1 mm before: hidden
+    public void TheSightLineStopsOneMillimetreShortOfTheCandidate(double b, double expected)
+    {
+        double ux = 0.6, uy = 0.8, tx = -0.8, ty = 0.6;
+        double mx = ux * (5 - b), my = uy * (5 - b);
+        var rule = OutlineCornerHeights.Prepare(new[]
+        {
+            Line(41.0, (-10, -1), (10, -1)),
+            Line(43.0, (5 * ux + tx, 5 * uy + ty), (5 * ux - tx, 5 * uy - ty)),
+            Line(41.0, (mx + 0.5 * tx, my + 0.5 * ty), (mx - 0.5 * tx, my - 0.5 * ty)),
+        });
+
+        Assert.Empty(rule.Bridges);
+        Assert.Equal(expected, HeightOf(rule, 0, 0, $"b {b}"), 6);
+    }
+
+    [Theory]
+    // One 41.00 line: 1 m + delta below V (its first segment), then 15 short segments round to a
+    // last segment 1 m to the right of V, in the next run of 16 segments. A 43.00 line lies above.
+    // With `belowFirst` the line goes on round V's left, so the run holding the part below V has the
+    // nearer box and is measured first.
+    [InlineData(false, 0.5e-9, 41.664457)]   // equally near: the nearest point with the smaller x, below V: u = +y
+    [InlineData(false, 2e-9, 41.0)]          // the right one nearer: u = -x, nothing of another height beyond
+    [InlineData(true, 0.5e-9, 41.664457)]
+    [InlineData(true, 2e-9, 41.0)]
+    public void TheNearestPointWithinANanometreHasTheSmallerXAcrossRunsOfSegments(bool belowFirst, double delta, double expected)
+    {
+        var poly = new List<XyPoint> { new(1, 0.5), new(1, -0.5) };
+        for (var k = 1; k <= 15; k++) poly.Add(new XyPoint(1 - 0.5 * k / 15, -0.5 - (0.5 + delta) * k / 15));
+        poly.Add(new XyPoint(-0.5, -1 - delta));
+        if (belowFirst)
+        {
+            poly.Add(new XyPoint(-3, -1));
+            poly.Add(new XyPoint(-3, 3));
+        }
+        var rule = OutlineCornerHeights.Prepare(new[]
+        {
+            new CornerLine(41.0, poly),
+            Line(43.0, (0.2, 2), (1, 2)),
+        });
+
+        Assert.Equal(expected, HeightOf(rule, 0, 0, $"delta {delta}"), 6);
+    }
+
+    [Theory]
+    // L1 (41.00) 1 m below V. The 43.00 line's far part is nearest at two points: (6, 8 - e), 10 m
+    // - delta away, first; (-6, 8), 10 m, in a later run of segments, alone in it or not. A 41.00
+    // line hides (-6, 8) from V.
+    [InlineData(true, 0.5e-9, 41.0)]          // equally near: the smaller x, hidden: no L2
+    [InlineData(true, 2e-9, 41.181818)]       // (6, 8 - e) nearer: in view
+    [InlineData(false, 0.5e-9, 41.0)]
+    [InlineData(false, 2e-9, 41.181818)]
+    public void TheFarPartsNearestPointWithinANanometreHasTheSmallerXAcrossRunsOfSegments(bool leftAlone, double delta, double expected)
+    {
+        var yr = Math.Sqrt((10 - delta) * (10 - delta) - 36);
+        var poly = new List<XyPoint> { new(7, yr), new(6, yr) };
+        var rightRise = leftAlone ? 14 : 15;
+        for (var k = 1; k <= rightRise; k++) poly.Add(new XyPoint(6, yr + (20 - yr) * k / rightRise));
+        poly.Add(new XyPoint(-6, 20));
+        for (var k = 1; k <= 5; k++) poly.Add(new XyPoint(-6, 20 - 12.0 * k / 5));
+        poly.Add(new XyPoint(-7, 8));
+        var rule = OutlineCornerHeights.Prepare(new[]
+        {
+            Line(41.0, (-10, -1), (10, -1)),
+            Line(41.0, (-4, 4), (-2, 4)),
+            new CornerLine(43.0, poly),
+        });
+
+        Assert.Equal(expected, HeightOf(rule, 0, 0, $"delta {delta}"), 6);
+    }
+
+    [Fact]
+    public void ALastVertexThatMergesTakesEarlierOnesWithinAMicrometreWithIt()
+    {
+        // The last two vertices before the end lie within a micrometre of it (the first of them off
+        // the line): read from either end the line keeps (0, 0), (10, 2e-6) and the end (10, 0), so
+        // every corner gets the same height.
+        var forward = new List<XyPoint>
+        {
+            new(0, 0), new(10, 0.000002), new(10.0000004, 0.0000005), new(10, -0.0000006), new(10, 0),
+        };
+        var backward = forward.AsEnumerable().Reverse().ToList();
+        var top = Line(43.0, (-10, 10), (20, 10));
+        var a = OutlineCornerHeights.Prepare(new[] { new CornerLine(41.0, forward), top });
+        var b = OutlineCornerHeights.Prepare(new[] { new CornerLine(41.0, backward), top });
+
+        for (var x = 0.5; x < 12; x += 0.5)
+        {
+            foreach (var y in new[] { 0.3, 1.0, 4.0 })
+            {
+                Assert.Equal(a.HeightAt(new XyPoint(x, y)), b.HeightAt(new XyPoint(x, y)));
+            }
+        }
+    }
+
+    [Fact]
+    public void ALineThatCollapsesOntoItsFirstVertexIsLeftOutEitherWay()
+    {
+        var forward = new List<XyPoint> { new(0, 0), new(0.0000012, 0), new(0.0000006, 0) };
+        var backward = forward.AsEnumerable().Reverse().ToList();
+
+        Assert.Null(OutlineCornerHeights.Prepare(new[] { new CornerLine(41.0, forward) }).HeightAt(new XyPoint(0, 0.01)));
+        Assert.Null(OutlineCornerHeights.Prepare(new[] { new CornerLine(41.0, backward) }).HeightAt(new XyPoint(0, 0.01)));
+    }
+
     // ---- speed ------------------------------------------------------------------------------
 
+    /// <summary>The scene and the limit on the best of three runs: the spec's 2,000 corners x 200
+    /// lines of 20 segments under 1 s; 240-segment lines (tessellated arcs) under 2 s.</summary>
     public static IEnumerable<object[]> TimingScenes() => new[]
     {
-        new object[] { "contours" },
-        new object[] { "arcs" },
+        new object[] { "contours20", 1.0 },
+        new object[] { "contours", 2.0 },
+        new object[] { "arcs", 2.0 },
     };
 
-    /// <summary>200 lines of 240 segments, 0.25 m apart in height, over a 100 m site: wavy contours
-    /// across it, or concentric 270-degree arcs (tessellated arcs carry many segments).</summary>
+    /// <summary>200 lines, 0.25 m apart in height, over a 100 m site: wavy contours across it (20
+    /// or 240 segments each), or concentric 270-degree arcs of 240 segments.</summary>
     private static List<CornerLine> TimingLines(string scene)
     {
+        var segments = scene == "contours20" ? 20 : 240;
         var lines = new List<CornerLine>();
         for (var i = 0; i < 200; i++)
         {
             var poly = new List<XyPoint>();
-            for (var k = 0; k <= 240; k++)
+            for (var k = 0; k <= segments; k++)
             {
-                if (scene == "contours")
+                if (scene != "arcs")
                 {
-                    var x = k * 100.0 / 240;
+                    var x = k * 100.0 / segments;
                     poly.Add(new XyPoint(x, i * 0.5 + 0.2 * Math.Sin(x / 7.0 + i)));
                 }
                 else
@@ -614,7 +1040,7 @@ public class OutlineCornerHeightsTests
 
     [Theory]
     [MemberData(nameof(TimingScenes))]
-    public void TwoThousandPointsAgainstTwoHundredLinesOfTwoHundredFortySegments(string scene)
+    public void TwoThousandPointsAgainstTwoHundredLines(string scene, double limitSeconds)
     {
         var lines = TimingLines(scene);
         var points = new List<XyPoint>();
@@ -637,6 +1063,7 @@ public class OutlineCornerHeightsTests
         var text = string.Join(", ", times.Select(t => $"{t.TotalMilliseconds:F0} ms"));
 
         _output.WriteLine($"{scene}: Prepare + 2000 HeightAt, three runs: {text}; {moved} moved");
-        Assert.True(times.Min() < TimeSpan.FromSeconds(2), $"{scene}: best of three runs over 2 s: {text}");
+        Assert.True(times.Min() < TimeSpan.FromSeconds(limitSeconds),
+            $"{scene}: best of three runs over {limitSeconds} s: {text}");
     }
 }
