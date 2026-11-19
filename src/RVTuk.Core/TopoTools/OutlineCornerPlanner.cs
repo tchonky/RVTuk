@@ -433,6 +433,30 @@ namespace RVTuk.Core.TopoTools
         }
 
         /// <summary>
+        /// Whether Cancel has to run <see cref="Restore"/>. Not when the record text now is the one
+        /// stored at the start and that record was not stale then (<paramref name="cornerStart"/>,
+        /// the <see cref="EffectiveStart"/>, encodes to the same text): nothing moved. A stale start
+        /// record written again, bit for bit, by an Update that raised its corners once more must
+        /// still be restored; Restore plans no move where nothing moved.
+        /// </summary>
+        public static bool CancelHasCornerWork(
+            string rawNow, string cornerSnapshot, IReadOnlyList<CornerRecord> cornerStart) =>
+            rawNow != cornerSnapshot || OutlineCornerRecordCodec.Encode(cornerStart) != cornerSnapshot;
+
+        /// <summary>
+        /// The vertices within 1 mm of an edge of any loop (outline or hole), the band
+        /// <see cref="Candidates"/> uses: the only ones a corner record can belong to. For
+        /// <see cref="EffectiveStart"/> and <see cref="Restore"/>, so a survey toposolid's thousands
+        /// of inner points are not paired against the records.
+        /// </summary>
+        public static IReadOnlyList<XyzPoint> OnOutline(
+            IReadOnlyList<XyzPoint> vertices, IReadOnlyList<IReadOnlyList<XyPoint>> loopsFeet) =>
+            vertices
+                .Where(vertex => PolygonContainment.IsNearEdge(
+                    loopsFeet, new XyPoint(vertex.X, vertex.Y), ShapeReplayPlanner.EdgeBandFeet))
+                .ToList();
+
+        /// <summary>
         /// For each candidate, its record or null. Every candidate–record pair within 0.1 mm in plan
         /// is sorted by distance, ties broken by the candidate's X, Y, Z and then the record's
         /// fields, and taken greedily, so the result does not depend on either list's order.

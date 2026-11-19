@@ -152,8 +152,8 @@ namespace RVTuk.Revit.TopoTools.Commands
 
         /// <summary>
         /// Cancel's corner step, inside its transaction: when the target still exists, was shaped
-        /// when Cancel began, and its corner record is not what it was at the start of the session,
-        /// each corner whose record changed goes back to its height at the start
+        /// when Cancel began, and its corner record may have changed since the start of the session
+        /// (<see cref="OutlineCornerPlanner.CancelHasCornerWork"/>), each corner whose record changed goes back to its height at the start
         /// (<see cref="TopoSession.CornerStart"/>'s set height), or to its own height when the start
         /// had no record for it (<see cref="OutlineCornerPlanner.Restore"/>); corners moved by hand
         /// are left alone. No line is read, so no corner the session left alone moves. The record
@@ -166,7 +166,13 @@ namespace RVTuk.Revit.TopoTools.Commands
         private static int RestoreCorners(Document doc, TopoSession session, bool shapedBefore)
         {
             var element = doc.GetElement(session.TargetId);
-            if (element == null || OutlineCornerStore.Raw(element) == session.CornerSnapshot) return 0;
+            if (element == null) return 0;
+
+            // Not only "the record text is unchanged": an Update can write a record that was stale
+            // at the start again, bit for bit, after raising its corners once more.
+            if (!OutlineCornerPlanner.CancelHasCornerWork(
+                    OutlineCornerStore.Raw(element), session.CornerSnapshot, session.CornerStart))
+                return 0;
 
             // Plain when Cancel began: an Update leaves an element plain only when it raised no
             // corner, so this is Reset Shape by hand during the session. Every corner then stands
@@ -184,7 +190,8 @@ namespace RVTuk.Revit.TopoTools.Commands
             foreach (SlabShapeVertex vertex in editor.SlabShapeVertices)
                 vertices.Add(SlabShape.ToPoint(vertex.Position));
 
-            var plan = OutlineCornerPlanner.Restore(session.CornerStart, OutlineCornerStore.Read(element), vertices);
+            var plan = OutlineCornerPlanner.Restore(
+                session.CornerStart, OutlineCornerStore.Read(element), TopoSession.OutlineVertices(element, vertices));
 
             // Each corner reports the Z it reached; after a failed raise, where it still stands.
             double? reference = null;

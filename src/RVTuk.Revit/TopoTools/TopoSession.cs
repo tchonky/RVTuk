@@ -179,13 +179,25 @@ namespace RVTuk.Revit.TopoTools
                     foreach (SlabShapeVertex vertex in editor!.SlabShapeVertices)
                         vertices.Add(SlabShape.ToPoint(vertex.Position));
                 }
-                return OutlineCornerPlanner.EffectiveStart(stored, enabled, vertices);
+                return OutlineCornerPlanner.EffectiveStart(stored, enabled, OutlineVertices(target, vertices));
             }
             catch (Exception ex)
             {
                 Application.LogDiagnostic($"TopoSession: reading the corners at the start failed, the stored record is used: {ex.Message}");
                 return stored;
             }
+        }
+
+        /// <summary>
+        /// The vertices a corner record can belong to: those within 1 mm of the element's outline
+        /// or holes (<see cref="OutlineCornerPlanner.OnOutline"/>), all of them when the outline
+        /// cannot be read. For Start and Cancel alike.
+        /// </summary>
+        internal static IReadOnlyList<XyzPoint> OutlineVertices(Element element, IReadOnlyList<XyzPoint> vertices)
+        {
+            if (vertices.Count == 0) return vertices;
+            var target = SlabTarget.From(element.Document, element);
+            return target == null ? vertices : OutlineCornerPlanner.OnOutline(vertices, target.Loops);
         }
 
         /// <summary>True when <paramref name="document"/> is this session's document.</summary>

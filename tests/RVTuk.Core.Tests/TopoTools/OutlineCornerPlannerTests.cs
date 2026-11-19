@@ -1314,6 +1314,73 @@ public class OutlineCornerPlannerTests
         Assert.Empty(plan.NewRecords);
     }
 
+    // ---------------------------------------------------------------- CancelHasCornerWork (fix round 2)
+
+    [Fact]
+    public void CancelSkipsTheCornersWhenAFreshRecordIsUnchanged()
+    {
+        var records = new[] { new CornerRecord(0, 0, 9, 10, false) };
+        string text = OutlineCornerRecordCodec.Encode(records);
+
+        Assert.False(OutlineCornerPlanner.CancelHasCornerWork(text, text, records));
+        Assert.False(OutlineCornerPlanner.CancelHasCornerWork("", "", NoRecords));
+    }
+
+    [Fact]
+    public void CancelRestoresWhenTheRecordChanged()
+    {
+        var records = new[] { new CornerRecord(0, 0, 9, 10, false) };
+        string text = OutlineCornerRecordCodec.Encode(records);
+
+        Assert.True(OutlineCornerPlanner.CancelHasCornerWork(
+            OutlineCornerRecordCodec.Encode(new[] { new CornerRecord(0, 0, 9, 12, false) }), text, records));
+        Assert.True(OutlineCornerPlanner.CancelHasCornerWork("", text, records));
+    }
+
+    [Fact]
+    public void CancelRestoresWhenAnUpdateWroteAStaleStartRecordAgain()
+    {
+        // Reset Shape outside a session left the corner at its own height 9 under a record set to
+        // 10; the session's Update, lines unchanged, raised it to 10 again and wrote the very same
+        // record text. Cancel must still put the corner back to 9.
+        var stored = new[] { new CornerRecord(0, 0, 9, 10, false) };
+        string text = OutlineCornerRecordCodec.Encode(stored);
+        var start = OutlineCornerPlanner.EffectiveStart(stored, true, new[] { new XyzPoint(0, 0, 9) });
+        var update = OutlineCornerPlanner.Plan(new[] { new XyzPoint(0, 0, 9) }, Always(10), stored);
+        Assert.Equal(text, OutlineCornerRecordCodec.Encode(update.NewRecords));
+
+        Assert.True(OutlineCornerPlanner.CancelHasCornerWork(text, text, start));
+
+        var corner = new XyzPoint(0, 0, 10);
+        var plan = OutlineCornerPlanner.Restore(start, update.NewRecords, new[] { corner });
+        Assert.Equal(new[] { (corner, 9.0) }, plan.PutBacks);
+        Assert.Empty(plan.NewRecords);
+    }
+
+    [Fact]
+    public void CancelRestoresWhenAFloorMadePlainKeptItsOldRecordAndAnUpdateWroteItAgain()
+    {
+        var stored = new[] { new CornerRecord(0, 0, 9, 10, false) };
+        string text = OutlineCornerRecordCodec.Encode(stored);
+        var start = OutlineCornerPlanner.EffectiveStart(stored, false, Array.Empty<XyzPoint>());
+
+        Assert.True(OutlineCornerPlanner.CancelHasCornerWork(text, text, start));
+    }
+
+    // ---------------------------------------------------------------- OnOutline (fix round 2)
+
+    [Fact]
+    public void OnlyVerticesWithinOneMillimetreOfALoopEdgeAreOnTheOutline()
+    {
+        var vertices = new[]
+        {
+            new XyzPoint(0, 0, 1), new XyzPoint(5, 0.999 * Mm, 1), new XyzPoint(4, 5, 1), // outline, hole
+            new XyzPoint(5, 1.001 * Mm, 1), new XyzPoint(2, 2, 1),                      // inside
+        };
+
+        Assert.Equal(vertices.Take(3), OutlineCornerPlanner.OnOutline(vertices, SquareWithHole));
+    }
+
     [Fact]
     public void CancelLeavesACornerMovedByHandBeforeTheSessionWhereItIs()
     {
