@@ -12,6 +12,14 @@ KKarea host (Revit 2023). Toolkit-wide items live in [`../../BACKLOG.md`](../../
 
 ## ✨ Improvements
 
+- [ ] Check setting usage codes from the Area Calc window in Revit 2024 and in 2023 (KKarea):
+  the checks in Task 6 Step 3 of
+  [plans/2026-11-22-area-usage-assign.md](plans/2026-11-22-area-usage-assign.md). Built and
+  unit-tested 2026-11-22; not yet run in Revit. Also note there whether clearing a key leaves
+  `RZ_USAGE_TYPE` with its old value (spec §7).
+- [ ] Setup Usage Keys still matches key rows by exact Key Name, so a row renamed by hand is
+  added again; the window's assignment already finds rows by their code (spec §5.7).
+
 - [ ] Split crop regions: `AreaExtractor` maps every point with the view's first
   model→projection transform. A view with a split crop has one transform per region; pick
   the region whose boundary contains the point (`TransformWithBoundary.GetBoundary`).

@@ -97,6 +97,27 @@ public class RishuiZaminViewModelTests
     });
 
     [Fact]
+    public void Populate_FillsFlatRowsInListOrder_WithTheirLevel() => Sta.Run(() =>
+    {
+        var vm = new Stubs().Vm();
+        vm.Populate(Five);
+        Assert.Equal(Rows(vm).Select(r => r.ElementId), vm.AllRows.Select(r => r.ElementId));
+        Assert.All(vm.AllRows, r => Assert.Contains(r, r.Level!.Rows));
+    });
+
+    [Fact]
+    public void UsageDisplays_FollowSelection() => Sta.Run(() =>
+    {
+        var vm = new Stubs().Vm();
+        vm.Populate(Five);
+        Select(vm, 1);
+        Assert.Equal("1 - מגורים", vm.NewUsageDisplay.Text);
+        Assert.Equal("— none —", vm.OldUsageDisplay.Text);
+        Select(vm, 1, 2);
+        Assert.Equal("(mixed)", vm.NewUsageDisplay.Text);
+    });
+
+    [Fact]
     public void CanAssign_FalseWithoutDelegate_OrSelection() => Sta.Run(() =>
     {
         var vm = new Stubs().Vm();

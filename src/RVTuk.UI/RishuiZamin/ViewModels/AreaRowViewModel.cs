@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using RVTuk.Core.RishuiZamin;
 
 using RVTuk.UI.Shared.ViewModels;
@@ -27,6 +27,9 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
             set => SetProperty(ref _isSelected, value);
         }
 
+        /// <summary>The level group this row is listed under (set when the list is filled).</summary>
+        public AreaLevelGroupViewModel? Level { get; set; }
+
         public string? Number => Record.Number;
         public string? Name => Record.Name;
         public int? UsageCode => Record.UsageCode;
@@ -36,6 +39,11 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         /// <summary>Left-hand label: "«number» — «name»" (or "(no #)" when the area has no
         /// Number set).</summary>
         public string NumberAndName => AreaSelectionSummary.NumberAndName(Number, Name);
+
+        /// <summary>The number half of the row label ("002 —", or "(no #) —"), shown apart from
+        /// <see cref="Name"/> so bidi never mixes the number into a Hebrew name.</summary>
+        public string NumberLabel =>
+            (string.IsNullOrWhiteSpace(Number) ? "(no #)" : Number!) + (string.IsNullOrWhiteSpace(Name) ? "" : " —");
 
         /// <summary>The area in m², 2 decimals, culture-independent ("84.30").</summary>
         public string AreaText => Record.AreaValue.ToString("F2", CultureInfo.InvariantCulture);
@@ -47,6 +55,9 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         public string? OldCodeText => UsageCodePrev == null
             ? null
             : "←" + UsageCodePrev.Value.ToString(CultureInfo.InvariantCulture);
+
+        /// <summary>True when the area has neither a New nor an Old usage code.</summary>
+        public bool HasNoCode => UsageCode == null && UsageCodePrev == null;
 
         public UsageGroup NewGroup => UsageGroups.OfCode(UsageCode);
         public UsageGroup OldGroup => UsageGroups.OfCode(UsageCodePrev);

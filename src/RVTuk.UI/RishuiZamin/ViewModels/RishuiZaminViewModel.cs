@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -31,6 +31,8 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         private SubmissionPane _currentPane = SubmissionPane.Areas;
         private IReadOnlyList<AreaRowViewModel> _selectedRows = Array.Empty<AreaRowViewModel>();
         private AreaSelectionSummary _selection = AreaSelectionSummary.From(Array.Empty<AreaRecord>());
+        private UsageValueDisplay _newUsageDisplay = UsageValueDisplay.From(new UsageValue(UsageValueKind.None, null));
+        private UsageValueDisplay _oldUsageDisplay = UsageValueDisplay.From(new UsageValue(UsageValueKind.None, null));
         private UsageTotals _sheetTotals = UsageTotals.Sum(Array.Empty<AreaRecord>());
         private string? _statusText;
         private bool _isAssigning;
@@ -79,6 +81,9 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         public RishuiZaminConfig Config { get; } = new RishuiZaminConfig();
         public ObservableCollection<AreaLevelGroupViewModel> Levels { get; } = new();
 
+        /// <summary>Every row in list order (level by level), for the grouped list.</summary>
+        public ObservableCollection<AreaRowViewModel> AllRows { get; } = new();
+
         public ICommand RefreshCommand { get; }
         public ICommand ExportCommand { get; }
         public ICommand BrowseOutputCommand { get; }
@@ -120,6 +125,20 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         {
             get => _selection;
             private set => SetProperty(ref _selection, value);
+        }
+
+        /// <summary>The New usage picker button's text and colour.</summary>
+        public UsageValueDisplay NewUsageDisplay
+        {
+            get => _newUsageDisplay;
+            private set => SetProperty(ref _newUsageDisplay, value);
+        }
+
+        /// <summary>The Old usage picker button's text and colour.</summary>
+        public UsageValueDisplay OldUsageDisplay
+        {
+            get => _oldUsageDisplay;
+            private set => SetProperty(ref _oldUsageDisplay, value);
         }
 
         /// <summary>The status line under the detail strip, after a usage was set.</summary>
@@ -303,6 +322,8 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         {
             SelectedRows = Levels.SelectMany(g => g.Rows).Where(r => r.IsSelected).ToList();
             Selection = AreaSelectionSummary.From(SelectedRows.Select(r => r.Record).ToList());
+            NewUsageDisplay = UsageValueDisplay.From(Selection.New);
+            OldUsageDisplay = UsageValueDisplay.From(Selection.Old);
             OnPropertyChanged(nameof(CanAssign));
         }
 
@@ -326,13 +347,15 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
                 {
                     var vm = new AreaLevelGroupViewModel(g.Key);
                     foreach (var (id, rec) in g.OrderBy(e => e.Rec.Number, StringComparer.OrdinalIgnoreCase))
-                        vm.Rows.Add(new AreaRowViewModel(id, rec) { IsSelected = keep.Contains(id) });
+                        vm.Rows.Add(new AreaRowViewModel(id, rec) { IsSelected = keep.Contains(id), Level = vm });
                     return vm;
                 })
                 .ToList();
 
             Levels.Clear();
             foreach (var g in groups) Levels.Add(g);
+            AllRows.Clear();
+            foreach (var row in groups.SelectMany(g => g.Rows)) AllRows.Add(row);
             OnPropertyChanged(nameof(FlaggedCount));
             OnPropertyChanged(nameof(TotalAreaCount));
             SheetTotals = UsageTotals.Sum(extracted.Select(e => e.Rec));
