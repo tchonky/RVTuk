@@ -16,7 +16,17 @@ KKarea host (Revit 2023). Toolkit-wide items live in [`../../BACKLOG.md`](../../
   the checks in Task 6 Step 3 of
   [plans/2026-11-22-area-usage-assign.md](plans/2026-11-22-area-usage-assign.md). Built and
   unit-tested 2026-11-22; not yet run in Revit. Also note there whether clearing a key leaves
-  `RZ_USAGE_TYPE` with its old value (spec §7).
+  `RZ_USAGE_TYPE` with its old value (spec §7). Add, from the branch review: a workshared
+  area borrowed by another user (the status line must not say done); two open copies of one
+  project, switching before the click (must refuse); typing, Enter and Esc in the picker with
+  a Hebrew keyboard; a collapsed floor stays collapsed and the list keeps its place after an
+  assignment.
+- [ ] Area Calc window, smaller points from the branch review (2026-11-22): the deleted-area
+  message gives the element id, not the area's number and name; a Shift-range can take in
+  rows of collapsed floors; clearing a code in a project with no key schedules still offers
+  to run setup; the picker's highlight can stop following ↑/↓ after a press-and-drag-off;
+  an area with an invalid New code (999) and a valid Old code groups under the Old code's
+  group, while the validator and the "without a usage code" count call it uncoded.
 - [ ] Setup Usage Keys still matches key rows by exact Key Name, so a row renamed by hand is
   added again; the window's assignment already finds rows by their code (spec §5.7).
 

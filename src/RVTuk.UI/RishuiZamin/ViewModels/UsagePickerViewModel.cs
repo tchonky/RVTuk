@@ -53,14 +53,20 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
 
         private readonly UsageKeySlot _slot;
         private readonly int? _currentCode;
+        private readonly bool _isMixed;
         private readonly IReadOnlyList<int> _suggestions;
         private string _query = "";
         private int _highlightedIndex;
 
-        public UsagePickerViewModel(UsageKeySlot slot, IReadOnlyList<string?> selectedNames, int? currentCode)
+        /// <param name="currentCode">The selected areas' shared code, or null.</param>
+        /// <param name="isMixed">The selected areas differ: nothing is marked current, not even
+        /// "— none —".</param>
+        public UsagePickerViewModel(UsageKeySlot slot, IReadOnlyList<string?> selectedNames, int? currentCode,
+            bool isMixed = false)
         {
             _slot = slot;
-            _currentCode = currentCode;
+            _currentCode = isMixed ? null : currentCode;
+            _isMixed = isMixed;
             _suggestions = UsageSuggester.Suggest(selectedNames, slot);
             Rebuild();
         }
@@ -125,7 +131,7 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
             var empty = string.IsNullOrWhiteSpace(_query);
             if (empty)
             {
-                Items.Add(new PickerItem(PickerItemKind.Clear, "— none — (clear)", null, UsageGroup.NoCode, _currentCode == null));
+                Items.Add(new PickerItem(PickerItemKind.Clear, "— none — (clear)", null, UsageGroup.NoCode, _currentCode == null && !_isMixed));
                 if (_suggestions.Count > 0)
                 {
                     Items.Add(new PickerItem(PickerItemKind.Heading, "Suggested from the name", null, UsageGroup.NoCode, false));

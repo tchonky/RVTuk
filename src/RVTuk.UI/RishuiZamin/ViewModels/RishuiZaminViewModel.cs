@@ -339,6 +339,7 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         public void Populate(IReadOnlyList<(long Id, AreaRecord Rec)> extracted)
         {
             var keep = new HashSet<long>(SelectedRows.Select(r => r.ElementId));
+            var collapsed = new HashSet<string>(Levels.Where(l => !l.IsExpanded).Select(l => l.LevelName));
 
             var groups = extracted
                 .GroupBy(e => e.Rec.Floor ?? string.Empty)
@@ -346,6 +347,7 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
                 .Select(g =>
                 {
                     var vm = new AreaLevelGroupViewModel(g.Key);
+                    vm.IsExpanded = !collapsed.Contains(vm.LevelName);
                     foreach (var (id, rec) in g.OrderBy(e => e.Rec.Number, StringComparer.OrdinalIgnoreCase))
                         vm.Rows.Add(new AreaRowViewModel(id, rec) { IsSelected = keep.Contains(id), Level = vm });
                     return vm;
@@ -410,6 +412,7 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         {
             if (!CanAssign) return;
             var ids = SelectedRows.Select(r => r.ElementId).ToList();
+            StatusText = null;   // never leave an earlier "done" line next to this attempt's outcome
             SetBusy(ref _isAssigning, true);
             RunAssign(slot, code, ids, runSetupFirst: false);
         }

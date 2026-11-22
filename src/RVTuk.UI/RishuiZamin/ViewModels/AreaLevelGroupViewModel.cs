@@ -22,6 +22,9 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
 
         public string Header => $"{LevelName}  ({Rows.Count})";
 
+        /// <summary>Whether the floor is open in the list; kept by level name across refreshes.</summary>
+        public bool IsExpanded { get; set; } = true;
+
         /// <summary>m² per usage group on this level.</summary>
         public UsageTotals Totals => UsageTotals.Sum(Rows.Select(r => r.Record));
 

@@ -106,6 +106,13 @@ public class UsagePickerViewModelTests
     }
 
     [Fact]
+    public void MixedSelection_MarksNothing_NotEvenNone()
+    {
+        var items = new UsagePickerViewModel(UsageKeySlot.New, new string?[0], null, isMixed: true).Items;
+        Assert.DoesNotContain(items, i => i.IsCurrent);
+    }
+
+    [Fact]
     public void CurrentCode_IsMarked()
     {
         var current = Picker(current: 105).Items.Where(i => i.IsCurrent).ToList();

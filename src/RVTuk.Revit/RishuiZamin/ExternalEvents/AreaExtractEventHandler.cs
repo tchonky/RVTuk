@@ -18,6 +18,10 @@ namespace RVTuk.Revit.RishuiZamin.ExternalEvents
 
         public ExtractDiagnostics Diagnostics { get; private set; }
 
+        /// <summary>The document the last extraction read; setting a usage checks that it is
+        /// still the active one.</summary>
+        public Autodesk.Revit.DB.Document? Document { get; private set; }
+
         /// <summary>Set when <see cref="Execute"/> threw; the caller rethrows this after
         /// <see cref="WaitForCompletion"/> instead of silently reporting zero areas.</summary>
         public Exception? Error { get; private set; }
@@ -35,6 +39,7 @@ namespace RVTuk.Revit.RishuiZamin.ExternalEvents
             try
             {
                 var uidoc = app.ActiveUIDocument;
+                Document = uidoc?.Document;
                 if (uidoc == null)
                 {
                     Result = Array.Empty<ExtractedArea>();

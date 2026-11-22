@@ -20,12 +20,17 @@ namespace RVTuk.Revit.RishuiZamin.ExternalEvents
         private int? _code;
         private IReadOnlyList<long> _areaIds = Array.Empty<long>();
         private bool _runSetupFirst;
+        private Autodesk.Revit.DB.Document? _readFrom;
 
         public UsageAssignResult Result { get; private set; } =
             new UsageAssignResult(UsageAssignStatus.Failed, "Not run.");
 
-        public void Prepare(UsageKeySlot slot, int? code, IReadOnlyList<long> areaIds, bool runSetupFirst)
+        /// <param name="readFrom">The document the areas were read from
+        /// (<see cref="AreaExtractEventHandler.Document"/>).</param>
+        public void Prepare(UsageKeySlot slot, int? code, IReadOnlyList<long> areaIds, bool runSetupFirst,
+            Autodesk.Revit.DB.Document? readFrom)
         {
+            _readFrom = readFrom;
             _slot = slot;
             _code = code;
             _areaIds = areaIds;
@@ -43,7 +48,7 @@ namespace RVTuk.Revit.RishuiZamin.ExternalEvents
                 var doc = app.ActiveUIDocument?.Document;
                 Result = doc == null
                     ? new UsageAssignResult(UsageAssignStatus.Failed, "No active document.")
-                    : UsageKeyAssigner.Assign(doc, _slot, _code, _areaIds, _runSetupFirst);
+                    : UsageKeyAssigner.Assign(doc, _slot, _code, _areaIds, _runSetupFirst, _readFrom);
             }
             catch (Exception ex)
             {

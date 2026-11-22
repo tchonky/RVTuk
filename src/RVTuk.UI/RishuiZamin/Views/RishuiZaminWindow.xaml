@@ -275,7 +275,7 @@
                                                 <ControlTemplate TargetType="GroupItem">
                                                     <StackPanel Margin="0,2,0,0">
                                                             <DockPanel Background="{StaticResource Brush.GroupHeader}">
-                                                                <ToggleButton x:Name="Toggle" DockPanel.Dock="Left" IsChecked="True" Focusable="False"
+                                                                <ToggleButton x:Name="Toggle" DockPanel.Dock="Left" IsChecked="{Binding Name.IsExpanded, Mode=TwoWay}" Focusable="False"
                                                                               Width="20" Foreground="{StaticResource Brush.TextMuted}" Cursor="Hand">
                                                                     <ToggleButton.Template>
                                                                         <ControlTemplate TargetType="ToggleButton">

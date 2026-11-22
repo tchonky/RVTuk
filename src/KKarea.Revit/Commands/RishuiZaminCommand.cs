@@ -84,7 +84,8 @@ namespace KKarea.Revit.Commands
             Func<UsageKeySlot, int?, IReadOnlyList<long>, bool, UsageAssignResult> assignUsage =
                 (slot, code, ids, runSetupFirst) =>
                 {
-                    Application.SetUsageKeyHandler.Prepare(slot, code, ids, runSetupFirst);
+                    Application.SetUsageKeyHandler.Prepare(slot, code, ids, runSetupFirst,
+                        Application.AreaExtractHandler.Document);
                     Application.SetUsageKeyEvent.Raise();
                     Application.SetUsageKeyHandler.WaitForCompletion();
                     return Application.SetUsageKeyHandler.Result;

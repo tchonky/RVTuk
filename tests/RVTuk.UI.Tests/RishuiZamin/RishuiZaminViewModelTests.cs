@@ -194,6 +194,34 @@ public class RishuiZaminViewModelTests
     });
 
     [Fact]
+    public void Assign_Failed_ClearsAnEarlierSuccessLine() => Sta.Run(() =>
+    {
+        var s = new Stubs();
+        var vm = s.Vm();
+        vm.Populate(Five);
+        Select(vm, 1);
+        vm.Assign(UsageKeySlot.New, 110);
+        PumpUntil(() => s.ExtractCalls == 1 && !vm.IsBusy);
+        Assert.NotNull(vm.StatusText);
+
+        s.AssignResult = _ => new UsageAssignResult(UsageAssignStatus.Failed, "rolled back");
+        vm.Assign(UsageKeySlot.New, 1);
+        PumpUntil(() => s.ExtractCalls == 2 && !vm.IsBusy);
+        Assert.Null(vm.StatusText);
+    });
+
+    [Fact]
+    public void Populate_KeepsCollapsedFloorsCollapsed() => Sta.Run(() =>
+    {
+        var vm = new Stubs().Vm();
+        vm.Populate(Five);
+        vm.Levels.Single(l => l.LevelName == "קומה 1 First").IsExpanded = false;
+        vm.Populate(Five);
+        Assert.False(vm.Levels.Single(l => l.LevelName == "קומה 1 First").IsExpanded);
+        Assert.True(vm.Levels.Single(l => l.LevelName == "קומת קרקע Ground").IsExpanded);
+    });
+
+    [Fact]
     public void Assign_Failed_ShowsMessageAndRefreshes() => Sta.Run(() =>
     {
         var s = new Stubs { AssignResult = _ => new UsageAssignResult(UsageAssignStatus.Failed, "Area 2 no longer exists") };

@@ -13,9 +13,13 @@ namespace RVTuk.Core.RishuiZamin
         public static IEnumerable<UsageEntry> Offered(UsageKeySlot slot) =>
             UsageCatalog.All.Where(e => slot == UsageKeySlot.New || e.Kind != UsageKind.Process);
 
+        /// <summary>Hebrew gershayim (U+05F4) and geresh (U+05F3) typed as their ASCII
+        /// look-alikes, so ממ״ד finds the catalog's ממ"ד.</summary>
+        private static string Normalize(string s) => s.Replace('״', '"').Replace('׳', '\'');
+
         public static IReadOnlyList<UsageEntry> Filter(string? query, UsageKeySlot slot)
         {
-            var q = (query ?? "").Trim();
+            var q = Normalize((query ?? "").Trim());
             var offered = Offered(slot);
             if (q.Length == 0)
             {
@@ -30,7 +34,7 @@ namespace RVTuk.Core.RishuiZamin
             }
 
             return offered
-                .Where(e => e.HebrewName.IndexOf(q, StringComparison.Ordinal) >= 0
+                .Where(e => Normalize(e.HebrewName).IndexOf(q, StringComparison.Ordinal) >= 0
                          || e.Kind.ToString().StartsWith(q, StringComparison.OrdinalIgnoreCase))
                 .ToList();
         }

@@ -37,6 +37,13 @@ public class UsageSearchTests
     }
 
     [Fact]
+    public void Text_TreatsGershayimAndQuoteAlike()
+    {
+        Assert.Contains(UsageSearch.Filter("ממ״ד", UsageKeySlot.New), e => e.Code == 117);
+        Assert.Contains(UsageSearch.Filter("ממ\"ד", UsageKeySlot.New), e => e.Code == 117);
+    }
+
+    [Fact]
     public void GroupName_MatchesByPrefix_CaseInsensitive()
     {
         var serv = UsageSearch.Filter("serv", UsageKeySlot.New);

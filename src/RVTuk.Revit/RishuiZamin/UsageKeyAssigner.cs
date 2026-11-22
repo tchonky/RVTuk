@@ -18,8 +18,11 @@ namespace RVTuk.Revit.RishuiZamin
     /// </summary>
     public static class UsageKeyAssigner
     {
+        /// <param name="readFrom">The document the window's areas were read from (the last
+        /// Refresh). The ids mean nothing in another project — even a copy of the same one — so a
+        /// different active document fails instead of writing there.</param>
         public static UsageAssignResult Assign(Document doc, UsageKeySlot slot, int? code,
-            IReadOnlyList<long> areaIds, bool runSetupFirst)
+            IReadOnlyList<long> areaIds, bool runSetupFirst, Document? readFrom)
         {
             var scheduleName = slot == UsageKeySlot.New
                 ? UsageKeyScheduleBuilder.NewUsageScheduleName
@@ -32,6 +35,8 @@ namespace RVTuk.Revit.RishuiZamin
                 : new[] { "Usage Type Prev", "Usage Type Prev. Name" };
             var txName = slot == UsageKeySlot.New ? "Area Calc — set New usage" : "Area Calc — set Old usage";
 
+            if (readFrom == null || !doc.Equals(readFrom))
+                return Failed("The active project is not the one the window last read. Click Refresh, then set the usage again.");
             if (doc.IsReadOnly)
                 return Failed("The project is read-only.");
             if (code != null)
@@ -84,7 +89,9 @@ namespace RVTuk.Revit.RishuiZamin
                         var keyParam = area.LookupParameter(keyParamName!)
                             ?? throw new InvalidOperationException(
                                 $"Areas have no \"{keyParamName}\" parameter. Run Setup Usage Keys.");
-                        keyParam.Set(rowId!);
+                        if (!keyParam.Set(rowId!))
+                            throw new InvalidOperationException(
+                                $"Revit refused to set \"{keyParamName}\" on area {area.Number} {area.Name}.");
                     }
 
                     if (code == null)
@@ -103,7 +110,14 @@ namespace RVTuk.Revit.RishuiZamin
                         foreach (var name in legacyParams)
                             Blank(area.LookupParameter(name));
 
-                    tx.Commit();
+                    // A commit Revit rejects (e.g. an area borrowed by another user in a
+                    // workshared model) comes back RolledBack, not as an exception.
+                    var status = tx.Commit();
+                    if (status != TransactionStatus.Committed)
+                    {
+                        group.RollBack();
+                        return Failed($"Revit did not accept the change ({status}); nothing was changed.");
+                    }
                 }
 
                 group.Assimilate();
@@ -159,8 +173,8 @@ namespace RVTuk.Revit.RishuiZamin
                    (name.Length == codeText.Length || !char.IsDigit(name[codeText.Length]));
         }
 
-        /// <summary>Empties an old office-template parameter. Text → "", numbers → 0, which the
-        /// extractor reads as unset.</summary>
+        /// <summary>Empties an old office-template parameter. Text → "", numbers → 0, a key →
+        /// none, which the extractor all reads as unset.</summary>
         private static void Blank(Parameter? p)
         {
             if (p == null || p.IsReadOnly) return;
@@ -174,6 +188,10 @@ namespace RVTuk.Revit.RishuiZamin
                     break;
                 case StorageType.Double:
                     if (p.AsDouble() != 0) p.Set(0.0);
+                    break;
+                case StorageType.ElementId:
+                    // An old template may have made "Usage Type" a key parameter of its own.
+                    if (p.AsElementId() != ElementId.InvalidElementId) p.Set(ElementId.InvalidElementId);
                     break;
             }
         }
