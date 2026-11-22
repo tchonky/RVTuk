@@ -22,34 +22,44 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
     public class RishuiZaminViewModel : ViewModelBase
     {
         private readonly Func<IReadOnlyList<(long Id, AreaRecord Rec)>> _extract;
-        private readonly Action<long> _selectInModel;
+        private readonly Action<IReadOnlyList<long>> _selectInModel;
         private readonly Func<IReadOnlyList<AreaRecord>, RishuiZaminConfig, (bool ok, string msg)> _export;
         private readonly Func<(bool ok, string msg)>? _setupUsageKeys;
+        private readonly Func<UsageKeySlot, int?, IReadOnlyList<long>, bool, UsageAssignResult>? _assignUsage;
         private readonly Dispatcher _dispatcher;
 
         private SubmissionPane _currentPane = SubmissionPane.Areas;
-        private AreaRowViewModel? _selectedRow;
+        private IReadOnlyList<AreaRowViewModel> _selectedRows = Array.Empty<AreaRowViewModel>();
+        private AreaSelectionSummary _selection = AreaSelectionSummary.From(Array.Empty<AreaRecord>());
+        private UsageTotals _sheetTotals = UsageTotals.Sum(Array.Empty<AreaRecord>());
+        private string? _statusText;
+        private bool _isAssigning;
         private string _buildingNoText = "";
         private string _fileBaseNameText = "";
         private bool _scaleMismatch;
         private bool _isRefreshing;
 
         /// <param name="extract">Reads the areas on the open sheet (id + record).</param>
-        /// <param name="selectInModel">Selects an Area in the model by element id.</param>
+        /// <param name="selectInModel">Selects Areas in the model by element id.</param>
         /// <param name="export">Validates + writes the DXF/DAT for the given records; returns (ok, message).</param>
         /// <param name="setupUsageKeys">Binds the robot's area text parameters and creates/tops-up
         /// the usage key schedules in the project; returns (ok, message). Blocking — run off the
         /// UI thread.</param>
+        /// <param name="assignUsage">Sets the New/Old usage key (code, or null for none) on the
+        /// areas, running Setup Usage Keys first when the last argument is true; one undo step.
+        /// Blocking — run off the UI thread.</param>
         public RishuiZaminViewModel(
             Func<IReadOnlyList<(long Id, AreaRecord Rec)>> extract,
-            Action<long> selectInModel,
+            Action<IReadOnlyList<long>> selectInModel,
             Func<IReadOnlyList<AreaRecord>, RishuiZaminConfig, (bool ok, string msg)> export,
-            Func<(bool ok, string msg)>? setupUsageKeys = null)
+            Func<(bool ok, string msg)>? setupUsageKeys = null,
+            Func<UsageKeySlot, int?, IReadOnlyList<long>, bool, UsageAssignResult>? assignUsage = null)
         {
             _extract = extract;
             _selectInModel = selectInModel;
             _export = export;
             _setupUsageKeys = setupUsageKeys;
+            _assignUsage = assignUsage;
             _dispatcher = Dispatcher.CurrentDispatcher;
 
             RefreshCommand    = new RelayCommand(Refresh);
@@ -76,6 +86,53 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
 
         /// <summary>Raised after an export attempt so the window can show a result dialog.</summary>
         public event Action<bool, string>? ExportCompleted;
+
+        /// <summary>Raised when setting a usage changed nothing, with the reason.</summary>
+        public event Action<string>? AssignFailed;
+
+        /// <summary>Asks the user whether to run Setup Usage Keys first (message from the
+        /// result); set by the window. Null means no.</summary>
+        public Func<string, bool>? ConfirmRunSetup { get; set; }
+
+        /// <summary>m² per usage group for every area on the sheet.</summary>
+        public UsageTotals SheetTotals
+        {
+            get => _sheetTotals;
+            private set
+            {
+                SetProperty(ref _sheetTotals, value);
+                OnPropertyChanged(nameof(HasUncoded));
+            }
+        }
+
+        /// <summary>True while some area has no usage group — shows the red "No code" box.</summary>
+        public bool HasUncoded => _sheetTotals.NoCodeCount > 0;
+
+        /// <summary>The selected areas, in list order.</summary>
+        public IReadOnlyList<AreaRowViewModel> SelectedRows
+        {
+            get => _selectedRows;
+            private set => SetProperty(ref _selectedRows, value);
+        }
+
+        /// <summary>What the detail strip says about <see cref="SelectedRows"/>.</summary>
+        public AreaSelectionSummary Selection
+        {
+            get => _selection;
+            private set => SetProperty(ref _selection, value);
+        }
+
+        /// <summary>The status line under the detail strip, after a usage was set.</summary>
+        public string? StatusText
+        {
+            get => _statusText;
+            private set => SetProperty(ref _statusText, value);
+        }
+
+        /// <summary>True while a refresh or a usage assignment runs.</summary>
+        public bool IsBusy => _isRefreshing || _isAssigning;
+
+        public bool CanAssign => _assignUsage != null && SelectedRows.Count > 0 && !IsBusy;
 
         public SubmissionPane CurrentPane
         {
@@ -233,17 +290,60 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
             ConfigManager.SaveConfig(appConfig);
         }
 
-        public AreaRowViewModel? SelectedRow
+        /// <summary>Call after the list's selection changed (the rows' <see cref="AreaRowViewModel.IsSelected"/>):
+        /// updates the detail strip and selects the same areas in the model.</summary>
+        public void OnSelectionChanged()
         {
-            get => _selectedRow;
-            set
-            {
-                SetProperty(ref _selectedRow, value);
-                if (value != null)
+            UpdateSelection();
+            try { _selectInModel(SelectedRows.Select(r => r.ElementId).ToList()); }
+            catch { /* selection is best-effort; never crash the window */ }
+        }
+
+        private void UpdateSelection()
+        {
+            SelectedRows = Levels.SelectMany(g => g.Rows).Where(r => r.IsSelected).ToList();
+            Selection = AreaSelectionSummary.From(SelectedRows.Select(r => r.Record).ToList());
+            OnPropertyChanged(nameof(CanAssign));
+        }
+
+        private void SetBusy(ref bool flag, bool value)
+        {
+            flag = value;
+            OnPropertyChanged(nameof(IsBusy));
+            OnPropertyChanged(nameof(CanAssign));
+        }
+
+        /// <summary>Fills the list from extracted areas (on the UI thread), keeping the rows that
+        /// were selected — by element id — selected.</summary>
+        public void Populate(IReadOnlyList<(long Id, AreaRecord Rec)> extracted)
+        {
+            var keep = new HashSet<long>(SelectedRows.Select(r => r.ElementId));
+
+            var groups = extracted
+                .GroupBy(e => e.Rec.Floor ?? string.Empty)
+                .OrderBy(g => g.First().Rec.LevelElevation)
+                .Select(g =>
                 {
-                    try { _selectInModel(value.ElementId); }
-                    catch { /* selection is best-effort; never crash the window */ }
-                }
+                    var vm = new AreaLevelGroupViewModel(g.Key);
+                    foreach (var (id, rec) in g.OrderBy(e => e.Rec.Number, StringComparer.OrdinalIgnoreCase))
+                        vm.Rows.Add(new AreaRowViewModel(id, rec) { IsSelected = keep.Contains(id) });
+                    return vm;
+                })
+                .ToList();
+
+            Levels.Clear();
+            foreach (var g in groups) Levels.Add(g);
+            OnPropertyChanged(nameof(FlaggedCount));
+            OnPropertyChanged(nameof(TotalAreaCount));
+            SheetTotals = UsageTotals.Sum(extracted.Select(e => e.Rec));
+            UpdateSelection();
+
+            var scales = extracted.Select(e => e.Rec.Scale).Where(s => s > 0).Distinct().ToList();
+            if (scales.Count > 0)
+            {
+                Config.Scale = scales[0];
+                ScaleMismatch = scales.Count > 1;
+                OnPropertyChanged(nameof(DetectedScale));
             }
         }
 
@@ -254,7 +354,7 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         private void Refresh()
         {
             if (_isRefreshing) return;   // a second click while one runs would just double-populate
-            _isRefreshing = true;
+            SetBusy(ref _isRefreshing, true);
             System.Threading.ThreadPool.QueueUserWorkItem(_ =>
             {
                 IReadOnlyList<(long Id, AreaRecord Rec)> extracted;
@@ -263,46 +363,77 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
                 {
                     _dispatcher.Invoke(() =>
                     {
-                        _isRefreshing = false;
+                        SetBusy(ref _isRefreshing, false);
                         ExportCompleted?.Invoke(false, "Could not read the open sheet: " + ex.Message);
                     });
                     return;
                 }
 
-                var groups = extracted
-                    .GroupBy(e => e.Rec.Floor ?? string.Empty)
-                    .OrderBy(g => g.First().Rec.LevelElevation)
-                    .Select(g =>
-                    {
-                        var vm = new AreaLevelGroupViewModel(g.Key);
-                        foreach (var (id, rec) in g.OrderBy(e => e.Rec.Number, StringComparer.OrdinalIgnoreCase))
-                            vm.Rows.Add(new AreaRowViewModel(id, rec));
-                        return vm;
-                    })
-                    .ToList();
-
-                var scales = extracted.Select(e => e.Rec.Scale).Where(s => s > 0).Distinct().ToList();
-
                 _dispatcher.Invoke(() =>
                 {
-                    _isRefreshing = false;
-                    Levels.Clear();
-                    foreach (var g in groups) Levels.Add(g);
-                    OnPropertyChanged(nameof(FlaggedCount));
-                    OnPropertyChanged(nameof(TotalAreaCount));
-
-                    if (scales.Count > 0)
-                    {
-                        Config.Scale = scales[0];
-                        ScaleMismatch = scales.Count > 1;
-                        OnPropertyChanged(nameof(DetectedScale));
-                    }
-
+                    Populate(extracted);
+                    SetBusy(ref _isRefreshing, false);
                     CurrentPane = SubmissionPane.Areas;
                     if (extracted.Count == 0)
                         ExportCompleted?.Invoke(false, "No areas found on the open sheet's area plan(s).");
                 });
             });
+        }
+
+        /// <summary>Sets the New or Old usage (a code, or null for none) on the selected areas,
+        /// then refreshes the sheet. When the key schedules are missing, asks
+        /// <see cref="ConfirmRunSetup"/> whether to set them up first.</summary>
+        public void Assign(UsageKeySlot slot, int? code)
+        {
+            if (!CanAssign) return;
+            var ids = SelectedRows.Select(r => r.ElementId).ToList();
+            SetBusy(ref _isAssigning, true);
+            RunAssign(slot, code, ids, runSetupFirst: false);
+        }
+
+        private void RunAssign(UsageKeySlot slot, int? code, IReadOnlyList<long> ids, bool runSetupFirst)
+        {
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                UsageAssignResult result;
+                try { result = _assignUsage!(slot, code, ids, runSetupFirst); }
+                catch (Exception ex) { result = new UsageAssignResult(UsageAssignStatus.Failed, "Setting the usage failed: " + ex.Message); }
+
+                _dispatcher.Invoke(() => HandleAssignResult(result, slot, code, ids, runSetupFirst));
+            });
+        }
+
+        private void HandleAssignResult(UsageAssignResult result, UsageKeySlot slot, int? code,
+            IReadOnlyList<long> ids, bool ranSetup)
+        {
+            if (result.Status == UsageAssignStatus.KeysMissing && !ranSetup)
+            {
+                if (ConfirmRunSetup?.Invoke(result.Message) == true)
+                    RunAssign(slot, code, ids, runSetupFirst: true);
+                else
+                    SetBusy(ref _isAssigning, false);
+                return;
+            }
+
+            SetBusy(ref _isAssigning, false);
+            if (result.Status == UsageAssignStatus.Done)
+                StatusText = FormatAssignStatus(slot, code, ids.Count);
+            else
+                AssignFailed?.Invoke(result.Message);
+            Refresh();
+        }
+
+        /// <summary>The status line after a usage was set, e.g. "New usage 110 - מרפסת on 2
+        /// areas · one undo step in Revit".</summary>
+        public static string FormatAssignStatus(UsageKeySlot slot, int? code, int count)
+        {
+            var what = slot == UsageKeySlot.New ? "New usage" : "Old usage";
+            var value = code == null
+                ? " cleared"
+                : " " + code.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) + " - " +
+                  (UsageCatalog.ByCode(code.Value)?.HebrewName ?? "");
+            var areas = count == 1 ? "1 area" : count + " areas";
+            return $"{what}{value} on {areas} · one undo step in Revit";
         }
 
         private void Export()

@@ -22,8 +22,11 @@ namespace RVTuk.UI.RishuiZamin.Views
         private void AreaTree_SelectedItemChanged(object sender,
             RoutedPropertyChangedEventArgs<object> e)
         {
-            if (e.NewValue is AreaRowViewModel row)
-                _vm.SelectedRow = row;
+            if (e.NewValue is not AreaRowViewModel row) return;
+            foreach (var group in _vm.Levels)
+                foreach (var r in group.Rows)
+                    r.IsSelected = ReferenceEquals(r, row);
+            _vm.OnSelectionChanged();
         }
 
         private void OnExportCompleted(bool ok, string message)
