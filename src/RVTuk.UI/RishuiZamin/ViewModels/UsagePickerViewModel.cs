@@ -15,9 +15,24 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         Entry
     }
 
-    /// <summary>One line of the usage picker's list.</summary>
-    public sealed record PickerItem(PickerItemKind Kind, string Text, UsageEntry? Entry, UsageGroup Group, bool IsCurrent)
+    /// <summary>One line of the usage picker's list. A class, not a record: RVTuk.UI has no
+    /// IsExternalInit polyfill for net48.</summary>
+    public sealed class PickerItem
     {
+        public PickerItem(PickerItemKind kind, string text, UsageEntry? entry, UsageGroup group, bool isCurrent)
+        {
+            Kind = kind;
+            Text = text;
+            Entry = entry;
+            Group = group;
+            IsCurrent = isCurrent;
+        }
+
+        public PickerItemKind Kind { get; }
+        public string Text { get; }
+        public UsageEntry? Entry { get; }
+        public UsageGroup Group { get; }
+        public bool IsCurrent { get; }
         public bool IsPickable => Kind != PickerItemKind.Heading;
     }
 
