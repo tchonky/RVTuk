@@ -1,11 +1,10 @@
 ﻿using System.Collections.ObjectModel;
 using System.Linq;
-
-using RVTuk.UI.Shared.ViewModels;
+using RVTuk.Core.RishuiZamin;
 
 namespace RVTuk.UI.RishuiZamin.ViewModels
 {
-    /// <summary>A collapsible group of areas on one level, shown in the submission tree.</summary>
+    /// <summary>The areas on one level, shown as a group in the Areas list.</summary>
     public class AreaLevelGroupViewModel
     {
         public string LevelName { get; }
@@ -20,5 +19,8 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         public bool HasError => Rows.Any(r => r.HasError);
 
         public string Header => $"{LevelName}  ({Rows.Count})";
+
+        /// <summary>m² per usage group on this level.</summary>
+        public UsageTotals Totals => UsageTotals.Sum(Rows.Select(r => r.Record));
     }
 }

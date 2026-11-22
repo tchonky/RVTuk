@@ -1,13 +1,16 @@
-﻿using RVTuk.Core.RishuiZamin;
+﻿using System.Globalization;
+using RVTuk.Core.RishuiZamin;
 
 using RVTuk.UI.Shared.ViewModels;
 
 namespace RVTuk.UI.RishuiZamin.ViewModels
 {
-    /// <summary>One Area row in the submission tree. Wraps the Core <see cref="AreaRecord"/>
+    /// <summary>One Area row in the Areas list. Wraps the Core <see cref="AreaRecord"/>
     /// plus the Revit element id used to select it in the model.</summary>
-    public class AreaRowViewModel
+    public class AreaRowViewModel : ViewModelBase
     {
+        private bool _isSelected;
+
         public long ElementId { get; }
         public AreaRecord Record { get; }
 
@@ -15,6 +18,13 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         {
             ElementId = elementId;
             Record = record;
+        }
+
+        /// <summary>Bound two-way to the list item's selection.</summary>
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set => SetProperty(ref _isSelected, value);
         }
 
         public string? Number => Record.Number;
@@ -25,19 +35,27 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
 
         /// <summary>Left-hand label: "«number» — «name»" (or "(no #)" when the area has no
         /// Number set).</summary>
-        public string NumberAndName
-        {
-            get
-            {
-                var head = string.IsNullOrWhiteSpace(Number) ? "(no #)" : Number!;
-                var name = string.IsNullOrWhiteSpace(Name) ? "" : " — " + Name;
-                return head + name;
-            }
-        }
+        public string NumberAndName => AreaSelectionSummary.NumberAndName(Number, Name);
 
-        /// <summary>Right-hand tag: the usage code, with a permit-history code
-        /// (USAGE_TYPE_OLD) shown as "301←1" so unexpected template data is visible, or
-        /// "⚠ no code" when neither is set.</summary>
+        /// <summary>The area in m², 2 decimals, culture-independent ("84.30").</summary>
+        public string AreaText => Record.AreaValue.ToString("F2", CultureInfo.InvariantCulture);
+
+        /// <summary>The New usage half of the code pill, or null.</summary>
+        public string? NewCodeText => UsageCode?.ToString(CultureInfo.InvariantCulture);
+
+        /// <summary>The Old usage half of the code pill ("←1"), or null.</summary>
+        public string? OldCodeText => UsageCodePrev == null
+            ? null
+            : "←" + UsageCodePrev.Value.ToString(CultureInfo.InvariantCulture);
+
+        public UsageGroup NewGroup => UsageGroups.OfCode(UsageCode);
+        public UsageGroup OldGroup => UsageGroups.OfCode(UsageCodePrev);
+
+        /// <summary>The group the row is counted under (New, else Old, else No code).</summary>
+        public UsageGroup Group => UsageGroups.Of(Record);
+
+        /// <summary>The usage code, with a permit-history code (USAGE_TYPE_OLD) shown as
+        /// "301←1", or "⚠ no code" when neither is set. Used for the tooltip.</summary>
         public string Tag => UsageCode.HasValue || UsageCodePrev.HasValue
             ? (UsageCode?.ToString() ?? "–") + (UsageCodePrev.HasValue ? "←" + UsageCodePrev : "")
             : "⚠ no code";
