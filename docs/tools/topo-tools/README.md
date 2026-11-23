@@ -15,8 +15,8 @@ pane.
    the RVTuk panel only.
 2. **Press Topo Tools.** A temporary **Topo Edit** panel appears on the Add-Ins tab, and the ribbon
    switches to that tab once. At the panel's left end **Cancel** (✗) sits above **Accept** (✓),
-   icons only (the tooltips name them). Then come **Draw Lines**, **Height Labels**, **Update** and
-   a **Spacing** box. During the session the same panel also shows on the Modify tab, whatever is
+   icons only (the tooltips name them). Then come **Draw Lines**, **Height Labels**, **Update**, a
+   **Spacing** box and a **Height** box. During the session the same panel also shows on the Modify tab, whatever is
    selected (see "Why the Modify tab needs AdWindows"). Pressing Topo Tools again during a session
    asks: "Topo Edit is open on Toposolid 123 in Site Plan." **Go to it** opens that view and
    selects that element. **Accept it** does what ✓ does, **Cancel it** what ✗ does; then, if one
@@ -221,6 +221,13 @@ two decimals. Press Enter to keep a value; Update and Accept also read the box, 
 without Enter is used and kept too (whether Revit hands over text not yet confirmed with Enter is
 unverified: checklist row 26). It is remembered between Revit sessions.
 
+**Height** shows the height of the selected topo lines (a line counts when it, or its label, is
+selected) when they all share one, and is empty otherwise. Type a height and press Enter: every
+selected line's label takes it, in one undo step ("Topo height"), and a line without a label gets
+one. Enter only changes labels, exactly like editing a label by hand; Update or Accept moves the
+points. A height that does not read changes nothing. The typed height is also where the next
+drawn line starts.
+
 ## Why it is shaped this way
 
 **The height is a text note, not a parameter — forced, not chosen.** The design called for a
@@ -383,7 +390,7 @@ Revit: its probe ran on a throwaway build (Revit 2024, 2026-11-18). The outline 
 
 **Names:** code `TopoTools`; ribbon buttons "Topo Tools" and "Floor ⇄ Topo" (RVTuk panel, internal
 names `TopoTools` and `FloorTopoConvert`); panel `Topo Edit` (`TopoCancel`, `TopoAccept`,
-`TopoDrawLines`, `TopoHeightLabels`, `TopoUpdate`, `TopoSpacing`; Autodesk.Windows source Id
+`TopoDrawLines`, `TopoHeightLabels`, `TopoUpdate`, `TopoSpacing`, `TopoHeight`; Autodesk.Windows source Id
 `CustomCtrl_%Add-Ins%Topo Edit`, command ids `CustomCtrl_%CustomCtrl_%Add-Ins%Topo Edit%` + the
 button's name); Modify-tab shortcut panel `RVTuk_ContextualTopoTools` (AdWindows, posting only the
 RVTuk panel's Topo Tools command); the Modify-tab copy of Topo Edit shares Topo Edit's source, so
@@ -519,6 +526,15 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 107 | **Every year.** Rows 86, 87, 24 and 97 | Each passes as written. They check that `ModifySubElement` takes an outline corner of a toposolid and of a floor, measured from the same unshaped top as an edge point. Report it if a corner does not move at all (the summary then counts it among the points that "could not be placed"), or if every corner lands off its expected height by one same amount | [ ] | [ ] | [ ] | [ ] |
 | 108 | A toposolid with a height offset other than 0, and a floor on a level above 0 with a height offset other than 0: on each, a line ending on an outline corner, at a known height; Update | The corner reads the line's height within 1 mm (point readout, Elevation Base = Survey Point), as the line's own points do (rows 19 and 73); the summary has no "could not be placed" | [ ] | [ ] | [ ] | [ ] |
 | 109 | In a session, type another height on a corner's line and Update, so the Update moves that corner; move it with Modify Sub Elements and Cancel with no Update between. Once with a corner only this session set, once with one an earlier session set | The corner stays where you put it both times, and Cancel's message does not count it. A later session's Update leaves it there and does not report it | [ ] | [ ] | [ ] | [ ] |
+| 110 | **Height box.** In a session select one topo line | The Height box shows its height | [ ] | [ ] | [ ] | [ ] |
+| 111 | Type another height in the box, press Enter; then Update | The line's label shows the new height (two decimals at least); Update moves its points there; one Undo ("Topo height") puts the label back | [ ] | [ ] | [ ] | [ ] |
+| 112 | Select three lines with different heights, type one height, Enter | The box was empty before typing; all three labels take the height in one undo step | [ ] | [ ] | [ ] | [ ] |
+| 113 | Select a line and its own label together | The box shows the height; Enter changes that one label, and no second label appears | [ ] | [ ] | [ ] | [ ] |
+| 114 | Delete a line's label, select the line, type a height, Enter; then ✗ | A new label appears at the line's middle; Cancel deletes it again | [ ] | [ ] | [ ] | [ ] |
+| 115 | Type "abc" and press Enter | Nothing changes; the box shows the selection's height again | [ ] | [ ] | [ ] | [ ] |
+| 116 | Draw a new line after typing a height in the box | The new line's label starts at that height | [ ] | [ ] | [ ] | [ ] |
+| 117 | With a non-topo element selected, and outside any session | The box is empty; Enter changes nothing | [ ] | [ ] | [ ] | [ ] |
+| 118 | During a session, look at the Modify-tab copy of Topo Edit | It has the Height box too, and typing there works the same | [ ] | [ ] | [ ] | [ ] |
 
 Items 19 and 20 are the two floor facts nothing has verified yet; if a floor wants an offset from
 its top, floors need their own Z conversion.
