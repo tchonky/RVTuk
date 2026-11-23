@@ -155,6 +155,15 @@ public class AreaTableTests
     }
 
     [Fact]
+    public void Format_PercentEmptyWhenGroupIsZero()
+    {
+        var t = AreaTable.Build(new[] { Area("מרתף Basement", -4.90, true, 105, 24.40), Area("קומת קרקע Ground", 0, false, 1, 5) });
+        var basement = t.Rows.Single(r => r.Label == "מרתף Basement");
+        var pct = t.Columns.ToList().IndexOf(C(UsageGroup.Primary, AreaTableColumnKind.Percent));
+        Assert.Equal("", t.Format(basement, 2370)[pct]);
+    }
+
+    [Fact]
     public void Format_EmptySummaryRow_IsDashes()
     {
         var t = AreaTable.Build(new[] { Area("קומת קרקע Ground", 0, false, 1, 5), Area("קומת קרקע Ground", 0, false, 105, 5) });

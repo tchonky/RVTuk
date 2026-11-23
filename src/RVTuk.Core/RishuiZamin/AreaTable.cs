@@ -125,8 +125,9 @@ namespace RVTuk.Core.RishuiZamin
             return new AreaTable(columns, rows);
         }
 
-        /// <summary>The row's cells, one per <see cref="Columns"/> entry: m² as "F2" (empty when
-        /// zero), % of <paramref name="plotAreaM2"/> as "F1" ("—" without a positive plot area).
+        /// <summary>The row's cells, one per <see cref="Columns"/> entry: m² as "F2" and % of
+        /// <paramref name="plotAreaM2"/> as "F1", both empty when the m² is zero; % is "—" without
+        /// a positive plot area.
         /// A summary row with no areas is all "—".</summary>
         public IReadOnlyList<string> Format(AreaTableRow row, double? plotAreaM2)
         {
@@ -145,9 +146,10 @@ namespace RVTuk.Core.RishuiZamin
                         cells[i] = M2(GroupM2(row.Totals, c.Group));
                         break;
                     default:
-                        cells[i] = plotAreaM2 is { } plot && plot > 0
-                            ? (GroupM2(row.Totals, c.Group) / plot * 100).ToString("F1", CultureInfo.InvariantCulture)
-                            : Dash;
+                        var groupM2 = GroupM2(row.Totals, c.Group);
+                        cells[i] = plotAreaM2 is not { } plot || plot <= 0 ? Dash
+                            : groupM2 == 0 ? ""
+                            : (groupM2 * 100 / plot).ToString("F1", CultureInfo.InvariantCulture);
                         break;
                 }
             }
