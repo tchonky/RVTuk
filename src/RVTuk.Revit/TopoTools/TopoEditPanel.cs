@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows.Media.Imaging;
 using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Events;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
 using RVTuk.Core.Shared.Config;
@@ -55,6 +56,10 @@ namespace RVTuk.Revit.TopoTools
         private static PushButton? _acceptButton;
         private static TextBox? _spacingBox;
         private static TextBox? _heightBox;
+
+        /// <summary>The last selection SelectionChanged reported, read again when the document
+        /// changes.</summary>
+        private static ICollection<ElementId> _lastSelection = new List<ElementId>();
         private static double _spacingCentimetres = 100;
 
         /// <summary>Set by the first <see cref="Show"/>: the icons-only look is tried once per
@@ -145,6 +150,7 @@ namespace RVTuk.Revit.TopoTools
             TopoSession.Ended += ClearHeightBox;
             TopoSession.Ended += Hide;
             app.SelectionChanged += OnSelectionForHeight;
+            app.ControlledApplication.DocumentChanged += OnDocumentChangedForHeight;
             app.ThemeChanged += OnThemeChanged;
         }
 
@@ -338,6 +344,7 @@ namespace RVTuk.Revit.TopoTools
         {
             try
             {
+                _lastSelection = new List<ElementId>();
                 if (_heightBox != null) _heightBox.Value = "";
             }
             catch (Exception ex)
@@ -353,7 +360,28 @@ namespace RVTuk.Revit.TopoTools
             {
                 if (_heightBox == null) return;
                 var doc = e.GetDocument();
-                _heightBox.Value = doc == null ? "" : ShownHeight(doc, e.GetSelectedElements());
+                _lastSelection = e.GetSelectedElements()?.ToList() ?? new List<ElementId>();
+                _heightBox.Value = doc == null ? "" : ShownHeight(doc, _lastSelection);
+            }
+            catch (Exception ex)
+            {
+                Application.LogDiagnostic($"Topo Edit height box failed: {ex}");
+            }
+        }
+
+        /// <summary>
+        /// The document changed (an Undo, a label edited by hand, a line deleted): during a session,
+        /// the Height box shows the last selection's height again, so it is never left stale.
+        /// </summary>
+        // ponytail: re-reads the view's labels on every change in the session's document; cache per session if it lags on big sites.
+        private static void OnDocumentChangedForHeight(object? sender, DocumentChangedEventArgs e)
+        {
+            try
+            {
+                if (_heightBox == null || TopoSession.Current == null) return;
+                var doc = e.GetDocument();
+                if (doc == null || !TopoSession.Current.IsFor(doc)) return;
+                _heightBox.Value = ShownHeight(doc, _lastSelection);
             }
             catch (Exception ex)
             {
@@ -366,8 +394,8 @@ namespace RVTuk.Revit.TopoTools
         private static string ShownHeight(Document doc, ICollection<ElementId> selected)
         {
             if (!TrySessionView(doc, out var view)) return "";
-            var notes = HeightTexts.ReadNotes(doc, view);
-            var lineIds = SelectedLineIds(doc, view, selected, notes);
+            var notes = HeightTexts.ReadNotes(doc, view, out var topoLines);
+            var lineIds = SelectedLineIds(selected, notes, topoLines);
             if (lineIds.Count == 0) return "";
             return HeightBoxText.For(lineIds.Select(id => notes.TryGetValue(id, out var note) ? note.Text : null));
         }
@@ -383,19 +411,17 @@ namespace RVTuk.Revit.TopoTools
         }
 
         /// <summary>
-        /// The topo lines of <paramref name="view"/> that are selected, each once: a line selected
+        /// The topo lines (<paramref name="topoLines"/>) that are selected, each once: a line selected
         /// itself, or through its height text. A text goes to the line <paramref name="notes"/> (the
         /// linker's plan) gives it, not to its stored link: a copied text still names the original
         /// line until Height Labels or Update relinks it.
         /// </summary>
-        // ponytail: collects the view's topo lines on every selection change; cache per session if it lags on big sites.
-        private static List<long> SelectedLineIds(Document doc, View view, ICollection<ElementId>? selected,
-            IReadOnlyDictionary<long, TextNote> notes)
+        private static List<long> SelectedLineIds(ICollection<ElementId>? selected,
+            IReadOnlyDictionary<long, TextNote> notes, ISet<long> topoLines)
         {
             var result = new List<long>();
             if (selected == null || selected.Count == 0) return result;
 
-            var topoLines = new HashSet<long>(TopoLineCollector.Collect(doc, view).Select(line => line.LineId));
             var lineByText = notes.ToDictionary(pair => pair.Value.Id.Value, pair => pair.Key);
             foreach (var id in selected)
             {
@@ -433,8 +459,8 @@ namespace RVTuk.Revit.TopoTools
                     return;
                 }
 
-                var notes = HeightTexts.ReadNotes(doc, view);
-                var lineIds = SelectedLineIds(doc, view, selected, notes);
+                var notes = HeightTexts.ReadNotes(doc, view, out var topoLines);
+                var lineIds = SelectedLineIds(selected, notes, topoLines);
                 if (lineIds.Count == 0)
                 {
                     _heightBox.Value = "";
@@ -476,6 +502,7 @@ namespace RVTuk.Revit.TopoTools
             catch (Exception ex)
             {
                 Application.LogDiagnostic($"Topo Edit height failed: {ex}");
+                TaskDialog.Show("RVTuk – Topo Tools", $"The height could not be set: {ex.Message}");
             }
         }
 

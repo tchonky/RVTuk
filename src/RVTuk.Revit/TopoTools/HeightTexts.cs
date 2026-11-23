@@ -116,10 +116,16 @@ namespace RVTuk.Revit.TopoTools
         /// Each topo line's height text note, line id → note, settled as <see cref="ReadHeights"/>
         /// settles them. Lines without a text are absent. Reads only; needs no transaction.
         /// </summary>
-        public static IReadOnlyDictionary<long, TextNote> ReadNotes(Document doc, View view)
+        public static IReadOnlyDictionary<long, TextNote> ReadNotes(Document doc, View view) =>
+            ReadNotes(doc, view, out _);
+
+        /// <summary><see cref="ReadNotes(Document, View)"/>, also handing out the ids of every topo
+        /// line of the view, labelled or not, from the same collect.</summary>
+        public static IReadOnlyDictionary<long, TextNote> ReadNotes(Document doc, View view, out ISet<long> lineIds)
         {
             var spotByLine = TopoLineCollector.Collect(doc, view)
                 .ToDictionary(line => line.LineId, line => HeightLabelPlacement.Midpoint(line.Polyline));
+            lineIds = new HashSet<long>(spotByLine.Keys);
             var texts = CollectTexts(doc, view);
             var plan = Plan(texts, spotByLine);
 

@@ -53,8 +53,8 @@ faster way to type heights.
 
 - `TextBox.EnterPressed` runs in API context, so it can open the transaction directly — the
   same way Spacing reads its value.
-- Refresh on `UIApplication.SelectionChanged`, already hooked in `ModifyTabHost`; the box is
-  refreshed from there (or from its own handler) only while a session is open.
+- Refresh on `SelectionChanged` (the box has its own handler; `ModifyTabHost` keeps its own for
+  the Modify tab), and on `DocumentChanged` in the session's document, so Undo and hand edits show.
 - The Modify-tab copy of the panel shares the same ribbon items, Spacing included, so the
   Height box appears there too with no extra work — to be confirmed in Revit.
 

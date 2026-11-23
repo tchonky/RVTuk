@@ -225,8 +225,10 @@ unverified: checklist row 26). It is remembered between Revit sessions.
 selected) when they all share one, and is empty otherwise. Type a height and press Enter: every
 selected line's label takes it, in one undo step ("Topo height"), and a line without a label gets
 one. Enter only changes labels, exactly like editing a label by hand; Update or Accept moves the
-points. A height that does not read changes nothing. The typed height is also where the next
-drawn line starts.
+points. A height that does not read changes nothing, and so does Enter with no topo line
+selected. Once Enter has set at least one label, the next drawn line starts at that height. The box
+follows the document too: after an Undo, or a label edited by hand, it shows the selection's height
+again. If setting the height fails, a message says so.
 
 ## Why it is shaped this way
 
@@ -532,10 +534,11 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 113 | Select a line and its own label together | The box shows the height; Enter changes that one label, and no second label appears | [ ] | [ ] | [ ] | [ ] |
 | 114 | Delete a line's label, select the line, type a height, Enter; then ✗ | A new label appears at the line's middle; Cancel deletes it again | [ ] | [ ] | [ ] | [ ] |
 | 115 | Type "abc" and press Enter | Nothing changes; the box shows the selection's height again | [ ] | [ ] | [ ] | [ ] |
-| 116 | Draw a new line after typing a height in the box | The new line's label starts at that height | [ ] | [ ] | [ ] | [ ] |
+| 116 | Select a line, type a height in the box, Enter; then draw a new line | The new line's label starts at that height | [ ] | [ ] | [ ] | [ ] |
 | 117 | With a non-topo element selected, and outside any session | The box is empty; Enter changes nothing | [ ] | [ ] | [ ] | [ ] |
 | 118 | During a session, look at the Modify-tab copy of Topo Edit | It has the Height box too, and typing there works the same | [ ] | [ ] | [ ] | [ ] |
 | 119 | Copy a line together with its label; select only the copied label (no Height Labels or Update in between), type a height, Enter | Only the copy's label changes; the original line keeps its height. The box showed the copy's height, not the original's | [ ] | [ ] | [ ] | [ ] |
+| 120 | Select a line, type a height, Enter; then Ctrl+Z. Also: with the line selected, edit its label by hand | After the Undo the box shows the old height again; after the hand edit it shows the edited height | [ ] | [ ] | [ ] | [ ] |
 
 Items 19 and 20 are the two floor facts nothing has verified yet; if a floor wants an offset from
 its top, floors need their own Z conversion.
