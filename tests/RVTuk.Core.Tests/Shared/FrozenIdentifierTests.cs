@@ -43,10 +43,17 @@ public class FrozenIdentifierTests
         1|new Guid("cca5f35d-98c8-466c-9175-4d51afe00df1")
         1|SchemaName = "RVTukTopoToolsOutlineHeights"
         1|FieldName = "CornersByXy"
+        1|new Guid("e6d292f7-e823-45c0-a5a6-b95108884f31")
+        1|SchemaName = "RVTukRishuiZaminPlotLimits"
+        1|PlotField = "PlotAreaM2"
+        1|PrimaryField = "PrimaryPercent"
+        1|ServiceField = "ServicePercent"
+        1|TotalField = "TotalPercent"
+        1|AddSimpleField(name, typeof(double)).SetSpec(SpecTypeId.Number)
         5|AddSimpleField(FieldName, typeof(string))
-        7|builder.SetVendorId("KnafoKlimor");
-        7|builder.SetReadAccessLevel(AccessLevel.Public);
-        7|builder.SetWriteAccessLevel(AccessLevel.Public);
+        8|builder.SetVendorId("KnafoKlimor");
+        8|builder.SetReadAccessLevel(AccessLevel.Public);
+        8|builder.SetWriteAccessLevel(AccessLevel.Public);
         1|OurVendorId = "KnafoKlimor"
         1|new DockablePaneId(new Guid("e5d47b31-2c8a-4f16-b0d9-73a5e91c46f2"))
         1|new DockablePaneId(new Guid("88a9c4fa-9c6a-4b02-b169-701be8358090"))

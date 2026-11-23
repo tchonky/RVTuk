@@ -27,6 +27,15 @@ KKarea host (Revit 2023). Toolkit-wide items live in [`../../BACKLOG.md`](../../
   to run setup; the picker's highlight can stop following ↑/↓ after a press-and-drag-off;
   an area with an invalid New code (999) and a valid Old code groups under the Old code's
   group, while the validator and the "without a usage code" count call it uncoded.
+- [ ] Check the Table tab's plot area and limits in Revit 2024 and 2023 (KKarea); built and
+  unit-tested 2026-11-23, not yet run in Revit
+  ([plans/2026-11-23-area-table.md](plans/2026-11-23-area-table.md) Task 3):
+  1. type plot area and limits, close and reopen the project → the values come back;
+  2. each commit is one Ctrl+Z, named "Area Calc — plot area and limits";
+  3. workshared, Project Information borrowed by another user → the message names them and
+     the value stays, marked not saved;
+  4. two projects open: switch, Refresh → the other project's values (or empty boxes) show;
+  5. KKarea (2023): checks 1 and 2.
 - [ ] Setup Usage Keys still matches key rows by exact Key Name, so a row renamed by hand is
   added again; the window's assignment already finds rows by their code (spec §5.7).
 

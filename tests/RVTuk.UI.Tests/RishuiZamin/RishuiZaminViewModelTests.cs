@@ -30,6 +30,10 @@ public class RishuiZaminViewModelTests
         public readonly List<IReadOnlyList<long>> Selected = new();
         public readonly List<bool> AssignSetupFlags = new();
         public Func<bool, UsageAssignResult> AssignResult = _ => new UsageAssignResult(UsageAssignStatus.Done, "");
+        public string DocKey = "A.rvt";
+        public PlotLimits Stored = PlotLimits.Empty;
+        public (bool ok, string msg) SaveResult = (true, "");
+        public readonly List<PlotLimits> Saved = new();
 
         public RishuiZaminViewModel Vm(bool withAssign = true) => new RishuiZaminViewModel(
             () => { Interlocked.Increment(ref ExtractCalls); return Areas; },
@@ -38,7 +42,9 @@ public class RishuiZaminViewModelTests
             null,
             withAssign
                 ? (slot, code, ids, setup) => { lock (AssignSetupFlags) AssignSetupFlags.Add(setup); return AssignResult(setup); }
-                : null);
+                : null,
+            () => (DocKey, Stored),
+            limits => { lock (Saved) Saved.Add(limits); return SaveResult; });
     }
 
     private static void PumpUntil(Func<bool> done)
@@ -233,5 +239,157 @@ public class RishuiZaminViewModelTests
         vm.Assign(UsageKeySlot.Old, 1);
         PumpUntil(() => s.ExtractCalls == 1 && !vm.IsBusy);
         Assert.Equal("Area 2 no longer exists", failure);
+    });
+    // ── Table tab ────────────────────────────────────────────────────────
+
+    private static void RefreshAndWait(Stubs s, RishuiZaminViewModel vm)
+    {
+        var before = s.ExtractCalls;
+        vm.RefreshCommand.Execute(null);
+        PumpUntil(() => s.ExtractCalls == before + 1 && !vm.IsBusy);
+    }
+
+    private static void Commit(RishuiZaminViewModel vm)
+    {
+        vm.CommitPlotLimits();
+        PumpUntil(() => !vm.IsBusy);
+    }
+
+    [Fact]
+    public void Populate_BuildsTable() => Sta.Run(() =>
+    {
+        var vm = new Stubs().Vm();
+        vm.Populate(Five);
+        Assert.Equal(5, vm.Table.Rows.Count);
+        Assert.Equal(2, vm.Table.Rows.Count(r => r.Kind == AreaTableRowKind.Floor));
+    });
+
+    [Fact]
+    public void Refresh_LoadsStoredLimitsIntoBoxes() => Sta.Run(() =>
+    {
+        var s = new Stubs { Stored = new PlotLimits(2370, 35, 20, 55) };
+        var vm = s.Vm();
+        RefreshAndWait(s, vm);
+        Assert.Equal(new[] { "2370", "35", "20", "55" },
+            new[] { vm.PlotAreaBox.Text, vm.PrimaryLimitBox.Text, vm.ServiceLimitBox.Text, vm.TotalLimitBox.Text });
+        Assert.Equal(3, vm.LimitChips.Count);
+        Assert.Equal(2370, vm.PlotAreaM2);
+        Assert.Null(vm.PlotHint);
+    });
+
+    [Fact]
+    public void CommitLimits_Changed_SavesOnce_AndSaysSo() => Sta.Run(() =>
+    {
+        var s = new Stubs();
+        var vm = s.Vm();
+        RefreshAndWait(s, vm);
+        Assert.Equal(PlotLimitCheck.NoPlotHint, vm.PlotHint);
+        vm.PlotAreaBox.Text = "2370";
+        Commit(vm);
+        Assert.Single(s.Saved);
+        Assert.Equal(2370, s.Saved[0].PlotAreaM2);
+        Assert.Equal("Plot area and limits saved in the project · one undo step in Revit", vm.TableStatusText);
+        Assert.False(vm.LimitsUnsaved);
+    });
+
+    [Fact]
+    public void CommitLimits_Unchanged_DoesNotSave() => Sta.Run(() =>
+    {
+        var s = new Stubs { Stored = new PlotLimits(2370, 35, null, null) };
+        var vm = s.Vm();
+        RefreshAndWait(s, vm);
+        Commit(vm);
+        Assert.Empty(s.Saved);
+
+        vm.ServiceLimitBox.Text = "20";
+        Commit(vm);
+        Commit(vm);
+        Assert.Single(s.Saved);
+    });
+
+    [Fact]
+    public void CommitLimits_Invalid_MarksBox_DoesNotSave() => Sta.Run(() =>
+    {
+        var s = new Stubs();
+        var vm = s.Vm();
+        RefreshAndWait(s, vm);
+        vm.PrimaryLimitBox.Text = "35,5";
+        Assert.True(vm.PrimaryLimitBox.IsInvalid);
+        Commit(vm);
+        Assert.Empty(s.Saved);
+    });
+
+    [Fact]
+    public void CommitLimits_RecomputesChips() => Sta.Run(() =>
+    {
+        var s = new Stubs();
+        var vm = s.Vm();
+        RefreshAndWait(s, vm);
+        vm.PlotAreaBox.Text = "500";
+        vm.PrimaryLimitBox.Text = "35";
+        Commit(vm);
+        Assert.Equal(PlotLimitCheck.Chips(vm.Table, new PlotLimits(500, 35, null, null)), vm.LimitChips);
+    });
+
+    [Fact]
+    public void FailedSave_SurvivesRefreshOfSameDocument() => Sta.Run(() =>
+    {
+        var s = new Stubs { SaveResult = (false, "borrowed") };
+        var vm = s.Vm();
+        RefreshAndWait(s, vm);
+        vm.PlotAreaBox.Text = "2370";
+        Commit(vm);
+        Assert.True(vm.LimitsUnsaved);
+        Assert.Equal("Not saved to the project: borrowed", vm.TableStatusText);
+
+        s.Stored = new PlotLimits(1000, null, null, null);
+        RefreshAndWait(s, vm);
+        Assert.Equal("2370", vm.PlotAreaBox.Text);
+        Assert.True(vm.LimitsUnsaved);
+    });
+
+    [Fact]
+    public void Refresh_OtherDocument_ReplacesUnsavedValues() => Sta.Run(() =>
+    {
+        var s = new Stubs { SaveResult = (false, "borrowed") };
+        var vm = s.Vm();
+        RefreshAndWait(s, vm);
+        vm.PlotAreaBox.Text = "2370";
+        Commit(vm);
+
+        s.DocKey = "B.rvt";
+        s.Stored = new PlotLimits(800, 40, null, null);
+        RefreshAndWait(s, vm);
+        Assert.Equal("800", vm.PlotAreaBox.Text);
+        Assert.Equal("40", vm.PrimaryLimitBox.Text);
+        Assert.False(vm.LimitsUnsaved);
+    });
+
+    [Fact]
+    public void Refresh_SameDocument_Saved_TakesStoredValues() => Sta.Run(() =>
+    {
+        var s = new Stubs();
+        var vm = s.Vm();
+        RefreshAndWait(s, vm);
+        vm.PlotAreaBox.Text = "2370";
+        Commit(vm);
+
+        s.Stored = new PlotLimits(1999.5, null, null, null);   // as after an Undo in Revit
+        RefreshAndWait(s, vm);
+        Assert.Equal("1999.5", vm.PlotAreaBox.Text);
+    });
+
+    [Fact]
+    public void Refresh_FromTableTab_StaysOnTable() => Sta.Run(() =>
+    {
+        var s = new Stubs();
+        var vm = s.Vm();
+        vm.CurrentPane = SubmissionPane.Table;
+        RefreshAndWait(s, vm);
+        Assert.Equal(SubmissionPane.Table, vm.CurrentPane);
+
+        vm.CurrentPane = SubmissionPane.Config;
+        RefreshAndWait(s, vm);
+        Assert.Equal(SubmissionPane.Areas, vm.CurrentPane);
     });
 }
