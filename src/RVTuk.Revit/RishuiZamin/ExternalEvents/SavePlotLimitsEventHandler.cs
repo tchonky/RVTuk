@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
@@ -59,11 +60,20 @@ namespace RVTuk.Revit.RishuiZamin.ExternalEvents
                 return (false, "The project is read-only.");
 
             var info = doc.ProjectInformation;
-            if (doc.IsWorkshared &&
-                WorksharingUtils.GetCheckoutStatus(doc, info.Id) == CheckoutStatus.OwnedByOtherUser)
+            if (doc.IsWorkshared)
             {
-                var owner = WorksharingUtils.GetWorksharingTooltipInfo(doc, info.Id).Owner;
-                return (false, "Project Information is being edited by " + owner + ". Ask them to sync, then try again.");
+                // GetCheckoutStatus is only the local cache; ask the central model before editing,
+                // so a borrow made since the last sync is reported here, not as a Revit failure.
+                var updates = WorksharingUtils.GetModelUpdatesStatus(doc, info.Id);
+                if (updates == ModelUpdatesStatus.UpdatedInCentral || updates == ModelUpdatesStatus.DeletedInCentral)
+                    return (false, "Project Information was changed in the central model. Reload Latest, then try again.");
+
+                var checkedOut = WorksharingUtils.CheckoutElements(doc, new List<ElementId> { info.Id });
+                if (!checkedOut.Contains(info.Id))
+                {
+                    var owner = WorksharingUtils.GetWorksharingTooltipInfo(doc, info.Id).Owner;
+                    return (false, "Project Information is being edited by " + owner + ". Ask them to sync, then try again.");
+                }
             }
 
             using var t = new Transaction(doc, TransactionName);

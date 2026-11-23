@@ -449,7 +449,17 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
                 RecomputeLimits();
             }
 
-            if (_savePlotLimits == null || typed == _lastKnownLimits) return;
+            if (typed == _lastKnownLimits)
+            {
+                // Back to what the project holds: nothing is unsaved any more.
+                if (LimitsUnsaved && !_isSavingLimits)
+                {
+                    LimitsUnsaved = false;
+                    TableStatusText = null;
+                }
+                return;
+            }
+            if (_savePlotLimits == null) return;
             if (_isSavingLimits) { _commitAgain = true; return; }
 
             SetBusy(ref _isSavingLimits, true);

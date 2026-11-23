@@ -392,4 +392,32 @@ public class RishuiZaminViewModelTests
         RefreshAndWait(s, vm);
         Assert.Equal(SubmissionPane.Areas, vm.CurrentPane);
     });
+
+    [Fact]
+    public void Refresh_StoredValueWithManyDecimals_CommitDoesNotSave() => Sta.Run(() =>
+    {
+        var s = new Stubs { Stored = new PlotLimits(2370.456, 35.125, null, null) };
+        var vm = s.Vm();
+        RefreshAndWait(s, vm);
+        Assert.Equal("2370.456", vm.PlotAreaBox.Text);
+        Commit(vm);
+        Assert.Empty(s.Saved);
+    });
+
+    [Fact]
+    public void FailedSave_ThenTypingStoredValueBack_ClearsNotSaved() => Sta.Run(() =>
+    {
+        var s = new Stubs { Stored = new PlotLimits(2370, null, null, null), SaveResult = (false, "borrowed") };
+        var vm = s.Vm();
+        RefreshAndWait(s, vm);
+        vm.PlotAreaBox.Text = "2400";
+        Commit(vm);
+        Assert.True(vm.LimitsUnsaved);
+
+        vm.PlotAreaBox.Text = "2370";
+        Commit(vm);
+        Assert.False(vm.LimitsUnsaved);
+        Assert.Null(vm.TableStatusText);
+        Assert.Single(s.Saved);
+    });
 }

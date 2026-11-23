@@ -32,10 +32,22 @@ KKarea host (Revit 2023). Toolkit-wide items live in [`../../BACKLOG.md`](../../
   ([plans/2026-11-23-area-table.md](plans/2026-11-23-area-table.md) Task 3):
   1. type plot area and limits, close and reopen the project → the values come back;
   2. each commit is one Ctrl+Z, named "Area Calc — plot area and limits";
-  3. workshared, Project Information borrowed by another user → the message names them and
-     the value stays, marked not saved;
+  3. workshared, Project Information borrowed by another user (also after your last sync) →
+     the message names them and the value stays, marked not saved; changed in central but not
+     reloaded → "Reload Latest";
   4. two projects open: switch, Refresh → the other project's values (or empty boxes) show;
-  5. KKarea (2023): checks 1 and 2.
+  5. KKarea (2023): checks 1 and 2;
+  6. type a value and close the window with X while the box still has the caret → is it
+     saved? (Enter always saves.)
+- [ ] Table tab, smaller points from the branch review (2026-11-23):
+  - a Refresh replaces an invalid box (e.g. "35,5") with the stored value without saying so;
+  - after "Not saved…", the only retry is Enter in a box, and the line does not say so;
+  - no test for a commit arriving while a save is still running (`_commitAgain`);
+  - the save waits on `ExternalEvent.Raise()` with no timeout and ignores a Denied result (the
+    same pattern as the other Area Calc handlers);
+  - the "(no level)" row sorts among the floors by its first area's elevation, not last;
+  - saving borrows Project Information in a workshared model until the next sync; a
+    `DataStorage` element of our own would not.
 - [ ] Setup Usage Keys still matches key rows by exact Key Name, so a row renamed by hand is
   added again; the window's assignment already finds rows by their code (spec §5.7).
 

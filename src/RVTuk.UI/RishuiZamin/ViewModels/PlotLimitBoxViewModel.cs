@@ -37,7 +37,9 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
             private set => SetProperty(ref _value, value);
         }
 
+        // Round-trip format: a rounded box would differ from the stored value and save it again
+        // on the next commit, unasked.
         internal void Load(double? value) =>
-            Text = value?.ToString("0.##", CultureInfo.InvariantCulture) ?? "";
+            Text = value?.ToString("R", CultureInfo.InvariantCulture) ?? "";
     }
 }
