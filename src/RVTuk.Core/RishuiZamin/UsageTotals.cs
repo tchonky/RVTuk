@@ -25,10 +25,15 @@ namespace RVTuk.Core.RishuiZamin
 
         /// <summary>The area's New usage group, else its Old usage group, else
         /// <see cref="UsageGroup.NoCode"/>.</summary>
-        public static UsageGroup Of(AreaRecord a)
+        public static UsageGroup Of(AreaRecord a) => OfCode(EffectiveCode(a));
+
+        /// <summary>The code an area is counted under: its New code if it is in
+        /// <see cref="UsageCatalog"/>, else its Old code if that is, else null.</summary>
+        public static int? EffectiveCode(AreaRecord a)
         {
-            var g = OfCode(a.UsageCode);
-            return g != UsageGroup.NoCode ? g : OfCode(a.UsageCodePrev);
+            if (a.UsageCode is { } n && UsageCatalog.ByCode(n) != null) return n;
+            if (a.UsageCodePrev is { } o && UsageCatalog.ByCode(o) != null) return o;
+            return null;
         }
     }
 
