@@ -109,7 +109,14 @@ namespace RVTuk.Revit.TopoTools
         /// them — so it agrees with Label even when Label has not run. Lines without a text are
         /// absent. Reads only; needs no transaction.
         /// </summary>
-        public static IReadOnlyDictionary<long, string> ReadHeights(Document doc, View view)
+        public static IReadOnlyDictionary<long, string> ReadHeights(Document doc, View view) =>
+            ReadNotes(doc, view).ToDictionary(pair => pair.Key, pair => (pair.Value.Text ?? "").Trim());
+
+        /// <summary>
+        /// Each topo line's height text note, line id → note, settled as <see cref="ReadHeights"/>
+        /// settles them. Lines without a text are absent. Reads only; needs no transaction.
+        /// </summary>
+        public static IReadOnlyDictionary<long, TextNote> ReadNotes(Document doc, View view)
         {
             var spotByLine = TopoLineCollector.Collect(doc, view)
                 .ToDictionary(line => line.LineId, line => HeightLabelPlacement.Midpoint(line.Polyline));
@@ -117,9 +124,7 @@ namespace RVTuk.Revit.TopoTools
             var plan = Plan(texts, spotByLine);
 
             var textById = texts.ToDictionary(text => text.Note.Id.Value, text => text.Note);
-            return plan.LineByText.ToDictionary(
-                pair => pair.Value,
-                pair => (textById[pair.Key].Text ?? "").Trim());
+            return plan.LineByText.ToDictionary(pair => pair.Value, pair => textById[pair.Key]);
         }
 
         private sealed record HeightText(TextNote Note, long? LineId);

@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows.Media.Imaging;
+using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
 using RVTuk.Core.Shared.Config;
+using RVTuk.Core.TopoTools;
 using RVTuk.Revit.TopoTools.Commands;
 using AwRibbonItem = Autodesk.Windows.RibbonItem;
 using AwRibbonItemSize = Autodesk.Windows.RibbonItemSize;
@@ -51,6 +54,7 @@ namespace RVTuk.Revit.TopoTools
         private static PushButton? _cancelButton;
         private static PushButton? _acceptButton;
         private static TextBox? _spacingBox;
+        private static TextBox? _heightBox;
         private static double _spacingCentimetres = 100;
 
         /// <summary>Set by the first <see cref="Show"/>: the icons-only look is tried once per
@@ -120,11 +124,27 @@ namespace RVTuk.Revit.TopoTools
             spacing.Value = Format(_spacingCentimetres);
             spacing.EnterPressed += OnSpacingEntered;
 
+            var height = (TextBox)panel.AddItem(new TextBoxData("TopoHeight")
+            {
+                ToolTip = "Height of the selected topo lines, in metres. Type a height and press Enter " +
+                          "to give it to all of them; Update or Accept moves the points.",
+            });
+            height.PromptText = "Height (m)";
+            height.ShowImageAsButton = false;
+            height.SelectTextOnFocus = true;
+            height.Width = 80;
+            height.Value = "";
+            height.EnterPressed += OnHeightEntered;
+
             panel.Visible = false;
 
             _panel = panel;
             _spacingBox = spacing;
+            _heightBox = height;
+            TopoSession.Started += ClearHeightBox;
+            TopoSession.Ended += ClearHeightBox;
             TopoSession.Ended += Hide;
+            app.SelectionChanged += OnSelectionForHeight;
             app.ThemeChanged += OnThemeChanged;
         }
 
@@ -311,6 +331,142 @@ namespace RVTuk.Revit.TopoTools
             catch (Exception ex)
             {
                 Application.LogDiagnostic($"Topo Edit spacing failed: {ex}");
+            }
+        }
+
+        private static void ClearHeightBox()
+        {
+            try
+            {
+                if (_heightBox != null) _heightBox.Value = "";
+            }
+            catch (Exception ex)
+            {
+                Application.LogDiagnostic($"Topo Edit height box failed: {ex}");
+            }
+        }
+
+        /// <summary>The selection changed: the Height box shows the selected topo lines' height.</summary>
+        private static void OnSelectionForHeight(object? sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                if (_heightBox == null) return;
+                var doc = e.GetDocument();
+                _heightBox.Value = doc == null ? "" : ShownHeight(doc, e.GetSelectedElements());
+            }
+            catch (Exception ex)
+            {
+                Application.LogDiagnostic($"Topo Edit height box failed: {ex}");
+            }
+        }
+
+        /// <summary>What the Height box shows for <paramref name="selected"/>: empty outside the
+        /// session's document or when no topo line of its view is selected.</summary>
+        private static string ShownHeight(Document doc, ICollection<ElementId> selected)
+        {
+            if (!TrySessionView(doc, out var view)) return "";
+            var lineIds = SelectedLineIds(doc, view, selected);
+            if (lineIds.Count == 0) return "";
+            var notes = HeightTexts.ReadNotes(doc, view);
+            return HeightBoxText.For(lineIds.Select(id => notes.TryGetValue(id, out var note) ? note.Text : null));
+        }
+
+        private static bool TrySessionView(Document doc, out View view)
+        {
+            view = null!;
+            var session = TopoSession.Current;
+            if (session == null || !session.IsFor(doc)) return false;
+            if (doc.GetElement(session.ViewId) is not View found) return false;
+            view = found;
+            return true;
+        }
+
+        /// <summary>
+        /// The topo lines of <paramref name="view"/> that are selected, each once: a line selected
+        /// itself, or through its height text.
+        /// </summary>
+        // ponytail: collects the view's topo lines on every selection change; cache per session if it lags on big sites.
+        private static List<long> SelectedLineIds(Document doc, View view, ICollection<ElementId>? selected)
+        {
+            var result = new List<long>();
+            if (selected == null || selected.Count == 0) return result;
+
+            var topoLines = new HashSet<long>(TopoLineCollector.Collect(doc, view).Select(line => line.LineId));
+            foreach (var id in selected)
+            {
+                long lineId;
+                if (topoLines.Contains(id.Value)) lineId = id.Value;
+                else if (doc.GetElement(id) is TextNote note && note.OwnerViewId == view.Id
+                         && HeightTextType.IsHeightText(note)
+                         && HeightTextLinkStore.TryGetLineId(note, out var linked) && topoLines.Contains(linked))
+                    lineId = linked;
+                else continue;
+
+                if (!result.Contains(lineId)) result.Add(lineId);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Enter in the Height box: every selected topo line's height text gets the typed height,
+        /// in one transaction; a line without one gets a new one. Points move on Update or Accept,
+        /// as with a text edited by hand. A height that does not read, or no topo line selected,
+        /// changes nothing and puts back what the selection shows.
+        /// </summary>
+        private static void OnHeightEntered(object? sender, TextBoxEnterPressedEventArgs e)
+        {
+            try
+            {
+                if (_heightBox == null) return;
+                var uiDoc = e.Application?.ActiveUIDocument;
+                if (uiDoc == null) return;
+                var doc = uiDoc.Document;
+                var selected = uiDoc.Selection.GetElementIds();
+
+                var typed = Convert.ToString(_heightBox.Value, CultureInfo.InvariantCulture);
+                var session = TopoSession.Current;
+                if (session == null || !SurveyHeightText.TryParse(typed, out double feet)
+                    || !TrySessionView(doc, out var view))
+                {
+                    _heightBox.Value = ShownHeight(doc, selected);
+                    return;
+                }
+
+                var lineIds = SelectedLineIds(doc, view, selected);
+                if (lineIds.Count == 0)
+                {
+                    _heightBox.Value = "";
+                    return;
+                }
+
+                string text = SurveyHeightText.Format(feet);
+                var notes = HeightTexts.ReadNotes(doc, view);
+                using (var tx = new Transaction(doc, "Topo height"))
+                {
+                    tx.Start();
+                    foreach (var lineId in lineIds)
+                    {
+                        if (notes.TryGetValue(lineId, out var note))
+                        {
+                            if ((note.Text ?? "").Trim() != text) note.Text = text;
+                        }
+                        else if (doc.GetElement(new ElementId(lineId)) is CurveElement line)
+                        {
+                            var created = HeightTexts.CreateFor(doc, view, line, feet);
+                            session.Created.Add(created.Id);
+                            session.LastSeenTexts[created.Id] = (created.Text ?? "").Trim();
+                        }
+                    }
+                    tx.Commit();
+                }
+
+                LastTypedHeights.Set(doc, feet);
+                _heightBox.Value = text;
+            }
+            catch (Exception ex)
+            {
+                Application.LogDiagnostic($"Topo Edit height failed: {ex}");
             }
         }
 
