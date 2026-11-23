@@ -366,9 +366,9 @@ namespace RVTuk.Revit.TopoTools
         private static string ShownHeight(Document doc, ICollection<ElementId> selected)
         {
             if (!TrySessionView(doc, out var view)) return "";
-            var lineIds = SelectedLineIds(doc, view, selected);
-            if (lineIds.Count == 0) return "";
             var notes = HeightTexts.ReadNotes(doc, view);
+            var lineIds = SelectedLineIds(doc, view, selected, notes);
+            if (lineIds.Count == 0) return "";
             return HeightBoxText.For(lineIds.Select(id => notes.TryGetValue(id, out var note) ? note.Text : null));
         }
 
@@ -384,24 +384,24 @@ namespace RVTuk.Revit.TopoTools
 
         /// <summary>
         /// The topo lines of <paramref name="view"/> that are selected, each once: a line selected
-        /// itself, or through its height text.
+        /// itself, or through its height text. A text goes to the line <paramref name="notes"/> (the
+        /// linker's plan) gives it, not to its stored link: a copied text still names the original
+        /// line until Height Labels or Update relinks it.
         /// </summary>
         // ponytail: collects the view's topo lines on every selection change; cache per session if it lags on big sites.
-        private static List<long> SelectedLineIds(Document doc, View view, ICollection<ElementId>? selected)
+        private static List<long> SelectedLineIds(Document doc, View view, ICollection<ElementId>? selected,
+            IReadOnlyDictionary<long, TextNote> notes)
         {
             var result = new List<long>();
             if (selected == null || selected.Count == 0) return result;
 
             var topoLines = new HashSet<long>(TopoLineCollector.Collect(doc, view).Select(line => line.LineId));
+            var lineByText = notes.ToDictionary(pair => pair.Value.Id.Value, pair => pair.Key);
             foreach (var id in selected)
             {
                 long lineId;
                 if (topoLines.Contains(id.Value)) lineId = id.Value;
-                else if (doc.GetElement(id) is TextNote note && note.OwnerViewId == view.Id
-                         && HeightTextType.IsHeightText(note)
-                         && HeightTextLinkStore.TryGetLineId(note, out var linked) && topoLines.Contains(linked))
-                    lineId = linked;
-                else continue;
+                else if (!lineByText.TryGetValue(id.Value, out lineId)) continue;
 
                 if (!result.Contains(lineId)) result.Add(lineId);
             }
@@ -433,7 +433,8 @@ namespace RVTuk.Revit.TopoTools
                     return;
                 }
 
-                var lineIds = SelectedLineIds(doc, view, selected);
+                var notes = HeightTexts.ReadNotes(doc, view);
+                var lineIds = SelectedLineIds(doc, view, selected, notes);
                 if (lineIds.Count == 0)
                 {
                     _heightBox.Value = "";
@@ -441,7 +442,7 @@ namespace RVTuk.Revit.TopoTools
                 }
 
                 string text = SurveyHeightText.Format(feet);
-                var notes = HeightTexts.ReadNotes(doc, view);
+                bool committed;
                 using (var tx = new Transaction(doc, "Topo height"))
                 {
                     tx.Start();
@@ -458,7 +459,15 @@ namespace RVTuk.Revit.TopoTools
                             session.LastSeenTexts[created.Id] = (created.Text ?? "").Trim();
                         }
                     }
-                    tx.Commit();
+                    committed = tx.Commit() == TransactionStatus.Committed;
+                }
+
+                // A commit Revit refused (worksharing, a failure it rolled back) changed no label:
+                // the box shows the labels as they are, and the next line does not start at it.
+                if (!committed)
+                {
+                    _heightBox.Value = ShownHeight(doc, selected);
+                    return;
                 }
 
                 LastTypedHeights.Set(doc, feet);

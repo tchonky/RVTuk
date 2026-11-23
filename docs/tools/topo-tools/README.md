@@ -535,6 +535,7 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 116 | Draw a new line after typing a height in the box | The new line's label starts at that height | [ ] | [ ] | [ ] | [ ] |
 | 117 | With a non-topo element selected, and outside any session | The box is empty; Enter changes nothing | [ ] | [ ] | [ ] | [ ] |
 | 118 | During a session, look at the Modify-tab copy of Topo Edit | It has the Height box too, and typing there works the same | [ ] | [ ] | [ ] | [ ] |
+| 119 | Copy a line together with its label; select only the copied label (no Height Labels or Update in between), type a height, Enter | Only the copy's label changes; the original line keeps its height. The box showed the copy's height, not the original's | [ ] | [ ] | [ ] | [ ] |
 
 Items 19 and 20 are the two floor facts nothing has verified yet; if a floor wants an offset from
 its top, floors need their own Z conversion.
