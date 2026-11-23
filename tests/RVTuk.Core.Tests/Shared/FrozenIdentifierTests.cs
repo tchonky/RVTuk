@@ -89,6 +89,8 @@ public class FrozenIdentifierTests
         1|"TopoCancel"
         1|"TopoHeight"
         1|"TopoPick"
+        1|"TopoPickSteps"
+        1|"TopoPickMenu"
         1|"TopoUpdateMenu"
         1|PanelName = "Topo Edit"
         1|Name = "_DP-Topo Height"

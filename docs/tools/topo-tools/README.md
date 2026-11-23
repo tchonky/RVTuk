@@ -16,7 +16,8 @@ pane.
 2. **Press Topo Tools.** A temporary **Topo Edit** panel appears on the Add-Ins tab, and the ribbon
    switches to that tab once. At the panel's left end **Cancel** (✗) sits above **Accept** (✓),
    icons only (the tooltips name them). Then a stack of three small rows: **Draw Lines**, **Pick
-   Lines** and the **Height** box (labelled "H=", 140 px wide); then **Update**, a split button whose own
+   Lines** (a split button: its own click is Pick Lines, its menu also holds **Pick in Steps**) and
+   the **Height** box (labelled "H=", 105 px wide); then **Update**, a split button whose own
    click updates the heights and whose menu holds **Heights** and **Labels** (Labels is the former
    Height Labels button). During the session the same panel also shows on the Modify tab, whatever is
    selected (see "Why the Modify tab needs AdWindows"). Pressing Topo Tools again during a session
@@ -245,6 +246,15 @@ says what a click does, and when a clicked line could not change (no readable la
 range). Pick opens the session's view first if another view is active. The box cannot be typed in
 while Pick runs: Esc, type, Pick again.
 
+**Pick in Steps** (in Pick Lines' menu) chains the heights instead: with a step in the box
+(`+0.1`, `-0.1`), the first line you click starts the run and keeps its height; each next line
+you click takes the height of the line before it plus the step, whatever height it had. So from
+a line at 50.00, `+0.1` makes the next clicks 50.10, 50.20, 50.30. The status bar says where the
+run is and what the next click gives. One undo step per click; Esc ends the run. Exactly one
+line selected when it is pressed is the start (several selected lines have no order to step
+in: it asks for a click). A plain height in the box (`43`) is not a step and is refused with a
+message; a start line whose label does not read is refused in the status bar.
+
 Once Enter has set at least one label, the next drawn line starts at that height. The box
 follows the document too: after an Undo, or a label edited by hand, it shows the selection's height
 again. If setting the height fails, a message says so.
@@ -411,7 +421,8 @@ Revit: its probe ran on a throwaway build (Revit 2024, 2026-11-18). The outline 
 
 **Names:** code `TopoTools`; ribbon buttons "Topo Tools" and "Floor ⇄ Topo" (RVTuk panel, internal
 names `TopoTools` and `FloorTopoConvert`); panel `Topo Edit` (`TopoCancel`, `TopoAccept`,
-`TopoDrawLines`, `TopoPick`, `TopoHeight`, the split button `TopoUpdateMenu` holding `TopoUpdate`
+`TopoDrawLines`, the split button `TopoPickMenu` holding `TopoPick` and `TopoPickSteps`,
+`TopoHeight`, the split button `TopoUpdateMenu` holding `TopoUpdate`
 and `TopoHeightLabels`; Autodesk.Windows source Id
 `CustomCtrl_%Add-Ins%Topo Edit`, command ids `CustomCtrl_%CustomCtrl_%Add-Ins%Topo Edit%` + the
 button's name); Modify-tab shortcut panel `RVTuk_ContextualTopoTools` (AdWindows, posting only the
@@ -574,6 +585,11 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 133 | Type 43 with a line selected, Enter; select another line | The first line becomes 43.00; the box still holds 43 (clear it to see the other line's height) | [ ] | [ ] | [ ] | [ ] |
 | 134 | Update's own click; then its menu: Labels | The click updates the heights (as the old Update); Labels re-labels as the old Height Labels; the button stays "Update" | [ ] | [ ] | [ ] | [ ] |
 | 135 | Type "4x" and press Enter | A message says "4x" is not a height; the text stays | [ ] | [ ] | [ ] | [ ] |
+| 136 | Look at the panel | Pick Lines is a small split button in the stack (its menu: Pick Lines, Pick in Steps); the H= box is a quarter narrower than before (105 px) | [ ] | [ ] | [ ] | [ ] |
+| 137 | A line at 50.00; type +0.1, Pick in Steps; click that line, then three other lines at any heights | The first keeps 50.00; the others become 50.10, 50.20, 50.30 in click order; the status bar names the next height; four clicks, three undo steps | [ ] | [ ] | [ ] | [ ] |
+| 138 | Select one line at 50.00, type -0.1, Pick in Steps, click two lines | They become 49.90 and 49.80 | [ ] | [ ] | [ ] | [ ] |
+| 139 | Type 43, Pick in Steps | A message asks for a step (+0.1, -0.1); nothing changes | [ ] | [ ] | [ ] | [ ] |
+| 140 | Pick in Steps: click a line whose label reads "abc" first | The status bar says it has no readable height and waits for another start | [ ] | [ ] | [ ] | [ ] |
 
 Items 19 and 20 are the two floor facts nothing has verified yet; if a floor wants an offset from
 its top, floors need their own Z conversion.
