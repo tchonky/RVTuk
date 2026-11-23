@@ -13,7 +13,7 @@ namespace RVTuk.Setup.Tests
         public HashSet<string> Installed { get; set; } = new HashSet<string>();
         public HashSet<string> Running { get; set; } = new HashSet<string>();
         public List<byte[]> Trusted { get; } = new List<byte[]>();
-        public Exception? TrustError { get; set; }
+        public Exception TrustError { get; set; }
 
         public string YearFolder(string year) => Path.Combine(_root, year);
         public bool IsInstalled(string year) => Installed.Contains(year);
