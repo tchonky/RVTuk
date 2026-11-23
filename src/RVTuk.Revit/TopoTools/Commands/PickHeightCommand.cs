@@ -25,7 +25,7 @@ namespace RVTuk.Revit.TopoTools.Commands
             if (!TopoEditPanel.TryReadInput(out var input))
             {
                 TaskDialog.Show(TopoSessionCommands.Title,
-                    "Type in the Height box first: a height (43) to give each line you click, " +
+                    "Type in the Height box first and press Enter: a height (43) to give each line you click, " +
                     "or a move (+0.1, -0.1) to raise or lower it on each click.");
                 return Result.Cancelled;
             }

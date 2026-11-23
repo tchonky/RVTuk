@@ -17,6 +17,7 @@ using AwRibbonPanel = Autodesk.Windows.RibbonPanel;
 using AwRibbonRowBreak = Autodesk.Windows.RibbonRowBreak;
 using AwRibbonRowPanel = Autodesk.Windows.RibbonRowPanel;
 using AwRibbonTab = Autodesk.Windows.RibbonTab;
+using AwRibbonTextBox = Autodesk.Windows.RibbonTextBox;
 
 namespace RVTuk.Revit.TopoTools
 {
@@ -26,11 +27,13 @@ namespace RVTuk.Revit.TopoTools
     /// itself on <see cref="TopoSession.Ended"/>, so every way a session ends — Accept, Cancel,
     /// the document closing, switching document — takes the panel with it.
     ///
-    /// Cancel (✗) above Accept (✓) at its left end, as Revit's own Mode panel has them, then Draw
-    /// Lines, Height Labels, Update and Spacing. The API makes the two as small buttons that show
-    /// their text; the first <see cref="Show"/> makes them icons only through the unsupported
-    /// Autodesk.Windows ribbon, and gives the folded panel the Topo Tools icon. If that fails, the
-    /// API's look stays and the panel works the same. As in <see cref="ModifyTabAccess"/>, each
+    /// Cancel (✗) above Accept (✓) at its left end, as Revit's own Mode panel has them, then a
+    /// stack of Draw Lines, Pick Lines and the Height box, then the Update split button (Heights,
+    /// the default, and Labels). The API makes ✗ and ✓ as small buttons that show their text; the
+    /// first <see cref="Show"/> makes them icons only through the unsupported Autodesk.Windows
+    /// ribbon, gives the folded panel the Topo Tools icon, and gives the Height box its "Height"
+    /// label and keeps text typed in it when the box loses focus. If that fails, the API's look
+    /// stays and the panel works the same, except that typed text needs Enter before Pick. As in <see cref="ModifyTabAccess"/>, each
     /// Autodesk.Windows member is reached in a NoInlining method called inside a try: a member
     /// that a Revit update removed then throws there and is logged in one line, not while a
     /// caller is being compiled, outside its try.
@@ -49,12 +52,9 @@ namespace RVTuk.Revit.TopoTools
         /// <summary>The panel's Autodesk.Windows source Id: CustomCtrl_%Add-Ins%Topo Edit.</summary>
         private static readonly string PanelSourceId = ModifyTabAccess.AddInsPanelId(PanelName);
 
-        private const double CentimetresPerFoot = 30.48;
-
         private static RibbonPanel? _panel;
         private static PushButton? _cancelButton;
         private static PushButton? _acceptButton;
-        private static TextBox? _spacingBox;
         private static TextBox? _heightBox;
 
         /// <summary>The last selection SelectionChanged reported, read again when the document
@@ -63,39 +63,20 @@ namespace RVTuk.Revit.TopoTools
 
         /// <summary>What the add-in last put in the Height box; other text there was typed.</summary>
         private static string _lastShown = "";
-        private static double _spacingCentimetres = 100;
 
         /// <summary>Set by the first <see cref="Show"/>: the icons-only look is tried once per
         /// Revit session, whatever comes of it.</summary>
         private static bool _iconsOnlyTried;
 
-        /// <summary>
-        /// The point spacing set in the panel, in Revit's internal feet. Revit's TextBox has no
-        /// focus-lost event, so a value typed without Enter is read here, when Update or Accept
-        /// asks: a valid new value is kept (and saved) as Enter would; an invalid one is replaced
-        /// in the box by the stored value.
-        /// </summary>
-        public static double SpacingFeet
-        {
-            get
-            {
-                try
-                {
-                    if (TryReadBox(out double centimetres) && centimetres != _spacingCentimetres)
-                        Adopt(centimetres);
-                }
-                catch (Exception ex)
-                {
-                    Application.LogDiagnostic($"Topo Edit spacing failed: {ex}");
-                }
-                return _spacingCentimetres / CentimetresPerFoot;
-            }
-        }
+        /// <summary>The distance between points along a topo line, in Revit's internal feet: a
+        /// fixed 100 cm (the Spacing box was taken out on 2026-11-23).</summary>
+        public const double SpacingFeet = 100 / 30.48;
+
+        /// <summary>Internal name of the Height box: part of its Autodesk.Windows Id.</summary>
+        private const string HeightName = "TopoHeight";
 
         public static void Create(UIControlledApplication app, string assemblyPath)
         {
-            _spacingCentimetres = ValidOrDefault(ConfigManager.LoadConfig().TopoPointSpacingCentimetres);
-
             var panel = app.CreateRibbonPanel(PanelName);
 
             // Added first, so the stack sits at the panel's left end; its first item is the top row.
@@ -110,52 +91,47 @@ namespace RVTuk.Revit.TopoTools
             _cancelButton = (PushButton)stack[0];
             _acceptButton = (PushButton)stack[1];
 
-            panel.AddItem(Button<DrawTopoLinesCommand>("TopoDrawLines", "Draw\nLines", assemblyPath,
-                "Start Revit's Detail Line tool in the session's view, opening it first if needed: every line drawn there becomes a topo line with a height text",
-                TopoIcons.DrawLines));
-            panel.AddItem(Button<HeightLabelsCommand>("TopoHeightLabels", "Height\nLabels", assemblyPath,
-                "Give every topo line in the session's view a height text at its middle, and re-centre the existing ones",
-                TopoIcons.HeightLabels));
-            panel.AddItem(Button<TopoUpdateCommand>("TopoUpdate", "Update", assemblyPath,
+            // A stack of three small rows: Draw Lines, Pick Lines, the Height box.
+            var height = new TextBoxData(HeightName)
+            {
+                ToolTip = "Height for the selected topo lines and for Pick, in metres. Type a height and press Enter " +
+                          "to give it to the selected lines, or +0.5 / -0.5 to raise or lower each from its own " +
+                          "height (=-3.20 sets a height below zero). What you type stays, for Pick or the next Enter; " +
+                          "clear the box to see the selected line's height. Update moves the points.",
+            };
+            var rows = panel.AddStackedItems(
+                Button<DrawTopoLinesCommand>("TopoDrawLines", "Draw Lines", assemblyPath,
+                    "Start Revit's Detail Line tool in the session's view, opening it first if needed: every line drawn there becomes a topo line with a height text",
+                    TopoIcons.DrawLines),
+                Button<PickHeightCommand>("TopoPick", "Pick Lines", assemblyPath,
+                    "Click topo lines one by one to do what the Height box holds: 43 gives each the height 43.00, " +
+                    "+0.1 raises it 10 cm on every click, -0.1 lowers it. Lines selected first get it straight away. " +
+                    "Esc to finish.",
+                    TopoIcons.Pick),
+                height);
+            var heightBox = (TextBox)rows[2];
+            heightBox.PromptText = "Height (m)";
+            heightBox.ShowImageAsButton = false;
+            heightBox.SelectTextOnFocus = true;
+            heightBox.Width = 90;
+            heightBox.Value = "";
+            heightBox.EnterPressed += OnHeightEntered;
+
+            // Update: Heights is the button's own click (it never switches to the last used one);
+            // Labels is in its menu.
+            var update = (SplitButton)panel.AddItem(new SplitButtonData("TopoUpdateMenu", "Update"));
+            update.AddPushButton(Button<TopoUpdateCommand>("TopoUpdate", "Heights", assemblyPath,
                 "Apply the topo lines and their heights to the toposolid or floor being edited, and stay in the session",
                 TopoIcons.Update));
-
-            var spacing = (TextBox)panel.AddItem(new TextBoxData("TopoSpacing")
-            {
-                ToolTip = "Distance between points along each topo line, in centimetres. " +
-                          "Press Enter, or Update or Accept, to keep it.",
-            });
-            spacing.PromptText = "Spacing (cm)";
-            spacing.ShowImageAsButton = false;
-            spacing.SelectTextOnFocus = true;
-            spacing.Width = 80;
-            spacing.Value = Format(_spacingCentimetres);
-            spacing.EnterPressed += OnSpacingEntered;
-
-            var height = (TextBox)panel.AddItem(new TextBoxData("TopoHeight")
-            {
-                ToolTip = "Height of the selected topo lines, in metres. Type a height and press Enter " +
-                          "to give it to all of them, or +0.5 / -0.5 to raise or lower each from its own " +
-                          "height (=-3.20 sets a height below zero). Update or Accept moves the points.",
-            });
-            height.PromptText = "Height (m)";
-            height.ShowImageAsButton = false;
-            height.SelectTextOnFocus = true;
-            height.Width = 80;
-            height.Value = "";
-            height.EnterPressed += OnHeightEntered;
-
-            panel.AddItem(Button<PickHeightCommand>("TopoPick", "Pick", assemblyPath,
-                "Click topo lines one by one to do what the Height box holds: 43 gives each the height 43.00, " +
-                "+0.1 raises it 10 cm on every click, -0.1 lowers it. Lines selected first get it straight away. " +
-                "Esc to finish.",
-                TopoIcons.Pick));
+            update.AddPushButton(Button<HeightLabelsCommand>("TopoHeightLabels", "Labels", assemblyPath,
+                "Give every topo line in the session's view a height text at its middle, and re-centre the existing ones",
+                TopoIcons.HeightLabels));
+            update.IsSynchronizedWithCurrentItem = false;
 
             panel.Visible = false;
 
             _panel = panel;
-            _spacingBox = spacing;
-            _heightBox = height;
+            _heightBox = heightBox;
             TopoSession.Started += ClearHeightBox;
             TopoSession.Ended += ClearHeightBox;
             TopoSession.Ended += Hide;
@@ -186,6 +162,17 @@ namespace RVTuk.Revit.TopoTools
                         "Topo Edit: Cancel and Accept keep their text, and the folded panel keeps its first icon: " +
                         $"{ex.GetType().FullName}: {ex.Message}");
                 }
+
+                try
+                {
+                    LabelHeightBox();
+                }
+                catch (Exception ex)
+                {
+                    Application.LogDiagnostic(
+                        "Topo Edit: the Height box keeps the API's look, and typed text needs Enter before Pick: " +
+                        $"{ex.GetType().FullName}: {ex.Message}");
+                }
             }
         }
 
@@ -206,6 +193,36 @@ namespace RVTuk.Revit.TopoTools
         /// <summary>A button's Autodesk.Windows Id, the same as its command id:
         /// CustomCtrl_%CustomCtrl_%Add-Ins%Topo Edit% and its name. A stack adds no level.</summary>
         private static string ItemIdOf(string buttonName) => ModifyTabAccess.AddInsButtonId(PanelName, buttonName);
+
+        /// <summary>
+        /// Gives the Height box its "Height" label at its left, and makes it keep text typed in it
+        /// when it loses focus (a click on Pick Lines, say), so Pick reads it without Enter. Through
+        /// the unsupported Autodesk.Windows ribbon, so a failure is logged in one line and the box
+        /// works as the API makes it.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void LabelHeightBox()
+        {
+            var item = FindAddInsTab()?.FindItem(ItemIdOf(HeightName), out _);
+            if (item is not AwRibbonTextBox box)
+            {
+                Application.LogDiagnostic(
+                    $"Topo Edit: the Height box keeps the API's look: no text box \"{ItemIdOf(HeightName)}\" on the Add-Ins tab.");
+                return;
+            }
+            SetAcceptOnLostFocus(box);
+            SetLabel(box, "Height");
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void SetAcceptOnLostFocus(AwRibbonTextBox box) => box.AcceptTextOnLostFocus = true;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void SetLabel(AwRibbonTextBox box, string label)
+        {
+            box.Text = label;
+            box.ShowText = true;
+        }
 
         /// <summary>
         /// Makes ✗ and ✓ icons only, as Revit's own Mode panel has them: Large with the text hidden,
@@ -338,18 +355,6 @@ namespace RVTuk.Revit.TopoTools
             }
         }
 
-        private static void OnSpacingEntered(object? sender, TextBoxEnterPressedEventArgs e)
-        {
-            try
-            {
-                if (TryReadBox(out double centimetres)) Adopt(centimetres);
-            }
-            catch (Exception ex)
-            {
-                Application.LogDiagnostic($"Topo Edit spacing failed: {ex}");
-            }
-        }
-
         private static void ClearHeightBox()
         {
             try
@@ -380,8 +385,7 @@ namespace RVTuk.Revit.TopoTools
         private static void FollowInBox(string value)
         {
             if (_heightBox == null) return;
-            var current = (Convert.ToString(_heightBox.Value, CultureInfo.InvariantCulture) ?? "").Trim();
-            if (current.Length > 0 && current != _lastShown) return;
+            if (!HeightBoxText.Follows(Convert.ToString(_heightBox.Value, CultureInfo.InvariantCulture), _lastShown)) return;
             ShowInBox(value);
         }
 
@@ -542,9 +546,9 @@ namespace RVTuk.Revit.TopoTools
         /// (<see cref="HeightBoxInput"/>: a height, or a move such as "+0.5" from each line's own),
         /// in one transaction; a line without one gets a new one when a height was typed. A move
         /// leaves alone the lines it cannot move (no readable label, a result out of range) and
-        /// says how many. Points move on Update or Accept, as with a text edited by hand. Input that
-        /// does not read, or no topo line selected, changes nothing and puts back what the
-        /// selection shows.
+        /// says how many. Points move on Update, as with a text edited by hand. What was typed stays
+        /// in the box, for Pick or the next Enter; with no topo line selected, Enter only keeps it
+        /// there. Input that does not read changes nothing and says so.
         /// </summary>
         private static void OnHeightEntered(object? sender, TextBoxEnterPressedEventArgs e)
         {
@@ -556,25 +560,24 @@ namespace RVTuk.Revit.TopoTools
                 var doc = uiDoc.Document;
                 var selected = uiDoc.Selection.GetElementIds();
 
-                var typed = Convert.ToString(_heightBox.Value, CultureInfo.InvariantCulture);
+                // What was typed stays in the box whatever happens here, for Pick or the next Enter.
+                var typed = (Convert.ToString(_heightBox.Value, CultureInfo.InvariantCulture) ?? "").Trim();
                 var session = TopoSession.Current;
-                if (session == null || !HeightBoxInput.TryParse(typed, out var input)
-                    || !TrySessionView(doc, out var view))
+                if (session == null || typed.Length == 0 || !TrySessionView(doc, out var view)) return;
+                if (!HeightBoxInput.TryParse(typed, out var input))
                 {
-                    ShowInBox(ShownHeight(doc, selected));
+                    TaskDialog.Show("RVTuk – Topo Tools",
+                        $"\"{typed}\" is not a height. Type a height (43), a move (+0.1, -0.1), " +
+                        "or = before a height below zero (=-3.20).");
                     return;
                 }
 
+                // No topo line selected: the height just waits in the box, for Pick.
                 var notes = HeightTexts.ReadNotes(doc, view, out var topoLines);
                 var lineIds = SelectedLineIds(selected, notes, topoLines);
-                if (lineIds.Count == 0)
-                {
-                    ShowInBox("");
-                    return;
-                }
+                if (lineIds.Count == 0) return;
 
                 ApplyHeight(doc, view, session, input, lineIds, notes, out int leftAlone);
-                ShowInBox(ShownHeight(doc, selected));
 
                 if (leftAlone > 0)
                     TaskDialog.Show("RVTuk – Topo Tools",
@@ -587,58 +590,6 @@ namespace RVTuk.Revit.TopoTools
                 TaskDialog.Show("RVTuk – Topo Tools", $"The height could not be set: {ex.Message}");
             }
         }
-
-        /// <summary>
-        /// Reads the spacing box. False when there is no box or its text is not a positive number;
-        /// in the second case the stored value is put back in the box.
-        /// </summary>
-        private static bool TryReadBox(out double centimetres)
-        {
-            centimetres = 0;
-            if (_spacingBox == null) return false;
-
-            var typed = Convert.ToString(_spacingBox.Value, CultureInfo.InvariantCulture)?.Trim() ?? "";
-            if (TryParsePositive(typed, out centimetres)) return true;
-
-            _spacingBox.Value = Format(_spacingCentimetres);
-            return false;
-        }
-
-        /// <summary>Makes <paramref name="centimetres"/> (already rounded) the spacing, shows it in
-        /// the box, and saves it to the config.</summary>
-        private static void Adopt(double centimetres)
-        {
-            _spacingCentimetres = centimetres;
-            if (_spacingBox != null) _spacingBox.Value = Format(centimetres);
-
-            var config = ConfigManager.LoadConfig();
-            config.TopoPointSpacingCentimetres = centimetres;
-            ConfigManager.SaveConfig(config);
-        }
-
-        /// <summary>Parses a typed spacing, rounded to what <see cref="Format"/> shows, so the box
-        /// read back by <see cref="SpacingFeet"/> never differs from the stored value.</summary>
-        private static bool TryParsePositive(string text, out double value)
-        {
-            // Either decimal separator: the office types both.
-            var normalised = text.Replace(',', '.');
-            if (!double.TryParse(normalised, NumberStyles.Float, CultureInfo.InvariantCulture, out value)) return false;
-            value = Round(value);
-            return value > 0 && !double.IsInfinity(value);
-        }
-
-        /// <summary>The configured spacing, rounded as the box shows it; 100 when it is not usable.</summary>
-        private static double ValidOrDefault(double centimetres)
-        {
-            centimetres = Round(centimetres);
-            return centimetres > 0 && !double.IsNaN(centimetres) && !double.IsInfinity(centimetres) ? centimetres : 100;
-        }
-
-        /// <summary>Rounds to the two decimals <see cref="Format"/> shows.</summary>
-        private static double Round(double centimetres) => Math.Round(centimetres, 2, MidpointRounding.AwayFromZero);
-
-        private static string Format(double centimetres) =>
-            centimetres.ToString("0.##", CultureInfo.InvariantCulture);
 
         private static PushButtonData Button<TCommand>(string name, string text, string assemblyPath, string toolTip,
             Func<int, BitmapSource> icon) =>

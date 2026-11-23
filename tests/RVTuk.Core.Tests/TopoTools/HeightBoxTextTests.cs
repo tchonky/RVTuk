@@ -23,4 +23,14 @@ public class HeightBoxTextTests
 
     [Fact]
     public void AMissingLabelShowsNothing() => Assert.Equal("", HeightBoxText.For(new string?[] { "42.70", null }));
+
+    [Theory]
+    [InlineData("", "42.70", true)]        // an empty box shows the selection
+    [InlineData("  ", "42.70", true)]
+    [InlineData(null, "", true)]
+    [InlineData("42.70", "42.70", true)]   // what the box itself showed
+    [InlineData("43", "42.70", false)]     // typed: kept, also after Enter
+    [InlineData("+0.1", "", false)]
+    public void TheBoxFollowsTheSelectionOnlyUntilSomethingIsTyped(string? current, string lastShown, bool follows)
+        => Assert.Equal(follows, HeightBoxText.Follows(current, lastShown));
 }

@@ -81,3 +81,14 @@ every click), one undo step per click, Esc ends; lines selected before pressing 
 One button driven by the box, chosen over two fixed buttons (set height / raise 10 cm), so the step
 can be any size and can lower. Text typed in the box and not yet applied now survives selection
 changes, so it can be typed before selecting lines.
+
+## Addendum 2026-11-23: the box keeps what you type; new layout
+
+Tried in Revit by Daniel: the typed number vanished on Enter (the box went back to showing the
+selection's height) and on Pick. Now what is typed stays in the box — after Enter, after Pick,
+across selection changes — and the box shows the selection's height only while empty
+(`HeightBoxText.Follows`). Typed text survives a click elsewhere through Autodesk.Windows
+`AcceptTextOnLostFocus`. Layout, Daniel's: ✗/✓, a stack of Draw Lines / Pick Lines / Height (with a
+"Height" label), then an Update split button (Heights, the default click, and Labels). The Spacing
+box is gone: points every 100 cm.
+

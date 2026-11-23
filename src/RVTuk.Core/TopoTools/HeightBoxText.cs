@@ -9,6 +9,17 @@ namespace RVTuk.Core.TopoTools
     /// </summary>
     public static class HeightBoxText
     {
+        /// <summary>
+        /// Whether the box may show the selection's height over what it holds now: only when it is
+        /// empty or holds what it last showed (<paramref name="lastShown"/>). Anything else was
+        /// typed, and stays — after Enter too — so Enter and Pick can use it again.
+        /// </summary>
+        public static bool Follows(string? current, string lastShown)
+        {
+            var text = (current ?? "").Trim();
+            return text.Length == 0 || text == lastShown;
+        }
+
         public static string For(IEnumerable<string?> labels)
         {
             string? shared = null;
