@@ -31,7 +31,7 @@ namespace RVTuk.Revit.TopoTools
     /// stack of Draw Lines, Pick Lines and the Height box, then the Update split button (Heights,
     /// the default, and Labels). The API makes ✗ and ✓ as small buttons that show their text; the
     /// first <see cref="Show"/> makes them icons only through the unsupported Autodesk.Windows
-    /// ribbon, gives the folded panel the Topo Tools icon, and gives the Height box its "Height"
+    /// ribbon, gives the folded panel the Topo Tools icon, and gives the Height box its "H="
     /// label and keeps text typed in it when the box loses focus. If that fails, the API's look
     /// stays and the panel works the same, except that typed text needs Enter before Pick. As in <see cref="ModifyTabAccess"/>, each
     /// Autodesk.Windows member is reached in a NoInlining method called inside a try: a member
@@ -113,7 +113,7 @@ namespace RVTuk.Revit.TopoTools
             heightBox.PromptText = "Height (m)";
             heightBox.ShowImageAsButton = false;
             heightBox.SelectTextOnFocus = true;
-            heightBox.Width = 90;
+            heightBox.Width = 140;
             heightBox.Value = "";
             heightBox.EnterPressed += OnHeightEntered;
 
@@ -195,7 +195,7 @@ namespace RVTuk.Revit.TopoTools
         private static string ItemIdOf(string buttonName) => ModifyTabAccess.AddInsButtonId(PanelName, buttonName);
 
         /// <summary>
-        /// Gives the Height box its "Height" label at its left, and makes it keep text typed in it
+        /// Gives the Height box its "H=" label at its left, and makes it keep text typed in it
         /// when it loses focus (a click on Pick Lines, say), so Pick reads it without Enter. Through
         /// the unsupported Autodesk.Windows ribbon, so a failure is logged in one line and the box
         /// works as the API makes it.
@@ -211,7 +211,7 @@ namespace RVTuk.Revit.TopoTools
                 return;
             }
             SetAcceptOnLostFocus(box);
-            SetLabel(box, "Height");
+            SetLabel(box, "H=");
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]

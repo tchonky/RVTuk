@@ -16,7 +16,7 @@ pane.
 2. **Press Topo Tools.** A temporary **Topo Edit** panel appears on the Add-Ins tab, and the ribbon
    switches to that tab once. At the panel's left end **Cancel** (✗) sits above **Accept** (✓),
    icons only (the tooltips name them). Then a stack of three small rows: **Draw Lines**, **Pick
-   Lines** and the **Height** box (labelled "Height"); then **Update**, a split button whose own
+   Lines** and the **Height** box (labelled "H=", 140 px wide); then **Update**, a split button whose own
    click updates the heights and whose menu holds **Heights** and **Labels** (Labels is the former
    Height Labels button). During the session the same panel also shows on the Modify tab, whatever is
    selected (see "Why the Modify tab needs AdWindows"). Pressing Topo Tools again during a session
@@ -568,7 +568,7 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 127 | Select a Tab chain of lines, type -0.1, Pick | The chain goes down 0.10 straight away, as one undo step; clicking continues | [ ] | [ ] | [ ] | [ ] |
 | 128 | During Pick, click a wall, a plain detail line, and a line whose label reads "abc" | The wall and the plain line cannot be picked; the "abc" line keeps its height and the prompt says so | [ ] | [ ] | [ ] | [ ] |
 | 129 | Press Pick with the box empty; then from another view than the session's | A message asks to type in the box first; from another view, the session's view opens and clicking works | [ ] | [ ] | [ ] | [ ] |
-| 130 | Look at the panel | ✗/✓, then a stack Draw Lines / Pick Lines / Height box with "Height" at its left, then the Update split button; no Spacing box. The log has no "Height box keeps the API's look" line | [ ] | [ ] | [ ] | [ ] |
+| 130 | Look at the panel | ✗/✓, then a stack Draw Lines / Pick Lines / Height box with "H=" at its left, wider than the two buttons above it, then the Update split button; no Spacing box. The log has no "Height box keeps the API's look" line | [ ] | [ ] | [ ] | [ ] |
 | 131 | Type 43, press Enter with nothing selected; then Pick Lines and click a line | 43 stays in the box after Enter and after Pick; the line becomes 43.00 | [ ] | [ ] | [ ] | [ ] |
 | 132 | Type +0.1 **without** Enter, click Pick Lines, click a line | +0.1 is still in the box; the line goes up 0.10. Also check the selected lines were not raised twice (once by the box losing focus, once by Pick) | [ ] | [ ] | [ ] | [ ] |
 | 133 | Type 43 with a line selected, Enter; select another line | The first line becomes 43.00; the box still holds 43 (clear it to see the other line's height) | [ ] | [ ] | [ ] | [ ] |

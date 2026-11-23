@@ -89,6 +89,6 @@ selection's height) and on Pick. Now what is typed stays in the box — after En
 across selection changes — and the box shows the selection's height only while empty
 (`HeightBoxText.Follows`). Typed text survives a click elsewhere through Autodesk.Windows
 `AcceptTextOnLostFocus`. Layout, Daniel's: ✗/✓, a stack of Draw Lines / Pick Lines / Height (with a
-"Height" label), then an Update split button (Heights, the default click, and Labels). The Spacing
+"H=" label, widened to 140 px), then an Update split button (Heights, the default click, and Labels). The Spacing
 box is gone: points every 100 cm.
 
