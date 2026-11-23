@@ -182,6 +182,13 @@ namespace RVTuk.Setup
                 }
 
                 IMachine machine = o.Target != null ? new TargetMachine(o.Target) : new RealMachine();
+
+                // Before the add-ins, so the first Revit start after this install already trusts them.
+                var trust = o.Remove ? null : Engine.TrustPublisher(payload, machine, null);
+                if (trust != null)
+                    Say("  Signing certificate  " + (trust.Outcome == Outcome.Installed ? "trusted"
+                        : trust.Outcome == Outcome.Unchanged ? "already trusted" : "FAILED: " + trust.Message));
+
                 var results = o.Remove
                     ? Engine.Remove(catalog, machine, o.Keys, o.Years, null)
                     : Engine.Install(catalog, payload, machine, o.Keys, o.Years, null);
@@ -190,7 +197,7 @@ namespace RVTuk.Setup
                     Say($"  Revit {r.Year}  {r.AddIn}  {Words(r)}");
                 if (results.Count == 0)
                     Say("  Nothing to do: no selected add-in fits a Revit year on this PC.");
-                bool failed = Engine.Failed(results);
+                bool failed = Engine.Failed(results) || (trust != null && trust.Outcome == Outcome.Failed);
                 Say(failed ? "  NOT everything was done - see the lines marked SKIPPED or FAILED." : "  Done.");
                 return failed ? 1 : 0;
             }

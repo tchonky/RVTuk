@@ -41,6 +41,29 @@ namespace RVTuk.Setup
             return results;
         }
 
+        /// <summary>The office's signing certificate (public part) at the payload's root.</summary>
+        public const string SigningCertificateFile = "signing.cer";
+
+        /// <summary>
+        /// Has the machine trust the payload's signing certificate, so Revit loads the signed
+        /// add-ins without asking. Null when the payload has none; Installed when it was trusted
+        /// now, Unchanged when it was already, Failed (with why) when the stores refused.
+        /// </summary>
+        public static Result TrustPublisher(string sourceDir, IMachine machine, Action<string> log)
+        {
+            var path = Path.Combine(sourceDir, SigningCertificateFile);
+            if (!File.Exists(path)) return null;
+            try
+            {
+                bool added = machine.TrustPublisher(File.ReadAllBytes(path));
+                return Log(log, R("Signing certificate", "", added ? Outcome.Installed : Outcome.Unchanged, null));
+            }
+            catch (Exception e)
+            {
+                return Log(log, R("Signing certificate", "", Outcome.Failed, e.Message));
+            }
+        }
+
         public static List<Result> Remove(Catalog catalog, IMachine machine,
                                           ICollection<string> keys, ICollection<string> years, Action<string> log)
         {

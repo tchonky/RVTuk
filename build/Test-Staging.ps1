@@ -43,6 +43,15 @@ try {
             $expected | Where-Object { $_ -notin $actual } | ForEach-Object { $fails.Add("FAIL $tag`: missing $_") }
             $actual | Where-Object { $_ -notin $expected } | ForEach-Object { $fails.Add("FAIL $tag`: unexpected $_") }
 
+            # 1b. With a signing certificate staged, each of our DLLs carries its signature.
+            if (Test-Path "$StagingDir\signing.cer") {
+                $thumb = (New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 "$StagingDir\signing.cer").Thumbprint
+                foreach ($asm in $a.Assemblies) {
+                    $sig = Get-AuthenticodeSignature "$dir\$asm.dll" -ErrorAction SilentlyContinue
+                    if (-not $sig.SignerCertificate -or $sig.SignerCertificate.Thumbprint -ne $thumb) { $fails.Add("FAIL $tag`: $asm.dll is not signed with signing.cer") }
+                }
+            }
+
             # 2. Collect vendor DLLs per year.
             $actual | Where-Object { $_ -like '*.dll' -and $_ -notin $own } | ForEach-Object { $vendor.Add([pscustomobject]@{ Year = $year; Dll = $_; Key = $e.key }) }
 
