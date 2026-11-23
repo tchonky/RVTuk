@@ -64,3 +64,11 @@ faster way to type heights.
 - Where the selection-reading code lives (a small helper next to `HeightTexts`).
 - Unit tests for the parts in Core (parsing/format already tested); Revit behaviour checked by
   hand in 2024, then 2026/2027.
+
+## Addendum 2026-11-23: moves
+
+Daniel asked for relative entry after the box shipped. A signed number (`+0.5`, `-0.5`, `−0.5`)
+moves each selected line from its own height; a plain number sets it, and `=` before a height sets
+it too, which is how a height below zero is typed (`=-3.20`) — Daniel's choice over `+-0.5` or
+`--0.5`. A line a move cannot change (no readable label, a result outside −500..3000 m) keeps its
+height and a message counts them. Rule in Core: `HeightBoxInput`.

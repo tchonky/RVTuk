@@ -225,7 +225,11 @@ unverified: checklist row 26). It is remembered between Revit sessions.
 selected) when they all share one, and is empty otherwise. Type a height and press Enter: every
 selected line's label takes it, in one undo step ("Topo height"), and a line without a label gets
 one. Enter only changes labels, exactly like editing a label by hand; Update or Accept moves the
-points. A height that does not read changes nothing, and so does Enter with no topo line
+points. A signed number moves each selected line from its own height instead: `+0.5` raises
+every line by half a metre, `-0.5` lowers it, so a sloped area keeps its slope. A line whose label
+does not read, or that the move would take past −500 to 3000 m, keeps its height, and a message
+says how many did. Since a minus now lowers, a height below zero is typed with `=`: `=-3.20`.
+Input that does not read changes nothing, and so does Enter with no topo line
 selected. Once Enter has set at least one label, the next drawn line starts at that height. The box
 follows the document too: after an Undo, or a label edited by hand, it shows the selection's height
 again. If setting the height fails, a message says so.
@@ -539,6 +543,9 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 118 | During a session, look at the Modify-tab copy of Topo Edit | It has the Height box too, and typing there works the same | [ ] | [ ] | [ ] | [ ] |
 | 119 | Copy a line together with its label; select only the copied label (no Height Labels or Update in between), type a height, Enter | Only the copy's label changes; the original line keeps its height. The box showed the copy's height, not the original's | [ ] | [ ] | [ ] | [ ] |
 | 120 | Select a line, type a height, Enter; then Ctrl+Z. Also: with the line selected, edit its label by hand | After the Undo the box shows the old height again; after the hand edit it shows the edited height | [ ] | [ ] | [ ] | [ ] |
+| 121 | Select three lines at different heights, type +0.5, Enter; then -0.25, Enter | Each label goes up by 0.50, then down by 0.25, from its own height; one undo step each | [ ] | [ ] | [ ] | [ ] |
+| 122 | Select a line and a line whose label reads "abc", type +0.5, Enter | The first goes up 0.50; a message says 1 line keeps its height | [ ] | [ ] | [ ] | [ ] |
+| 123 | Type =-3.20, Enter | The label shows -3.20 | [ ] | [ ] | [ ] | [ ] |
 
 Items 19 and 20 are the two floor facts nothing has verified yet; if a floor wants an offset from
 its top, floors need their own Z conversion.

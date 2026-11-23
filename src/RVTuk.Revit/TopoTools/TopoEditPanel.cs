@@ -132,7 +132,8 @@ namespace RVTuk.Revit.TopoTools
             var height = (TextBox)panel.AddItem(new TextBoxData("TopoHeight")
             {
                 ToolTip = "Height of the selected topo lines, in metres. Type a height and press Enter " +
-                          "to give it to all of them; Update or Accept moves the points.",
+                          "to give it to all of them, or +0.5 / -0.5 to raise or lower each from its own " +
+                          "height (=-3.20 sets a height below zero). Update or Accept moves the points.",
             });
             height.PromptText = "Height (m)";
             height.ShowImageAsButton = false;
@@ -435,10 +436,13 @@ namespace RVTuk.Revit.TopoTools
         }
 
         /// <summary>
-        /// Enter in the Height box: every selected topo line's height text gets the typed height,
-        /// in one transaction; a line without one gets a new one. Points move on Update or Accept,
-        /// as with a text edited by hand. A height that does not read, or no topo line selected,
-        /// changes nothing and puts back what the selection shows.
+        /// Enter in the Height box: every selected topo line's height text gets the typed height
+        /// (<see cref="HeightBoxInput"/>: a height, or a move such as "+0.5" from each line's own),
+        /// in one transaction; a line without one gets a new one when a height was typed. A move
+        /// leaves alone the lines it cannot move (no readable label, a result out of range) and
+        /// says how many. Points move on Update or Accept, as with a text edited by hand. Input that
+        /// does not read, or no topo line selected, changes nothing and puts back what the
+        /// selection shows.
         /// </summary>
         private static void OnHeightEntered(object? sender, TextBoxEnterPressedEventArgs e)
         {
@@ -452,7 +456,7 @@ namespace RVTuk.Revit.TopoTools
 
                 var typed = Convert.ToString(_heightBox.Value, CultureInfo.InvariantCulture);
                 var session = TopoSession.Current;
-                if (session == null || !SurveyHeightText.TryParse(typed, out double feet)
+                if (session == null || !HeightBoxInput.TryParse(typed, out var input)
                     || !TrySessionView(doc, out var view))
                 {
                     _heightBox.Value = ShownHeight(doc, selected);
@@ -467,18 +471,27 @@ namespace RVTuk.Revit.TopoTools
                     return;
                 }
 
-                string text = SurveyHeightText.Format(feet);
                 bool committed;
+                int leftAlone = 0;
                 using (var tx = new Transaction(doc, "Topo height"))
                 {
                     tx.Start();
                     foreach (var lineId in lineIds)
                     {
-                        if (notes.TryGetValue(lineId, out var note))
+                        notes.TryGetValue(lineId, out var note);
+                        var text = input.NewLabel(note?.Text);
+                        if (text == null)
+                        {
+                            leftAlone++;
+                            continue;
+                        }
+
+                        if (note != null)
                         {
                             if ((note.Text ?? "").Trim() != text) note.Text = text;
                         }
-                        else if (doc.GetElement(new ElementId(lineId)) is CurveElement line)
+                        else if (doc.GetElement(new ElementId(lineId)) is CurveElement line
+                                 && SurveyHeightText.TryParse(text, out double feet))
                         {
                             var created = HeightTexts.CreateFor(doc, view, line, feet);
                             session.Created.Add(created.Id);
@@ -496,8 +509,19 @@ namespace RVTuk.Revit.TopoTools
                     return;
                 }
 
-                LastTypedHeights.Set(doc, feet);
-                _heightBox.Value = text;
+                // A typed height is where the next drawn line starts. (The session updater also
+                // notes every label it sees change, so after a move the next line starts at the
+                // height of a moved line, as after editing labels by hand.)
+                var shown = ShownHeight(doc, selected);
+                if (input.IsAbsolute && SurveyHeightText.TryParse(shown, out double typedFeet))
+                    LastTypedHeights.Set(doc, typedFeet);
+                _heightBox.Value = shown;
+
+                if (leftAlone > 0)
+                    TaskDialog.Show("RVTuk – Topo Tools",
+                        (leftAlone == 1 ? "1 line keeps its height" : $"{leftAlone} lines keep their height") +
+                        ": its label does not read as a height, or the move would take it past " +
+                        $"{SurveyHeightText.LowestMetres:0} to {SurveyHeightText.HighestMetres:0} m.");
             }
             catch (Exception ex)
             {
