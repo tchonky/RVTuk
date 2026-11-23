@@ -54,6 +54,8 @@ namespace RVTuk.Revit
         public static ExternalEvent SelectAreaEvent { get; private set; } = null!;
         public static SetupUsageKeysEventHandler SetupUsageKeysHandler { get; private set; } = null!;
         public static ExternalEvent SetupUsageKeysEvent { get; private set; } = null!;
+        public static SetUsageKeyEventHandler SetUsageKeyHandler { get; private set; } = null!;
+        public static ExternalEvent SetUsageKeyEvent { get; private set; } = null!;
         public static RVTuk.UI.FamilyBrowser.Views.FamilyBrowserWindow? BrowserWindow { get; set; }
         public static RVTuk.UI.RishuiZamin.Views.RishuiZaminWindow? RishuiZaminWindow { get; set; }
         public static UIApplication? CurrentUIApp { get; set; }
@@ -156,6 +158,8 @@ namespace RVTuk.Revit
             SelectAreaEvent    = ExternalEvent.Create(SelectAreaHandler);
             SetupUsageKeysHandler = new SetupUsageKeysEventHandler();
             SetupUsageKeysEvent   = ExternalEvent.Create(SetupUsageKeysHandler);
+            SetUsageKeyHandler    = new SetUsageKeyEventHandler();
+            SetUsageKeyEvent      = ExternalEvent.Create(SetUsageKeyHandler);
 
             if (RegisterNeoProperties)
             {

@@ -62,6 +62,34 @@ function Copy-AddInOutput([string]$OutputDir, [string]$Tfm, [string]$TargetDir) 
     }
 }
 
+# The office's signing certificate (build\New-SigningCertificate.ps1): the one in this user's store
+# whose thumbprint is installer\RVTukSigning.cer's, with its private key. $null, after a warning,
+# when there is none; -Strict throws instead, so an installer never ships unsigned.
+function Get-SigningCertificate([string]$Root, [switch]$Strict) {
+    $cerPath = Join-Path $Root 'installer\RVTukSigning.cer'
+    $why = $null
+    if (-not (Test-Path $cerPath)) {
+        $why = 'no installer\RVTukSigning.cer: run build\New-SigningCertificate.ps1 once'
+    } else {
+        $thumb = (New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 $cerPath).Thumbprint
+        $cert = Get-Item "Cert:\CurrentUser\My\$thumb" -ErrorAction SilentlyContinue
+        if ($cert -and $cert.HasPrivateKey) { return $cert }
+        $why = "the private key of installer\RVTukSigning.cer ($thumb) is not in this user's certificate store: sign on the PC that made it, or make a new one with build\New-SigningCertificate.ps1 -Replace"
+    }
+    if ($Strict) { throw "Cannot sign the add-ins: $why." }
+    Write-Warning "The add-ins are staged unsigned, so Revit will ask to load them: $why."
+    $null
+}
+
+# Signs one staged DLL. The certificate is self-signed, so on a PC that does not trust it yet the
+# status is not Valid; what counts is that the file now carries our signature.
+function Set-AddInSignature([string]$Path, $Certificate) {
+    $sig = Set-AuthenticodeSignature -FilePath $Path -Certificate $Certificate -HashAlgorithm SHA256
+    if (-not $sig.SignerCertificate -or $sig.SignerCertificate.Thumbprint -ne $Certificate.Thumbprint) {
+        throw "Signing $Path failed: $($sig.Status) $($sig.StatusMessage)"
+    }
+}
+
 function Write-Json([string]$Path, $Value) {
     [IO.File]::WriteAllText((Get-AbsolutePath $Path), ($Value | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding $false))
 }
@@ -88,6 +116,8 @@ function New-Staging {
     if (git -C $Root status --porcelain) { $commit += '-dirty' }
 
     $addIns = @(Get-AddIns -Root $Root | Where-Object { -not $AddIn -or $AddIn -contains $_.Key })
+    $signer = if ($CatalogOnly) { $null } else { Get-SigningCertificate -Root $Root -Strict:$Strict }
+    if ($signer) { Copy-Item (Join-Path $Root 'installer\RVTukSigning.cer') "$StagingDir\signing.cer" }
     $staged = @()
     foreach ($a in $addIns) {
         foreach ($year in $a.Years | Where-Object { -not $Years -or $Years -contains $_ }) {
@@ -109,6 +139,8 @@ function New-Staging {
                 }
                 $target = "$StagingDir\$($a.Key)\$year"
                 Copy-AddInOutput -OutputDir $outputDir -Tfm $tfm -TargetDir $target
+                # Our own DLLs only: the third-party ones keep their own signatures (or none).
+                if ($signer) { foreach ($asm in $a.Assemblies) { Set-AddInSignature "$target\$asm.dll" $signer } }
                 Write-Json "$target\addin.json" ([ordered]@{
                     key = $a.Key; version = $a.Version; commit = $commit; built = $built; manifest = $a.Manifest; dev = $true })
             }

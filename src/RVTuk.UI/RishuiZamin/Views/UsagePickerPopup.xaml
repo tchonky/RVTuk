@@ -1,0 +1,109 @@
+<UserControl x:Class="RVTuk.UI.RishuiZamin.Views.UsagePickerPopup"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:theme="clr-namespace:RVTuk.UI.Shared.Themes"
+             xmlns:vm="clr-namespace:RVTuk.UI.RishuiZamin.ViewModels"
+             xmlns:views="clr-namespace:RVTuk.UI.RishuiZamin.Views"
+             Width="320">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <theme:DarkThemeDictionary/>
+            </ResourceDictionary.MergedDictionaries>
+            <views:UsageGroupBrushConverter x:Key="GroupBrush"
+                                            Primary="{StaticResource Brush.UsagePrimary}"
+                                            Service="{StaticResource Brush.UsageService}"
+                                            Other="{StaticResource Brush.UsageOther}"
+                                            Process="{StaticResource Brush.UsageProcess}"
+                                            NoCode="{StaticResource Brush.TextMuted}"
+                                            Muted="{StaticResource Brush.TextMuted}"/>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Border Background="{StaticResource Brush.Panel}" BorderBrush="{StaticResource Brush.Border}"
+            BorderThickness="1" Padding="6">
+        <DockPanel>
+            <TextBox x:Name="Search" DockPanel.Dock="Top" Margin="0,0,0,6"
+                     Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}"
+                     PreviewKeyDown="Search_PreviewKeyDown"
+                     ToolTip="Type a code (11), part of a name, or a group (serv)"/>
+
+            <ListBox x:Name="List" ItemsSource="{Binding Items}" MaxHeight="340"
+                     SelectedIndex="{Binding HighlightedIndex, Mode=OneWay}"
+                     BorderThickness="0" Background="{StaticResource Brush.Panel}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     PreviewMouseLeftButtonUp="List_PreviewMouseLeftButtonUp">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsPickable}" Value="False">
+                                <Setter Property="Focusable" Value="False"/>
+                                <Setter Property="IsHitTestVisible" Value="False"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:PickerItem}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Text="✓" Margin="6,0,0,0"
+                                       Foreground="{Binding Group, Converter={StaticResource GroupBrush}}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <!-- Entries: code and Hebrew name in separate blocks, so bidi never
+                                 reorders them. Headings and "— none —": one text. -->
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" Margin="8,1,0,1">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Entry}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock Text="{Binding Entry.Code}" Width="34" FontWeight="SemiBold"
+                                               Foreground="{Binding Group, Converter={StaticResource GroupBrush}}"/>
+                                    <TextBlock Text="{Binding Entry.HebrewName}" TextTrimming="CharacterEllipsis"
+                                               Foreground="{Binding Group, Converter={StaticResource GroupBrush}}"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis"
+                                           Foreground="{Binding Group, Converter={StaticResource GroupBrush}}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="{x:Static vm:PickerItemKind.Heading}">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    <Setter Property="FontSize" Value="10"/>
+                                                    <Setter Property="Margin" Value="0,6,0,1"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Kind}" Value="{x:Static vm:PickerItemKind.Clear}">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Setter Property="FontStyle" Value="Italic"/>
+                                                    <Setter Property="Margin" Value="0,1"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                        </DockPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+    </Border>
+</UserControl>

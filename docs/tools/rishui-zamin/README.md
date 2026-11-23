@@ -6,6 +6,16 @@ files the רישוי זמין (Rishui Zamin) area-calculation robot expects (`RZ
 action binds the `RZ_*` shared parameters to Areas and creates/tops-up the usage-key
 schedules — no separate ribbon command.
 
+**Setting usage codes and reading the areas** (2026-11-22): the Areas tab shows each area's
+m², each floor's m² per usage group (Primary green, Service cyan, Other grey, Process yellow,
+no code red) with Σ = Primary + Service, and the same sums for the whole sheet at the top.
+Select one or several areas (Ctrl/Shift-click) and set their New or Old usage from the
+detail strip: the picker searches by code, Hebrew name or group and suggests codes from the
+areas' names. It sets the same New Usage / Old Usage key you would pick in Properties, in
+one undo step, offers to run Setup Usage Keys first when the key schedules are missing, and
+empties the office template's old "Usage Type" parameters on those areas. See
+[specs/2026-11-22-area-usage-assign-design.md](specs/2026-11-22-area-usage-assign-design.md).
+
 **Status:** shipped (v1 launch surface). Also shipped to Revit 2023 as
 **KKarea**, a standalone one-button add-in hosting only this tool (RVTuk itself was dropped
 from 2023; Revit 2026 and 2027 get the full RVTuk add-in).
@@ -21,7 +31,7 @@ from 2023; Revit 2026 and 2027 get the full RVTuk add-in).
 | UI    | `src/RVTuk.UI/RishuiZamin/` (Views, ViewModels) |
 | Revit | `src/RVTuk.Revit/RishuiZamin/` (Commands, ExternalEvents, extractor, schedule builder) |
 | KKarea host (2023) | `src/KKarea.Revit/` (links the Revit-layer sources; must never reference `RVTuk.Revit` itself) |
-| Tests | `tests/RVTuk.Core.Tests/RishuiZamin/` |
+| Tests | `tests/RVTuk.Core.Tests/RishuiZamin/`, `tests/RVTuk.UI.Tests/RishuiZamin/` |
 
 ## Docs
 

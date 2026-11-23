@@ -20,6 +20,11 @@
     <SolidColorBrush x:Key="Brush.UpdateOrange" Color="#D9822B"/>
     <SolidColorBrush x:Key="Brush.ErrorFill"    Color="#3A2424"/>
     <SolidColorBrush x:Key="Brush.Splitter"     Color="#4A4A4A"/>
+    <!-- Area Calc usage groups (Rishui Zamin) -->
+    <SolidColorBrush x:Key="Brush.UsagePrimary" Color="#7CC67C"/>
+    <SolidColorBrush x:Key="Brush.UsageService" Color="#45AFAF"/>
+    <SolidColorBrush x:Key="Brush.UsageOther"   Color="#A3A3A3"/>
+    <SolidColorBrush x:Key="Brush.UsageProcess" Color="#E2C35C"/>
 
     <!-- ── TextBlock ──────────────────────────────────────────────────────── -->
     <Style TargetType="TextBlock">

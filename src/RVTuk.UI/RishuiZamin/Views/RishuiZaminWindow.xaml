@@ -3,6 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:theme="clr-namespace:RVTuk.UI.Shared.Themes"
         xmlns:vm="clr-namespace:RVTuk.UI.RishuiZamin.ViewModels"
         xmlns:conv="clr-namespace:RVTuk.UI.Shared.Converters"
+        xmlns:views="clr-namespace:RVTuk.UI.RishuiZamin.Views"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
         Title="RVTuk — Area Calc (Rishui Zamin)"
         Width="480" Height="600" MinWidth="380" MinHeight="420"
         WindowStartupLocation="CenterScreen" Topmost="True">
@@ -14,6 +16,35 @@
             </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BoolVis"/>
             <conv:CountToVisibilityConverter x:Key="CountVis"/>
+            <views:UsageGroupBrushConverter x:Key="GroupBrush"
+                                            Primary="{StaticResource Brush.UsagePrimary}"
+                                            Service="{StaticResource Brush.UsageService}"
+                                            Other="{StaticResource Brush.UsageOther}"
+                                            Process="{StaticResource Brush.UsageProcess}"
+                                            NoCode="{StaticResource Brush.Warning}"
+                                            Muted="{StaticResource Brush.TextMuted}"/>
+            <sys:Double x:Key="Zero">0</sys:Double>
+            <CollectionViewSource x:Key="AreaRowsByLevel" Source="{Binding AllRows}">
+                <CollectionViewSource.GroupDescriptions>
+                    <PropertyGroupDescription PropertyName="Level"/>
+                </CollectionViewSource.GroupDescriptions>
+            </CollectionViewSource>
+            <Style x:Key="SummaryBox" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource Brush.Panel}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource Brush.Border}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="3"/>
+                <Setter Property="Padding" Value="5,3"/>
+                <Setter Property="Margin" Value="0,0,4,0"/>
+            </Style>
+            <Style x:Key="SummaryLabel" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="9"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+            <Style x:Key="SummaryValue" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Foreground" Value="{StaticResource Brush.Text}"/>
+            </Style>
         </ResourceDictionary>
     </Window.Resources>
 
@@ -43,6 +74,91 @@
                                 Background="{StaticResource Brush.AccentDark}" BorderBrush="{StaticResource Brush.Accent}"/>
                     </StackPanel>
 
+                    <!-- Sheet summary: the four groups always (a zero muted), "No code" only while
+                         some area has none, then Total = Primary + Service. -->
+                    <UniformGrid DockPanel.Dock="Top" Rows="1" Margin="8,0,4,6">
+                        <Border Style="{StaticResource SummaryBox}">
+                            <StackPanel>
+                                <TextBlock Text="PRIMARY" Style="{StaticResource SummaryLabel}" Foreground="{StaticResource Brush.UsagePrimary}"/>
+                                <TextBlock Text="{Binding SheetTotals.Primary, StringFormat={}{0:F2}}" Foreground="{StaticResource Brush.UsagePrimary}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource SummaryValue}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SheetTotals.Primary}" Value="{StaticResource Zero}">
+                                                    <Setter Property="Opacity" Value="0.45"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource SummaryBox}">
+                            <StackPanel>
+                                <TextBlock Text="SERVICE" Style="{StaticResource SummaryLabel}" Foreground="{StaticResource Brush.UsageService}"/>
+                                <TextBlock Text="{Binding SheetTotals.Service, StringFormat={}{0:F2}}" Foreground="{StaticResource Brush.UsageService}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource SummaryValue}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SheetTotals.Service}" Value="{StaticResource Zero}">
+                                                    <Setter Property="Opacity" Value="0.45"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource SummaryBox}">
+                            <StackPanel>
+                                <TextBlock Text="OTHER" Style="{StaticResource SummaryLabel}" Foreground="{StaticResource Brush.UsageOther}"/>
+                                <TextBlock Text="{Binding SheetTotals.Other, StringFormat={}{0:F2}}" Foreground="{StaticResource Brush.UsageOther}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource SummaryValue}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SheetTotals.Other}" Value="{StaticResource Zero}">
+                                                    <Setter Property="Opacity" Value="0.45"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource SummaryBox}">
+                            <StackPanel>
+                                <TextBlock Text="PROCESS" Style="{StaticResource SummaryLabel}" Foreground="{StaticResource Brush.UsageProcess}"/>
+                                <TextBlock Text="{Binding SheetTotals.Process, StringFormat={}{0:F2}}" Foreground="{StaticResource Brush.UsageProcess}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource SummaryValue}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SheetTotals.Process}" Value="{StaticResource Zero}">
+                                                    <Setter Property="Opacity" Value="0.45"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource SummaryBox}" BorderBrush="{StaticResource Brush.Warning}"
+                                Background="{StaticResource Brush.ErrorFill}"
+                                Visibility="{Binding HasUncoded, Converter={StaticResource BoolVis}}">
+                            <StackPanel>
+                                <TextBlock Text="NO CODE" Style="{StaticResource SummaryLabel}" Foreground="{StaticResource Brush.Warning}"/>
+                                <TextBlock Text="{Binding SheetTotals.NoCode, StringFormat={}{0:F2}}" Style="{StaticResource SummaryValue}"
+                                           Foreground="{StaticResource Brush.Warning}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource SummaryBox}" BorderBrush="{StaticResource Brush.Accent}" ToolTip="Primary + Service">
+                            <StackPanel>
+                                <TextBlock Text="TOTAL M²" Style="{StaticResource SummaryLabel}" Foreground="{StaticResource Brush.Text}"/>
+                                <TextBlock Text="{Binding SheetTotals.Total, StringFormat={}{0:F2}}" Style="{StaticResource SummaryValue}"
+                                           FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Border>
+                    </UniformGrid>
+
                     <Border DockPanel.Dock="Top" Background="{StaticResource Brush.ErrorFill}"
                             BorderBrush="{StaticResource Brush.Warning}" BorderThickness="1" CornerRadius="2"
                             Margin="10,0,10,0" Padding="8,6"
@@ -52,58 +168,200 @@
                         </TextBlock>
                     </Border>
 
-                    <TreeView x:Name="AreaTree"
-                              ItemsSource="{Binding Levels}"
-                              SelectedItemChanged="AreaTree_SelectedItemChanged"
-                              BorderThickness="0" Background="{StaticResource Brush.Bg}" Margin="4,6,4,4">
-                        <TreeView.ItemContainerStyle>
-                            <Style TargetType="TreeViewItem">
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <!-- Status line (bottom-most), then the detail strip above it. -->
+                    <TextBlock DockPanel.Dock="Bottom" Text="{Binding StatusText}" Margin="10,3,10,5" FontSize="11"
+                               Foreground="{StaticResource Brush.TextMuted}" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding StatusText}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding StatusText}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
                             </Style>
-                        </TreeView.ItemContainerStyle>
-                        <TreeView.Resources>
-                            <HierarchicalDataTemplate DataType="{x:Type vm:AreaLevelGroupViewModel}" ItemsSource="{Binding Rows}">
-                                <Border Background="{StaticResource Brush.GroupHeader}" Margin="0,2" Padding="6,4">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding Header}" FontWeight="SemiBold" Foreground="{StaticResource Brush.Text}"/>
-                                        <TextBlock Text="  ⚠" Foreground="{StaticResource Brush.Warning}"
-                                                   Visibility="{Binding HasError, Converter={StaticResource BoolVis}}"/>
-                                    </StackPanel>
-                                </Border>
-                            </HierarchicalDataTemplate>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <Border DockPanel.Dock="Bottom" Background="{StaticResource Brush.Panel}"
+                            BorderBrush="{StaticResource Brush.Border}" BorderThickness="0,1,0,0" Padding="10,6">
+                        <StackPanel>
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Foreground="{StaticResource Brush.TextMuted}"
+                                           Text="{Binding Selection.AreaM2, StringFormat={}{0:F2} m²}"/>
+                                <TextBlock Text="{Binding Selection.Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            </DockPanel>
+                            <TextBlock Text="{Binding Selection.Detail}" Foreground="{StaticResource Brush.Warning}" FontSize="11" Margin="0,2,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Selection.Detail}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <Grid Margin="0,6,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="New usage" VerticalAlignment="Center" Margin="0,0,6,0"
+                                           Foreground="{StaticResource Brush.TextMuted}"/>
+                                <Button Grid.Column="1" x:Name="NewUsageButton" Click="NewUsageButton_Click" IsEnabled="{Binding CanAssign}"
+                                        HorizontalContentAlignment="Stretch" Padding="6,3" Margin="0,0,10,0">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="▾" Margin="4,0,0,0" Foreground="{StaticResource Brush.TextMuted}"/>
+                                        <TextBlock Text="{Binding NewUsageDisplay.Text}" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{Binding NewUsageDisplay.Group, Converter={StaticResource GroupBrush}}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding NewUsageDisplay.IsMixed}" Value="True">
+                                                            <Setter Property="FontStyle" Value="Italic"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DockPanel>
+                                </Button>
+                                <TextBlock Grid.Column="2" Text="Old usage" VerticalAlignment="Center" Margin="0,0,6,0"
+                                           Foreground="{StaticResource Brush.TextMuted}"/>
+                                <Button Grid.Column="3" x:Name="OldUsageButton" Click="OldUsageButton_Click" IsEnabled="{Binding CanAssign}"
+                                        HorizontalContentAlignment="Stretch" Padding="6,3">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="▾" Margin="4,0,0,0" Foreground="{StaticResource Brush.TextMuted}"/>
+                                        <TextBlock Text="{Binding OldUsageDisplay.Text}" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{Binding OldUsageDisplay.Group, Converter={StaticResource GroupBrush}}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding OldUsageDisplay.IsMixed}" Value="True">
+                                                            <Setter Property="FontStyle" Value="Italic"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DockPanel>
+                                </Button>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- The areas, grouped by level; Ctrl/Shift-click selects several. -->
+                    <ListBox x:Name="AreaList" ItemsSource="{Binding Source={StaticResource AreaRowsByLevel}}"
+                             SelectionMode="Extended" SelectionChanged="AreaList_SelectionChanged"
+                             VirtualizingPanel.IsVirtualizing="False"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             BorderThickness="0" Background="{StaticResource Brush.Bg}" Margin="4,6,4,4">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.ContainerStyle>
+                                    <Style TargetType="GroupItem">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <!-- A plain collapsible header (not an Expander, whose header does
+                                                     not stretch), so the floor totals sit at the right edge. -->
+                                                <ControlTemplate TargetType="GroupItem">
+                                                    <StackPanel Margin="0,2,0,0">
+                                                            <DockPanel Background="{StaticResource Brush.GroupHeader}">
+                                                                <ToggleButton x:Name="Toggle" DockPanel.Dock="Left" IsChecked="{Binding Name.IsExpanded, Mode=TwoWay}" Focusable="False"
+                                                                              Width="20" Foreground="{StaticResource Brush.TextMuted}" Cursor="Hand">
+                                                                    <ToggleButton.Template>
+                                                                        <ControlTemplate TargetType="ToggleButton">
+                                                                            <Border Background="Transparent">
+                                                                                <TextBlock x:Name="Arrow" Text="▾" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                           Foreground="{TemplateBinding Foreground}"/>
+                                                                            </Border>
+                                                                            <ControlTemplate.Triggers>
+                                                                                <Trigger Property="IsChecked" Value="False">
+                                                                                    <Setter TargetName="Arrow" Property="Text" Value="▸"/>
+                                                                                </Trigger>
+                                                                            </ControlTemplate.Triggers>
+                                                                        </ControlTemplate>
+                                                                    </ToggleButton.Template>
+                                                                </ToggleButton>
+                                                                <TextBlock DockPanel.Dock="Right" Text="{Binding Name.TotalText}" FontWeight="SemiBold"
+                                                                           Margin="8,3,6,3" ToolTip="Primary + Service"/>
+                                                                <ItemsControl DockPanel.Dock="Right" ItemsSource="{Binding Name.Parts}" VerticalAlignment="Center">
+                                                                    <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate>
+                                                                            <StackPanel Orientation="Horizontal"/>
+                                                                        </ItemsPanelTemplate>
+                                                                    </ItemsControl.ItemsPanel>
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate DataType="{x:Type vm:UsageTotalPart}">
+                                                                            <TextBlock Text="{Binding Text}" Margin="8,0,0,0" FontSize="11"
+                                                                                       Foreground="{Binding Group, Converter={StaticResource GroupBrush}}"/>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                                <!-- Name and count in separate blocks: a Hebrew name and "(4)"
+                                                                     in one text get reordered by bidi. -->
+                                                                <TextBlock DockPanel.Dock="Left" Text="{Binding Name.LevelName}" FontWeight="SemiBold" Margin="2,3,0,3"
+                                                                           TextTrimming="CharacterEllipsis"/>
+                                                                <TextBlock DockPanel.Dock="Left" Margin="6,3,4,3" Foreground="{StaticResource Brush.TextMuted}">
+                                                                    <Run Text="("/><Run Text="{Binding Name.Rows.Count, Mode=OneWay}"/><Run Text=")"/>
+                                                                </TextBlock>
+                                                                <TextBlock Text="⚠" Foreground="{StaticResource Brush.Warning}" Margin="0,3"
+                                                                           Visibility="{Binding Name.HasError, Converter={StaticResource BoolVis}}"/>
+                                                            </DockPanel>
+                                                        <ItemsPresenter x:Name="Items"/>
+                                                    </StackPanel>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger SourceName="Toggle" Property="IsChecked" Value="False">
+                                                            <Setter TargetName="Items" Property="Visibility" Value="Collapsed"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </GroupStyle.ContainerStyle>
+                            </GroupStyle>
+                        </ListBox.GroupStyle>
+                        <ListBox.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:AreaRowViewModel}">
-                                <Grid Margin="10,2,4,2" ToolTip="{Binding ErrorSummary}">
+                                <Grid Margin="14,1,4,1" ToolTip="{Binding ErrorSummary}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="70"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <Grid.Style>
-                                        <Style TargetType="Grid">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding HasError}" Value="True">
-                                                    <Setter Property="Background" Value="{StaticResource Brush.ErrorFill}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Grid.Style>
-                                    <TextBlock Grid.Column="0" Text="{Binding NumberAndName}" Margin="0,2">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Foreground" Value="{StaticResource Brush.Text}"/>
+                                    <!-- Number and name in separate blocks: one text would let bidi
+                                         reorder the number into a Hebrew name. -->
+                                    <DockPanel Grid.Column="0" Margin="0,2">
+                                        <DockPanel.Style>
+                                            <Style TargetType="DockPanel">
+                                                <Setter Property="TextElement.Foreground" Value="{StaticResource Brush.Text}"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding HasError}" Value="True">
-                                                        <Setter Property="Foreground" Value="{StaticResource Brush.Warning}"/>
-                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                        <Setter Property="TextElement.Foreground" Value="{StaticResource Brush.Warning}"/>
+                                                        <Setter Property="TextElement.FontWeight" Value="SemiBold"/>
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                    <Border Grid.Column="1" Background="{StaticResource Brush.Control}"
-                                            BorderBrush="{StaticResource Brush.Border}" BorderThickness="1"
-                                            CornerRadius="8" Padding="6,1" VerticalAlignment="Center">
+                                        </DockPanel.Style>
+                                        <TextBlock DockPanel.Dock="Left" Text="{Binding NumberLabel}" Margin="0,0,5,0"/>
+                                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                    </DockPanel>
+                                    <TextBlock Grid.Column="1" Text="{Binding AreaText}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                               Margin="0,0,8,0" FontSize="11" Foreground="{StaticResource Brush.TextMuted}"/>
+                                    <Border Grid.Column="2" Background="{StaticResource Brush.Control}" BorderThickness="1"
+                                            CornerRadius="8" Padding="6,1" VerticalAlignment="Center" ToolTip="{Binding Tag}">
                                         <Border.Style>
                                             <Style TargetType="Border">
+                                                <Setter Property="BorderBrush" Value="{StaticResource Brush.Border}"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding HasError}" Value="True">
                                                         <Setter Property="BorderBrush" Value="{StaticResource Brush.Warning}"/>
@@ -111,23 +369,19 @@
                                                 </Style.Triggers>
                                             </Style>
                                         </Border.Style>
-                                        <TextBlock Text="{Binding Tag}" FontSize="9">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="{StaticResource Brush.TextMuted}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding HasError}" Value="True">
-                                                            <Setter Property="Foreground" Value="{StaticResource Brush.Warning}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding NewCodeText}" FontSize="10" FontWeight="SemiBold"
+                                                       Foreground="{Binding NewGroup, Converter={StaticResource GroupBrush}}"/>
+                                            <TextBlock Text="{Binding OldCodeText}" FontSize="10"
+                                                       Foreground="{Binding OldGroup, Converter={StaticResource GroupBrush}}"/>
+                                            <TextBlock Text="⚠ no code" FontSize="10" Foreground="{StaticResource Brush.Warning}"
+                                                       Visibility="{Binding HasNoCode, Converter={StaticResource BoolVis}}"/>
+                                        </StackPanel>
                                     </Border>
                                 </Grid>
                             </DataTemplate>
-                        </TreeView.Resources>
-                    </TreeView>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                 </DockPanel>
             </TabItem>
 
@@ -283,5 +537,6 @@
             </TabItem>
 
         </TabControl>
+        <Popup x:Name="PickerPopup" StaysOpen="False" Placement="Bottom" AllowsTransparency="True"/>
     </Grid>
 </Window>

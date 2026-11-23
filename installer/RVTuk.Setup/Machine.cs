@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.Win32;
 
 namespace RVTuk.Setup
@@ -12,9 +13,14 @@ namespace RVTuk.Setup
         string YearFolder(string year);
         bool IsInstalled(string year);
         bool IsRunning(string year);
+
+        /// <summary>Trusts the signing certificate for code on this machine; false when it was
+        /// trusted already.</summary>
+        bool TrustPublisher(byte[] certificate);
     }
 
-    /// <summary>This PC: the machine-wide Addins folders, the registry, the running processes. Reads only.</summary>
+    /// <summary>This PC: the machine-wide Addins folders, the registry, the running processes. Reads
+    /// only, except <see cref="TrustPublisher"/>, which writes the machine's certificate stores.</summary>
     internal sealed class RealMachine : IMachine
     {
         // ProgramData up to 2026, Program Files from 2027 (the only copy of this rule).
@@ -53,6 +59,27 @@ namespace RVTuk.Setup
                 }
             return false;
         }
+
+        /// <summary>
+        /// Adds the certificate to the machine's Trusted Root (a self-signed certificate is its own
+        /// root, so its signature only checks out from there) and Trusted Publishers (where Revit
+        /// looks before asking "Always Load"). Machine-wide: every user, every Revit year. Needs
+        /// the elevation the install already has.
+        /// </summary>
+        public bool TrustPublisher(byte[] certificate)
+        {
+            bool added = false;
+            using (var cert = new X509Certificate2(certificate))
+                foreach (var name in new[] { StoreName.Root, StoreName.TrustedPublisher })
+                    using (var store = new X509Store(name, StoreLocation.LocalMachine))
+                    {
+                        store.Open(OpenFlags.ReadWrite);
+                        if (store.Certificates.Find(X509FindType.FindByThumbprint, cert.Thumbprint, false).Count > 0) continue;
+                        store.Add(cert);
+                        added = true;
+                    }
+            return added;
+        }
     }
 
     /// <summary>--target: every year lives under one test folder, always installed, never running.</summary>
@@ -64,5 +91,8 @@ namespace RVTuk.Setup
         public string YearFolder(string year) => Path.Combine(_dir, year);
         public bool IsInstalled(string year) => true;
         public bool IsRunning(string year) => false;
+
+        /// <summary>A test install changes no certificate store.</summary>
+        public bool TrustPublisher(byte[] certificate) => false;
     }
 }

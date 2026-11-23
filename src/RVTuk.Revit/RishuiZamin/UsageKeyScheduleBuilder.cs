@@ -40,8 +40,8 @@ namespace RVTuk.Revit.RishuiZamin
         public const string AssetParam = "RZ_ASSET";
         public const string BuildingNoParam = "RZ_BUILDING_NO";
 
-        private const string NewUsageScheduleName = "New Usage";
-        private const string OldUsageScheduleName = "Old Usage";
+        internal const string NewUsageScheduleName = "New Usage";
+        internal const string OldUsageScheduleName = "Old Usage";
 
         // Stable shared-parameter GUIDs: the same definition in every project, so schedules,
         // tags and the extractor always agree on identity (not just on the display name).
@@ -251,7 +251,7 @@ namespace RVTuk.Revit.RishuiZamin
 
         /// <summary>The key row's "Key Name" — read through REF_TABLE_ELEM_NAME to match how
         /// <see cref="SetKeyRowName"/> writes it (Element.Name is only a fallback).</summary>
-        private static string KeyRowName(Element keyRow)
+        internal static string KeyRowName(Element keyRow)
         {
             var p = keyRow.get_Parameter(BuiltInParameter.REF_TABLE_ELEM_NAME);
             return p != null && p.HasValue ? p.AsString() ?? "" : keyRow.Name;

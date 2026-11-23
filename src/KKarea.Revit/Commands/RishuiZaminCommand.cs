@@ -61,9 +61,9 @@ namespace KKarea.Revit.Commands
 
             // Select an area in the model — fire-and-forget (called on the UI thread; the event
             // runs on Revit's main thread once the click returns, so no WaitForCompletion here).
-            Action<long> selectInModel = id =>
+            Action<IReadOnlyList<long>> selectInModel = ids =>
             {
-                Application.SelectAreaHandler.Prepare(id);
+                Application.SelectAreaHandler.Prepare(ids);
                 Application.SelectAreaEvent.Raise();
             };
 
@@ -77,6 +77,19 @@ namespace KKarea.Revit.Commands
                 Application.SetupUsageKeysHandler.WaitForCompletion();
                 return Application.SetupUsageKeysHandler.Result;
             };
+
+            // Set the New/Old usage key on areas (one undo step, optionally running the usage
+            // key setup first). Blocks until Revit's main thread services it — called on a
+            // background thread, like extract.
+            Func<UsageKeySlot, int?, IReadOnlyList<long>, bool, UsageAssignResult> assignUsage =
+                (slot, code, ids, runSetupFirst) =>
+                {
+                    Application.SetUsageKeyHandler.Prepare(slot, code, ids, runSetupFirst,
+                        Application.AreaExtractHandler.Document);
+                    Application.SetUsageKeyEvent.Raise();
+                    Application.SetUsageKeyHandler.WaitForCompletion();
+                    return Application.SetUsageKeyHandler.Result;
+                };
 
             // Export is pure (validate + write files); safe to run on the UI thread. The
             // RZ_FRAME must be the real sheet outline, so inject the title-block paper size
@@ -97,7 +110,7 @@ namespace KKarea.Revit.Commands
 
             try
             {
-                var vm = new RishuiZaminViewModel(extract, selectInModel, export, setupUsageKeys);
+                var vm = new RishuiZaminViewModel(extract, selectInModel, export, setupUsageKeys, assignUsage);
                 if (string.IsNullOrWhiteSpace(vm.FileBaseNameText))
                 {
                     vm.FileBaseNameText = commandData.Application.ActiveUIDocument.Document.Title;
