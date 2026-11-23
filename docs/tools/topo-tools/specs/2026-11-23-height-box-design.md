@@ -72,3 +72,12 @@ moves each selected line from its own height; a plain number sets it, and `=` be
 it too, which is how a height below zero is typed (`=-3.20`) — Daniel's choice over `+-0.5` or
 `--0.5`. A line a move cannot change (no readable label, a result outside −500..3000 m) keeps its
 height and a message counts them. Rule in Core: `HeightBoxInput`.
+
+## Addendum 2026-11-23: Pick
+
+Daniel's idea, replacing "fill between two heights": a **Pick** button after the Height box. It
+does what the box holds to each topo line clicked (a height sets it, `+0.1`/`-0.1` moves it on
+every click), one undo step per click, Esc ends; lines selected before pressing it get it first.
+One button driven by the box, chosen over two fixed buttons (set height / raise 10 cm), so the step
+can be any size and can lower. Text typed in the box and not yet applied now survives selection
+changes, so it can be typed before selecting lines.

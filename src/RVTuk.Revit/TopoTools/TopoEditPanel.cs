@@ -60,6 +60,9 @@ namespace RVTuk.Revit.TopoTools
         /// <summary>The last selection SelectionChanged reported, read again when the document
         /// changes.</summary>
         private static ICollection<ElementId> _lastSelection = new List<ElementId>();
+
+        /// <summary>What the add-in last put in the Height box; other text there was typed.</summary>
+        private static string _lastShown = "";
         private static double _spacingCentimetres = 100;
 
         /// <summary>Set by the first <see cref="Show"/>: the icons-only look is tried once per
@@ -141,6 +144,12 @@ namespace RVTuk.Revit.TopoTools
             height.Width = 80;
             height.Value = "";
             height.EnterPressed += OnHeightEntered;
+
+            panel.AddItem(Button<PickHeightCommand>("TopoPick", "Pick", assemblyPath,
+                "Click topo lines one by one to do what the Height box holds: 43 gives each the height 43.00, " +
+                "+0.1 raises it 10 cm on every click, -0.1 lowers it. Lines selected first get it straight away. " +
+                "Esc to finish.",
+                TopoIcons.Pick));
 
             panel.Visible = false;
 
@@ -346,12 +355,34 @@ namespace RVTuk.Revit.TopoTools
             try
             {
                 _lastSelection = new List<ElementId>();
-                if (_heightBox != null) _heightBox.Value = "";
+                ShowInBox("");
             }
             catch (Exception ex)
             {
                 Application.LogDiagnostic($"Topo Edit height box failed: {ex}");
             }
+        }
+
+        /// <summary>Puts <paramref name="value"/> in the Height box, whatever it holds.</summary>
+        private static void ShowInBox(string value)
+        {
+            if (_heightBox == null) return;
+            _heightBox.Value = value;
+            _lastShown = value;
+        }
+
+        /// <summary>
+        /// Puts <paramref name="value"/> in the Height box unless it holds something typed and not
+        /// yet applied: text other than what the box last showed. So "+0.1" typed before selecting
+        /// lines, or before Pick, is still there when Enter or Pick reads it. Clearing the box hands
+        /// it back to the selection.
+        /// </summary>
+        private static void FollowInBox(string value)
+        {
+            if (_heightBox == null) return;
+            var current = (Convert.ToString(_heightBox.Value, CultureInfo.InvariantCulture) ?? "").Trim();
+            if (current.Length > 0 && current != _lastShown) return;
+            ShowInBox(value);
         }
 
         /// <summary>The selection changed: the Height box shows the selected topo lines' height.</summary>
@@ -362,7 +393,7 @@ namespace RVTuk.Revit.TopoTools
                 if (_heightBox == null) return;
                 var doc = e.GetDocument();
                 _lastSelection = e.GetSelectedElements()?.ToList() ?? new List<ElementId>();
-                _heightBox.Value = doc == null ? "" : ShownHeight(doc, _lastSelection);
+                FollowInBox(doc == null ? "" : ShownHeight(doc, _lastSelection));
             }
             catch (Exception ex)
             {
@@ -382,7 +413,7 @@ namespace RVTuk.Revit.TopoTools
                 if (_heightBox == null || TopoSession.Current == null) return;
                 var doc = e.GetDocument();
                 if (doc == null || !TopoSession.Current.IsFor(doc)) return;
-                _heightBox.Value = ShownHeight(doc, _lastSelection);
+                FollowInBox(ShownHeight(doc, _lastSelection));
             }
             catch (Exception ex)
             {
@@ -435,6 +466,77 @@ namespace RVTuk.Revit.TopoTools
             return result;
         }
 
+        /// <summary>Why <see cref="ApplyHeight"/> left a line alone, for a message.</summary>
+        internal static readonly string LeftAloneReason =
+            "its label does not read as a height, or the move would take it past " +
+            $"{SurveyHeightText.LowestMetres:0} to {SurveyHeightText.HighestMetres:0} m";
+
+        /// <summary>
+        /// What the Height box holds, read as <see cref="HeightBoxInput"/>; false when there is no
+        /// box or its text does not read.
+        /// </summary>
+        internal static bool TryReadInput(out HeightBoxInput input)
+        {
+            input = null!;
+            return _heightBox != null
+                && HeightBoxInput.TryParse(Convert.ToString(_heightBox.Value, CultureInfo.InvariantCulture), out input);
+        }
+
+        /// <summary>
+        /// The topo lines of <paramref name="view"/> that <paramref name="ids"/> name, each once
+        /// (a line or its height text), with the view's height texts by line.
+        /// </summary>
+        internal static List<long> LinesOf(Document doc, View view, ICollection<ElementId> ids,
+            out IReadOnlyDictionary<long, TextNote> notes)
+        {
+            notes = HeightTexts.ReadNotes(doc, view, out var topoLines);
+            return SelectedLineIds(ids, notes, topoLines);
+        }
+
+        /// <summary>
+        /// Gives <paramref name="lineIds"/> what <paramref name="input"/> says, in one transaction
+        /// "Topo height": each line's label is rewritten, and a line without one gets one when a
+        /// height was typed. A line the input cannot change is left alone and counted in
+        /// <paramref name="leftAlone"/>. False when Revit did not commit (worksharing, a failure it
+        /// rolled back): then no label changed. A typed height becomes where the next drawn line
+        /// starts. (The session updater also notes every label it sees change, so after a move
+        /// the next line starts at a moved line's height, as after editing labels by hand.)
+        /// </summary>
+        internal static bool ApplyHeight(Document doc, View view, TopoSession session, HeightBoxInput input,
+            IReadOnlyCollection<long> lineIds, IReadOnlyDictionary<long, TextNote> notes, out int leftAlone)
+        {
+            leftAlone = 0;
+            using var tx = new Transaction(doc, "Topo height");
+            tx.Start();
+            foreach (var lineId in lineIds)
+            {
+                notes.TryGetValue(lineId, out var note);
+                var text = input.NewLabel(note?.Text);
+                if (text == null)
+                {
+                    leftAlone++;
+                    continue;
+                }
+
+                if (note != null)
+                {
+                    if ((note.Text ?? "").Trim() != text) note.Text = text;
+                }
+                else if (doc.GetElement(new ElementId(lineId)) is CurveElement line
+                         && SurveyHeightText.TryParse(text, out double feet))
+                {
+                    var created = HeightTexts.CreateFor(doc, view, line, feet);
+                    session.Created.Add(created.Id);
+                    session.LastSeenTexts[created.Id] = (created.Text ?? "").Trim();
+                }
+            }
+            if (tx.Commit() != TransactionStatus.Committed) return false;
+
+            if (input.IsAbsolute && SurveyHeightText.TryParse(input.NewLabel(null), out double typedFeet))
+                LastTypedHeights.Set(doc, typedFeet);
+            return true;
+        }
+
         /// <summary>
         /// Enter in the Height box: every selected topo line's height text gets the typed height
         /// (<see cref="HeightBoxInput"/>: a height, or a move such as "+0.5" from each line's own),
@@ -459,7 +561,7 @@ namespace RVTuk.Revit.TopoTools
                 if (session == null || !HeightBoxInput.TryParse(typed, out var input)
                     || !TrySessionView(doc, out var view))
                 {
-                    _heightBox.Value = ShownHeight(doc, selected);
+                    ShowInBox(ShownHeight(doc, selected));
                     return;
                 }
 
@@ -467,61 +569,17 @@ namespace RVTuk.Revit.TopoTools
                 var lineIds = SelectedLineIds(selected, notes, topoLines);
                 if (lineIds.Count == 0)
                 {
-                    _heightBox.Value = "";
+                    ShowInBox("");
                     return;
                 }
 
-                bool committed;
-                int leftAlone = 0;
-                using (var tx = new Transaction(doc, "Topo height"))
-                {
-                    tx.Start();
-                    foreach (var lineId in lineIds)
-                    {
-                        notes.TryGetValue(lineId, out var note);
-                        var text = input.NewLabel(note?.Text);
-                        if (text == null)
-                        {
-                            leftAlone++;
-                            continue;
-                        }
-
-                        if (note != null)
-                        {
-                            if ((note.Text ?? "").Trim() != text) note.Text = text;
-                        }
-                        else if (doc.GetElement(new ElementId(lineId)) is CurveElement line
-                                 && SurveyHeightText.TryParse(text, out double feet))
-                        {
-                            var created = HeightTexts.CreateFor(doc, view, line, feet);
-                            session.Created.Add(created.Id);
-                            session.LastSeenTexts[created.Id] = (created.Text ?? "").Trim();
-                        }
-                    }
-                    committed = tx.Commit() == TransactionStatus.Committed;
-                }
-
-                // A commit Revit refused (worksharing, a failure it rolled back) changed no label:
-                // the box shows the labels as they are, and the next line does not start at it.
-                if (!committed)
-                {
-                    _heightBox.Value = ShownHeight(doc, selected);
-                    return;
-                }
-
-                // A typed height is where the next drawn line starts. (The session updater also
-                // notes every label it sees change, so after a move the next line starts at the
-                // height of a moved line, as after editing labels by hand.)
-                var shown = ShownHeight(doc, selected);
-                if (input.IsAbsolute && SurveyHeightText.TryParse(shown, out double typedFeet))
-                    LastTypedHeights.Set(doc, typedFeet);
-                _heightBox.Value = shown;
+                ApplyHeight(doc, view, session, input, lineIds, notes, out int leftAlone);
+                ShowInBox(ShownHeight(doc, selected));
 
                 if (leftAlone > 0)
                     TaskDialog.Show("RVTuk – Topo Tools",
                         (leftAlone == 1 ? "1 line keeps its height" : $"{leftAlone} lines keep their height") +
-                        ": its label does not read as a height, or the move would take it past " +
-                        $"{SurveyHeightText.LowestMetres:0} to {SurveyHeightText.HighestMetres:0} m.");
+                        ": " + LeftAloneReason + ".");
             }
             catch (Exception ex)
             {

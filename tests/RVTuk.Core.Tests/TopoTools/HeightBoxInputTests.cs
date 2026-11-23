@@ -50,4 +50,16 @@ public class HeightBoxInputTests
         Assert.True(HeightBoxInput.TryParse("=-3.2", out var below) && below.IsAbsolute);
         Assert.True(HeightBoxInput.TryParse("+0.5", out var move) && !move.IsAbsolute);
     }
+
+    [Theory]
+    [InlineData("43", "give them 43.00 m")]
+    [InlineData("=-3.2", "give them -3.20 m")]
+    [InlineData("+0.1", "raise them 0.10 m")]
+    [InlineData("-0.25", "lower them 0.25 m")]
+    [InlineData("+0", "raise them 0.00 m")]
+    public void ThePromptSaysWhatAClickDoes(string typed, string expected)
+    {
+        Assert.True(HeightBoxInput.TryParse(typed, out var input));
+        Assert.Equal(expected, input.Action);
+    }
 }

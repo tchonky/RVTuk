@@ -16,7 +16,7 @@ pane.
 2. **Press Topo Tools.** A temporary **Topo Edit** panel appears on the Add-Ins tab, and the ribbon
    switches to that tab once. At the panel's left end **Cancel** (✗) sits above **Accept** (✓),
    icons only (the tooltips name them). Then come **Draw Lines**, **Height Labels**, **Update**, a
-   **Spacing** box and a **Height** box. During the session the same panel also shows on the Modify tab, whatever is
+   **Spacing** box, a **Height** box and **Pick**. During the session the same panel also shows on the Modify tab, whatever is
    selected (see "Why the Modify tab needs AdWindows"). Pressing Topo Tools again during a session
    asks: "Topo Edit is open on Toposolid 123 in Site Plan." **Go to it** opens that view and
    selects that element. **Accept it** does what ✓ does, **Cancel it** what ✗ does; then, if one
@@ -229,6 +229,17 @@ points. A signed number moves each selected line from its own height instead: `+
 every line by half a metre, `-0.5` lowers it, so a sloped area keeps its slope. A line whose label
 does not read, or that the move would take past −500 to 3000 m, keeps its height, and a message
 says how many did. Since a minus now lowers, a height below zero is typed with `=`: `=-3.20`.
+Text typed in the box and not yet applied stays there when the selection changes, so a value can be
+typed first and lines selected after; clear the box to see the selection's height again.
+
+**Pick** does what the Height box holds to each topo line you click, one undo step per click,
+until Esc: `43` gives each clicked line 43.00, `+0.1` raises it 10 cm on every click (click it
+again for 20 cm), `-0.1` lowers it. Clicking a line's label counts as clicking the line. Lines
+already selected when Pick is pressed (a Tab chain, say) get it first, as one step. The prompt
+says what a click does, and when a clicked line could not change (no readable label, out of
+range). Pick opens the session's view first if another view is active. The box cannot be typed in
+while Pick runs: Esc, type, Pick again.
+
 Input that does not read changes nothing, and so does Enter with no topo line
 selected. Once Enter has set at least one label, the next drawn line starts at that height. The box
 follows the document too: after an Undo, or a label edited by hand, it shows the selection's height
@@ -396,7 +407,7 @@ Revit: its probe ran on a throwaway build (Revit 2024, 2026-11-18). The outline 
 
 **Names:** code `TopoTools`; ribbon buttons "Topo Tools" and "Floor ⇄ Topo" (RVTuk panel, internal
 names `TopoTools` and `FloorTopoConvert`); panel `Topo Edit` (`TopoCancel`, `TopoAccept`,
-`TopoDrawLines`, `TopoHeightLabels`, `TopoUpdate`, `TopoSpacing`, `TopoHeight`; Autodesk.Windows source Id
+`TopoDrawLines`, `TopoHeightLabels`, `TopoUpdate`, `TopoSpacing`, `TopoHeight`, `TopoPick`; Autodesk.Windows source Id
 `CustomCtrl_%Add-Ins%Topo Edit`, command ids `CustomCtrl_%CustomCtrl_%Add-Ins%Topo Edit%` + the
 button's name); Modify-tab shortcut panel `RVTuk_ContextualTopoTools` (AdWindows, posting only the
 RVTuk panel's Topo Tools command); the Modify-tab copy of Topo Edit shares Topo Edit's source, so
@@ -546,6 +557,12 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 121 | Select three lines at different heights, type +0.5, Enter; then -0.25, Enter | Each label goes up by 0.50, then down by 0.25, from its own height; one undo step each | [ ] | [ ] | [ ] | [ ] |
 | 122 | Select a line and a line whose label reads "abc", type +0.5, Enter | The first goes up 0.50; a message says 1 line keeps its height | [ ] | [ ] | [ ] | [ ] |
 | 123 | Type =-3.20, Enter | The label shows -3.20 | [ ] | [ ] | [ ] | [ ] |
+| 124 | Type +0.1 in the box (no Enter), then select a line | The box keeps +0.1 | [ ] | [ ] | [ ] | [ ] |
+| 125 | Type 43, press Pick, click three lines, Esc | Each label becomes 43.00 as it is clicked; three undo steps | [ ] | [ ] | [ ] | [ ] |
+| 126 | Type +0.1, Pick, click one line twice, then its label once | The line goes up 0.30 in all; the prompt says "raise them 0.10 m" | [ ] | [ ] | [ ] | [ ] |
+| 127 | Select a Tab chain of lines, type -0.1, Pick | The chain goes down 0.10 straight away, as one undo step; clicking continues | [ ] | [ ] | [ ] | [ ] |
+| 128 | During Pick, click a wall, a plain detail line, and a line whose label reads "abc" | The wall and the plain line cannot be picked; the "abc" line keeps its height and the prompt says so | [ ] | [ ] | [ ] | [ ] |
+| 129 | Press Pick with the box empty; then from another view than the session's | A message asks to type in the box first; from another view, the session's view opens and clicking works | [ ] | [ ] | [ ] | [ ] |
 
 Items 19 and 20 are the two floor facts nothing has verified yet; if a floor wants an offset from
 its top, floors need their own Z conversion.

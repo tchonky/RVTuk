@@ -19,6 +19,13 @@ namespace RVTuk.Core.TopoTools
         /// <summary>True for a height to set, false for a move from each line's own height.</summary>
         public bool IsAbsolute { get; }
 
+        /// <summary>What applying it does to the lines, for a prompt: "give them 43.00 m",
+        /// "raise them 0.10 m", "lower them 0.25 m".</summary>
+        public string Action =>
+            IsAbsolute ? $"give them {SurveyHeightText.Format(_feet)} m"
+            : _feet < 0 ? $"lower them {SurveyHeightText.Format(-_feet)} m"
+            : $"raise them {SurveyHeightText.Format(_feet)} m";
+
         public static bool TryParse(string? typed, out HeightBoxInput input)
         {
             input = null!;
