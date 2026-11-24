@@ -32,8 +32,8 @@ namespace RVTuk.UI.Tests.Shared
                 .Where(t => !t.IsAbstract && (typeof(Window).IsAssignableFrom(t) || typeof(UserControl).IsAssignableFrom(t)))
                 .ToList();
             // 10 since the Topo Tools pane gave way to the ribbon edit session; 11 with the Area
-            // Calc usage picker.
-            Assert.Equal(11, views.Count);
+            // Calc usage picker; 12 with the Area Calc table.
+            Assert.Equal(12, views.Count);
 
             var folder = Path.Combine(Path.GetTempPath(), "rvtuk_smoke_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(folder);

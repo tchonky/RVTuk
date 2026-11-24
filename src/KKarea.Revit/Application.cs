@@ -26,6 +26,8 @@ namespace KKarea.Revit
         public static ExternalEvent SetupUsageKeysEvent { get; private set; } = null!;
         public static SetUsageKeyEventHandler SetUsageKeyHandler { get; private set; } = null!;
         public static ExternalEvent SetUsageKeyEvent { get; private set; } = null!;
+        public static SavePlotLimitsEventHandler SavePlotLimitsHandler { get; private set; } = null!;
+        public static ExternalEvent SavePlotLimitsEvent { get; private set; } = null!;
         public static RVTuk.UI.RishuiZamin.Views.RishuiZaminWindow? RishuiZaminWindow { get; set; }
 
         private static string? _addinDir;
@@ -63,6 +65,8 @@ namespace KKarea.Revit
             SetupUsageKeysEvent   = ExternalEvent.Create(SetupUsageKeysHandler);
             SetUsageKeyHandler    = new SetUsageKeyEventHandler();
             SetUsageKeyEvent      = ExternalEvent.Create(SetUsageKeyHandler);
+            SavePlotLimitsHandler = new SavePlotLimitsEventHandler();
+            SavePlotLimitsEvent   = ExternalEvent.Create(SavePlotLimitsHandler);
 
             try
             {

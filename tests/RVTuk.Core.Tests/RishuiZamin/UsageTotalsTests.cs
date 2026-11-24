@@ -23,6 +23,16 @@ public class UsageTotalsTests
     }
 
     [Fact]
+    public void EffectiveCode_NewElseOldElseNull()
+    {
+        Assert.Equal(1, UsageGroups.EffectiveCode(Area(1, 105)));
+        Assert.Equal(30, UsageGroups.EffectiveCode(Area(999, 30)));
+        Assert.Equal(105, UsageGroups.EffectiveCode(Area(null, 105)));
+        Assert.Null(UsageGroups.EffectiveCode(Area(3, null)));
+        Assert.Null(UsageGroups.EffectiveCode(Area(null, null)));
+    }
+
+    [Fact]
     public void GroupOf_ProcessWithOld_IsProcess() => Assert.Equal(UsageGroup.Process, UsageGroups.Of(Area(301, 1)));
 
     [Fact]

@@ -104,13 +104,27 @@ namespace RVTuk.Revit.RishuiZamin.Commands
                     return RishuiZaminExporter.Export(records, cfg);
                 };
 
+            // The Table tab's plot area and limits: the extract handler read them with the areas,
+            // so reading them back needs no extra event. Saving blocks until Revit's main thread
+            // services it — called on a background thread, like extract.
+            Func<(string DocumentKey, PlotLimits Limits)> readPlotLimits = () =>
+                (Application.AreaExtractHandler.DocumentKey, Application.AreaExtractHandler.PlotLimits);
+            Func<PlotLimits, (bool ok, string msg)> savePlotLimits = limits =>
+            {
+                Application.SavePlotLimitsHandler.Prepare(limits, Application.AreaExtractHandler.Document);
+                Application.SavePlotLimitsEvent.Raise();
+                Application.SavePlotLimitsHandler.WaitForCompletion();
+                return Application.SavePlotLimitsHandler.Result;
+            };
+
             var crashLogPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "RVTuk", "crash.log");
 
             try
             {
-                var vm = new RishuiZaminViewModel(extract, selectInModel, export, setupUsageKeys, assignUsage);
+                var vm = new RishuiZaminViewModel(extract, selectInModel, export, setupUsageKeys, assignUsage,
+                    readPlotLimits, savePlotLimits);
                 if (string.IsNullOrWhiteSpace(vm.FileBaseNameText))
                 {
                     vm.FileBaseNameText = commandData.Application.ActiveUIDocument.Document.Title;

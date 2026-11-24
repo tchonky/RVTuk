@@ -49,6 +49,8 @@
     <Compile Include="..\RVTuk.Revit\RishuiZamin\ExternalEvents\SetupUsageKeysEventHandler.cs" Link="Shared\SetupUsageKeysEventHandler.cs" />
     <Compile Include="..\RVTuk.Revit\RishuiZamin\UsageKeyAssigner.cs" Link="Shared\UsageKeyAssigner.cs" />
     <Compile Include="..\RVTuk.Revit\RishuiZamin\ExternalEvents\SetUsageKeyEventHandler.cs" Link="Shared\SetUsageKeyEventHandler.cs" />
+    <Compile Include="..\RVTuk.Revit\RishuiZamin\PlotLimitsStore.cs" Link="Shared\PlotLimitsStore.cs" />
+    <Compile Include="..\RVTuk.Revit\RishuiZamin\ExternalEvents\SavePlotLimitsEventHandler.cs" Link="Shared\SavePlotLimitsEventHandler.cs" />
   </ItemGroup>
 
 </Project>
