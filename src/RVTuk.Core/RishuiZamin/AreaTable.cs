@@ -18,6 +18,10 @@ namespace RVTuk.Core.RishuiZamin
     /// <see cref="AreaTableColumnKind.Code"/>.</summary>
     public sealed record AreaTableColumn(UsageGroup Group, AreaTableColumnKind Kind, int? Code);
 
+    /// <summary>A run of <see cref="AreaTable.Columns"/> under one merged header: a group's code
+    /// columns (<see cref="IsCodes"/>) or its totals (Σ and %).</summary>
+    public sealed record AreaTableBand(UsageGroup Group, bool IsCodes, int Start, int Count);
+
     public enum AreaTableRowKind
     {
         Floor,
@@ -80,6 +84,27 @@ namespace RVTuk.Core.RishuiZamin
         }
 
         public IReadOnlyList<AreaTableColumn> Columns { get; }
+
+        /// <summary><see cref="Columns"/> cut into header bands, in column order: each group's
+        /// codes, then its totals.</summary>
+        public IReadOnlyList<AreaTableBand> Bands
+        {
+            get
+            {
+                var bands = new List<AreaTableBand>();
+                for (var i = 0; i < Columns.Count; i++)
+                {
+                    var c = Columns[i];
+                    var isCodes = c.Kind == AreaTableColumnKind.Code;
+                    var last = bands.Count == 0 ? null : bands[bands.Count - 1];
+                    if (last != null && last.Group == c.Group && last.IsCodes == isCodes)
+                        bands[bands.Count - 1] = last with { Count = last.Count + 1 };
+                    else
+                        bands.Add(new AreaTableBand(c.Group, isCodes, i, 1));
+                }
+                return bands;
+            }
+        }
         public IReadOnlyList<AreaTableRow> Rows { get; }
 
         public static AreaTable Build(IEnumerable<AreaRecord> areas)

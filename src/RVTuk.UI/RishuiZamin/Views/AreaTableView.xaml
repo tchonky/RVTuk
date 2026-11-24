@@ -100,20 +100,22 @@
             </TextBlock>
         </StackPanel>
 
-        <DataGrid x:Name="Grid" IsReadOnly="True" AutoGenerateColumns="False" FrozenColumnCount="3"
-                  HeadersVisibility="Column" CanUserSortColumns="False" CanUserReorderColumns="False"
-                  SelectionMode="Single" Margin="8,0,8,8" FlowDirection="RightToLeft"
-                  HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-            <DataGrid.RowStyle>
-                <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding IsSummary}" Value="True">
-                            <Setter Property="FontWeight" Value="SemiBold"/>
-                            <Setter Property="Background" Value="{StaticResource Brush.Panel}"/>
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </DataGrid.RowStyle>
-        </DataGrid>
+        <!-- Built in code: the columns depend on the codes in use, and the headers merge across them.
+             The floor columns stay put while the usage columns scroll sideways. -->
+        <ScrollViewer Margin="8,0,8,8" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Border BorderBrush="{StaticResource Brush.Border}" BorderThickness="1" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    FlowDirection="RightToLeft" x:Name="TableFrame">
+                <Grid x:Name="TableHost" Grid.IsSharedSizeScope="True">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid x:Name="FixedPart" Grid.Column="0"/>
+                    <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <Grid x:Name="CodesPart" HorizontalAlignment="Left"/>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </ScrollViewer>
     </DockPanel>
 </UserControl>

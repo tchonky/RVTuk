@@ -33,6 +33,35 @@ public class AreaTableTests
     }
 
     [Fact]
+    public void Bands_SplitEachGroupIntoCodesAndTotals()
+    {
+        var t = AreaTable.Build(new[]
+        {
+            Area("קומת קרקע Ground", 0, false, 105, 10), Area("קומת קרקע Ground", 0, false, 1, 10),
+            Area("קומת קרקע Ground", 0, false, 104, 10), Area("קומת קרקע Ground", 0, false, 252, 10),
+            Area("קומת קרקע Ground", 0, false, null, 10),
+            Area("קומת קרקע Ground", 0, false, 300, 10, old: 1),
+        });
+
+        Assert.Equal(new[]
+        {
+            new AreaTableBand(UsageGroup.Primary, true, 0, 1), new AreaTableBand(UsageGroup.Primary, false, 1, 2),
+            new AreaTableBand(UsageGroup.Service, true, 3, 2), new AreaTableBand(UsageGroup.Service, false, 5, 2),
+            new AreaTableBand(UsageGroup.Other, true, 7, 1), new AreaTableBand(UsageGroup.Other, false, 8, 1),
+            new AreaTableBand(UsageGroup.NoCode, false, 9, 1),
+            new AreaTableBand(UsageGroup.Process, true, 10, 1),
+        }, t.Bands);
+    }
+
+    [Fact]
+    public void Bands_GroupWithoutCodes_HasOnlyItsTotals()
+    {
+        var t = AreaTable.Build(new[] { Area("קומה א First", 4, false, 105, 10) });
+        Assert.Equal(new AreaTableBand(UsageGroup.Primary, false, 0, 2), t.Bands[0]);
+        Assert.Equal(new AreaTableBand(UsageGroup.Service, true, 2, 1), t.Bands[1]);
+    }
+
+    [Fact]
     public void Columns_EmptyGroup_KeepsSumAndPercent()
     {
         var t = AreaTable.Build(new[] { Area("קומה א First", 4, false, 105, 10) });

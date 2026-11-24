@@ -22,7 +22,10 @@ it is in Hebrew and reads right to left (2026-11-24). It has one row per floor (
 elevation), then סה"כ מעל הקרקע, מתחת לקרקע and בבניין. It has one column per usage code in
 use, under שטחים עיקריים, שטחי שירות and אחר, each group with its סה"כ, and % of plot for the
 first two. There is a ללא קוד column when some area has no code, and a הורדה והריסה column
-for 300–302. Long usage names wrap in the header. Type the plot area and the plan's allowed % of plot for Primary, Service and
+for 300–302. Like the official table, the header has three merged rows (group; שימושים over
+the codes and סה"כ over the totals; the column), a double line separates each group's codes
+from its totals and each group from the next, and every cell is centred. The floor columns
+stay put while the usage columns scroll sideways. Long usage names wrap in the header. Type the plot area and the plan's allowed % of plot for Primary, Service and
 Total. A strip checks the Building row against them: green ok, amber at 95 % of a limit or
 more, red over. The values are kept in the project (Extensible Storage on Project
 Information, one undo step per change). See
