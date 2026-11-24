@@ -13,7 +13,7 @@ public class FrozenIdentifierTests
 {
     // count|snippet. A row changes only on purpose: "AreaCalc" becomes 1 in phase 3's Area Calc
     // step, which deletes src\KKarea.Revit; the 0 rows at the end are retired names that must
-    // never come back (the last three went with the Topo Tools pane, replaced by the edit session).
+    // never come back (the last three before "TopoSpacing" went with the Topo Tools pane, replaced by the edit session; "TopoSpacing" with the Spacing box, on 2026-11-23).
     private const string Table = """
         1|new Guid("7b3c1d92-4e58-4a0f-9c21-6d5f8e3a17b4")
         1|SchemaName = "RVTukAutoDimensionTrackingByView"
@@ -43,10 +43,17 @@ public class FrozenIdentifierTests
         1|new Guid("cca5f35d-98c8-466c-9175-4d51afe00df1")
         1|SchemaName = "RVTukTopoToolsOutlineHeights"
         1|FieldName = "CornersByXy"
+        1|new Guid("e6d292f7-e823-45c0-a5a6-b95108884f31")
+        1|SchemaName = "RVTukRishuiZaminPlotLimits"
+        1|PlotField = "PlotAreaM2"
+        1|PrimaryField = "PrimaryPercent"
+        1|ServiceField = "ServicePercent"
+        1|TotalField = "TotalPercent"
+        1|AddSimpleField(name, typeof(double)).SetSpec(SpecTypeId.Number)
         5|AddSimpleField(FieldName, typeof(string))
-        7|builder.SetVendorId("KnafoKlimor");
-        7|builder.SetReadAccessLevel(AccessLevel.Public);
-        7|builder.SetWriteAccessLevel(AccessLevel.Public);
+        8|builder.SetVendorId("KnafoKlimor");
+        8|builder.SetReadAccessLevel(AccessLevel.Public);
+        8|builder.SetWriteAccessLevel(AccessLevel.Public);
         1|OurVendorId = "KnafoKlimor"
         1|new DockablePaneId(new Guid("e5d47b31-2c8a-4f16-b0d9-73a5e91c46f2"))
         1|new DockablePaneId(new Guid("88a9c4fa-9c6a-4b02-b169-701be8358090"))
@@ -87,7 +94,9 @@ public class FrozenIdentifierTests
         1|"TopoUpdate"
         1|"TopoAccept"
         1|"TopoCancel"
-        1|"TopoSpacing"
+        1|"TopoHeight"
+        1|"TopoPick"
+        1|"TopoUpdateMenu"
         1|PanelName = "Topo Edit"
         1|Name = "_DP-Topo Height"
         3|"RVTuk.db"
@@ -128,6 +137,7 @@ public class FrozenIdentifierTests
         0|6d21f8b4-0c93-4e57-a8d6-b45f70e29c18
         0|RVTukTopoLineElevation
         0|a17c46e9-5b83-4d20-8f6a-9c4e2b70d135
+        0|"TopoSpacing"
         """;
 
     [Fact]

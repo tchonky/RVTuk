@@ -15,8 +15,10 @@ pane.
    the RVTuk panel only.
 2. **Press Topo Tools.** A temporary **Topo Edit** panel appears on the Add-Ins tab, and the ribbon
    switches to that tab once. At the panel's left end **Cancel** (✗) sits above **Accept** (✓),
-   icons only (the tooltips name them). Then come **Draw Lines**, **Height Labels**, **Update** and
-   a **Spacing** box. During the session the same panel also shows on the Modify tab, whatever is
+   icons only (the tooltips name them). Then a stack of three small rows: **Draw Lines**, **Pick
+   Lines** and the **Height** box (labelled "H=", 140 px wide); then **Update**, a split button whose own
+   click updates the heights and whose menu holds **Heights** and **Labels** (Labels is the former
+   Height Labels button). During the session the same panel also shows on the Modify tab, whatever is
    selected (see "Why the Modify tab needs AdWindows"). Pressing Topo Tools again during a session
    asks: "Topo Edit is open on Toposolid 123 in Site Plan." **Go to it** opens that view and
    selects that element. **Accept it** does what ✓ does, **Cancel it** what ✗ does; then, if one
@@ -216,10 +218,36 @@ Esc at such a prompt did not stop Revit from closing (probe, Revit 2024, 2026-11
 another document asks nothing. A model opened from a read-only file asks at Save As, not at Save,
 which cannot write the file back.
 
-**Spacing** is the distance between points along a line, in centimetres (default 100), rounded to
-two decimals. Press Enter to keep a value; Update and Accept also read the box, so a value typed
-without Enter is used and kept too (whether Revit hands over text not yet confirmed with Enter is
-unverified: checklist row 26). It is remembered between Revit sessions.
+Points go along each line every **100 cm**, fixed. (A Spacing box set it until 2026-11-23; Daniel
+had it taken out. The config key `TopoPointSpacingCentimetres` is no longer read.)
+
+**Height** shows the height of the selected topo lines (a line counts when it, or its label, is
+selected) when they all share one, and is empty otherwise. Type a height and press Enter: every
+selected line's label takes it, in one undo step ("Topo height"), and a line without a label gets
+one. Enter only changes labels, exactly like editing a label by hand; Update or Accept moves the
+points. A signed number moves each selected line from its own height instead: `+0.5` raises
+every line by half a metre, `-0.5` lowers it, so a sloped area keeps its slope. A line whose label
+does not read, or that the move would take past −500 to 3000 m, keeps its height, and a message
+says how many did. Since a minus now lowers, a height below zero is typed with `=`: `=-3.20`.
+What you type **stays in the box**: after Enter, after Pick, and when the selection changes, so the
+same value can be used again and again. The box shows the selected lines' height only while it is
+empty (or still holds a height it showed itself): clear it to see the selection's height again.
+Enter with no topo line selected just keeps the value there, ready for Pick. Text that does not
+read as a height says so in a message. The box also keeps text typed without Enter when you click
+elsewhere, Pick Lines say (Autodesk.Windows `AcceptTextOnLostFocus`, set when the panel first
+shows; if that fails, the log says so and Pick needs Enter first).
+
+**Pick** does what the Height box holds to each topo line you click, one undo step per click,
+until Esc: `43` gives each clicked line 43.00, `+0.1` raises it 10 cm on every click (click it
+again for 20 cm), `-0.1` lowers it. Clicking a line's label counts as clicking the line. Lines
+already selected when Pick is pressed (a Tab chain, say) get it first, as one step. The prompt
+says what a click does, and when a clicked line could not change (no readable label, out of
+range). Pick opens the session's view first if another view is active. The box cannot be typed in
+while Pick runs: Esc, type, Pick again.
+
+Once Enter has set at least one label, the next drawn line starts at that height. The box
+follows the document too: after an Undo, or a label edited by hand, it shows the selection's height
+again. If setting the height fails, a message says so.
 
 ## Why it is shaped this way
 
@@ -338,7 +366,7 @@ office does the same and "select first, then press" fits it. The session's panel
   RVTuk panel's Topo Tools command rather than running anything itself. Floor ⇄ Topo is no longer
   on the Modify tab (since 2026-11-17); it stays on the RVTuk panel.
 - **During a session: a copy of the Topo Edit panel.** A second panel object shows the Add-Ins
-  panel's contents (its `RibbonPanelSource`): the same buttons and the same Spacing box, so a click
+  panel's contents (its `RibbonPanelSource`): the same buttons and the same Height box, so a click
   on the copy is a click on the real button. It shows whatever the Modify tab says:
   Modify | Toposolid, Modify | Place Detail Lines while drawing, Modify | Text Notes, the plain
   Modify tab. The shortcut leaves the tab meanwhile. The copy goes on after the panels Revit has
@@ -383,7 +411,8 @@ Revit: its probe ran on a throwaway build (Revit 2024, 2026-11-18). The outline 
 
 **Names:** code `TopoTools`; ribbon buttons "Topo Tools" and "Floor ⇄ Topo" (RVTuk panel, internal
 names `TopoTools` and `FloorTopoConvert`); panel `Topo Edit` (`TopoCancel`, `TopoAccept`,
-`TopoDrawLines`, `TopoHeightLabels`, `TopoUpdate`, `TopoSpacing`; Autodesk.Windows source Id
+`TopoDrawLines`, `TopoPick`, `TopoHeight`, the split button `TopoUpdateMenu` holding `TopoUpdate`
+and `TopoHeightLabels`; Autodesk.Windows source Id
 `CustomCtrl_%Add-Ins%Topo Edit`, command ids `CustomCtrl_%CustomCtrl_%Add-Ins%Topo Edit%` + the
 button's name); Modify-tab shortcut panel `RVTuk_ContextualTopoTools` (AdWindows, posting only the
 RVTuk panel's Topo Tools command); the Modify-tab copy of Topo Edit shares Topo Edit's source, so
@@ -424,7 +453,7 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 12 | Cancel | New lines and their points gone, edited numbers restored, panel hidden | [ ] | [ ] | [ ] | [ ] |
 | 13 | Accept; select the element again, press Topo Tools | Panel hidden, lines and texts stay; the session carries on from them | [ ] | [ ] | [ ] | [ ] |
 | 14 | Close the document mid-session; open it again, press Topo Tools | The panel hides on close; Topo Tools starts fresh | [ ] | [ ] | [ ] | [ ] |
-| 15 | Spacing: type 50, press Enter, press Update; restart Revit | Denser points on that Update; 50 is still there after the restart | [ ] | [ ] | [ ] | [ ] |
+| 15 | *(Retired 2026-11-23 with the Spacing box: points are every 100 cm.)* | Points every 100 cm along each line | [ ] | [ ] | [ ] | [ ] |
 | 16 | Floor ⇄ Topo button | Converts as the old ⇄ did | [ ] | [ ] | [ ] | [ ] |
 | 17 | Save a project after a session; open it on a PC without RVTuk | No missing-updater warning | [ ] | [ ] | [ ] | [ ] |
 | 18 | Select one toposolid; then, each straight after a toposolid, one floor, a wall, a door, a subdivision, two toposolids | One toposolid: Topo Tools alone on the Modify tab, with no Floor ⇄ Topo, doing exactly what its RVTuk-panel button does. Each of the others: nothing of ours on the Modify tab. Note where the shortcut sits when one toposolid is selected straight after another | [ ] | [ ] | [ ] | [ ] |
@@ -435,7 +464,7 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 23 | Draw a line, Ctrl+Z it, place an ordinary text note in the view; then Cancel | The text note stays | [ ] | [ ] | [ ] | [ ] |
 | 24 | Session on a plain floor with no line over it: first with no topo line in the view, then with lines on one side of it only, more than 5 cm from its corners; Update each time | The floor is not made shape-edited (Modify Sub Elements shows no points): a floor none of whose corners takes a height from the lines stays a plain floor | [ ] | [ ] | [ ] | [ ] |
 | 25 | Make Revit roll an Update back (press Cancel in a Revit error dialog during Update) | "Nothing was applied — Revit rolled the change back."; the session stays open | [ ] | [ ] | [ ] | [ ] |
-| 26 | Type 50 in Spacing **without** Enter, click Update; restart Revit | Denser points on that Update, and 50 after the restart. If not, Revit does not hand over text before Enter: say so in the tooltip and drop the read-back | [ ] | [ ] | [ ] | [ ] |
+| 26 | *(Retired 2026-11-23 with the Spacing box; row 131 asks the same of the Height box.)* | — | [ ] | [ ] | [ ] | [ ] |
 | 27 | Two lines at 42.75 and 43.00 sharing an end point inside the element; Update twice, then ✓ | One point there at 43.00. Neither Update shows a summary: a crossing alone needs no attention, and a "moved by hand" warning would bring one up. ✓'s summary says "1 point where lines cross took the higher line's height." | [ ] | [ ] | [ ] | [ ] |
 | 28 | The Topo Edit buttons, Floor ⇄ Topo and the Modify-tab Topo Tools shortcut, in the light and the dark theme | Every button has a legible icon at both sizes. No Floor ⇄ Topo on the Modify tab | [ ] | [ ] | [ ] | [ ] |
 | 29 | **The panel.** Start a session; look at Topo Edit on the Add-Ins tab; hover ✗, ✓ and Update | ✗ above ✓ at the panel's left end, 32 px icons with no text. Tooltips titled "Cancel" and "Accept"; Update's says "…to the toposolid or floor being edited, and stay in the session". The Add-Ins panels are no taller than before the session (two screenshots), and nothing on Topo Edit is cut off | [ ] | [ ] | [ ] | [ ] |
@@ -472,7 +501,7 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 60 | **The Modify tab.** Edit a toposolid's sketch and select a sketch line; Finish, and select the toposolid again | No Revit error; the shortcut is back after Finish | [ ] | [ ] | [ ] | [ ] |
 | 61 | One toposolid selected: press Topo Tools; then ✓ with it still selected | During the session the shortcut is off the Modify tab (the copy is there); after ✓ it comes back | [ ] | [ ] | [ ] | [ ] |
 | 62 | During a session, look at Modify \| Toposolid, Modify \| Place Detail Lines (while drawing), Modify \| Text Notes, Modify \| Walls and the plain Modify tab | The copy is there, in the tab's colours. On the tab where the session started it sits after Revit's panels; after Draw Lines or a new selection, Revit's new panels come after it, so it sits right after Revit's fixed panels. Note where it sits | [ ] | [ ] | [ ] | [ ] |
-| 63 | On the copy, type a spacing; then click its buttons (✗ and ✓ in separate sessions) | One Spacing box: the value shows in both. Each button acts as it does on Add-Ins | [ ] | [ ] | [ ] | [ ] |
+| 63 | On the copy, type a height in the Height box; then click its buttons (✗ and ✓ in separate sessions) | One Height box: the value shows in both. Each button acts as it does on Add-Ins | [ ] | [ ] | [ ] | [ ] |
 | 64 | While drawing after Draw Lines, click ✓ on the copy | The Detail Line tool ends and the session is accepted. If not, report it | [ ] | [ ] | [ ] | [ ] |
 | 65 | End a session by ✓; by ✗; by closing the model; by switching to another open model | Each time the copy leaves the Modify tab at once | [ ] | [ ] | [ ] | [ ] |
 | 66 | During a session: Edit Boundary of another floor with a sketch line selected; a filled region's sketch; Edit Group with an element of the group selected. Finish some, cancel others | While each lasts, the copy is off the Modify tab and Revit shows no error. After Finish, and after Cancel, the copy is back, also with nothing selected | [ ] | [ ] | [ ] | [ ] |
@@ -519,6 +548,32 @@ to the design rather than being ticked. UIFramework 2025 could not be read for t
 | 107 | **Every year.** Rows 86, 87, 24 and 97 | Each passes as written. They check that `ModifySubElement` takes an outline corner of a toposolid and of a floor, measured from the same unshaped top as an edge point. Report it if a corner does not move at all (the summary then counts it among the points that "could not be placed"), or if every corner lands off its expected height by one same amount | [ ] | [ ] | [ ] | [ ] |
 | 108 | A toposolid with a height offset other than 0, and a floor on a level above 0 with a height offset other than 0: on each, a line ending on an outline corner, at a known height; Update | The corner reads the line's height within 1 mm (point readout, Elevation Base = Survey Point), as the line's own points do (rows 19 and 73); the summary has no "could not be placed" | [ ] | [ ] | [ ] | [ ] |
 | 109 | In a session, type another height on a corner's line and Update, so the Update moves that corner; move it with Modify Sub Elements and Cancel with no Update between. Once with a corner only this session set, once with one an earlier session set | The corner stays where you put it both times, and Cancel's message does not count it. A later session's Update leaves it there and does not report it | [ ] | [ ] | [ ] | [ ] |
+| 110 | **Height box.** In a session select one topo line | The Height box shows its height | [ ] | [ ] | [ ] | [ ] |
+| 111 | Type another height in the box, press Enter; then Update | The line's label shows the new height (two decimals at least); Update moves its points there; one Undo ("Topo height") puts the label back | [ ] | [ ] | [ ] | [ ] |
+| 112 | Select three lines with different heights, type one height, Enter | The box was empty before typing; all three labels take the height in one undo step | [ ] | [ ] | [ ] | [ ] |
+| 113 | Select a line and its own label together | The box shows the height; Enter changes that one label, and no second label appears | [ ] | [ ] | [ ] | [ ] |
+| 114 | Delete a line's label, select the line, type a height, Enter; then ✗ | A new label appears at the line's middle; Cancel deletes it again | [ ] | [ ] | [ ] | [ ] |
+| 115 | Type "abc" and press Enter | Nothing changes; the box shows the selection's height again | [ ] | [ ] | [ ] | [ ] |
+| 116 | Select a line, type a height in the box, Enter; then draw a new line | The new line's label starts at that height | [ ] | [ ] | [ ] | [ ] |
+| 117 | With a non-topo element selected, and outside any session | The box is empty; Enter changes nothing | [ ] | [ ] | [ ] | [ ] |
+| 118 | During a session, look at the Modify-tab copy of Topo Edit | It has the Height box too, and typing there works the same | [ ] | [ ] | [ ] | [ ] |
+| 119 | Copy a line together with its label; select only the copied label (no Height Labels or Update in between), type a height, Enter | Only the copy's label changes; the original line keeps its height. The box showed the copy's height, not the original's | [ ] | [ ] | [ ] | [ ] |
+| 120 | Select a line, type a height, Enter; then Ctrl+Z. Also: with the line selected, edit its label by hand | After the Undo the box shows the old height again; after the hand edit it shows the edited height | [ ] | [ ] | [ ] | [ ] |
+| 121 | Select three lines at different heights, type +0.5, Enter; then -0.25, Enter | Each label goes up by 0.50, then down by 0.25, from its own height; one undo step each | [ ] | [ ] | [ ] | [ ] |
+| 122 | Select a line and a line whose label reads "abc", type +0.5, Enter | The first goes up 0.50; a message says 1 line keeps its height | [ ] | [ ] | [ ] | [ ] |
+| 123 | Type =-3.20, Enter | The label shows -3.20 | [ ] | [ ] | [ ] | [ ] |
+| 124 | Type +0.1 in the box (no Enter), then select a line | The box keeps +0.1 | [ ] | [ ] | [ ] | [ ] |
+| 125 | Type 43, press Pick, click three lines, Esc | Each label becomes 43.00 as it is clicked; three undo steps | [ ] | [ ] | [ ] | [ ] |
+| 126 | Type +0.1, Pick, click one line twice, then its label once | The line goes up 0.30 in all; the prompt says "raise them 0.10 m" | [ ] | [ ] | [ ] | [ ] |
+| 127 | Select a Tab chain of lines, type -0.1, Pick | The chain goes down 0.10 straight away, as one undo step; clicking continues | [ ] | [ ] | [ ] | [ ] |
+| 128 | During Pick, click a wall, a plain detail line, and a line whose label reads "abc" | The wall and the plain line cannot be picked; the "abc" line keeps its height and the prompt says so | [ ] | [ ] | [ ] | [ ] |
+| 129 | Press Pick with the box empty; then from another view than the session's | A message asks to type in the box first; from another view, the session's view opens and clicking works | [ ] | [ ] | [ ] | [ ] |
+| 130 | Look at the panel | ✗/✓, then a stack Draw Lines / Pick Lines / Height box with "H=" at its left, wider than the two buttons above it, then the Update split button; no Spacing box. The log has no "Height box keeps the API's look" line | [ ] | [ ] | [ ] | [ ] |
+| 131 | Type 43, press Enter with nothing selected; then Pick Lines and click a line | 43 stays in the box after Enter and after Pick; the line becomes 43.00 | [ ] | [ ] | [ ] | [ ] |
+| 132 | Type +0.1 **without** Enter, click Pick Lines, click a line | +0.1 is still in the box; the line goes up 0.10. Also check the selected lines were not raised twice (once by the box losing focus, once by Pick) | [ ] | [ ] | [ ] | [ ] |
+| 133 | Type 43 with a line selected, Enter; select another line | The first line becomes 43.00; the box still holds 43 (clear it to see the other line's height) | [ ] | [ ] | [ ] | [ ] |
+| 134 | Update's own click; then its menu: Labels | The click updates the heights (as the old Update); Labels re-labels as the old Height Labels; the button stays "Update" | [ ] | [ ] | [ ] | [ ] |
+| 135 | Type "4x" and press Enter | A message says "4x" is not a height; the text stays | [ ] | [ ] | [ ] | [ ] |
 
 Items 19 and 20 are the two floor facts nothing has verified yet; if a floor wants an offset from
 its top, floors need their own Z conversion.

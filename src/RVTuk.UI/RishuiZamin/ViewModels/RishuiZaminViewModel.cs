@@ -12,7 +12,7 @@ using RVTuk.UI.Shared.ViewModels;
 
 namespace RVTuk.UI.RishuiZamin.ViewModels
 {
-    public enum SubmissionPane { Areas, Config }
+    public enum SubmissionPane { Areas, Table, Config }
 
     /// <summary>
     /// View model for the Area Calc (Rishui Zamin) window. Top toolbar switches the bottom pane
@@ -26,6 +26,8 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         private readonly Func<IReadOnlyList<AreaRecord>, RishuiZaminConfig, (bool ok, string msg)> _export;
         private readonly Func<(bool ok, string msg)>? _setupUsageKeys;
         private readonly Func<UsageKeySlot, int?, IReadOnlyList<long>, bool, UsageAssignResult>? _assignUsage;
+        private readonly Func<(string DocumentKey, PlotLimits Limits)>? _readPlotLimits;
+        private readonly Func<PlotLimits, (bool ok, string msg)>? _savePlotLimits;
         private readonly Dispatcher _dispatcher;
 
         private SubmissionPane _currentPane = SubmissionPane.Areas;
@@ -40,6 +42,16 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         private string _fileBaseNameText = "";
         private bool _scaleMismatch;
         private bool _isRefreshing;
+        private bool _isSavingLimits;
+        private bool _commitAgain;
+        private AreaTable _table = AreaTable.Empty;
+        private PlotLimits _appliedLimits = PlotLimits.Empty;
+        private PlotLimits _lastKnownLimits = PlotLimits.Empty;
+        private string? _limitsDocKey;
+        private bool _limitsUnsaved;
+        private IReadOnlyList<PlotLimitChip> _limitChips = Array.Empty<PlotLimitChip>();
+        private string? _plotHint;
+        private string? _tableStatusText;
 
         /// <param name="extract">Reads the areas on the open sheet (id + record).</param>
         /// <param name="selectInModel">Selects Areas in the model by element id.</param>
@@ -50,18 +62,27 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         /// <param name="assignUsage">Sets the New/Old usage key (code, or null for none) on the
         /// areas, running Setup Usage Keys first when the last argument is true; one undo step.
         /// Blocking — run off the UI thread.</param>
+        /// <param name="readPlotLimits">The Table tab's plot area and limits stored in the project
+        /// the last extract read, with a key identifying that project. Called right after
+        /// <paramref name="extract"/>, on the same background thread.</param>
+        /// <param name="savePlotLimits">Stores the plot area and limits in that project (one undo
+        /// step); returns (ok, message). Blocking — run off the UI thread.</param>
         public RishuiZaminViewModel(
             Func<IReadOnlyList<(long Id, AreaRecord Rec)>> extract,
             Action<IReadOnlyList<long>> selectInModel,
             Func<IReadOnlyList<AreaRecord>, RishuiZaminConfig, (bool ok, string msg)> export,
             Func<(bool ok, string msg)>? setupUsageKeys = null,
-            Func<UsageKeySlot, int?, IReadOnlyList<long>, bool, UsageAssignResult>? assignUsage = null)
+            Func<UsageKeySlot, int?, IReadOnlyList<long>, bool, UsageAssignResult>? assignUsage = null,
+            Func<(string DocumentKey, PlotLimits Limits)>? readPlotLimits = null,
+            Func<PlotLimits, (bool ok, string msg)>? savePlotLimits = null)
         {
             _extract = extract;
             _selectInModel = selectInModel;
             _export = export;
             _setupUsageKeys = setupUsageKeys;
             _assignUsage = assignUsage;
+            _readPlotLimits = readPlotLimits;
+            _savePlotLimits = savePlotLimits;
             _dispatcher = Dispatcher.CurrentDispatcher;
 
             RefreshCommand    = new RelayCommand(Refresh);
@@ -149,7 +170,7 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
         }
 
         /// <summary>True while a refresh or a usage assignment runs.</summary>
-        public bool IsBusy => _isRefreshing || _isAssigning;
+        public bool IsBusy => _isRefreshing || _isAssigning || _isSavingLimits;
 
         public bool CanAssign => _assignUsage != null && SelectedRows.Count > 0 && !IsBusy;
 
@@ -334,6 +355,144 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
             OnPropertyChanged(nameof(CanAssign));
         }
 
+        // ── Table tab ────────────────────────────────────────────────────────
+
+        /// <summary>The Table tab's floors × codes, rebuilt on every read of the sheet.</summary>
+        public AreaTable Table
+        {
+            get => _table;
+            private set => SetProperty(ref _table, value);
+        }
+
+        public PlotLimitBoxViewModel PlotAreaBox { get; } = new();
+        public PlotLimitBoxViewModel PrimaryLimitBox { get; } = new();
+        public PlotLimitBoxViewModel ServiceLimitBox { get; } = new();
+        public PlotLimitBoxViewModel TotalLimitBox { get; } = new();
+
+        /// <summary>The plot area the table's % cells and the chips use (the last committed or
+        /// loaded value, saved or not).</summary>
+        public double? PlotAreaM2 => _appliedLimits.PlotAreaM2;
+
+        /// <summary>Primary, Service and Total against the plan's allowed % of plot.</summary>
+        public IReadOnlyList<PlotLimitChip> LimitChips
+        {
+            get => _limitChips;
+            private set => SetProperty(ref _limitChips, value);
+        }
+
+        /// <summary>"Type the plot area…" while there is no plot area; otherwise null.</summary>
+        public string? PlotHint
+        {
+            get => _plotHint;
+            private set => SetProperty(ref _plotHint, value);
+        }
+
+        /// <summary>The Table tab's status line: saved, or why not.</summary>
+        public string? TableStatusText
+        {
+            get => _tableStatusText;
+            private set => SetProperty(ref _tableStatusText, value);
+        }
+
+        /// <summary>True while the boxes hold values that could not be saved to the project.</summary>
+        public bool LimitsUnsaved
+        {
+            get => _limitsUnsaved;
+            private set => SetProperty(ref _limitsUnsaved, value);
+        }
+
+        /// <summary>Raised after the table, the plot area or the chips change, so the view can
+        /// rebuild its grid.</summary>
+        public event Action? TableChanged;
+
+        private PlotLimits TypedLimits() => new PlotLimits(PlotAreaBox.Value, PrimaryLimitBox.Value,
+            ServiceLimitBox.Value, TotalLimitBox.Value);
+
+        private void RecomputeLimits()
+        {
+            LimitChips = PlotLimitCheck.Chips(Table, _appliedLimits);
+            PlotHint = _appliedLimits.PlotAreaM2 is > 0 ? null : PlotLimitCheck.NoPlotHint;
+            OnPropertyChanged(nameof(PlotAreaM2));
+            TableChanged?.Invoke();
+        }
+
+        /// <summary>Takes the values stored in the project just read — unless the boxes hold
+        /// unsaved (or still saving) values typed for that same project. Another project's values
+        /// always replace them, so one project's numbers never show against another.</summary>
+        private void ApplyStoredLimits(string documentKey, PlotLimits stored)
+        {
+            var sameDocument = documentKey == _limitsDocKey;
+            _limitsDocKey = documentKey;
+            if (sameDocument && (LimitsUnsaved || _isSavingLimits)) return;
+
+            if (!sameDocument) TableStatusText = null;
+            PlotAreaBox.Load(stored.PlotAreaM2);
+            PrimaryLimitBox.Load(stored.PrimaryPercent);
+            ServiceLimitBox.Load(stored.ServicePercent);
+            TotalLimitBox.Load(stored.TotalPercent);
+            _appliedLimits = stored;
+            _lastKnownLimits = stored;
+            LimitsUnsaved = false;
+            RecomputeLimits();
+        }
+
+        /// <summary>Applies the boxes (Enter or leaving a box) and, when they changed, saves them
+        /// in the project. Does nothing while a box is invalid.</summary>
+        public void CommitPlotLimits()
+        {
+            if (PlotAreaBox.IsInvalid || PrimaryLimitBox.IsInvalid || ServiceLimitBox.IsInvalid || TotalLimitBox.IsInvalid)
+                return;
+            var typed = TypedLimits();
+            if (typed != _appliedLimits)
+            {
+                _appliedLimits = typed;
+                RecomputeLimits();
+            }
+
+            if (typed == _lastKnownLimits)
+            {
+                // Back to what the project holds: nothing is unsaved any more.
+                if (LimitsUnsaved && !_isSavingLimits)
+                {
+                    LimitsUnsaved = false;
+                    TableStatusText = null;
+                }
+                return;
+            }
+            if (_savePlotLimits == null) return;
+            if (_isSavingLimits) { _commitAgain = true; return; }
+
+            SetBusy(ref _isSavingLimits, true);
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                (bool ok, string msg) result;
+                try { result = _savePlotLimits(typed); }
+                catch (Exception ex) { result = (false, ex.Message); }
+
+                _dispatcher.Invoke(() =>
+                {
+                    SetBusy(ref _isSavingLimits, false);
+                    if (result.ok)
+                    {
+                        _lastKnownLimits = typed;
+                        LimitsUnsaved = false;
+                        TableStatusText = "Plot area and limits saved in the project · one undo step in Revit";
+                    }
+                    else
+                    {
+                        LimitsUnsaved = true;
+                        TableStatusText = "Not saved to the project: " + result.msg;
+                    }
+
+                    if (_commitAgain)
+                    {
+                        _commitAgain = false;
+                        CommitPlotLimits();
+                    }
+                });
+            });
+        }
+
         /// <summary>Fills the list from extracted areas (on the UI thread), keeping the rows that
         /// were selected — by element id — selected.</summary>
         public void Populate(IReadOnlyList<(long Id, AreaRecord Rec)> extracted)
@@ -361,6 +520,8 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
             OnPropertyChanged(nameof(FlaggedCount));
             OnPropertyChanged(nameof(TotalAreaCount));
             SheetTotals = UsageTotals.Sum(extracted.Select(e => e.Rec));
+            Table = AreaTable.Build(extracted.Select(e => e.Rec));
+            RecomputeLimits();
             UpdateSelection();
 
             var scales = extracted.Select(e => e.Rec.Scale).Where(s => s > 0).Distinct().ToList();
@@ -383,7 +544,12 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
             System.Threading.ThreadPool.QueueUserWorkItem(_ =>
             {
                 IReadOnlyList<(long Id, AreaRecord Rec)> extracted;
-                try { extracted = _extract(); }
+                (string DocumentKey, PlotLimits Limits)? stored = null;
+                try
+                {
+                    extracted = _extract();
+                    stored = _readPlotLimits?.Invoke();
+                }
                 catch (Exception ex)
                 {
                     _dispatcher.Invoke(() =>
@@ -396,9 +562,10 @@ namespace RVTuk.UI.RishuiZamin.ViewModels
 
                 _dispatcher.Invoke(() =>
                 {
+                    if (stored is { } read) ApplyStoredLimits(read.DocumentKey, read.Limits);
                     Populate(extracted);
                     SetBusy(ref _isRefreshing, false);
-                    CurrentPane = SubmissionPane.Areas;
+                    if (CurrentPane == SubmissionPane.Config) CurrentPane = SubmissionPane.Areas;
                     if (extracted.Count == 0)
                         ExportCompleted?.Invoke(false, "No areas found on the open sheet's area plan(s).");
                 });

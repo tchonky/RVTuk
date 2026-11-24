@@ -61,6 +61,16 @@ namespace RVTuk.Revit.TopoTools
             ctx.DrawLine(digits, new WpfPoint(s * 0.34, s * 0.39), new WpfPoint(s * 0.66, s * 0.39));
         });
 
+        /// <summary>Pick: a white mouse pointer clicking an orange line.</summary>
+        internal static BitmapSource Pick(int size) => Draw(size, (ctx, s) =>
+        {
+            ctx.DrawLine(OrangePen(s), new WpfPoint(s * 0.10, s * 0.30), new WpfPoint(s * 0.90, s * 0.30));
+
+            // The pointer: tip on the line, body down to the bottom right, with its tail.
+            ctx.DrawGeometry(Brushes.White, null, Polygon(s,
+                (0.36, 0.30), (0.36, 0.86), (0.49, 0.73), (0.59, 0.92), (0.68, 0.87), (0.58, 0.69), (0.76, 0.69)));
+        });
+
         /// <summary>Update: a white clockwise refresh arrow around an orange contour.</summary>
         internal static BitmapSource Update(int size) => Draw(size, (ctx, s) =>
         {

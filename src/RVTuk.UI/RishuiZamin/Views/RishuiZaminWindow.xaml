@@ -385,6 +385,11 @@
                 </DockPanel>
             </TabItem>
 
+            <!-- ── TABLE TAB ────────────────────────────────────────────── -->
+            <TabItem Header="Table">
+                <views:AreaTableView/>
+            </TabItem>
+
             <!-- ── SETTINGS TAB ─────────────────────────────────────────── -->
             <TabItem>
                 <TabItem.Header>
