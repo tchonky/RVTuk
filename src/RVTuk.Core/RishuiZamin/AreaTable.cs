@@ -18,6 +18,10 @@ namespace RVTuk.Core.RishuiZamin
     /// <see cref="AreaTableColumnKind.Code"/>.</summary>
     public sealed record AreaTableColumn(UsageGroup Group, AreaTableColumnKind Kind, int? Code);
 
+    /// <summary>A run of <see cref="AreaTable.Columns"/> under one merged header: a group's code
+    /// columns (<see cref="IsCodes"/>) or its totals (Σ and %).</summary>
+    public sealed record AreaTableBand(UsageGroup Group, bool IsCodes, int Start, int Count);
+
     public enum AreaTableRowKind
     {
         Floor,
@@ -68,7 +72,7 @@ namespace RVTuk.Core.RishuiZamin
     /// </summary>
     public sealed class AreaTable
     {
-        public const string NoLevelLabel = "(no level)";
+        public const string NoLevelLabel = "(ללא מפלס)";
         private const string Dash = "—";
 
         public static readonly AreaTable Empty = Build(new AreaRecord[0]);
@@ -80,6 +84,27 @@ namespace RVTuk.Core.RishuiZamin
         }
 
         public IReadOnlyList<AreaTableColumn> Columns { get; }
+
+        /// <summary><see cref="Columns"/> cut into header bands, in column order: each group's
+        /// codes, then its totals.</summary>
+        public IReadOnlyList<AreaTableBand> Bands
+        {
+            get
+            {
+                var bands = new List<AreaTableBand>();
+                for (var i = 0; i < Columns.Count; i++)
+                {
+                    var c = Columns[i];
+                    var isCodes = c.Kind == AreaTableColumnKind.Code;
+                    var last = bands.Count == 0 ? null : bands[bands.Count - 1];
+                    if (last != null && last.Group == c.Group && last.IsCodes == isCodes)
+                        bands[bands.Count - 1] = last with { Count = last.Count + 1 };
+                    else
+                        bands.Add(new AreaTableBand(c.Group, isCodes, i, 1));
+                }
+                return bands;
+            }
+        }
         public IReadOnlyList<AreaTableRow> Rows { get; }
 
         public static AreaTable Build(IEnumerable<AreaRecord> areas)
@@ -96,9 +121,9 @@ namespace RVTuk.Core.RishuiZamin
 
             var rows = new List<AreaTableRow>(floors)
             {
-                new(AreaTableRowKind.AboveGround, "Above ground", null, false, list.Where(a => !a.IsUnderground).ToList()),
-                new(AreaTableRowKind.BelowGround, "Below ground", null, true, list.Where(a => a.IsUnderground).ToList()),
-                new(AreaTableRowKind.Building, "Building", null, false, list),
+                new(AreaTableRowKind.AboveGround, "סה\"כ מעל הקרקע", null, false, list.Where(a => !a.IsUnderground).ToList()),
+                new(AreaTableRowKind.BelowGround, "סה\"כ מתחת לקרקע", null, true, list.Where(a => a.IsUnderground).ToList()),
+                new(AreaTableRowKind.Building, "סה\"כ בבניין", null, false, list),
             };
 
             var used = new HashSet<int>(list.Select(UsageGroups.EffectiveCode).Where(c => c != null).Select(c => c!.Value));

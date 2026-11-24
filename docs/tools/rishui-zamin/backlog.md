@@ -45,7 +45,7 @@ KKarea host (Revit 2023). Toolkit-wide items live in [`../../BACKLOG.md`](../../
   - no test for a commit arriving while a save is still running (`_commitAgain`);
   - the save waits on `ExternalEvent.Raise()` with no timeout and ignores a Denied result (the
     same pattern as the other Area Calc handlers);
-  - the "(no level)" row sorts among the floors by its first area's elevation, not last;
+  - the "(ללא מפלס)" (no level) row sorts among the floors by its first area's elevation, not last;
   - saving borrows Project Information in a workshared model until the next sync; a
     `DataStorage` element of our own would not.
 - [ ] Setup Usage Keys still matches key rows by exact Key Name, so a row renamed by hand is
