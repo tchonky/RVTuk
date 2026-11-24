@@ -1,4 +1,4 @@
-# Rishui Zamin (ribbon button: "Area Calc")
+# Rishui Zamin (ribbon button: "Rishui Zamin")
 
 **What it is:** reads the Areas on the open sheet and exports the paired `.dxf` + `.dat`
 files the רישוי זמין (Rishui Zamin) area-calculation robot expects (`RZ_FRAME` /
@@ -35,7 +35,7 @@ Information, one undo step per change). See
 **KKarea**, a standalone one-button add-in hosting only this tool (RVTuk itself was dropped
 from 2023; Revit 2026 and 2027 get the full RVTuk add-in).
 
-**Names:** code `RishuiZamin`; ribbon button displays "Area Calc" (internal id
+**Names:** code `RishuiZamin`; ribbon button displays "Rishui Zamin" ("Area Calc" until 2026-11-24; the window is still titled "RVTuk — Area Calc (Rishui Zamin)"); its icon is a simplified state emblem (`RVTuk.UI/RishuiZamin/Views/RishuiZaminIcon`, shared with KKarea) (internal id
 `AreaCalc`). Older code/docs say `AreaSubmission` / `autoarea` — same tool.
 
 ## Code
