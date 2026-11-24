@@ -4,10 +4,14 @@ Search the office family library and load families into the open project.
 
 ## Finding a family
 
-- Type in the search box. Every word must appear in the family name or its tags, in any order.
-- **Category** shows only the ticked categories. "(No category)" holds families that have not been scanned yet.
-- ⬅ shows families loaded in the open project, ➡ families in the library, ⭐ your favourites. Press ⬅ and ➡ together for families that are in both.
-- Click a tag under a family's name to search for it.
+- Click the search box: a list opens with the categories and the tags.
+- Type words: every word must appear in the family name or its tags, in any order. Typing also narrows the list of categories and suggests matching tags.
+- **Categories**: tick one or more to see families in any of them. With none ticked you see every category. "(No category)" holds families that have not been scanned yet. The number next to each is how many families you would see.
+- **Tags**: add a tag to see only families that have it. Add several and a family needs all of them. Enter adds the highlighted tag.
+- Every family also has tags of its own that you can't remove: **Project** (loaded in the open project, after ⟳), **Library** (in the library) and **Fix requested** (someone asked for a fix). Add **Project** and **Library** together for families that are in both.
+- Ticked categories and added tags show as chips in the box. ✕ on a chip removes it, Backspace in an empty box removes the last one, and ✕ at the right clears everything.
+- ⭐ next to the box shows only your favourites.
+- Click a tag under a family's name to add it to the search.
 - The grid button at the bottom switches to large thumbnails.
 
 ## Checking the project (⟳)
@@ -34,6 +38,14 @@ Switch to the project window first. The check does not work while a family is op
 - **Rescan** (top-right icon) re-reads one family's parameters and thumbnail after its file changed.
 - "Working…" at the bottom of the list means Revit or the library database is still busy with your last action.
 
+## Asking the maintainer
+
+- **Request a fix** (under Load) tells the library maintainer that the selected family needs fixing or changing. Describe what is wrong. If you already changed the family in your project, tick **Attach my project's version** so the maintainer can see your change.
+- **Request family** (bottom of the list) asks for a family the library doesn't have. It is also offered when a search finds nothing.
+- The inbox button at the bottom lists every open request, with their number on it. Check it before asking for the same thing twice. You can **Withdraw** your own requests.
+- A family with an open fix request shows 🔧 in the list, the **Fix requested** tag, and the request above its instructions.
+- Your Windows user name and the date are added. The maintainer sees a request once Desktop Connector has uploaded it, usually within a minute, and marks it **Done** when it is handled.
+
 ## View-only access
 
 Most people can only view the library, so only its maintainer can scan or edit it. In that case:
@@ -54,5 +66,6 @@ You need Autodesk Desktop Connector, signed in with your Autodesk account.
 
 - "The active window is a family": switch to the project window and try again.
 - "Revit did not accept the request": finish or cancel what Revit is doing, then try again.
-- The list is empty: clear the search and the filters, press ⟳, or run a Scan if the library is new.
+- The list is empty: remove some chips or clear the search, press ⟳, or run a Scan if the library is new.
+- "The request was not sent": check that Desktop Connector is running, and ask the maintainer to let you add files to the library's .Requests folder.
 - Anything else: contact the RVTuk team.

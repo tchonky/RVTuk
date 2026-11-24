@@ -81,6 +81,24 @@ namespace RVTuk.UI.Tests.FamilyBrowser
         });
 
         [Fact]
+        public void BuiltInTags_AreNeverStored() => Sta.Run(() =>
+        {
+            // Project, Library and Fix requested are worked out from the family's state; a typed
+            // "Project" stored as a tag would make the family look loaded when it isn't.
+            var (repo, id, vm) = Arrange(null);
+            using (repo)
+            {
+                vm.TagsText = "interior, Project, LIBRARY, fix requested, דלת פנים";
+                Assert.True(vm.ExecuteSave(Good()));
+                Assert.Equal("interior, דלת פנים", repo.GetTags(id));
+
+                vm.TagsText = "Project";
+                Assert.True(vm.ExecuteSave(Good()));
+                Assert.Null(repo.GetTags(id));
+            }
+        });
+
+        [Fact]
         public void EditorCouldNotSerialise_NothingIsWritten() => Sta.Run(() =>
         {
             var good = Good();

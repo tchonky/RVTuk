@@ -32,8 +32,9 @@ namespace RVTuk.UI.Tests.Shared
                 .Where(t => !t.IsAbstract && (typeof(Window).IsAssignableFrom(t) || typeof(UserControl).IsAssignableFrom(t)))
                 .ToList();
             // 10 since the Topo Tools pane gave way to the ribbon edit session; 11 with the Area
-            // Calc usage picker; 12 with the Area Calc table.
-            Assert.Equal(12, views.Count);
+            // Calc usage picker; 12 with the Area Calc table; 13 with the Family Browser's
+            // request window.
+            Assert.Equal(13, views.Count);
 
             var folder = Path.Combine(Path.GetTempPath(), "rvtuk_smoke_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(folder);
@@ -55,6 +56,7 @@ namespace RVTuk.UI.Tests.Shared
                         BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null, new byte[4], 4)),
                     [typeof(FamilyBrowserWindow)] = () => new FamilyBrowserWindow(
                         new AppConfig { LibraryFolderPath = folder }, null!, null!, null!, null!, null!, null!, null!, null!),
+                    [typeof(RequestWindow)] = () => new RequestWindow(new RequestDialogInput { IsFix = true, FamilyName = "A" }),
                     [typeof(InstructionsEditorWindow)] = () => new InstructionsEditorWindow(
                         new FamilyBrowserItemViewModel(new FamilyBrowserItem { Id = id, FileName = "A.rfa" }),
                         Path.Combine(folder, "A.rfa"), repo),

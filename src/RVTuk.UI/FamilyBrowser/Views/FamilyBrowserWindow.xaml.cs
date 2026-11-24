@@ -2,7 +2,9 @@
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Navigation;
 using System.Collections.Generic;
 using RVTuk.Core.Shared.Config;
@@ -119,6 +121,7 @@ namespace RVTuk.UI.FamilyBrowser.Views
             }
             vm.Owner = this;
             vm.EditInfoRequested += OnEditInfoRequested;
+            vm.RequestDialog = ShowRequestDialog;
 
             if (ViewModel != null)
             {
@@ -174,16 +177,109 @@ namespace RVTuk.UI.FamilyBrowser.Views
             });
         }
 
-        // WPF's native three-state CheckBox cycles true→null→false on each click, which would
-        // let the user click their way into a stray "indeterminate" state. Indeterminate here is
-        // display-only (computed from the individual category checkboxes), so this forces a
-        // deterministic two-way toggle instead: check-all if not already fully checked, else
-        // uncheck-all. The CheckBox's IsChecked binding is OneWay, so this Click handler is the
-        // only thing driving the change.
-        private void AllCategoriesCheckBox_Click(object sender, RoutedEventArgs e)
+        // ── The search box ──────────────────────────────────────────────────────────────
+        // Focusing or clicking it opens the dropdown; typing keeps it open. Enter adds the
+        // highlighted tag, Backspace in an empty box takes the last chip back, Esc closes,
+        // Down moves into the dropdown.
+        // The popup is StaysOpen=True and closed here instead: a StaysOpen=False popup takes
+        // mouse capture, so the text box's own click would close it again, and the first click
+        // elsewhere (on a family in the list) would only close it.
+        private bool _refocusingAfterEscape;
+
+        private void SearchBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
         {
-            bool turnOn = ViewModel.IsAllCategoriesSelected != true;
-            ViewModel.IsAllCategoriesSelected = turnOn;
+            if (!_refocusingAfterEscape) ViewModel.IsSearchPopupOpen = true;
+        }
+
+        private void SearchBox_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+            => ViewModel.IsSearchPopupOpen = true;
+
+        // Tab or a click away from the box (not into the dropdown) closes the dropdown.
+        private void SearchBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+        {
+            if (e.NewFocus is DependencyObject d && SearchPopupContent.IsAncestorOf(d)) return;
+            ViewModel.IsSearchPopupOpen = false;
+        }
+
+        // Any click in the window outside the search row. Clicks inside the dropdown never get
+        // here: a popup is a window of its own.
+        private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (!ViewModel.IsSearchPopupOpen) return;
+            if (e.OriginalSource is DependencyObject d && SearchRow.IsAncestorOf(d)) return;
+            ViewModel.IsSearchPopupOpen = false;
+        }
+
+        // A popup doesn't follow its window, nor float sensibly over another application.
+        private void Window_MovedOrDeactivated(object sender, EventArgs e)
+        {
+            if (ViewModel != null) ViewModel.IsSearchPopupOpen = false;
+        }
+
+        // Chips wrapping onto a second row make the box taller: move the dropdown below it.
+        private void SearchRow_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (!SearchPopup.IsOpen) return;
+            var offset = SearchPopup.HorizontalOffset;
+            SearchPopup.HorizontalOffset = offset + 0.01;
+            SearchPopup.HorizontalOffset = offset;
+        }
+
+        // A click on the box around the chips (the text box and the chips' ✕ handle their own)
+        // focuses the text, so the whole box behaves like one text box.
+        private void SearchArea_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            SearchBox.Focus();
+            ViewModel.IsSearchPopupOpen = true;
+        }
+
+        private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (SearchBox.IsKeyboardFocused) ViewModel.IsSearchPopupOpen = true;
+        }
+
+        private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            switch (e.Key)
+            {
+                case Key.Enter:
+                    if (ViewModel.AddFirstSuggestion()) e.Handled = true;
+                    break;
+                case Key.Escape:
+                    if (ViewModel.IsSearchPopupOpen) { ViewModel.IsSearchPopupOpen = false; e.Handled = true; }
+                    break;
+                case Key.Back:
+                    if (SearchBox.Text.Length == 0 && ViewModel.RemoveLastChip()) e.Handled = true;
+                    break;
+                case Key.Down:
+                    if (ViewModel.IsSearchPopupOpen)
+                    {
+                        SearchPopupContent.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
+                        e.Handled = true;
+                    }
+                    break;
+            }
+        }
+
+        private void SearchPopup_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Escape) return;
+            ViewModel.IsSearchPopupOpen = false;
+            // Back to the box without its focus handler opening the dropdown again.
+            _refocusingAfterEscape = true;
+            try { SearchBox.Focus(); }
+            finally { _refocusingAfterEscape = false; }
+            e.Handled = true;
+        }
+
+        // A chip, tag or category clicked in the dropdown: keep typing in the box.
+        private void RefocusSearch(object sender, RoutedEventArgs e) =>
+            Dispatcher.BeginInvoke(new Action(() => SearchBox.Focus()), System.Windows.Threading.DispatcherPriority.Input);
+
+        private RequestDialogResult? ShowRequestDialog(RequestDialogInput input)
+        {
+            var dialog = new RequestWindow(input) { Owner = this };
+            return dialog.ShowDialog() == true ? dialog.Result : null;
         }
 
         // Edit Info is non-modal (editor.Show(), not ShowDialog()) so the Family Browser stays

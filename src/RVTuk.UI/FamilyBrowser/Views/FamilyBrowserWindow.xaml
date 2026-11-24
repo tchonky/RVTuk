@@ -3,9 +3,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:theme="clr-namespace:RVTuk.UI.Shared.Themes"
         xmlns:vm="clr-namespace:RVTuk.UI.FamilyBrowser.ViewModels"
         xmlns:ctrl="clr-namespace:RVTuk.UI.Shared.Controls"
+        xmlns:v="clr-namespace:RVTuk.UI.FamilyBrowser.Views"
         Title="RVTuk — Family Browser"
         Width="900" Height="620" MinWidth="660" MinHeight="420"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        PreviewMouseDown="Window_PreviewMouseDown"
+        LocationChanged="Window_MovedOrDeactivated" Deactivated="Window_MovedOrDeactivated">
 
     <Window.Resources>
         <ResourceDictionary>
@@ -13,6 +16,60 @@
                 <theme:DarkThemeDictionary/>
             </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BoolVis"/>
+            <v:CategoryIconConverter x:Key="CategoryIcon"/>
+            <v:TablerIconConverter x:Key="IconByName"/>
+
+            <!-- One request in the Requests list. The text is another user's: plain text only. -->
+            <DataTemplate x:Key="RequestCard" DataType="{x:Type vm:RequestItemViewModel}">
+                <Border Margin="0,0,0,6" Padding="10,8" CornerRadius="2"
+                        Background="{StaticResource Brush.Panel}" BorderBrush="{StaticResource Brush.Border}" BorderThickness="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Viewbox Width="18" Height="18" Margin="0,1,10,0" VerticalAlignment="Top">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="{Binding IconName, Converter={StaticResource IconByName}}"
+                                      Stroke="{StaticResource Brush.Text}" StrokeThickness="2"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                            </Canvas>
+                        </Viewbox>
+                        <StackPanel Grid.Column="1">
+                            <!-- A fix's family name links to the family; a new-family request has none. -->
+                            <TextBlock FontWeight="SemiBold" Visibility="{Binding IsFix, Converter={StaticResource BoolVis}}">
+                                <Hyperlink Command="{Binding DataContext.ShowRequestFamilyCommand,
+                                                     RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
+                                           CommandParameter="{Binding}" Foreground="{StaticResource Brush.Accent}"
+                                           ToolTip="Show this family">
+                                    <Run Text="{Binding Title, Mode=OneWay}"/>
+                                </Hyperlink>
+                            </TextBlock>
+                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                       Visibility="{Binding IsNewFamily, Converter={StaticResource BoolVis}}"/>
+                            <TextBlock Text="{Binding Meta}" FontSize="10" Foreground="{StaticResource Brush.TextMuted}" Margin="0,1,0,2"/>
+                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FlowDirection="{Binding TextFlowDirection}"/>
+                            <TextBlock FontSize="10" Foreground="{StaticResource Brush.TextMuted}" Margin="0,2,0,0"
+                                       Text="&#x1F4CE; Their project's version is attached"
+                                       Visibility="{Binding HasAttachment, Converter={StaticResource BoolVis}}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top" Margin="8,0,0,0">
+                            <Button Content="Done" Padding="8,2" FontSize="11" ToolTip="Mark this request as done"
+                                    Visibility="{Binding CanMarkDone, Converter={StaticResource BoolVis}}"
+                                    Command="{Binding DataContext.MarkRequestDoneCommand,
+                                              RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
+                                    CommandParameter="{Binding}"/>
+                            <Button Content="Withdraw" Padding="8,2" FontSize="11" Margin="4,0,0,0"
+                                    ToolTip="Take back your request"
+                                    Visibility="{Binding CanWithdraw, Converter={StaticResource BoolVis}}"
+                                    Command="{Binding DataContext.WithdrawRequestCommand,
+                                              RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
+                                    CommandParameter="{Binding}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </DataTemplate>
         </ResourceDictionary>
     </Window.Resources>
 
@@ -36,129 +93,124 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- LINE 1: Category (checkbox popover) + source toggles -->
-            <Grid Grid.Row="0" Margin="6,6,6,2">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <Grid Grid.Column="0" Margin="0,0,4,0">
-                    <ToggleButton x:Name="CategoryToggle" HorizontalContentAlignment="Left"
-                                  Content="{Binding CategorySummary}"
-                                  ToolTip="Filter by category (tick several)"/>
-                    <Popup StaysOpen="False" AllowsTransparency="True" Placement="Bottom"
-                           PlacementTarget="{Binding ElementName=CategoryToggle}"
-                           IsOpen="{Binding IsChecked, ElementName=CategoryToggle, Mode=TwoWay}">
-                        <Border Background="{StaticResource Brush.Panel}" BorderBrush="{StaticResource Brush.Border}"
-                                BorderThickness="1" Padding="6" MinWidth="180"
-                                TextElement.Foreground="{StaticResource Brush.Text}">
-                            <StackPanel>
-                                <CheckBox Content="All categories" FontWeight="SemiBold" Margin="2" IsThreeState="True"
-                                          IsChecked="{Binding IsAllCategoriesSelected, Mode=OneWay}"
-                                          Click="AllCategoriesCheckBox_Click"/>
-                                <Separator/>
-                                <!-- A Popup taller than the screen can't scroll: cap it. -->
-                                <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto">
-                                    <ItemsControl ItemsSource="{Binding CategoryOptions}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <CheckBox Content="{Binding Name}" Margin="2"
-                                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"/>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
-                            </StackPanel>
-                        </Border>
-                    </Popup>
-                </Grid>
-
-                <!-- Source toggles: in the model (⬅), favourites (⭐), in the library (⬅ mirrored
-                     as ➡) — all off by default (unfiltered). Each pressed toggle narrows the
-                     list (AND); ⬅ and ➡ are inclusive, so pressing both shows only the families
-                     that exist in both the model and the library (Core's SourceToggleFilter). -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <!-- ⬅️/➡️ used to be two different emoji code points (U+2B05 / U+27A1),
-                         which don't render as a true mirror pair in every font. One Path,
-                         flipped via RenderTransform, guarantees they match. -->
-                    <ToggleButton Width="30" Height="28" Margin="0,0,2,0"
-                                  IsChecked="{Binding ShowInProjectFamilies, Mode=TwoWay}"
-                                  ToolTip="Show families loaded in the model (press both arrows for families in the model and the library)">
-                        <Viewbox Width="14" Height="14" RenderTransformOrigin="0.5,0.5">
-                            <Viewbox.RenderTransform>
-                                <ScaleTransform ScaleX="-1"/>
-                            </Viewbox.RenderTransform>
-                            <Canvas Width="24" Height="24">
-                                <Path Stroke="{StaticResource Brush.Text}" StrokeThickness="2"
-                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
-                                      Data="M4,12 L20,12 M14,6 L20,12 L14,18"/>
-                            </Canvas>
-                        </Viewbox>
-                    </ToggleButton>
-                    <ToggleButton Width="30" Height="28" Margin="0,0,2,0" FontSize="13"
-                                  IsChecked="{Binding ShowFavoriteFamilies, Mode=TwoWay}"
-                                  ToolTip="Show favourite families"
-                                  Content="⭐"/>
-                    <ToggleButton Width="30" Height="28"
-                                  IsChecked="{Binding ShowLibraryFamilies, Mode=TwoWay}"
-                                  ToolTip="Show families in the library (press both arrows for families in the model and the library)">
-                        <Viewbox Width="14" Height="14">
-                            <Canvas Width="24" Height="24">
-                                <Path Stroke="{StaticResource Brush.Text}" StrokeThickness="2"
-                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
-                                      Data="M4,12 L20,12 M14,6 L20,12 L14,18"/>
-                            </Canvas>
-                        </Viewbox>
-                    </ToggleButton>
-                </StackPanel>
-            </Grid>
-
-            <!-- LINE 2: Search + Refresh -->
-            <Grid Grid.Row="1" Margin="6,0,6,4">
+            <!-- SEARCH ROW: one box for words, categories (OR) and tags (AND) · ⟳ · ⭐.
+                 Ticked categories and chosen tags show as chips in the box; focusing it opens
+                 the dropdown below. Rules: Core's FamilyFilter. -->
+            <Grid Grid.Row="0" x:Name="SearchRow" Margin="6,6,6,4" SizeChanged="SearchRow_SizeChanged">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" MinWidth="100"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Search box with overlay hint text (VisualBrush avoided — render-thread-unsafe in WPF 4.x)
-                     and a clear (✕) button shown only while there's text to clear. -->
-                <Grid Grid.Column="0" Margin="0,0,4,0">
-                    <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Padding="4,2,22,2"/>
-                    <TextBlock Text="&#x1F50D; Search..." IsHitTestVisible="False"
-                               Foreground="{StaticResource Brush.TextMuted}"
-                               Margin="7,0,0,0" VerticalAlignment="Center" FontSize="11">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding SearchText}" Value="">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                    <Button HorizontalAlignment="Right" VerticalAlignment="Center"
-                             Width="18" Height="18" Margin="0,0,2,0" Padding="0"
-                             BorderThickness="0" Background="Transparent"
-                             Foreground="{StaticResource Brush.TextMuted}" FontSize="9"
-                             Command="{Binding ClearSearchCommand}"
-                             ToolTip="Clear search"
-                             Content="&#x2715;">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding SearchText}" Value="">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
-                </Grid>
+                <Border x:Name="SearchArea" Grid.Column="0" Margin="0,0,4,0" MinHeight="28"
+                        BorderThickness="1" CornerRadius="2" Cursor="IBeam"
+                        Background="{StaticResource Brush.Input}"
+                        MouseLeftButtonDown="SearchArea_MouseDown">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="BorderBrush" Value="{StaticResource Brush.Border}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSearchPopupOpen}" Value="True">
+                                    <Setter Property="BorderBrush" Value="{StaticResource Brush.BorderFocus}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Viewbox Width="14" Height="14" Margin="6,6,0,0" HorizontalAlignment="Left"
+                                 VerticalAlignment="Top" IsHitTestVisible="False">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="{v:Icon search}" Stroke="{StaticResource Brush.TextMuted}" StrokeThickness="2"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                            </Canvas>
+                        </Viewbox>
+                        <!-- Hint over the empty box (VisualBrush avoided — render-thread-unsafe in WPF 4.x). -->
+                        <TextBlock Text="{Binding SearchHint}" Margin="26,0,22,0" VerticalAlignment="Center"
+                                   FontSize="11" Foreground="{StaticResource Brush.TextMuted}"
+                                   TextTrimming="CharacterEllipsis" IsHitTestVisible="False"/>
+                        <WrapPanel Margin="24,2,22,2" VerticalAlignment="Center">
+                            <ItemsControl ItemsSource="{Binding FilterChips}" Focusable="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:FilterChip}">
+                                        <Border Margin="0,1,3,1" Height="20" CornerRadius="10" BorderThickness="1"
+                                                Padding="6,0,1,0" ToolTip="{Binding ToolTip}" Cursor="Arrow">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="{StaticResource Brush.Control}"/>
+                                                    <Setter Property="BorderBrush" Value="#5A5A5A"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsCategory}" Value="True">
+                                                            <Setter Property="Background" Value="#2D3A48"/>
+                                                            <Setter Property="BorderBrush" Value="#4A6A8A"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsBuiltIn}" Value="True">
+                                                            <Setter Property="Background" Value="{StaticResource Brush.Selection}"/>
+                                                            <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Viewbox Width="12" Height="12" Margin="0,0,3,0" VerticalAlignment="Center">
+                                                    <Canvas Width="24" Height="24">
+                                                        <Path Data="{Binding IconName, Converter={StaticResource IconByName}}"
+                                                              Stroke="{StaticResource Brush.Text}" StrokeThickness="2"
+                                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                                                    </Canvas>
+                                                </Viewbox>
+                                                <TextBlock Text="{Binding Value}" FontSize="11" VerticalAlignment="Center"
+                                                           MaxWidth="160" TextTrimming="CharacterEllipsis"/>
+                                                <Button Width="16" Height="16" Margin="2,0,0,0" Padding="0"
+                                                        BorderThickness="0" Background="Transparent" Cursor="Hand"
+                                                        ToolTip="{Binding RemoveLabel}"
+                                                        AutomationProperties.Name="{Binding RemoveLabel}"
+                                                        Command="{Binding DataContext.RemoveChipCommand,
+                                                                  RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        CommandParameter="{Binding}" Click="RefocusSearch">
+                                                    <Viewbox Width="9" Height="9">
+                                                        <Canvas Width="24" Height="24">
+                                                            <Path Data="{v:Icon x}" Stroke="{StaticResource Brush.TextMuted}" StrokeThickness="2.5"
+                                                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                                        </Canvas>
+                                                    </Viewbox>
+                                                </Button>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBox x:Name="SearchBox" MinWidth="90" Height="22" Padding="2,0"
+                                     BorderThickness="0" Background="Transparent"
+                                     VerticalContentAlignment="Center"
+                                     AutomationProperties.Name="Search families, categories and tags"
+                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     GotKeyboardFocus="SearchBox_GotKeyboardFocus"
+                                     PreviewMouseDown="SearchBox_PreviewMouseDown"
+                                     PreviewKeyDown="SearchBox_PreviewKeyDown"
+                                     LostKeyboardFocus="SearchBox_LostKeyboardFocus"
+                                     TextChanged="SearchBox_TextChanged"/>
+                        </WrapPanel>
+                        <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,4,2,0"
+                                Width="18" Height="18" Padding="0" Cursor="Hand"
+                                BorderThickness="0" Background="Transparent"
+                                Command="{Binding ClearSearchCommand}"
+                                ToolTip="Clear the search, categories and tags"
+                                Visibility="{Binding HasAnyFilter, Converter={StaticResource BoolVis}}">
+                            <Viewbox Width="10" Height="10">
+                                <Canvas Width="24" Height="24">
+                                    <Path Data="{v:Icon x}" Stroke="{StaticResource Brush.TextMuted}" StrokeThickness="2.5"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                </Canvas>
+                            </Viewbox>
+                        </Button>
+                    </Grid>
+                </Border>
 
-                <Button Grid.Column="1" Width="30" Height="28" Padding="0"
+                <Button Grid.Column="1" Width="30" Height="28" Padding="0" Margin="0,0,2,0" VerticalAlignment="Top"
                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                         Command="{Binding SyncCommand}"
                         ToolTip="{Binding SyncToolTip}">
@@ -171,13 +223,124 @@
                             </Style.Triggers>
                         </Style>
                     </Button.Style>
-                    <Viewbox Width="13" Height="13">
+                    <Viewbox Width="18" Height="18">
                         <Canvas Width="24" Height="24">
                             <Path Fill="{StaticResource Brush.Text}"
                                   Data="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
                         </Canvas>
                     </Viewbox>
                 </Button>
+                <ToggleButton Grid.Column="2" Width="30" Height="28" FontSize="17" Padding="0" VerticalAlignment="Top"
+                              HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                              IsChecked="{Binding ShowFavoriteFamilies, Mode=TwoWay}"
+                              ToolTip="Show favourite families"
+                              Content="⭐"/>
+
+                <!-- The dropdown: tags (AND) then categories (OR). It stays open on its own; code-behind
+                     closes it on a click elsewhere, Tab, Esc, or the window moving. -->
+                <Popup x:Name="SearchPopup" StaysOpen="True" AllowsTransparency="True" Placement="Bottom"
+                       PlacementTarget="{Binding ElementName=SearchRow}"
+                       Width="{Binding ActualWidth, ElementName=SearchRow}"
+                       IsOpen="{Binding IsSearchPopupOpen, Mode=TwoWay}"
+                       PreviewKeyDown="SearchPopup_PreviewKeyDown">
+                    <Border x:Name="SearchPopupContent" Margin="0,2,0,0" Padding="6"
+                            Background="{StaticResource Brush.Panel}" BorderBrush="{StaticResource Brush.Border}"
+                            BorderThickness="1" TextElement.Foreground="{StaticResource Brush.Text}">
+                        <!-- A Popup taller than the screen can't scroll: cap it. -->
+                        <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <StackPanel Visibility="{Binding ShowTagSuggestions, Converter={StaticResource BoolVis}}">
+                                    <TextBlock Text="TAGS · every tag must match" FontSize="10" FontWeight="SemiBold"
+                                               Foreground="{StaticResource Brush.TextMuted}" Margin="2,2,2,4"/>
+                                    <ItemsControl ItemsSource="{Binding TagSuggestions}" Margin="0,0,0,6">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:TagSuggestion}">
+                                                <Button Margin="2" Padding="8,2" IsEnabled="{Binding IsEnabled}"
+                                                        ToolTip="{Binding ToolTip}" ToolTipService.ShowOnDisabled="True"
+                                                        Command="{Binding DataContext.FilterByTagCommand,
+                                                                  RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        CommandParameter="{Binding Name}" Click="RefocusSearch">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsFirst}" Value="True">
+                                                                    <Setter Property="Background" Value="{StaticResource Brush.Selection}"/>
+                                                                    <Setter Property="BorderBrush" Value="{StaticResource Brush.Accent}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Viewbox Width="11" Height="11" Margin="0,0,4,0" VerticalAlignment="Center"
+                                                                 Visibility="{Binding IsBuiltIn, Converter={StaticResource BoolVis}}">
+                                                            <Canvas Width="24" Height="24">
+                                                                <Path Data="{v:Icon lock}" Stroke="{StaticResource Brush.Text}" StrokeThickness="2"
+                                                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                                                            </Canvas>
+                                                        </Viewbox>
+                                                        <TextBlock Text="{Binding Name}" FontSize="11"/>
+                                                        <TextBlock Text="{Binding Count}" FontSize="11" Margin="5,0,0,0"
+                                                                   Foreground="{StaticResource Brush.TextMuted}"/>
+                                                    </StackPanel>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Separator Margin="0,0,0,4"/>
+                                </StackPanel>
+
+                                <DockPanel Margin="2,2,2,3">
+                                    <Button DockPanel.Dock="Right" Content="Clear" Padding="2,0" FontSize="11"
+                                            BorderThickness="0" Background="Transparent" Cursor="Hand"
+                                            Foreground="{StaticResource Brush.Accent}"
+                                            Command="{Binding ClearCategoriesCommand}"
+                                            ToolTip="Untick every category"
+                                            Visibility="{Binding HasSelectedCategories, Converter={StaticResource BoolVis}}"/>
+                                    <TextBlock Text="CATEGORIES · any ticked one" FontSize="10" FontWeight="SemiBold"
+                                               VerticalAlignment="Center" Foreground="{StaticResource Brush.TextMuted}"/>
+                                </DockPanel>
+                                <ItemsControl ItemsSource="{Binding VisibleCategoryOptions}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:CategoryFilterOption}">
+                                            <CheckBox Margin="2" IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                      HorizontalContentAlignment="Stretch">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Viewbox Width="15" Height="15" VerticalAlignment="Center">
+                                                        <Canvas Width="24" Height="24">
+                                                            <Path Data="{Binding IconCategory, Converter={StaticResource CategoryIcon}}"
+                                                                  Stroke="{StaticResource Brush.Text}" StrokeThickness="2"
+                                                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                                                        </Canvas>
+                                                    </Viewbox>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Name}" Margin="6,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding Count}" FontSize="11" VerticalAlignment="Center"
+                                                               Foreground="{StaticResource Brush.TextMuted}"/>
+                                                </Grid>
+                                            </CheckBox>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Margin="2,4" FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{StaticResource Brush.TextMuted}"
+                                           Text="No category or tag matches. The words still search the family names."
+                                           Visibility="{Binding ShowNoSearchMatch, Converter={StaticResource BoolVis}}"/>
+                                <Border BorderBrush="{StaticResource Brush.Border}" BorderThickness="0,1,0,0"
+                                        Margin="0,6,0,0" Padding="2,5,2,0">
+                                    <TextBlock FontSize="10" TextWrapping="Wrap" Foreground="{StaticResource Brush.TextMuted}"
+                                               Text="Enter adds the first tag · Backspace removes the last chip · Esc closes"/>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Popup>
             </Grid>
 
             <!-- Another document is active: the comparison is hidden until ⟳ (or coming back). -->
@@ -229,8 +392,18 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <Image Grid.Column="0" Source="{Binding Thumbnail}" Width="48" Height="48" Stretch="Uniform"/>
+                            <!-- An open fix request (the "Fix requested" tag). -->
+                            <Viewbox Grid.Column="4" Width="15" Height="15" Margin="4,0,0,0" VerticalAlignment="Center"
+                                     ToolTip="A fix is requested for this family"
+                                     Visibility="{Binding IsFixRequested, Converter={StaticResource BoolVis}}">
+                                <Canvas Width="24" Height="24">
+                                    <Path Data="{v:Icon tool}" Stroke="{StaticResource Brush.UpdateOrange}" StrokeThickness="2"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                                </Canvas>
+                            </Viewbox>
                             <StackPanel Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Center">
                                 <!-- Two lines max, then ellipsis; the tooltip carries the full name. -->
                                 <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"
@@ -273,7 +446,7 @@
                                        VerticalAlignment="Center" Margin="4,0,2,0"
                                        ToolTip="{Binding DuplicateToolTip}"
                                        Visibility="{Binding ShowDuplicate, Converter={StaticResource BoolVis}}"/>
-                            <Button Grid.Column="4" Margin="2,0,0,0" Padding="3,0" BorderThickness="0"
+                            <Button Grid.Column="5" Margin="2,0,0,0" Padding="3,0" BorderThickness="0"
                                     Background="Transparent" ToolTip="Toggle favourite"
                                     Command="{Binding DataContext.ToggleFavoriteCommand,
                                               RelativeSource={RelativeSource AncestorType=ListBox}}"
@@ -393,6 +566,17 @@
                                             Visibility="{Binding ShowDuplicate, Converter={StaticResource BoolVis}}">
                                         <TextBlock Text="&#x26A0;&#xFE0F;" FontSize="11"/>
                                     </Border>
+                                    <Border Background="#66000000" CornerRadius="3" Padding="3,2" Margin="0,0,2,0"
+                                            VerticalAlignment="Center"
+                                            ToolTip="A fix is requested for this family"
+                                            Visibility="{Binding IsFixRequested, Converter={StaticResource BoolVis}}">
+                                        <Viewbox Width="13" Height="13">
+                                            <Canvas Width="24" Height="24">
+                                                <Path Data="{v:Icon tool}" Stroke="{StaticResource Brush.UpdateOrange}" StrokeThickness="2"
+                                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                                            </Canvas>
+                                        </Viewbox>
+                                    </Border>
                                     <Button Padding="3,0" BorderThickness="0"
                                             Background="#66000000" ToolTip="Toggle favourite"
                                             Command="{Binding DataContext.ToggleFavoriteCommand,
@@ -430,13 +614,11 @@
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <!-- Empty state: a blank list with no explanation reads as broken. -->
-            <TextBlock Grid.Row="3" Margin="16" TextWrapping="Wrap" TextAlignment="Center"
-                       VerticalAlignment="Center" FontSize="11" IsHitTestVisible="False"
-                       Foreground="{StaticResource Brush.TextMuted}"
-                       Text="No families to show. Clear the search or filters, press &#x27F3; to check the open project, or run Scan in Settings if the library is new.">
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock">
+            <!-- Empty state: a blank list with no explanation reads as broken. Nothing found is
+                 also exactly when a user may need a family the library doesn't have. -->
+            <StackPanel Grid.Row="3" Margin="16" VerticalAlignment="Center">
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
                         <Setter Property="Visibility" Value="Collapsed"/>
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding FilteredItems.Count}" Value="0">
@@ -444,14 +626,32 @@
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
-                </TextBlock.Style>
-            </TextBlock>
+                </StackPanel.Style>
+                <TextBlock TextWrapping="Wrap" TextAlignment="Center" FontSize="11"
+                           Foreground="{StaticResource Brush.TextMuted}"
+                           Text="No families to show. Remove some chips or clear the search, press &#x27F3; to check the open project, or run Scan in Settings if the library is new."/>
+                <Button Margin="0,10,0,0" Padding="10,5" HorizontalAlignment="Center"
+                        Command="{Binding RequestNewFamilyCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <Viewbox Width="15" Height="15" Margin="0,0,6,0">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="{v:Icon plus}" Stroke="{StaticResource Brush.Text}" StrokeThickness="2"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="Can't find it? Request a new family" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
 
-            <!-- Rail footer: help/about (left) · busy note · grid-view toggle + settings (right) -->
+            <!-- Rail footer: help/about + request a family (left) · busy note · requests,
+                 grid-view toggle + settings (right) -->
             <Grid Grid.Row="4" Margin="6" >
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
@@ -460,7 +660,21 @@
                         Command="{Binding ToggleHelpCommand}"
                         ToolTip="Help, info &amp; support"
                         Content="ℹ️"/>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0" VerticalAlignment="Center"
+                <!-- Its own button, never tied to the selected family. -->
+                <Button Grid.Column="1" Height="28" Margin="4,0,0,0" Padding="5,0,8,0"
+                        Command="{Binding RequestNewFamilyCommand}"
+                        ToolTip="Ask for a family that is not in the library yet">
+                    <StackPanel Orientation="Horizontal">
+                        <Viewbox Width="15" Height="15" Margin="0,0,4,0">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="{v:Icon plus}" Stroke="{StaticResource Brush.Text}" StrokeThickness="2"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="Request family" FontSize="11" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0" VerticalAlignment="Center"
                             Visibility="{Binding IsBusy, Converter={StaticResource BoolVis}}">
                     <TextBlock Text="{Binding BatchProgressText, TargetNullValue=Working…}" VerticalAlignment="Center"
                                Foreground="{StaticResource Brush.TextMuted}" FontSize="11" TextTrimming="CharacterEllipsis"
@@ -471,7 +685,7 @@
                     </TextBlock>
                 </StackPanel>
                 <!-- Read-only users browse a local copy of the library: say how fresh it is. -->
-                <TextBlock Grid.Column="1" Text="{Binding LibraryStatus}" Margin="8,0" VerticalAlignment="Center"
+                <TextBlock Grid.Column="2" Text="{Binding LibraryStatus}" Margin="8,0" VerticalAlignment="Center"
                            Foreground="{StaticResource Brush.TextMuted}" FontSize="11"
                            TextTrimming="CharacterEllipsis"
                            ToolTip="{Binding LibraryStatusDetail}">
@@ -487,7 +701,29 @@
                 </TextBlock>
                 <!-- Grid-view toggle (2x2 squares). Hand-drawn vector to match the other icon-only
                      buttons in this window rather than an emoji. -->
-                <ToggleButton Grid.Column="2" Width="30" Height="28" Padding="0" Margin="0,0,4,0"
+                <!-- Requests (fixes and new families), with the open count as a badge. -->
+                <ToggleButton Grid.Column="3" Width="30" Height="28" Padding="0" Margin="0,0,4,0"
+                              HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                              IsChecked="{Binding IsShowingRequests, Mode=OneWay}"
+                              Command="{Binding ToggleRequestsCommand}"
+                              ToolTip="{Binding RequestsButtonToolTip}">
+                    <Grid>
+                        <Viewbox Width="16" Height="16">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="{v:Icon inbox}" Stroke="{StaticResource Brush.Text}" StrokeThickness="2"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                            </Canvas>
+                        </Viewbox>
+                        <Border Margin="0,-9,-12,0" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                MinWidth="15" Height="15" Padding="3,0" CornerRadius="7.5"
+                                Background="{StaticResource Brush.UpdateOrange}"
+                                Visibility="{Binding HasOpenRequests, Converter={StaticResource BoolVis}}">
+                            <TextBlock Text="{Binding OpenRequestCount}" Foreground="White" FontSize="9"
+                                       FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </Grid>
+                </ToggleButton>
+                <ToggleButton Grid.Column="4" Width="30" Height="28" Padding="0" Margin="0,0,4,0"
                               HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                               IsChecked="{Binding IsGridView, Mode=TwoWay}"
                               ToolTip="Toggle grid view">
@@ -504,7 +740,7 @@
                         </Canvas>
                     </Viewbox>
                 </ToggleButton>
-                <ToggleButton Grid.Column="3" Width="30" Height="28" Padding="0" FontSize="13"
+                <ToggleButton Grid.Column="5" Width="30" Height="28" Padding="0" FontSize="13"
                               HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                               IsChecked="{Binding IsShowingSettings, Mode=OneWay}"
                               Command="{Binding ToggleSettingsCommand}"
@@ -526,6 +762,7 @@
             <Grid Grid.Row="0" Grid.RowSpan="2"
                   Visibility="{Binding ShowDetailPane, Converter={StaticResource BoolVis}}">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
@@ -596,12 +833,34 @@
                                     <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Button Content="{Binding}" Margin="0,0,4,4" Padding="6,1" FontSize="11"
+                                    <DataTemplate DataType="{x:Type vm:TagChip}">
+                                        <Button Margin="0,0,4,4" Padding="6,1" FontSize="11"
                                                 Command="{Binding DataContext.FilterByTagCommand,
                                                           RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                CommandParameter="{Binding}"
-                                                ToolTip="Filter the list by this tag"/>
+                                                CommandParameter="{Binding Name}"
+                                                ToolTip="{Binding ToolTip}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                    <Style.Triggers>
+                                                        <!-- Built-in tags look different: worked out, never typed. -->
+                                                        <DataTrigger Binding="{Binding IsBuiltIn}" Value="True">
+                                                            <Setter Property="Background" Value="#2D3A48"/>
+                                                            <Setter Property="BorderBrush" Value="#4A6A8A"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Viewbox Width="10" Height="10" Margin="0,0,4,0" VerticalAlignment="Center"
+                                                         Visibility="{Binding IsBuiltIn, Converter={StaticResource BoolVis}}">
+                                                    <Canvas Width="24" Height="24">
+                                                        <Path Data="{v:Icon lock}" Stroke="{StaticResource Brush.Text}" StrokeThickness="2"
+                                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                                                    </Canvas>
+                                                </Viewbox>
+                                                <TextBlock Text="{Binding Name}"/>
+                                            </StackPanel>
+                                        </Button>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
@@ -610,8 +869,8 @@
 
                     <!-- Load / Update — one button, vertically centred against the thumbnail's
                          height; switches to "Update" + orange when a newer version exists. -->
-                    <Button Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0"
-                            Padding="16,7" FontWeight="SemiBold"
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0">
+                    <Button Padding="16,7" FontWeight="SemiBold"
                             Command="{Binding LoadFamilyCommand}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -636,11 +895,35 @@
                     <!-- Save to Library — the model-only counterpart of Load: writes the family
                          from the model into the library folder so the library can be grown from
                          the project. -->
-                    <Button Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0"
-                            Padding="16,7" FontWeight="SemiBold" Content="Save to Library"
+                    <Button Padding="16,7" FontWeight="SemiBold" Content="Save to Library"
                             Command="{Binding SaveToLibraryCommand}"
                             ToolTip="Save this family from the model into the library folder"
                             Visibility="{Binding SelectedItem.IsModelOnly, Converter={StaticResource BoolVis}, FallbackValue=Collapsed}"/>
+
+                    <!-- Request a fix — for library families, open to everyone (view-only users too). -->
+                    <Button Margin="0,6,0,0" Padding="8,4" FontSize="11"
+                            Command="{Binding RequestFixCommand}"
+                            ToolTip="Tell the library maintainer this family needs fixing or changing">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedItem.IsModelOnly}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <Viewbox Width="14" Height="14" Margin="0,0,5,0">
+                                <Canvas Width="24" Height="24">
+                                    <Path Data="{v:Icon tool}" Stroke="{StaticResource Brush.Text}" StrokeThickness="2"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="Request a fix" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    </StackPanel>
 
                     <!-- Rescan / Edit Info / Open — top-right corner of the panel, stacked -->
                     <StackPanel Grid.Column="4" VerticalAlignment="Top">
@@ -662,7 +945,7 @@
                                     </Style.Triggers>
                                 </Style>
                             </Button.Style>
-                            <Viewbox Width="13" Height="13">
+                            <Viewbox Width="18" Height="18">
                                 <Canvas Width="24" Height="24">
                                     <Path Fill="{StaticResource Brush.Text}"
                                           Data="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
@@ -687,7 +970,7 @@
                                     </Style.Triggers>
                                 </Style>
                             </Button.Style>
-                            <Viewbox Width="13" Height="13">
+                            <Viewbox Width="18" Height="18">
                                 <Canvas Width="24" Height="24">
                                     <Rectangle Canvas.Left="4" Canvas.Top="3" Width="13" Height="18"
                                                Stroke="{StaticResource Brush.Text}" StrokeThickness="1.6"/>
@@ -702,7 +985,7 @@
                                 HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                 Command="{Binding OpenFamilyEditorCommand}"
                                 ToolTip="Open in Family Editor (model-only families open from the model)">
-                            <Viewbox Width="13" Height="13">
+                            <Viewbox Width="18" Height="18">
                                 <Canvas Width="24" Height="24">
                                     <Path Stroke="{StaticResource Brush.Text}" StrokeThickness="1.6"
                                           Data="M10 4 L5 4 L5 20 L19 20 L19 15"/>
@@ -714,7 +997,55 @@
                     </StackPanel>
                 </Grid>
 
-                <TabControl Grid.Row="1" Margin="12,0,12,10">
+                <!-- Open fix requests on this family: who asked, when, what they wrote. -->
+                <Border Grid.Row="1" Margin="12,0,12,8" Padding="10,8" CornerRadius="2"
+                        Background="#3A3122" BorderBrush="#6A5530" BorderThickness="1"
+                        Visibility="{Binding HasSelectedFamilyRequests, Converter={StaticResource BoolVis}}">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <Viewbox Width="15" Height="15" Margin="0,0,6,0">
+                                <Canvas Width="24" Height="24">
+                                    <Path Data="{v:Icon tool}" Stroke="#F0C070" StrokeThickness="2"
+                                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Text="{Binding SelectedRequestsTitle}" FontWeight="SemiBold" Foreground="#F0C070"/>
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding SelectedFamilyRequests}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:RequestItemViewModel}">
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Meta}" FontSize="10" Foreground="#B8A888"/>
+                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FlowDirection="{Binding TextFlowDirection}"/>
+                                            <TextBlock FontSize="10" Foreground="#B8A888" Text="&#x1F4CE; Their project's version is attached"
+                                                       Visibility="{Binding HasAttachment, Converter={StaticResource BoolVis}}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="8,0,0,0">
+                                            <Button Content="Done" Padding="8,2" FontSize="11" ToolTip="Mark this request as done"
+                                                    Visibility="{Binding CanMarkDone, Converter={StaticResource BoolVis}}"
+                                                    Command="{Binding DataContext.MarkRequestDoneCommand,
+                                                              RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"/>
+                                            <Button Content="Withdraw" Padding="8,2" FontSize="11" Margin="4,0,0,0"
+                                                    ToolTip="Take back your request"
+                                                    Visibility="{Binding CanWithdraw, Converter={StaticResource BoolVis}}"
+                                                    Command="{Binding DataContext.WithdrawRequestCommand,
+                                                              RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <TabControl Grid.Row="2" Margin="12,0,12,10">
                     <TabItem Header="Instructions">
                         <RichTextBox IsReadOnly="True" IsDocumentEnabled="True"
                                      ctrl:RichTextBoxHelper.DocumentXaml="{Binding InstructionsXaml}"/>
@@ -886,6 +1217,44 @@
                              VerticalScrollBarVisibility="Auto"
                              ctrl:RichTextBoxHelper.MarkdownSource="{Binding HelpMarkdownRaw}"/>
             </Grid>
+
+            <!-- REQUESTS (fixes and new families; files in the library's .Requests folder) -->
+            <ScrollViewer Grid.Row="0" Grid.RowSpan="2" VerticalScrollBarVisibility="Auto"
+                          Visibility="{Binding IsShowingRequests, Converter={StaticResource BoolVis}}">
+                <StackPanel Margin="18,14,18,18">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Padding="10,5" Command="{Binding RequestNewFamilyCommand}">
+                            <StackPanel Orientation="Horizontal">
+                                <Viewbox Width="15" Height="15" Margin="0,0,5,0">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Data="{v:Icon plus}" Stroke="{StaticResource Brush.Text}" StrokeThickness="2"
+                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    </Canvas>
+                                </Viewbox>
+                                <TextBlock Text="Request a new family" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Text="Requests" FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
+                    </DockPanel>
+                    <TextBlock Text="{Binding RequestsIntro}" Margin="0,8,0,12" FontSize="11" TextWrapping="Wrap"
+                               Foreground="{StaticResource Brush.TextMuted}"/>
+
+                    <TextBlock Text="{Binding NewFamilyRequestsTitle}" FontSize="10" FontWeight="SemiBold"
+                               Foreground="{StaticResource Brush.TextMuted}" Margin="0,0,0,6"/>
+                    <TextBlock Text="None open." FontSize="11" Foreground="{StaticResource Brush.TextMuted}" Margin="0,0,0,6"
+                               Visibility="{Binding HasNoNewFamilyRequests, Converter={StaticResource BoolVis}}"/>
+                    <ItemsControl ItemsSource="{Binding NewFamilyRequests}" ItemTemplate="{StaticResource RequestCard}"/>
+
+                    <TextBlock Text="{Binding FixRequestsTitle}" FontSize="10" FontWeight="SemiBold"
+                               Foreground="{StaticResource Brush.TextMuted}" Margin="0,12,0,6"/>
+                    <TextBlock Text="None open." FontSize="11" Foreground="{StaticResource Brush.TextMuted}" Margin="0,0,0,6"
+                               Visibility="{Binding HasNoFixRequests, Converter={StaticResource BoolVis}}"/>
+                    <ItemsControl ItemsSource="{Binding FixRequests}" ItemTemplate="{StaticResource RequestCard}"/>
+
+                    <TextBlock Text="{Binding DoneRequestsLine}" FontSize="10" Margin="0,10,0,0"
+                               Foreground="{StaticResource Brush.TextMuted}"/>
+                </StackPanel>
+            </ScrollViewer>
         </Grid>
 
     </Grid>

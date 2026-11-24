@@ -32,17 +32,17 @@ network path read by many users at once and written only by an admin.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ RVTuk — Family Browser          [Furniture › Seating]       │
+│ RVTuk — Family Browser                                      │
 ├──────────────────────┬──────────────────────────────────────┤
-│ 🔍 Search... ☑ Cat ▾ │ [thumb] Chair - Dining      [Load] ↻ │
-│ ⬅️  ⭐  ➡️      ⟳ Sync│         Furniture › Seating       📝 ⬈│
-├──────────────────────┼──────────────────────────────────────┤
-│ ▌ Chair - Dining  ↑  │ Instructions │ Parameters (6)         │
-│   Chair - Office  ✓  ├──────────────────────────────────────┤
-│   Sofa - 3-Seat   ↑  │ Place in a 3D view...                │
-│   Stool - Bar        │                                       │
+│ 🔍 [Doors✕][interior✕] ⟳ ⭐│ [thumb] Chair - Dining     [Load]  ↻ │
+│ ┌ dropdown ────────┐ │         Furniture   [Request a fix] 📝 ⬈│
+│ │ TAGS  🔒Project   │ ├──────────────────────────────────────┤
+│ │ CATEGORIES ☑🚪 … │ │ (open fix requests banner)           │
+│ └──────────────────┘ │ Instructions │ Parameters (6)         │
+│ ▌ Chair - Dining  ↑  ├──────────────────────────────────────┤
+│   Chair - Office  ✓🔧│ Place in a 3D view...                │
 ├──────────────────────┤                                       │
-│ ℹ️            ⚙️      │                                       │
+│ ℹ️ [+ Request family]  📥³ ▦ ⚙️│                               │
 └──────────────────────┴──────────────────────────────────────┘
 ```
 
@@ -50,32 +50,30 @@ network path read by many users at once and written only by an admin.
 closes it manually.
 
 ### Left panel
-- **Search bar** — filters by family name (live, case-insensitive; multi-word: all tokens
-  match in any order). Also matches tags.
-- **Category filter** — a checkbox popover (`CategoryFilterOption.cs`), not the old single-select
-  `ComboBox`. Header row is an "All categories" master checkbox with tri-state
-  checked/unchecked/indeterminate behaviour; below it, one checkbox per category, all **on by
-  default**. This is a genuine multi-select: unchecking a category hides its families from the
-  list immediately, and any combination of categories can be shown at once. The options come
-  from the rows in the list (not a DB query), so a model-only family's category always has
-  one, and families without a category get a "(No category)" option at the end.
-- **Toggle buttons (⬅️ / ⭐ / ➡️)** — three always-visible toolbar toggles, all **off by default**
-  (unfiltered — nothing hidden):
-  - ⬅️ — families loaded in the model (model-only rows **and** families that are also in the
-    library).
-  - ⭐ — favourites.
-  - ➡️ — families present in the library (library-only **and** families that are also loaded
-    in the model).
-  Each pressed toggle **narrows the list (AND)**; with none pressed the list is unfiltered.
-  ⬅️ and ➡️ are *inclusive* membership filters that overlap on the in-both statuses, so
-  pressing both shows exactly the families that exist in both the model and the library —
-  the four source views are: nothing pressed (everything), ⬅️ (all in the model), ➡️ (all in
-  the library), ⬅️+➡️ (in both). Pressing only ⭐ still shows every favourite regardless of
-  model/library status; ⭐ combined with an arrow intersects (e.g. ⭐+⬅️ = favourites loaded
-  in the model). Semantics live in `RVTuk.Core.FamilyBrowser.Util.SourceToggleFilter` with a
-  truth-table test. See *Deviations* for the exclusion→OR→AND history.
+- **Search box (2026-11-24)** — one box for words, categories and tags, then ⟳ and ⭐. It
+  replaced the category popover and the ⬅️/➡️ toggles. Ticked categories and chosen tags show
+  as chips inside the box (✕ removes one, Backspace in the empty box takes the last one back,
+  the ✕ at the right clears everything). Focusing or clicking the box opens a dropdown:
+  - **Tags** — the built-in tags always; while typing, every tag containing the text, with how
+    many families have it. The first one is highlighted and Enter adds it (which clears the
+    typed word: it was only there to find the tag).
+  - **Categories** — a checkbox per category with its Tabler icon (`Views/TablerIcons.cs`,
+    MIT, see `THIRD-PARTY-NOTICES.md`) and a count, narrowed by the typed text. All
+    **unticked by default** = every category. The options come from the rows in the list, so a
+    model-only family's category always has one; "(No category)" sits at the end.
+  - The counts are the families left after the tags and ⭐, before the words and categories.
+  **Rule:** categories **OR** (any ticked one), tags **AND** (a family needs every chosen tag),
+  words **AND** (each in the name or any tag, any order), ⭐ **AND**. It lives in
+  `RVTuk.Core.FamilyBrowser.Util.FamilyFilter`, tested in `FamilyFilterTests`.
+- **Built-in tags** (`BuiltInTags`) — worked out from the family's state, never stored (Edit
+  Info drops them from the typed tags), shown with a lock and no ✕:
+  - **Project** — loaded in the open project (every status but `None`, so only after ⟳).
+  - **Library** — in the library (every status but `ModelOnly`).
+  - **Fix requested** — an open fix request names the family (§6b).
+  Project + Library = in both, the view ⬅️+➡️ used to give; the old toggles' truth table is
+  carried over into `FamilyFilterTests`.
 - **Sync button (⟳)** — a plain button, not a popover menu. Clicking it directly re-runs the
-  project/version check (§3); there is no menu of checkboxes hanging off it anymore.
+  project/version check (§3) and re-reads the requests (§6b).
 - **Family list** — each row shows a small thumbnail, family name, and sub-category; selection
   highlights with a left accent bar. Long names wrap to at most **two lines**, then trim with
   an ellipsis (the full name is in the row tooltip). Version badges (after the check runs):
@@ -86,8 +84,12 @@ closes it manually.
   parameter in the family (library `.rfa` per the deep scan, or the loaded copy per the sync's
   instance fallback, §3): off the office standard, which wants a type parameter, so the red
   marks families whose parameter needs changing. The tooltip says so.
-- **Footer row** (new, under the family list) — two icon buttons:
+- **Footer row** (under the family list):
   - ℹ️ — toggles the right panel to the Help/About page (§4a) instead of the family detail.
+  - **+ Request family** — asks the maintainer for a family the library doesn't have (§6b).
+    Its own button, never tied to the selected family; the empty-list message offers it too.
+  - 📥 Requests — toggles the right panel to the open requests (§6b), with their number as a badge.
+  - ▦ — the grid view.
   - ⚙️ — toggles the right panel to the embedded Settings page (§4b) instead of the family
     detail.
 
@@ -298,6 +300,37 @@ permissions** — the maintainer has Edit, everyone else View + Download.
 - **Favourites are personal** (`PersonalFavorites`, `favorites.txt` in the same local folder),
   since readers cannot write the DB. The `Families.IsFavorite` column is no longer used.
 - Loading a family uses the Desktop Connector path, so only that `.rfa` downloads.
+
+### 6b. Requests to the maintainer (2026-11-24)
+
+View-only users can't write the database, so they ask through files instead: one small JSON
+file per request in the library's **`.Requests`** folder (`RVTuk.Core.FamilyBrowser.Requests`).
+- **ACC permissions:** everyone gets **View + Upload** on `.Requests`, which lets them add files
+  but not change or delete them — so every user action only *creates* a file: the request
+  `<id>.json` (kind `fix`/`new`, family relative path and name, Windows user name, UTC time,
+  text), an optional `<id>.rfa` (the user's project version, saved by Revit through the Save to
+  Library handler), and `<id>.withdrawn` to take one back. Two people asking at once never
+  touch the same file. The id is `yyyyMMdd-HHmmss-<user>-<random>`.
+- **The maintainer** (who can edit the folder) marks a request **Done**, which moves its files
+  to `.Requests\Done\` (kept as history); withdrawn requests are moved there on the next open.
+- **Only the maintainer's browser creates `.Requests`** (on open). A view-only user could make
+  it on their own PC, but Desktop Connector can't upload a folder where they may not edit, so
+  their requests would silently never arrive; while it is missing, sending says so instead.
+- The attached `.rfa` is named after the request id, so in Revit that copy is a family called
+  `<id>`: fine for opening and comparing, but loading it into a project adds a new family rather
+  than replacing the original. A per-request subfolder would keep the name, but whether View +
+  Upload may create folders in Autodesk Docs is unchecked.
+- The scan never walks `.DB` or `.Requests` (`FamilyIndexer`), so an attached copy never
+  becomes a second library copy.
+- **In the browser:** read when it opens and on ⟳. A family with an open fix request gets the
+  built-in **Fix requested** tag, a 🔧 in the list and a banner above its instructions (Done for
+  the maintainer, Withdraw for the asker). The footer's 📥 lists every open request (new
+  families, then fixes) for everyone, so people see what was already asked. **Request a fix**
+  sits under Load (library families only); **+ Request family** has its own footer button and
+  the empty-list message, never tied to the selection.
+- Request text is other users' input: it is shown only as plain text, right to left when it
+  starts with Hebrew.
+- Not done: a direct ACC connection without Desktop Connector (backlog Ideas, archived).
 
 > **Note:** the per-family image gallery that previously lived in this section of the doc was
 > removed on 2026-07-07 — pictures now live only as images embedded inline in the rich-text
