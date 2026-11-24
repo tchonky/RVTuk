@@ -106,6 +106,9 @@
                     <TextBox Text="{Binding TagsText, UpdateSourceTrigger=PropertyChanged}"
                              ToolTip="Comma-separated tags, e.g. door, exterior, ADA"/>
                 </DockPanel>
+                <TextBlock Text="Project, Library and Fix requested are added automatically and are not saved here."
+                           FontSize="10" Foreground="{StaticResource Brush.TextMuted}" Margin="0,3,0,0"
+                           TextWrapping="Wrap"/>
             </StackPanel>
         </Grid>
 

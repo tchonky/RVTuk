@@ -11,6 +11,7 @@ using System.Windows.Threading;
 using RVTuk.Core.Shared.Config;
 using RVTuk.Core.FamilyBrowser.Database;
 using RVTuk.Core.FamilyBrowser.Models;
+using RVTuk.Core.FamilyBrowser.Requests;
 using RVTuk.Core.FamilyBrowser.Util;
 using RVTuk.Core.Shared.Util;
 
@@ -18,7 +19,23 @@ using RVTuk.UI.Shared.ViewModels;
 
 namespace RVTuk.UI.FamilyBrowser.ViewModels
 {
-    public enum FamilyBrowserRightView { Detail, Settings, Help }
+    public enum FamilyBrowserRightView { Detail, Settings, Help, Requests }
+
+    /// <summary>What the request window is asked to show.</summary>
+    public sealed class RequestDialogInput
+    {
+        public bool IsFix { get; set; }
+        public string? FamilyName { get; set; }
+        /// <summary>The family is loaded in the open project, so its project version can be attached.</summary>
+        public bool CanAttach { get; set; }
+    }
+
+    /// <summary>What the user typed in the request window (null result = cancelled).</summary>
+    public sealed class RequestDialogResult
+    {
+        public string Text { get; set; } = string.Empty;
+        public bool Attach { get; set; }
+    }
 
     public class FamilyBrowserViewModel : ViewModelBase, IDisposable
     {
@@ -47,11 +64,9 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         private List<FamilyBrowserItemViewModel> _allItems = new();
         private string _searchText = string.Empty;
         private FamilyBrowserItemViewModel? _selectedItem;
-        private bool _showInProjectFamilies;
         private bool _showFavoriteFamilies;
-        private bool _showLibraryFamilies;
         private bool _isGridView;
-        private bool? _isAllCategoriesSelected = true;
+        private bool _isSearchPopupOpen;
         private bool _isSyncing;
         private bool _isRescanning;
         private bool _isLoading;
@@ -73,22 +88,49 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         public ObservableCollection<FamilyBrowserItemViewModel> FilteredItems { get; } = new();
         public ObservableCollection<CategoryFilterOption> CategoryOptions { get; } = new();
 
+        // ── The search box ─────────────────────────────────────────────────────────────
+        // One box for words, categories and tags. Ticked categories and chosen tags show as
+        // chips in it (in the order they were added, so Backspace takes the last one back).
+        // Categories OR, tags AND, words AND, ⭐ AND — the rule lives in Core's FamilyFilter.
+        public ObservableCollection<FilterChip> FilterChips { get; } = new();
+
+        /// <summary>The dropdown's categories: the ones whose name contains the typed text.</summary>
+        public ObservableCollection<CategoryFilterOption> VisibleCategoryOptions { get; } = new();
+
+        /// <summary>The dropdown's tags: the built-in ones, and while typing every tag containing the text.</summary>
+        public ObservableCollection<TagSuggestion> TagSuggestions { get; } = new();
+
         public string SearchText
         {
             get => _searchText;
-            set { SetProperty(ref _searchText, value); ApplyFilter(); }
+            set
+            {
+                SetProperty(ref _searchText, value ?? string.Empty);
+                SearchChanged();
+                ApplyFilter();
+            }
         }
 
-        // All default off (unfiltered — nothing hidden). Each pressed toggle is an independent
-        // AND constraint, and the model/library pair are *inclusive* membership filters
-        // ("loaded in the model" / "present in the library") that overlap on the in-both
-        // statuses — so pressing both shows exactly the families that exist in both places.
-        // Semantics live in Core's SourceToggleFilter (tested there).
-        public bool ShowInProjectFamilies
+        private void SearchChanged()
         {
-            get => _showInProjectFamilies;
-            set { SetProperty(ref _showInProjectFamilies, value); ApplyFilter(); }
+            OnPropertyChanged(nameof(HasAnyFilter));
+            OnPropertyChanged(nameof(SearchHint));
         }
+
+        public bool IsSearchPopupOpen
+        {
+            get => _isSearchPopupOpen;
+            set => SetProperty(ref _isSearchPopupOpen, value);
+        }
+
+        public bool HasAnyFilter => _searchText.Length > 0 || FilterChips.Count > 0;
+        public bool HasSelectedCategories => FilterChips.Any(c => c.IsCategory);
+        public bool ShowTagSuggestions => TagSuggestions.Count > 0;
+        public bool ShowNoSearchMatch => _searchText.Trim().Length > 0 && VisibleCategoryOptions.Count == 0 && TagSuggestions.Count == 0;
+
+        /// <summary>The hint inside the empty box; none once chips fill it.</summary>
+        public string SearchHint => _searchText.Length == 0 && FilterChips.Count == 0
+            ? "Search, or pick categories and tags" : string.Empty;
 
         public bool ShowFavoriteFamilies
         {
@@ -96,10 +138,75 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             set { SetProperty(ref _showFavoriteFamilies, value); ApplyFilter(); }
         }
 
-        public bool ShowLibraryFamilies
+        /// <summary>Adds a tag chip and clears the typed text (the word was only there to find the tag).</summary>
+        public void AddTagFilter(string? tag)
         {
-            get => _showLibraryFamilies;
-            set { SetProperty(ref _showLibraryFamilies, value); ApplyFilter(); }
+            var t = tag?.Trim();
+            if (string.IsNullOrEmpty(t)) return;
+            if (!FilterChips.Any(c => c.IsTag && string.Equals(c.Value, t, StringComparison.OrdinalIgnoreCase)))
+                FilterChips.Add(new FilterChip(isCategory: false, t!));
+            ChipsChanged();
+            _searchText = string.Empty;
+            OnPropertyChanged(nameof(SearchText));
+            SearchChanged();
+            ApplyFilter();
+        }
+
+        /// <summary>Enter in the search box: adds the highlighted tag. False when there is none.</summary>
+        public bool AddFirstSuggestion()
+        {
+            var first = TagSuggestions.FirstOrDefault(s => s.IsFirst);
+            if (first == null) return false;
+            AddTagFilter(first.Name);
+            return true;
+        }
+
+        /// <summary>Backspace in the empty search box: takes the last chip back. False when there is none.</summary>
+        public bool RemoveLastChip()
+        {
+            if (FilterChips.Count == 0) return false;
+            RemoveChip(FilterChips[FilterChips.Count - 1]);
+            return true;
+        }
+
+        private void RemoveChip(FilterChip? chip)
+        {
+            if (chip == null) return;
+            if (chip.IsCategory)
+            {
+                var opt = CategoryOptions.FirstOrDefault(o => o.Name == chip.Value);
+                if (opt != null && opt.IsSelected) { opt.IsSelected = false; return; } // its handler removes the chip
+            }
+            FilterChips.Remove(chip);
+            ChipsChanged();
+            ApplyFilter();
+        }
+
+        private void ClearCategories()
+        {
+            _bulkCategoryEdit = true;
+            try { foreach (var o in CategoryOptions) o.IsSelected = false; }
+            finally { _bulkCategoryEdit = false; }
+            foreach (var c in FilterChips.Where(c => c.IsCategory).ToList()) FilterChips.Remove(c);
+            ChipsChanged();
+            ApplyFilter();
+        }
+
+        private void ClearSearchAndChips()
+        {
+            _bulkCategoryEdit = true;
+            try { foreach (var o in CategoryOptions) o.IsSelected = false; }
+            finally { _bulkCategoryEdit = false; }
+            FilterChips.Clear();
+            ChipsChanged();
+            SearchText = string.Empty;
+        }
+
+        private void ChipsChanged()
+        {
+            OnPropertyChanged(nameof(HasAnyFilter));
+            OnPropertyChanged(nameof(HasSelectedCategories));
+            OnPropertyChanged(nameof(SearchHint));
         }
 
         // Toggles the family list between the compact row list and the 2-column large-thumbnail
@@ -109,52 +216,6 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         {
             get => _isGridView;
             set => SetProperty(ref _isGridView, value);
-        }
-
-        // Tri-state master checkbox for CategoryOptions: true = all selected, false = none,
-        // null = mixed (indeterminate, display-only — the setter only ever receives true/false,
-        // driven by a deterministic Click handler in code-behind rather than WPF's native
-        // three-way cycling).
-        public bool? IsAllCategoriesSelected
-        {
-            get => _isAllCategoriesSelected;
-            set
-            {
-                if (value != true && value != false) return;
-                // One filter pass for the whole batch, not one per category.
-                _bulkCategoryEdit = true;
-                try { foreach (var c in CategoryOptions) c.IsSelected = value.Value; }
-                finally { _bulkCategoryEdit = false; }
-                UpdateCategoryAllState();
-                ApplyFilter();
-            }
-        }
-
-        public string CategorySummary
-        {
-            get
-            {
-                if (CategoryOptions.Count == 0) return "All categories";
-                var selected = CategoryOptions.Count(o => o.IsSelected);
-                if (selected == CategoryOptions.Count) return "All categories";
-                if (selected == 0) return "No categories";
-                if (selected == 1) return CategoryOptions.First(o => o.IsSelected).Name;
-                return $"{selected} categories";
-            }
-        }
-
-        private void UpdateCategoryAllState()
-        {
-            bool? next;
-            if (CategoryOptions.Count == 0) next = true;
-            else
-            {
-                var selected = CategoryOptions.Count(o => o.IsSelected);
-                next = selected == CategoryOptions.Count ? true : selected == 0 ? (bool?)false : null;
-            }
-            _isAllCategoriesSelected = next;
-            OnPropertyChanged(nameof(IsAllCategoriesSelected));
-            OnPropertyChanged(nameof(CategorySummary));
         }
 
         public FamilyBrowserItemViewModel? SelectedItem
@@ -167,6 +228,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 if (_rebuildingList || ReferenceEquals(_selectedItem, value)) return;
                 _selectedItem = value;
                 OnPropertyChanged();
+                RebuildTagChips();
+                UpdateSelectedRequests();
                 LoadDetailAsync(value);
                 OnPropertyChanged(nameof(HasSelection));
                 OnPropertyChanged(nameof(ShowDetailPane));
@@ -205,7 +268,15 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             set { SetProperty(ref _isLoading, value); BusyChanged(); }
         }
 
-        public bool IsBusy => _isSyncing || _isRescanning || _isSavingToLibrary || _isLoading;
+        // A request is being written (with an attachment, Revit saves the family first).
+        private bool _isSendingRequest;
+        public bool IsSendingRequest
+        {
+            get => _isSendingRequest;
+            set { SetProperty(ref _isSendingRequest, value); BusyChanged(); }
+        }
+
+        public bool IsBusy => _isSyncing || _isRescanning || _isSavingToLibrary || _isLoading || _isSendingRequest;
 
         private void BusyChanged()
         {
@@ -240,26 +311,17 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             set => SetProperty(ref _instructionsXaml, value);
         }
 
-        private string? _selectedTags;
-        public string? SelectedTags
-        {
-            get => _selectedTags;
-            set { SetProperty(ref _selectedTags, value); OnPropertyChanged(nameof(ShowTags)); RebuildTagChips(); }
-        }
-
-        public bool ShowTags => !string.IsNullOrWhiteSpace(_selectedTags);
-
-        public ObservableCollection<string> SelectedTagChips { get; } = new();
+        // The selected family's tags: its own, then the built-in ones (which can't be removed).
+        public ObservableCollection<TagChip> SelectedTagChips { get; } = new();
+        public bool ShowTags => SelectedTagChips.Count > 0;
 
         private void RebuildTagChips()
         {
+            var tags = _selectedItem?.AllTags ?? Array.Empty<string>();
+            if (SelectedTagChips.Select(c => c.Name).SequenceEqual(tags)) return;
             SelectedTagChips.Clear();
-            if (string.IsNullOrWhiteSpace(_selectedTags)) return;
-            foreach (var t in _selectedTags!.Split(','))
-            {
-                var s = t.Trim();
-                if (s.Length > 0) SelectedTagChips.Add(s);
-            }
+            foreach (var t in tags) SelectedTagChips.Add(new TagChip(t));
+            OnPropertyChanged(nameof(ShowTags));
         }
 
         public List<ParameterModel> Parameters
@@ -323,6 +385,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 OnPropertyChanged(nameof(IsShowingDetail));
                 OnPropertyChanged(nameof(IsShowingSettings));
                 OnPropertyChanged(nameof(IsShowingHelp));
+                OnPropertyChanged(nameof(IsShowingRequests));
                 OnPropertyChanged(nameof(ShowDetailPane));
                 if (value == FamilyBrowserRightView.Help) _ = LoadHelpDocumentAsync();
             }
@@ -331,6 +394,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         public bool IsShowingDetail => _rightView == FamilyBrowserRightView.Detail;
         public bool IsShowingSettings => _rightView == FamilyBrowserRightView.Settings;
         public bool IsShowingHelp => _rightView == FamilyBrowserRightView.Help;
+        public bool IsShowingRequests => _rightView == FamilyBrowserRightView.Requests;
 
         public string? HelpMarkdownRaw
         {
@@ -361,6 +425,17 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         public ICommand ToggleSettingsCommand { get; }
         public ICommand ToggleHelpCommand { get; }
         public ICommand ClearSearchCommand { get; }
+        public ICommand RemoveChipCommand { get; }
+        public ICommand ClearCategoriesCommand { get; }
+        public ICommand ToggleRequestsCommand { get; }
+        public ICommand RequestFixCommand { get; }
+        public ICommand RequestNewFamilyCommand { get; }
+        public ICommand MarkRequestDoneCommand { get; }
+        public ICommand WithdrawRequestCommand { get; }
+        public ICommand ShowRequestFamilyCommand { get; }
+
+        /// <summary>Shows the request window (set by the browser window); null result = cancelled.</summary>
+        public Func<RequestDialogInput, RequestDialogResult?>? RequestDialog { get; set; }
 
         public event Action<FamilyBrowserItemViewModel>? EditInfoRequested;
 
@@ -386,12 +461,15 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             Func<IReadOnlyList<string>, IReadOnlyDictionary<string, byte[]>> getFamilyPreviews,
             Action? onLibraryFolderChanged = null,
             bool canEdit = true,
-            PersonalFavorites? favorites = null)
+            PersonalFavorites? favorites = null,
+            string? currentUser = null)
         {
             _config = config;
             _repo = repo;
             CanEdit = canEdit;
             _favorites = favorites;
+            _currentUser = string.IsNullOrWhiteSpace(currentUser) ? Environment.UserName : currentUser!;
+            _requestStore = string.IsNullOrWhiteSpace(config.LibraryFolderPath) ? null : new RequestStore(config.LibraryFolderPath);
             _getProjectFamilies = getProjectFamilies;
             _loadFamily = loadFamily;
             _rescanFamily = rescanFamily;
@@ -428,40 +506,62 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             OpenFamilyEditorCommand= new RelayCommand(OpenInFamilyEditor, () => SelectedItem != null && !IsLoading);
             SaveToLibraryCommand   = new RelayCommand(SaveToLibrary,
                 () => CanEdit && SelectedItem != null && SelectedItem.IsModelOnly && !IsSavingToLibrary);
-            FilterByTagCommand     = new RelayCommand<string>(t => { if (!string.IsNullOrWhiteSpace(t)) SearchText = t.Trim(); });
+            FilterByTagCommand     = new RelayCommand<string>(AddTagFilter);
+            RemoveChipCommand      = new RelayCommand<FilterChip>(RemoveChip);
+            ClearCategoriesCommand = new RelayCommand(ClearCategories);
+            ToggleRequestsCommand  = new RelayCommand(() => RightView = RightView == FamilyBrowserRightView.Requests
+                ? FamilyBrowserRightView.Detail : FamilyBrowserRightView.Requests);
+            RequestFixCommand      = new RelayCommand(RequestFix,
+                () => _requestStore != null && SelectedItem != null && !SelectedItem.IsModelOnly && !IsSendingRequest);
+            RequestNewFamilyCommand= new RelayCommand(RequestNewFamily, () => _requestStore != null && !IsSendingRequest);
+            MarkRequestDoneCommand = new RelayCommand<RequestItemViewModel>(MarkRequestDone, r => r != null && r.CanMarkDone);
+            WithdrawRequestCommand = new RelayCommand<RequestItemViewModel>(WithdrawRequest, r => r != null && r.CanWithdraw);
+            ShowRequestFamilyCommand = new RelayCommand<RequestItemViewModel>(ShowRequestFamily, r => r != null && r.IsFix);
             ToggleFavoriteCommand  = new RelayCommand<FamilyBrowserItemViewModel>(ToggleFavorite);
             ToggleSettingsCommand  = new RelayCommand(() => RightView = RightView == FamilyBrowserRightView.Settings
                 ? FamilyBrowserRightView.Detail : FamilyBrowserRightView.Settings);
             ToggleHelpCommand      = new RelayCommand(() => RightView = RightView == FamilyBrowserRightView.Help
                 ? FamilyBrowserRightView.Detail : FamilyBrowserRightView.Help);
-            ClearSearchCommand     = new RelayCommand(() => SearchText = string.Empty);
+            ClearSearchCommand     = new RelayCommand(ClearSearchAndChips);
 
             _allItems = _repo.GetAllFamilies().Select(f => new FamilyBrowserItemViewModel(f)).ToList();
             ApplyFavorites(_allItems);
             LoadCategories();
             ApplyFilter();
+            ReloadRequests();
         }
 
         // Options come from the rows themselves, so families with no category and model-only
         // families (whose category may be absent from the library) can always be ticked back on.
         private void LoadCategories()
         {
-            // Preserve which categories were deselected across a reload (e.g. after Sync).
-            var previouslyDeselected = CategoryOptions.Where(o => !o.IsSelected).Select(o => o.Name).ToHashSet();
+            // Ticked categories stay ticked across a reload (e.g. after Sync): they are chips.
+            // A ticked category that no family has any more (e.g. a model-only family's, once
+            // the comparison is hidden) keeps its checkbox, so it can still be unticked there.
+            var ticked = FilterChips.Where(c => c.IsCategory).Select(c => c.Value).ToHashSet();
             CategoryOptions.Clear();
-            foreach (var cat in _allItems.Select(CategoryKey).Distinct()
+            foreach (var cat in _allItems.Select(CategoryKey).Concat(ticked).Distinct()
                          .OrderBy(c => c == NoCategory).ThenBy(c => c, StringComparer.CurrentCultureIgnoreCase))
             {
-                var opt = new CategoryFilterOption(cat) { IsSelected = !previouslyDeselected.Contains(cat) };
-                opt.PropertyChanged += (_, __) =>
+                var opt = new CategoryFilterOption(cat, cat == NoCategory ? string.Empty : cat)
+                    { IsSelected = ticked.Contains(cat) };
+                opt.PropertyChanged += (_, e) =>
                 {
-                    if (_bulkCategoryEdit) return;
-                    UpdateCategoryAllState();
-                    ApplyFilter();
+                    if (e.PropertyName != nameof(CategoryFilterOption.IsSelected) || _bulkCategoryEdit) return;
+                    CategoryTicked(opt);
                 };
                 CategoryOptions.Add(opt);
             }
-            UpdateCategoryAllState();
+            VisibleCategoryOptions.Clear(); // rebuilt by the next ApplyFilter
+        }
+
+        private void CategoryTicked(CategoryFilterOption opt)
+        {
+            var chip = FilterChips.FirstOrDefault(c => c.IsCategory && c.Value == opt.Name);
+            if (opt.IsSelected && chip == null) FilterChips.Add(new FilterChip(isCategory: true, opt.Name, opt.IconCategory));
+            else if (!opt.IsSelected && chip != null) FilterChips.Remove(chip);
+            ChipsChanged();
+            ApplyFilter();
         }
 
         private static string CategoryKey(FamilyBrowserItemViewModel i) =>
@@ -479,33 +579,21 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         private void ApplyFilter()
         {
-            // Multi-word search: split on whitespace; every token must appear somewhere in the
-            // family name, in any order/position. e.g. "door single" matches "single - door".
-            var tokens = _searchText.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-            var filtered = _allItems.AsEnumerable();
-            if (tokens.Length > 0)
-                filtered = filtered.Where(i =>
-                    tokens.All(t =>
-                        i.DisplayName.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                        (i.Tags != null && i.Tags.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0)));
-
-            if (CategoryOptions.Count > 0)
-            {
-                var selectedCats = CategoryOptions.Where(o => o.IsSelected).Select(o => o.Name).ToHashSet();
-                if (selectedCats.Count < CategoryOptions.Count)
-                    filtered = filtered.Where(i => selectedCats.Contains(CategoryKey(i)));
-            }
-
-            // Source/status toggles: each pressed toggle narrows the list (AND); the
-            // model/library pair are inclusive, so pressing both shows the families that
-            // exist in both places. Full truth table in Core's SourceToggleFilterTests.
-            filtered = filtered.Where(i => SourceToggleFilter.Matches(
-                i.VersionStatus, i.IsFavorite,
-                _showInProjectFamilies, _showLibraryFamilies, _showFavoriteFamilies));
-
-            // Hide ignored subfolders and file patterns, e.g. Revit backups (kept in the DB).
+            // Hidden ignored subfolders and file patterns (e.g. Revit backups, kept in the DB),
+            // then the tags (AND) and ⭐: what's left is what the dropdown counts. The words
+            // (each in the name or a tag, any order) and the ticked categories (OR) narrow it
+            // to the list. Rules and truth tables: Core's FamilyFilter / FamilyFilterTests.
             var ignored = IgnoredRule();
-            filtered = filtered.Where(i => !ignored(i));
+            var required = FilterChips.Where(c => c.IsTag).Select(c => c.Value).ToList();
+            var categories = new HashSet<string>(FilterChips.Where(c => c.IsCategory).Select(c => c.Value));
+            var tokens = FamilyFilter.Tokens(_searchText);
+            var counted = _allItems.Where(i => !ignored(i)
+                    && (!_showFavoriteFamilies || i.IsFavorite)
+                    && FamilyFilter.HasAllTags(i.AllTags, required))
+                .ToList();
+            var filtered = counted.Where(i => FamilyFilter.MatchesText(i.DisplayName, i.AllTags, tokens)
+                                           && FamilyFilter.MatchesCategory(CategoryKey(i), categories));
+            UpdateSearchDropdown(counted, required);
 
             // Rebuilding the list makes both ListBoxes push a null selection (ignored by the
             // setter); put the user's selection back unless it was just filtered out.
@@ -520,13 +608,55 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             finally { _rebuildingList = false; }
             if (keep != null && !FilteredItems.Contains(keep)) SelectedItem = null;
             else OnPropertyChanged(nameof(SelectedItem));
+            RebuildTagChips(); // a ⟳ or a request can change the selected family's built-in tags
+        }
+
+        // The dropdown under the search box: categories with their counts (narrowed by the typed
+        // text), and tags — the built-in ones always, every matching tag while typing.
+        private void UpdateSearchDropdown(List<FamilyBrowserItemViewModel> counted, List<string> chosenTags)
+        {
+            var q = _searchText.Trim();
+            var perCategory = counted.GroupBy(CategoryKey).ToDictionary(g => g.Key, g => g.Count());
+            foreach (var o in CategoryOptions) o.Count = perCategory.TryGetValue(o.Name, out var n) ? n : 0;
+            var visible = CategoryOptions.Where(o => q.Length == 0 || o.Name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            // Rebuilt only when it changes: recreating the checkboxes under a click would eat it.
+            if (!visible.SequenceEqual(VisibleCategoryOptions))
+            {
+                VisibleCategoryOptions.Clear();
+                foreach (var o in visible) VisibleCategoryOptions.Add(o);
+            }
+
+            var tagCounts = new Dictionary<string, (string Name, int Count)>(StringComparer.OrdinalIgnoreCase);
+            foreach (var b in BuiltInTags.All) tagCounts[b] = (b, 0);
+            foreach (var i in counted)
+                foreach (var t in i.AllTags)
+                    tagCounts[t] = tagCounts.TryGetValue(t, out var e) ? (e.Name, e.Count + 1) : (t, 1);
+            var offered = tagCounts.Values
+                .Where(t => !chosenTags.Any(c => string.Equals(c, t.Name, StringComparison.OrdinalIgnoreCase)))
+                .Where(t => q.Length == 0 ? BuiltInTags.IsBuiltIn(t.Name) : t.Name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)
+                .OrderBy(t => BuiltInTags.IsBuiltIn(t.Name) ? IndexOfBuiltIn(t.Name) : int.MaxValue)
+                .ThenBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase)
+                .Take(12)
+                .ToList();
+            var first = q.Length == 0 ? (string?)null : offered.FirstOrDefault(t => t.Count > 0).Name;
+            TagSuggestions.Clear();
+            foreach (var t in offered) TagSuggestions.Add(new TagSuggestion(t.Name, t.Count, isFirst: t.Name == first));
+            OnPropertyChanged(nameof(ShowTagSuggestions));
+            OnPropertyChanged(nameof(ShowNoSearchMatch));
+        }
+
+        private static int IndexOfBuiltIn(string tag)
+        {
+            for (int i = 0; i < BuiltInTags.All.Count; i++)
+                if (string.Equals(BuiltInTags.All[i], tag, StringComparison.OrdinalIgnoreCase)) return i;
+            return int.MaxValue;
         }
 
         private void LoadDetailAsync(FamilyBrowserItemViewModel? item)
         {
             // Clear first: a slow or failed read must not leave the previous family's
             // instructions showing under this one.
-            InstructionsXaml = null; Parameters = new List<ParameterModel>(); SelectedTags = null;
+            InstructionsXaml = null; Parameters = new List<ParameterModel>();
             // Model-only rows have no DB row (Id 0) — nothing to fetch, and Id 0 must never
             // reach the repository queries.
             if (item == null || item.IsModelOnly) return;
@@ -545,8 +675,13 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
                         InstructionsXaml = xaml;
                         Parameters = prms;
-                        item.Model.Tags = tags;
-                        SelectedTags = tags;
+                        if (!string.Equals(item.Tags, tags, StringComparison.Ordinal))
+                        {
+                            // Edit Info changed them: the list and its counts follow.
+                            item.SetTags(tags);
+                            ApplyFilter();
+                        }
+                        RebuildTagChips();
                     });
                 }
                 catch { /* swallow — detail load failure is non-fatal */ }
@@ -672,6 +807,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                                     && (i.Id != 0 || string.Equals(i.FileName, selected.FileName, StringComparison.OrdinalIgnoreCase)))
                                     ?? selected;
                             _allItems = finalItems;
+                            ApplyRequestFlags();
                             _stash = null;
                             IsComparisonHidden = false;
                             _lastComparison = finalComparison;
@@ -686,6 +822,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                                 HideComparison();
                             ApplyFilter();
                             OnPropertyChanged(nameof(ShowUpdateInProject));
+                            ReloadRequests(); // ⟳ also picks up requests sent since the browser opened
                         });
                     }
                     catch (Exception ex)
@@ -1090,6 +1227,253 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                     _dispatcher.BeginInvoke(new Action(() => IsSavingToLibrary = false));
                 }
             });
+        }
+
+        // ── Requests ────────────────────────────────────────────────────────────────────
+        // Users ask the maintainer to fix a family or add one. Each request is its own small
+        // file in the library's .Requests folder (Core's RequestStore), which everyone can add
+        // files to; the maintainer marks them done. Read when the browser opens and on ⟳.
+        private readonly RequestStore? _requestStore;
+        private readonly string _currentUser;
+        private List<FamilyRequest> _openRequests = new();
+        private int _doneRequestCount;
+        private int _requestsGeneration; // a stale background read never overwrites a newer list
+
+        public ObservableCollection<RequestItemViewModel> NewFamilyRequests { get; } = new();
+        public ObservableCollection<RequestItemViewModel> FixRequests { get; } = new();
+        public ObservableCollection<RequestItemViewModel> SelectedFamilyRequests { get; } = new();
+
+        public int OpenRequestCount => _openRequests.Count;
+        public bool HasOpenRequests => _openRequests.Count > 0;
+        public bool HasSelectedFamilyRequests => SelectedFamilyRequests.Count > 0;
+        public bool HasNoNewFamilyRequests => NewFamilyRequests.Count == 0;
+        public bool HasNoFixRequests => FixRequests.Count == 0;
+        public string NewFamilyRequestsTitle => $"NEW FAMILIES ({NewFamilyRequests.Count})";
+        public string FixRequestsTitle => $"FIXES ({FixRequests.Count})";
+        public string SelectedRequestsTitle => SelectedFamilyRequests.Count == 1
+            ? "A fix is requested" : $"{SelectedFamilyRequests.Count} fixes are requested";
+        public string RequestsButtonToolTip => _openRequests.Count == 0 ? "Requests" : $"Requests ({_openRequests.Count} open)";
+        public string RequestsIntro => CanEdit
+            ? "What users asked for. Done moves a request to .Requests\\Done, so you keep a history."
+            : "Everyone can see these, so check here before asking for the same thing twice. You can withdraw your own requests.";
+        public string DoneRequestsLine => _doneRequestCount == 0 ? string.Empty
+            : $"{_doneRequestCount} done request{(_doneRequestCount == 1 ? "" : "s")} kept in .Requests\\Done.";
+
+        private void ReloadRequests()
+        {
+            var store = _requestStore;
+            if (store == null) return;
+            int generation = ++_requestsGeneration;
+            bool tidy = CanEdit;
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                List<FamilyRequest> open;
+                int done;
+                try
+                {
+                    if (tidy)
+                    {
+                        // The maintainer's browser makes the folder (a view-only user's would
+                        // never upload), then moves withdrawn requests out of the way.
+                        try { store.EnsureFolder(); } catch { /* read-only after all: users see "no folder yet" */ }
+                        store.TidyWithdrawn();
+                    }
+                    open = store.LoadOpen().ToList();
+                    done = store.CountDone();
+                }
+                catch { return; } // requests are extras: never break the browser over them
+                _dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (generation != _requestsGeneration) return;
+                    _openRequests = open;
+                    _doneRequestCount = done;
+                    RequestsChanged();
+                }));
+            });
+        }
+
+        private void RequestsChanged()
+        {
+            ApplyRequestFlags();
+            Fill(NewFamilyRequests, _openRequests.Where(r => r.Kind == FamilyRequest.KindNewFamily));
+            Fill(FixRequests, _openRequests.Where(r => r.Kind != FamilyRequest.KindNewFamily));
+            UpdateSelectedRequests();
+            OnPropertyChanged(nameof(OpenRequestCount));
+            OnPropertyChanged(nameof(HasOpenRequests));
+            OnPropertyChanged(nameof(HasNoNewFamilyRequests));
+            OnPropertyChanged(nameof(HasNoFixRequests));
+            OnPropertyChanged(nameof(NewFamilyRequestsTitle));
+            OnPropertyChanged(nameof(FixRequestsTitle));
+            OnPropertyChanged(nameof(RequestsButtonToolTip));
+            OnPropertyChanged(nameof(DoneRequestsLine));
+            ApplyFilter(); // "Fix requested" is a tag: the list and the counts follow
+        }
+
+        private void Fill(ObservableCollection<RequestItemViewModel> target, IEnumerable<FamilyRequest> requests)
+        {
+            target.Clear();
+            foreach (var r in requests) target.Add(new RequestItemViewModel(r, CanEdit, _currentUser));
+        }
+
+        private void ApplyRequestFlags()
+        {
+            var paths = new HashSet<string>(_openRequests
+                .Where(r => r.Kind != FamilyRequest.KindNewFamily && !string.IsNullOrEmpty(r.RelativePath))
+                .Select(r => r.RelativePath!), StringComparer.OrdinalIgnoreCase);
+            foreach (var i in _allItems) i.IsFixRequested = !i.IsModelOnly && paths.Contains(i.RelativePath);
+        }
+
+        private void UpdateSelectedRequests()
+        {
+            SelectedFamilyRequests.Clear();
+            var item = _selectedItem;
+            if (item != null && !item.IsModelOnly)
+                foreach (var r in _openRequests.Where(r => r.Kind != FamilyRequest.KindNewFamily
+                             && string.Equals(r.RelativePath, item.RelativePath, StringComparison.OrdinalIgnoreCase)))
+                    SelectedFamilyRequests.Add(new RequestItemViewModel(r, CanEdit, _currentUser));
+            OnPropertyChanged(nameof(HasSelectedFamilyRequests));
+            OnPropertyChanged(nameof(SelectedRequestsTitle));
+        }
+
+        private void RequestFix()
+        {
+            var item = SelectedItem;
+            if (item == null || item.IsModelOnly) return;
+            bool inProject = !IsComparisonHidden && item.VersionStatus is VersionStatus.UpToDate
+                or VersionStatus.UpdateAvailable or VersionStatus.DuplicateInLibrary;
+            var answer = RequestDialog?.Invoke(new RequestDialogInput
+                { IsFix = true, FamilyName = item.DisplayName, CanAttach = inProject });
+            if (answer == null) return;
+            SendRequest(FamilyRequest.KindFix, item, answer.Text, answer.Attach && inProject);
+        }
+
+        private void RequestNewFamily()
+        {
+            var answer = RequestDialog?.Invoke(new RequestDialogInput { IsFix = false });
+            if (answer == null) return;
+            SendRequest(FamilyRequest.KindNewFamily, null, answer.Text, attach: false);
+        }
+
+        private void SendRequest(string kind, FamilyBrowserItemViewModel? item, string text, bool attach)
+        {
+            var store = _requestStore;
+            if (store == null || string.IsNullOrWhiteSpace(text)) return;
+            var now = DateTime.UtcNow;
+            var request = new FamilyRequest
+            {
+                Id = RequestStore.NewId(_currentUser, now),
+                Kind = kind,
+                RelativePath = item?.RelativePath,
+                FamilyName = item?.DisplayName,
+                User = _currentUser,
+                CreatedUtc = now.ToString("o"),
+                Text = text.Trim(),
+            };
+            IsSendingRequest = true;
+            ++_requestsGeneration; // a reload already under way must not drop this request
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string? attachError = null, error = null;
+                bool folderReady;
+                try { folderReady = store.FolderExists; }
+                catch { folderReady = false; }
+                if (!folderReady) error = RequestStore.MissingFolderMessage;
+                else if (attach && item != null)
+                {
+                    try
+                    {
+                        var path = store.AttachmentPath(request.Id);
+                        bool ok;
+                        string? err;
+                        lock (_loadLock) // shared Revit handler with Save to Library — serialize
+                        {
+                            (ok, err) = _saveFamilyToLibrary(item.ProjectFamilyName, path);
+                        }
+                        if (ok) request.Attachment = Path.GetFileName(path);
+                        else attachError = err ?? "Revit did not save the family.";
+                    }
+                    catch (Exception ex) { attachError = ex.Message; }
+                }
+                if (error == null)
+                {
+                    try { store.Save(request); }
+                    catch (Exception ex) { error = ex.Message; }
+                }
+                _dispatcher.BeginInvoke(new Action(() =>
+                {
+                    IsSendingRequest = false;
+                    if (error != null)
+                    {
+                        Warn("The request was not sent:\n\n" + error + "\n\n" +
+                             "Check that Autodesk Desktop Connector is running, and that you can add files to the library's .Requests folder.");
+                        return;
+                    }
+                    if (!_openRequests.Any(r => r.Id == request.Id)) _openRequests.Add(request); // a newer reload may have it
+                    RequestsChanged();
+                    var msg = kind == FamilyRequest.KindFix
+                        ? $"Fix requested for {request.FamilyName}."
+                        : "Family request sent.";
+                    msg += "\n\nThe library maintainer sees it once Desktop Connector has uploaded it, usually within a minute.";
+                    if (attachError != null) msg += "\n\nYour project's version could not be attached, so it was sent without it:\n" + attachError;
+                    Warn(msg, icon: MessageBoxImage.Information, caption: "RVTuk — Request");
+                }));
+            });
+        }
+
+        private void MarkRequestDone(RequestItemViewModel? item)
+        {
+            var store = _requestStore;
+            if (item == null || store == null || !CanEdit) return;
+            ChangeRequestInBackground(() => store.MarkDone(item.Request), "Could not mark the request as done:", () =>
+            {
+                _openRequests.RemoveAll(r => r.Id == item.Request.Id); // by id: a reload makes new objects
+                _doneRequestCount++;
+            });
+        }
+
+        private void WithdrawRequest(RequestItemViewModel? item)
+        {
+            var store = _requestStore;
+            if (item == null || store == null || !item.CanWithdraw) return;
+            if (Warn("Withdraw your request?", MessageBoxButton.OKCancel, MessageBoxImage.Question, "RVTuk — Request")
+                != MessageBoxResult.OK) return;
+            ChangeRequestInBackground(() => store.Withdraw(item.Request), "Could not withdraw the request:",
+                () => _openRequests.RemoveAll(r => r.Id == item.Request.Id));
+        }
+
+        // The folder is on Desktop Connector, which can stall: file work stays off the UI thread.
+        private void ChangeRequestInBackground(Action fileWork, string failure, Action onDone)
+        {
+            ++_requestsGeneration; // a reload already under way must not undo this change
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string? error = null;
+                try { fileWork(); }
+                catch (Exception ex) { error = ex.Message; }
+                _dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (error != null) { Warn(failure + "\n\n" + error); return; }
+                    onDone();
+                    RequestsChanged();
+                }));
+            });
+        }
+
+        // From the Requests list to the family: clears the search so it can't be filtered out.
+        private void ShowRequestFamily(RequestItemViewModel? item)
+        {
+            if (item == null || !item.IsFix) return;
+            var family = _allItems.FirstOrDefault(i => !i.IsModelOnly
+                && string.Equals(i.RelativePath, item.Request.RelativePath, StringComparison.OrdinalIgnoreCase));
+            if (family == null)
+            {
+                Warn($"'{item.Title}' is no longer in the library.");
+                return;
+            }
+            _showFavoriteFamilies = false;
+            OnPropertyChanged(nameof(ShowFavoriteFamilies));
+            ClearSearchAndChips();
+            SelectedItem = family;
         }
 
         public void Dispose() => _repo.Dispose();

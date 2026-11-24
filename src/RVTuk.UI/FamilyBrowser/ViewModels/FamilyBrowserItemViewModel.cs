@@ -23,6 +23,34 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         public string RelativePath => Model.RelativePath;
         public string? Tags => Model.Tags;
 
+        /// <summary>Takes freshly read tags (Edit Info, or the detail pane's re-read).</summary>
+        public void SetTags(string? tags)
+        {
+            Model.Tags = tags;
+            _allTags = null;
+            OnPropertyChanged(nameof(Tags));
+        }
+
+        // An open fix request names this family (set from the .Requests folder).
+        private bool _isFixRequested;
+        public bool IsFixRequested
+        {
+            get => _isFixRequested;
+            set
+            {
+                if (_isFixRequested == value) return;
+                _isFixRequested = value;
+                _allTags = null;
+                OnPropertyChanged();
+            }
+        }
+
+        // Own tags plus the built-in ones (Project, Library, Fix requested), kept until one of
+        // their inputs changes: the search reads them for every family on every keystroke.
+        private IReadOnlyList<string>? _allTags;
+        public IReadOnlyList<string> AllTags =>
+            _allTags ??= FamilyFilter.TagsOf(Model.Tags, _versionStatus, _isFixRequested);
+
         // Value of the _Version shared parameter — from the library index for indexed rows,
         // from the loaded family (symbols, else a placed instance) for model-only rows.
         // Shown next to the row flags.
@@ -60,6 +88,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             set
             {
                 SetProperty(ref _versionStatus, value);
+                _allTags = null;
                 OnPropertyChanged(nameof(ShowUpToDate));
                 OnPropertyChanged(nameof(ShowUpdateAvailable));
                 OnPropertyChanged(nameof(IsModelOnly));
@@ -102,6 +131,9 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         // The copy loaded in the project, as of the last Sync — kept so a Rescan can re-judge.
         private ProjectFamilyInfo? _inProject;
         public string? ProjectVersion => _inProject?.Version;
+
+        /// <summary>The family's exact name in the project (it can differ in case from the file).</summary>
+        public string ProjectFamilyName => _inProject?.Name ?? DisplayName;
 
         public FamilyBrowserItemViewModel(FamilyBrowserItem model)
         {

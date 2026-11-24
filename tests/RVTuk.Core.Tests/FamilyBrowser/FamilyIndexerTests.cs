@@ -199,6 +199,22 @@ public class FamilyIndexerTests : IDisposable
     }
 
     [Fact]
+    public void Scan_NeverIndexesTheLibrarysOwnFolders()
+    {
+        // A user's attached project copy sits in .Requests; it must not become a second
+        // library copy of the family (which would block its Update).
+        WriteRfa("Doors/A.rfa");
+        WriteRfa(".Requests/20261124-120000-noa-abc123.rfa");
+        WriteRfa(".Requests/Done/20261101-120000-noa-def456.rfa");
+        WriteRfa(".DB/Stray.rfa");
+        using var repo = new IndexRepository(_dbPath);
+
+        var work = new FamilyIndexer(repo, _root).Scan(NoProgress, default, includeParameters: true);
+
+        Assert.Equal(Path.Combine("Doors", "A.rfa"), Assert.Single(work).RelativePath);
+    }
+
+    [Fact]
     public void Scan_PreservesPreviouslyIndexedFamilyWhenItsFolderBecomesIgnored()
     {
         WriteRfa("Doors/A.rfa");

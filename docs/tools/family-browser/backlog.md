@@ -57,10 +57,18 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
   `RunDeepScan`) while a scan is in progress.
 
 ## 🚀 Ideas
-- [ ] **Suggest a family / a change.** Users with view-only access upload a suggestion (a short
-  note, plus an optional `.rfa`) into an ACC `.Suggestions` folder where everyone has Upload
-  permission. One file per suggestion means no sync conflicts; the maintainer reviews them in
-  the browser. Follows the 2026-11-15 view-only design (design.md §6a).
+- [ ] **Reach the library without a sync client** (archived 2026-11-24; Desktop Connector stays
+  for now). View-only users would download the library DB and each loaded `.rfa` straight from
+  ACC through the Autodesk Platform Services Data Management API, instead of through Desktop
+  Connector; the maintainer keeps Desktop Connector, since a scan needs every `.rfa` on disk.
+  Needs a one-time APS app registration, the ACC account admin adding it as a custom
+  integration, and a first-time Autodesk sign-in per user (check whether an add-in can reuse
+  Revit's own sign-in; plain OAuth over HttpClient otherwise, so no new identity library is
+  loaded into Revit). The readers' local copy (`LibraryCache`) is the part that already exists.
+  The same could be done for a SharePoint folder through Microsoft Graph, but that needs a
+  Microsoft 365 admin and the MSAL library inside Revit (version clashes), and mapping
+  SharePoint as a WebDAV drive is unreliable — both set aside. Only worth it if Desktop
+  Connector proves a real problem on the office PCs.
 
 - [ ] **Tags follow-ups** (base `c742a9b`, clickable chips `c625502`): a tag auto-complete /
   pick-from-existing list so spelling stays consistent.
@@ -75,6 +83,15 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
 - [x] UI styling/layout polish for the parameter regions.
 
 ## ✅ Done
+
+- [x] **One search box, built-in tags, requests** (2026-11-24, mocked first in the design
+  artifact). The category popover and the ⬅️/➡️ toggles gave way to one search box with chips:
+  categories OR, tags AND, with Tabler icons per category. Project, Library and Fix requested
+  are built-in tags. Users can **Request a fix** or **Request family** through files in
+  `.Requests` (design.md §6b). The ⟳/⭐ and detail-pane icons are bigger. This also covers the
+  "Suggest a family / a change" idea. Still to check in Revit: the dropdown's focus and keyboard
+  handling, that ACC gives View + Upload users read-only files and lets them add new ones, and
+  attaching a project version.
 
 - [x] **Safe Update** (2026-11-18): Update kept nothing the project changed, Update All could
   load ignored or duplicate copies, badges outlived a project switch, a busy Revit froze the

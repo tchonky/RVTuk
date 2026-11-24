@@ -32,7 +32,13 @@ namespace RVTuk.Core.FamilyBrowser.Extraction
         {
             _repository = repository;
             _libraryRoot = libraryRootPath;
-            _ignoredSubfolders = ignoredSubfolders ?? new List<string>();
+            // The library's own folders are never families: the database, and users' requests
+            // (whose attached .rfa copies would otherwise show up as second library copies).
+            var ignored = new List<string>(ignoredSubfolders ?? new List<string>());
+            foreach (var own in new[] { Shared.Config.AppConfig.DbFolderName, Requests.RequestStore.FolderName })
+                if (!ignored.Exists(f => string.Equals(f.Trim().Trim('\\', '/'), own, StringComparison.OrdinalIgnoreCase)))
+                    ignored.Add(own);
+            _ignoredSubfolders = ignored;
             _ignoredFiles = new IgnoredFileMatcher(ignoredFilePatterns);
         }
 

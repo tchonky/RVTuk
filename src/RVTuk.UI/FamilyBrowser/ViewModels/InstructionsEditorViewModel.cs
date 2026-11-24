@@ -169,7 +169,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             // An unreadable row stays as it is; the editor only shows a notice in its place.
             if (!InstructionsUnreadable)
                 _repo.SaveInstructionsXaml(_familyId, xamlFromEditor);
-            _repo.SaveTags(_familyId, string.IsNullOrWhiteSpace(_tagsText) ? null : _tagsText.Trim());
+            // Built-in tags (Project, Library, Fix requested) are worked out, never stored.
+            _repo.SaveTags(_familyId, FamilyFilter.CleanStoredTags(_tagsText));
 
             if (_customThumbPng == null)
             {
