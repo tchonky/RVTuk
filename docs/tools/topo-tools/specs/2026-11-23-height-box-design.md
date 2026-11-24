@@ -92,3 +92,11 @@ across selection changes — and the box shows the selection's height only while
 "H=" label, widened to 140 px), then an Update split button (Heights, the default click, and Labels). The Spacing
 box is gone: points every 100 cm.
 
+## Addendum 2026-11-23: Pick in Steps
+
+Daniel asked for heights relative to the line clicked before, not to each line's own height. Pick
+Lines became a split button (its own click unchanged) whose menu adds **Pick in Steps**: with a
+step in the box, the first clicked line starts the run and keeps its height, each next one takes
+the previous line's height plus the step (`HeightSteps`). A split-button choice rather than a
+checkbox: the ribbon API has no checkbox, and a mode set once and forgotten surprises; the status
+bar names the mode while clicking. The H= box went from 140 to 105 px (a quarter narrower).
