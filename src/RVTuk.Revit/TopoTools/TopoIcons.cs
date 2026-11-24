@@ -71,6 +71,18 @@ namespace RVTuk.Revit.TopoTools
                 (0.36, 0.30), (0.36, 0.86), (0.49, 0.73), (0.59, 0.92), (0.68, 0.87), (0.58, 0.69), (0.76, 0.69)));
         });
 
+        /// <summary>Pick in Steps: three orange lines rising like stairs, with a white pointer on the top one.</summary>
+        internal static BitmapSource PickSteps(int size) => Draw(size, (ctx, s) =>
+        {
+            var pen = OrangePen(s);
+            ctx.DrawLine(pen, new WpfPoint(s * 0.06, s * 0.86), new WpfPoint(s * 0.36, s * 0.86));
+            ctx.DrawLine(pen, new WpfPoint(s * 0.30, s * 0.58), new WpfPoint(s * 0.60, s * 0.58));
+            ctx.DrawLine(pen, new WpfPoint(s * 0.54, s * 0.30), new WpfPoint(s * 0.94, s * 0.30));
+
+            ctx.DrawGeometry(Brushes.White, null, Polygon(s,
+                (0.72, 0.30), (0.72, 0.78), (0.82, 0.68), (0.89, 0.83), (0.96, 0.80), (0.89, 0.65), (1.0, 0.65)));
+        });
+
         /// <summary>Update: a white clockwise refresh arrow around an orange contour.</summary>
         internal static BitmapSource Update(int size) => Draw(size, (ctx, s) =>
         {

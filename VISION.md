@@ -51,7 +51,7 @@ database; search/filter/browse it from a dark-themed panel; load or update famil
 straight into the active project; keep per-family instructions, tags, favourites, and
 custom thumbnails.
 **Status:** shipped in v1, together with **Rishui Zamin** (the רישוי זמין area-submission
-export; ribbon button "Area Calc" — see `docs/tools/rishui-zamin/`).
+export; ribbon button "Rishui Zamin" — see `docs/tools/rishui-zamin/`).
 
 ### 2. Standardization — *Project Comparator* (the "Template Snapshot")
 Capture a snapshot of a project's most important settings — **view templates first**,

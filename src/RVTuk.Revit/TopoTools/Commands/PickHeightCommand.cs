@@ -34,20 +34,7 @@ namespace RVTuk.Revit.TopoTools.Commands
             if (uiDoc == null || !session.IsFor(uiDoc.Document)) return Result.Cancelled;
             var doc = uiDoc.Document;
 
-            // Clicks land in the active view: the session's view is opened first, as Draw Lines does.
-            if (uiDoc.ActiveView?.Id != session.ViewId)
-            {
-                try
-                {
-                    uiDoc.ActiveView = view;
-                }
-                catch (Exception ex)
-                {
-                    Application.LogDiagnostic($"Topo Pick: opening the session's view failed: {ex}");
-                    TaskDialog.Show(TopoSessionCommands.Title, $"Open the view \"{view.Name}\" and press Pick again.");
-                    return Result.Cancelled;
-                }
-            }
+            if (!OpenSessionView(uiDoc, view)) return Result.Cancelled;
 
             try
             {
@@ -101,8 +88,28 @@ namespace RVTuk.Revit.TopoTools.Commands
             }
         }
 
+        /// <summary>
+        /// Clicks land in the active view: the session's view is opened first, as Draw Lines does.
+        /// False, after saying so, when it cannot be opened.
+        /// </summary>
+        internal static bool OpenSessionView(UIDocument uiDoc, View view)
+        {
+            if (uiDoc.ActiveView?.Id == view.Id) return true;
+            try
+            {
+                uiDoc.ActiveView = view;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Application.LogDiagnostic($"Topo Pick: opening the session's view failed: {ex}");
+                TaskDialog.Show(TopoSessionCommands.Title, $"Open the view \"{view.Name}\" and press Pick again.");
+                return false;
+            }
+        }
+
         /// <summary>Only topo lines of the session's view and their height texts can be clicked.</summary>
-        private sealed class TopoPickFilter : ISelectionFilter
+        internal sealed class TopoPickFilter : ISelectionFilter
         {
             private readonly HashSet<long> _allowed;
 

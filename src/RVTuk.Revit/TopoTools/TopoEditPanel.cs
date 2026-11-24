@@ -103,17 +103,29 @@ namespace RVTuk.Revit.TopoTools
                 Button<DrawTopoLinesCommand>("TopoDrawLines", "Draw Lines", assemblyPath,
                     "Start Revit's Detail Line tool in the session's view, opening it first if needed: every line drawn there becomes a topo line with a height text",
                     TopoIcons.DrawLines),
-                Button<PickHeightCommand>("TopoPick", "Pick Lines", assemblyPath,
-                    "Click topo lines one by one to do what the Height box holds: 43 gives each the height 43.00, " +
-                    "+0.1 raises it 10 cm on every click, -0.1 lowers it. Lines selected first get it straight away. " +
-                    "Esc to finish.",
-                    TopoIcons.Pick),
+                new SplitButtonData("TopoPickMenu", "Pick Lines"),
                 height);
+
+            // Pick Lines: its own click moves each clicked line from its own height; its menu also
+            // holds Pick in Steps, where each clicked line goes one step from the line before.
+            var pick = (SplitButton)rows[1];
+            pick.AddPushButton(Button<PickHeightCommand>("TopoPick", "Pick Lines", assemblyPath,
+                "Click topo lines one by one to do what the Height box holds: 43 gives each the height 43.00, " +
+                "+0.1 raises it 10 cm on every click, -0.1 lowers it. Lines selected first get it straight away. " +
+                "Esc to finish.",
+                TopoIcons.Pick));
+            pick.AddPushButton(Button<PickStepsCommand>("TopoPickSteps", "Pick in Steps", assemblyPath,
+                "With a step in the Height box (+0.1, -0.1): click the line to start from, which keeps its height, " +
+                "then each next line you click takes the height of the line before plus the step. " +
+                "One line selected first is the start. Esc to finish.",
+                TopoIcons.PickSteps));
+            pick.IsSynchronizedWithCurrentItem = false;
+
             var heightBox = (TextBox)rows[2];
             heightBox.PromptText = "Height (m)";
             heightBox.ShowImageAsButton = false;
             heightBox.SelectTextOnFocus = true;
-            heightBox.Width = 140;
+            heightBox.Width = 105;
             heightBox.Value = "";
             heightBox.EnterPressed += OnHeightEntered;
 
@@ -479,12 +491,11 @@ namespace RVTuk.Revit.TopoTools
         /// What the Height box holds, read as <see cref="HeightBoxInput"/>; false when there is no
         /// box or its text does not read.
         /// </summary>
-        internal static bool TryReadInput(out HeightBoxInput input)
-        {
-            input = null!;
-            return _heightBox != null
-                && HeightBoxInput.TryParse(Convert.ToString(_heightBox.Value, CultureInfo.InvariantCulture), out input);
-        }
+        internal static bool TryReadInput(out HeightBoxInput input) => HeightBoxInput.TryParse(BoxText, out input);
+
+        /// <summary>The Height box's text as typed; empty when there is no box.</summary>
+        internal static string BoxText =>
+            _heightBox == null ? "" : Convert.ToString(_heightBox.Value, CultureInfo.InvariantCulture) ?? "";
 
         /// <summary>
         /// The topo lines of <paramref name="view"/> that <paramref name="ids"/> name, each once
