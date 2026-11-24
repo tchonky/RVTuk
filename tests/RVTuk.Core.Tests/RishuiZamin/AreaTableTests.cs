@@ -125,7 +125,15 @@ public class AreaTableTests
     public void Rows_EmptyFloorName_ShowsNoLevel()
     {
         var t = AreaTable.Build(new[] { Area("", 0, false, 1, 5) });
-        Assert.Equal("(no level)", t.Rows.First().Label);
+        Assert.Equal("(ללא מפלס)", t.Rows.First().Label);
+    }
+
+    [Fact]
+    public void Rows_SummaryLabelsInHebrew()
+    {
+        var t = AreaTable.Build(new[] { Area("קומה א First", 4, false, 1, 5) });
+        Assert.Equal(new[] { "סה\"כ מעל הקרקע", "סה\"כ מתחת לקרקע", "סה\"כ בבניין" },
+            t.Rows.Where(r => r.Kind != AreaTableRowKind.Floor).Select(r => r.Label));
     }
 
     [Fact]

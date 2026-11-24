@@ -102,7 +102,7 @@
 
         <DataGrid x:Name="Grid" IsReadOnly="True" AutoGenerateColumns="False" FrozenColumnCount="3"
                   HeadersVisibility="Column" CanUserSortColumns="False" CanUserReorderColumns="False"
-                  SelectionMode="Single" Margin="8,0,8,8"
+                  SelectionMode="Single" Margin="8,0,8,8" FlowDirection="RightToLeft"
                   HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
             <DataGrid.RowStyle>
                 <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">

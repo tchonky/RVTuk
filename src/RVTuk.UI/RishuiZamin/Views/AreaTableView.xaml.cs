@@ -74,9 +74,9 @@ namespace RVTuk.UI.RishuiZamin.Views
             }
 
             var table = _vm.Table;
-            Grid.Columns.Add(TextColumn("Elev.", nameof(Row.Elevation), right: true));
-            Grid.Columns.Add(TextColumn("Below", nameof(Row.Below), right: false));
-            Grid.Columns.Add(TextColumn("Floor", nameof(Row.Label), right: false));
+            Grid.Columns.Add(TextColumn(PlainHeader("מפלס"), nameof(Row.Elevation), number: true));
+            Grid.Columns.Add(TextColumn(PlainHeader("תת-קרקעי"), nameof(Row.Below), number: false));
+            Grid.Columns.Add(TextColumn(PlainHeader("קומה"), nameof(Row.Label), number: false));
 
             UsageGroup? previous = null;
             for (var i = 0; i < table.Columns.Count; i++)
@@ -84,22 +84,26 @@ namespace RVTuk.UI.RishuiZamin.Views
                 var c = table.Columns[i];
                 var first = c.Group != previous;
                 previous = c.Group;
-                var column = TextColumn(Header(c, first), "Cells[" + i + "]", right: true);
+                var column = TextColumn(Header(c, first), "Cells[" + i + "]", number: true);
                 Grid.Columns.Add(column);
             }
 
             Grid.ItemsSource = table.Rows.Select(r => new Row(
                 r.Elevation is { } e ? e.ToString("F2", CultureInfo.InvariantCulture) : "",
-                r.Kind == AreaTableRowKind.Floor && r.IsUnderground ? "yes" : "",
+                r.Kind == AreaTableRowKind.Floor && r.IsUnderground ? "כן" : "",
                 r.Label,
                 r.Kind != AreaTableRowKind.Floor,
                 table.Format(r, _vm.PlotAreaM2))).ToList();
         }
 
-        private static DataGridTextColumn TextColumn(object header, string path, bool right)
+        // The grid flows right to left like the official table. Number cells flow left to right,
+        // or "-4.90" would read "4.90-"; text cells keep the grid's direction and start at the right.
+        private static DataGridTextColumn TextColumn(object header, string path, bool number)
         {
             var style = new Style(typeof(TextBlock));
-            style.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, right ? TextAlignment.Right : TextAlignment.Left));
+            if (number)
+                style.Setters.Add(new Setter(FrameworkElement.FlowDirectionProperty, FlowDirection.LeftToRight));
+            style.Setters.Add(new Setter(TextBlock.TextAlignmentProperty, number ? TextAlignment.Right : TextAlignment.Left));
             style.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(4, 1, 4, 1)));
             var column = new DataGridTextColumn
             {
@@ -110,14 +114,20 @@ namespace RVTuk.UI.RishuiZamin.Views
             return column;
         }
 
+        private static FrameworkElement PlainHeader(string text) =>
+            new TextBlock { Text = text, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Bottom };
+
         // Three separate TextBlocks — group, code, Hebrew name — so bidi never reorders them.
+        // Long names wrap rather than being cut.
         private FrameworkElement Header(AreaTableColumn c, bool firstOfGroup)
         {
-            var panel = new StackPanel { ToolTip = Tip(c) };
+            var panel = new StackPanel { ToolTip = Tip(c), VerticalAlignment = VerticalAlignment.Bottom };
             panel.Children.Add(new TextBlock
             {
                 Text = firstOfGroup ? GroupName(c.Group) : " ",
-                FontSize = 9,
+                FontSize = 10,
+                MaxWidth = 110,
+                TextWrapping = TextWrapping.Wrap,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = GroupBrush(c.Group),
             });
@@ -126,7 +136,7 @@ namespace RVTuk.UI.RishuiZamin.Views
                 Text = c.Kind switch
                 {
                     AreaTableColumnKind.Code => c.Code!.Value.ToString(CultureInfo.InvariantCulture),
-                    AreaTableColumnKind.Sum => "Σ",
+                    AreaTableColumnKind.Sum => "סה\"כ",
                     _ => "%",
                 },
                 FontWeight = FontWeights.SemiBold,
@@ -135,9 +145,8 @@ namespace RVTuk.UI.RishuiZamin.Views
             {
                 Text = c.Kind == AreaTableColumnKind.Code ? UsageCatalog.ByCode(c.Code!.Value)?.HebrewName ?? "" : " ",
                 FontSize = 10,
-                MaxWidth = 90,
-                FlowDirection = FlowDirection.RightToLeft,   // so a long Hebrew name loses its end, not its start
-                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxWidth = 110,
+                TextWrapping = TextWrapping.Wrap,
                 Foreground = (Brush)FindResource("Brush.TextMuted"),
             });
             return panel;
@@ -146,17 +155,17 @@ namespace RVTuk.UI.RishuiZamin.Views
         private static string? Tip(AreaTableColumn c) => c.Kind switch
         {
             AreaTableColumnKind.Code => c.Code + " - " + UsageCatalog.ByCode(c.Code!.Value)?.HebrewName,
-            AreaTableColumnKind.Percent => "% of the plot area",
-            _ => c.Group == UsageGroup.NoCode ? "Areas without a usage code" : null,
+            AreaTableColumnKind.Percent => "% משטח המגרש",
+            _ => c.Group == UsageGroup.NoCode ? "שטחים ללא קוד שימוש" : null,
         };
 
         private static string GroupName(UsageGroup g) => g switch
         {
-            UsageGroup.Primary => "PRIMARY",
-            UsageGroup.Service => "SERVICE",
-            UsageGroup.Other => "OTHER",
-            UsageGroup.Process => "REMOVED",
-            _ => "NO CODE",
+            UsageGroup.Primary => "שטחים עיקריים",
+            UsageGroup.Service => "שטחי שירות",
+            UsageGroup.Other => "אחר",
+            UsageGroup.Process => "הורדה והריסה",
+            _ => "ללא קוד",
         };
 
         private Brush GroupBrush(UsageGroup g) => (Brush)FindResource(g switch

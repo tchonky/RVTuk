@@ -68,7 +68,7 @@ namespace RVTuk.Core.RishuiZamin
     /// </summary>
     public sealed class AreaTable
     {
-        public const string NoLevelLabel = "(no level)";
+        public const string NoLevelLabel = "(ללא מפלס)";
         private const string Dash = "—";
 
         public static readonly AreaTable Empty = Build(new AreaRecord[0]);
@@ -96,9 +96,9 @@ namespace RVTuk.Core.RishuiZamin
 
             var rows = new List<AreaTableRow>(floors)
             {
-                new(AreaTableRowKind.AboveGround, "Above ground", null, false, list.Where(a => !a.IsUnderground).ToList()),
-                new(AreaTableRowKind.BelowGround, "Below ground", null, true, list.Where(a => a.IsUnderground).ToList()),
-                new(AreaTableRowKind.Building, "Building", null, false, list),
+                new(AreaTableRowKind.AboveGround, "סה\"כ מעל הקרקע", null, false, list.Where(a => !a.IsUnderground).ToList()),
+                new(AreaTableRowKind.BelowGround, "סה\"כ מתחת לקרקע", null, true, list.Where(a => a.IsUnderground).ToList()),
+                new(AreaTableRowKind.Building, "סה\"כ בבניין", null, false, list),
             };
 
             var used = new HashSet<int>(list.Select(UsageGroups.EffectiveCode).Where(c => c != null).Select(c => c!.Value));
