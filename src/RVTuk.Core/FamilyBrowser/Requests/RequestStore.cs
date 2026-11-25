@@ -119,6 +119,34 @@ namespace RVTuk.Core.FamilyBrowser.Requests
             }
         }
 
+        /// <summary>
+        /// The maintainer approves a suggested family: its attached file moves to
+        /// <paramref name="targetPath"/> in the library, then the request goes to <c>Done\</c>.
+        /// The target's file name is the family's own name, which Revit uses as the family name
+        /// on loading (the attachment is named after the request id).
+        /// </summary>
+        /// <exception cref="FileNotFoundException">The attachment hasn't arrived (Desktop
+        /// Connector may still be downloading it).</exception>
+        /// <exception cref="IOException">The target exists and <paramref name="overwrite"/> is false.</exception>
+        public void ApproveSuggestion(FamilyRequest request, string targetPath, bool overwrite)
+        {
+            var source = string.IsNullOrEmpty(request.Attachment)
+                ? AttachmentPath(request.Id)
+                : Path.Combine(Folder, request.Attachment);
+            if (!File.Exists(source))
+                throw new FileNotFoundException(
+                    "The suggested family's file is not on this PC yet. Desktop Connector may still be downloading it: try again in a minute.",
+                    source);
+            if (File.Exists(targetPath))
+            {
+                if (!overwrite) throw new IOException(targetPath + " already exists.");
+                File.Delete(targetPath);
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+            File.Move(source, targetPath);
+            MarkDone(request);
+        }
+
         /// <summary>For the maintainer: moves withdrawn requests to <c>Done\</c> so the folder
         /// stays short. Best-effort; returns how many were moved.</summary>
         public int TidyWithdrawn()

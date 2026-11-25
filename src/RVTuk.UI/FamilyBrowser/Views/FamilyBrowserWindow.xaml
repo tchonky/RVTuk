@@ -47,15 +47,23 @@
                                 </Hyperlink>
                             </TextBlock>
                             <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
-                                       Visibility="{Binding IsNewFamily, Converter={StaticResource BoolVis}}"/>
+                                       Visibility="{Binding HasPlainTitle, Converter={StaticResource BoolVis}}"/>
                             <TextBlock Text="{Binding Meta}" FontSize="10" Foreground="{StaticResource Brush.TextMuted}" Margin="0,1,0,2"/>
-                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FlowDirection="{Binding TextFlowDirection}"/>
+                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FlowDirection="{Binding TextFlowDirection}"
+                                       Visibility="{Binding HasText, Converter={StaticResource BoolVis}}"/>
                             <TextBlock FontSize="10" Foreground="{StaticResource Brush.TextMuted}" Margin="0,2,0,0"
                                        Text="&#x1F4CE; Their project's version is attached"
-                                       Visibility="{Binding HasAttachment, Converter={StaticResource BoolVis}}"/>
+                                       Visibility="{Binding ShowAttachmentNote, Converter={StaticResource BoolVis}}"/>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top" Margin="8,0,0,0">
-                            <Button Content="Done" Padding="8,2" FontSize="11" ToolTip="Mark this request as done"
+                            <!-- A suggested family: Approve files it in the library. -->
+                            <Button Content="Approve" Padding="8,2" FontSize="11" Margin="0,0,4,0" FontWeight="SemiBold"
+                                    ToolTip="Add this family to the library"
+                                    Visibility="{Binding CanApprove, Converter={StaticResource BoolVis}}"
+                                    Command="{Binding DataContext.ApproveSuggestionCommand,
+                                              RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
+                                    CommandParameter="{Binding}"/>
+                            <Button Content="{Binding DoneLabel}" Padding="8,2" FontSize="11" ToolTip="{Binding DoneToolTip}"
                                     Visibility="{Binding CanMarkDone, Converter={StaticResource BoolVis}}"
                                     Command="{Binding DataContext.MarkRequestDoneCommand,
                                               RelativeSource={RelativeSource AncestorType=ScrollViewer}}"
@@ -895,9 +903,10 @@
                     <!-- Save to Library — the model-only counterpart of Load: writes the family
                          from the model into the library folder so the library can be grown from
                          the project. -->
-                    <Button Padding="16,7" FontWeight="SemiBold" Content="Save to Library"
+                    <!-- View-only users can't write the library: theirs suggests the family instead. -->
+                    <Button Padding="16,7" FontWeight="SemiBold" Content="{Binding SaveToLibraryLabel}"
                             Command="{Binding SaveToLibraryCommand}"
-                            ToolTip="Save this family from the model into the library folder"
+                            ToolTip="{Binding SaveToLibraryToolTip}"
                             Visibility="{Binding SelectedItem.IsModelOnly, Converter={StaticResource BoolVis}, FallbackValue=Collapsed}"/>
 
                     <!-- Request a fix — for library families, open to everyone (view-only users too). -->
@@ -1005,7 +1014,8 @@
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                             <Viewbox Width="15" Height="15" Margin="0,0,6,0">
                                 <Canvas Width="24" Height="24">
-                                    <Path Data="{v:Icon tool}" Stroke="#F0C070" StrokeThickness="2"
+                                    <Path Data="{Binding SelectedRequestsIcon, Converter={StaticResource IconByName}}"
+                                          Stroke="#F0C070" StrokeThickness="2"
                                           StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
                                 </Canvas>
                             </Viewbox>
@@ -1021,12 +1031,13 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel>
                                             <TextBlock Text="{Binding Meta}" FontSize="10" Foreground="#B8A888"/>
-                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FlowDirection="{Binding TextFlowDirection}"/>
+                                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FlowDirection="{Binding TextFlowDirection}"
+                                                       Visibility="{Binding HasText, Converter={StaticResource BoolVis}}"/>
                                             <TextBlock FontSize="10" Foreground="#B8A888" Text="&#x1F4CE; Their project's version is attached"
-                                                       Visibility="{Binding HasAttachment, Converter={StaticResource BoolVis}}"/>
+                                                       Visibility="{Binding ShowAttachmentNote, Converter={StaticResource BoolVis}}"/>
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="8,0,0,0">
-                                            <Button Content="Done" Padding="8,2" FontSize="11" ToolTip="Mark this request as done"
+                                            <Button Content="{Binding DoneLabel}" Padding="8,2" FontSize="11" ToolTip="{Binding DoneToolTip}"
                                                     Visibility="{Binding CanMarkDone, Converter={StaticResource BoolVis}}"
                                                     Command="{Binding DataContext.MarkRequestDoneCommand,
                                                               RelativeSource={RelativeSource AncestorType=ItemsControl}}"
@@ -1175,6 +1186,36 @@
 
                     <Separator Margin="0,26,0,22"/>
 
+                    <!-- Office keyboard shortcuts: .DB\KeyboardShortcuts.xml (Core's OfficeShortcuts). -->
+                    <TextBlock Text="KEYBOARD SHORTCUTS" Foreground="{StaticResource Brush.TextMuted}"
+                               FontSize="10" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Install office shortcuts" Padding="12,6"
+                                Command="{Binding InstallShortcutsCommand}"
+                                ToolTip="Replace your Revit keyboard shortcuts with the office's"/>
+                        <Button Content="Publish my shortcuts" Padding="12,6" Margin="6,0,0,0"
+                                Command="{Binding PublishShortcutsCommand}"
+                                ToolTip="Make your own Revit keyboard shortcuts the office's">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                    <Style.Triggers>
+                                        <!-- Only the maintainer can write the library. -->
+                                        <DataTrigger Binding="{Binding IsReadOnlyLibrary}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                    <TextBlock Foreground="{StaticResource Brush.TextMuted}" FontSize="10"
+                               Margin="0,5,0,0" TextWrapping="Wrap">
+                        Install replaces your shortcuts in every Revit version on this PC with the office's;
+                        your old ones are kept as a backup file next to them. Restart Revit to use them.
+                    </TextBlock>
+
+                    <Separator Margin="0,26,0,22"/>
+
                     <TextBlock Text="IGNORED SUBFOLDERS" Foreground="{StaticResource Brush.TextMuted}"
                                FontSize="10" FontWeight="SemiBold" Margin="0,0,0,8"/>
                     <TextBox AcceptsReturn="True" Height="80"
@@ -1244,6 +1285,12 @@
                     <TextBlock Text="None open." FontSize="11" Foreground="{StaticResource Brush.TextMuted}" Margin="0,0,0,6"
                                Visibility="{Binding HasNoNewFamilyRequests, Converter={StaticResource BoolVis}}"/>
                     <ItemsControl ItemsSource="{Binding NewFamilyRequests}" ItemTemplate="{StaticResource RequestCard}"/>
+
+                    <TextBlock Text="{Binding SuggestedFamilyRequestsTitle}" FontSize="10" FontWeight="SemiBold"
+                               Foreground="{StaticResource Brush.TextMuted}" Margin="0,12,0,6"/>
+                    <TextBlock Text="None open." FontSize="11" Foreground="{StaticResource Brush.TextMuted}" Margin="0,0,0,6"
+                               Visibility="{Binding HasNoSuggestedFamilyRequests, Converter={StaticResource BoolVis}}"/>
+                    <ItemsControl ItemsSource="{Binding SuggestedFamilyRequests}" ItemTemplate="{StaticResource RequestCard}"/>
 
                     <TextBlock Text="{Binding FixRequestsTitle}" FontSize="10" FontWeight="SemiBold"
                                Foreground="{StaticResource Brush.TextMuted}" Margin="0,12,0,6"/>

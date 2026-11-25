@@ -313,12 +313,22 @@ file per request in the library's **`.Requests`** folder (`RVTuk.Core.FamilyBrow
   touch the same file. The id is `yyyyMMdd-HHmmss-<user>-<random>`.
 - **The maintainer** (who can edit the folder) marks a request **Done**, which moves its files
   to `.Requests\Done\` (kept as history); withdrawn requests are moved there on the next open.
+- **Suggested families (2026-11-25):** a view-only user's **Save to Library** reads **Suggest
+  for Library**. It saves the model-only family from their project (the Save to Library
+  handler) as `<id>.rfa` next to an `add` request carrying its name and category; without the
+  file nothing is sent. The maintainer's Requests list has a *Suggested families* section:
+  **Approve** offers the folder Save to Library would pick (`SaveToLibraryPlanner`), or another
+  one inside the library (never `.DB`, `.Requests` or an ignored subfolder), then moves the
+  file there as `<family name>.rfa` — the name Revit gives the family on loading — and the
+  request to `Done\`; **Reject** just closes it. The family appears after the next Scan. The
+  suggester sees the suggestion above the family's instructions and can't send it twice.
 - **Only the maintainer's browser creates `.Requests`** (on open). A view-only user could make
   it on their own PC, but Desktop Connector can't upload a folder where they may not edit, so
   their requests would silently never arrive; while it is missing, sending says so instead.
-- The attached `.rfa` is named after the request id, so in Revit that copy is a family called
+- A fix's attached `.rfa` is named after the request id, so in Revit that copy is a family called
   `<id>`: fine for opening and comparing, but loading it into a project adds a new family rather
-  than replacing the original. A per-request subfolder would keep the name, but whether View +
+  than replacing the original. (An approved suggestion is renamed as it moves, so it doesn't
+  have this problem.) A per-request subfolder would keep the name, but whether View +
   Upload may create folders in Autodesk Docs is unchecked.
 - The scan never walks `.DB` or `.Requests` (`FamilyIndexer`), so an attached copy never
   becomes a second library copy.

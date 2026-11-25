@@ -84,6 +84,19 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
 
 ## ✅ Done
 
+- [x] **Office keyboard shortcuts** (2026-11-25): Settings › Keyboard shortcuts. The maintainer
+  publishes their own `KeyboardShortcuts.xml` to `.DB`; **Install office shortcuts** copies it
+  over the user's file for every Revit year in `%APPDATA%\Autodesk\Revit` (office keys win, the
+  old file kept as `KeyboardShortcuts.before-RVTuk-<time>.xml`), effective after a restart
+  (`Core/FamilyBrowser/Config/OfficeShortcuts`). Revit has no shortcuts API. Still to check
+  in Revit: that one year's export loads in the other years, and that a Revit already open
+  doesn't write its old shortcuts back over the new file when it closes.
+
+- [x] **Suggest for Library** (2026-11-25): for view-only users, Save to Library sends the
+  model-only family to `.Requests` as a suggestion; the maintainer approves it into a library
+  folder or rejects it (design.md §6b). Still to check in Revit: that a View + Upload user's
+  Revit can save the `.rfa` into `.Requests`, and the folder picker on Approve.
+
 - [x] **One search box, built-in tags, requests** (2026-11-24, mocked first in the design
   artifact). The category popover and the ⬅️/➡️ toggles gave way to one search box with chips:
   categories OR, tags AND, with Tabler icons per category. Project, Library and Fix requested

@@ -147,6 +147,50 @@ public class RequestStoreTests : IDisposable
     }
 
     [Fact]
+    public void ApproveSuggestion_MovesTheFamilyIntoTheLibraryUnderItsOwnName()
+    {
+        var store = new RequestStore(_root);
+        var r = Make(store, "noa", "please add", DateTime.UtcNow, path: null);
+        r.Attachment = r.Id + ".rfa";
+        File.WriteAllText(store.AttachmentPath(r.Id), "rfa");
+        var target = Path.Combine(_root, "Furniture", "Desk - Reception.rfa");
+
+        store.ApproveSuggestion(r, target, overwrite: false);
+
+        Assert.Equal("rfa", File.ReadAllText(target));
+        Assert.False(File.Exists(store.AttachmentPath(r.Id)));
+        Assert.Empty(store.LoadOpen());
+        Assert.Equal(1, store.CountDone());
+    }
+
+    [Fact]
+    public void ApproveSuggestion_FileNotArrivedYet_ChangesNothing()
+    {
+        var store = new RequestStore(_root);
+        var r = Make(store, "noa", "please add", DateTime.UtcNow, path: null);
+        Assert.Throws<FileNotFoundException>(() =>
+            store.ApproveSuggestion(r, Path.Combine(_root, "X.rfa"), overwrite: false));
+        Assert.Single(store.LoadOpen());
+    }
+
+    [Fact]
+    public void ApproveSuggestion_NeverOverwritesALibraryFileUnlessAsked()
+    {
+        var store = new RequestStore(_root);
+        var r = Make(store, "noa", "", DateTime.UtcNow, path: null);
+        File.WriteAllText(store.AttachmentPath(r.Id), "new");
+        var target = Path.Combine(_root, "X.rfa");
+        File.WriteAllText(target, "old");
+
+        Assert.Throws<IOException>(() => store.ApproveSuggestion(r, target, overwrite: false));
+        Assert.Equal("old", File.ReadAllText(target));
+        Assert.Single(store.LoadOpen());
+
+        store.ApproveSuggestion(r, target, overwrite: true);
+        Assert.Equal("new", File.ReadAllText(target));
+    }
+
+    [Fact]
     public void TidyWithdrawn_MovesWithdrawnRequestsToDone()
     {
         var store = new RequestStore(_root);

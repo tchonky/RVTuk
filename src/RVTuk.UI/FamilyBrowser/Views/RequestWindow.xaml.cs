@@ -10,10 +10,21 @@ namespace RVTuk.UI.FamilyBrowser.Views
     {
         public RequestDialogResult? Result { get; private set; }
 
+        private readonly bool _noteOptional;
+
         public RequestWindow(RequestDialogInput input)
         {
             InitializeComponent();
-            if (input.IsFix)
+            _noteOptional = input.IsSuggestion;
+            if (input.IsSuggestion)
+            {
+                Title = "RVTuk — Suggest for Library — " + input.FamilyName;
+                PromptLabel.Content = "WHY ADD IT TO THE LIBRARY? (OPTIONAL)";
+                Placeholder.Text = "e.g. used in every clinic project, a manufacturer's family we use a lot…";
+                AttachBox.Visibility = Visibility.Collapsed; // the family itself is always sent
+                SendButton.IsEnabled = true;
+            }
+            else if (input.IsFix)
             {
                 Title = "RVTuk — Request a fix — " + input.FamilyName;
                 PromptLabel.Content = "WHAT NEEDS FIXING OR CHANGING?";
@@ -37,7 +48,7 @@ namespace RVTuk.UI.FamilyBrowser.Views
         {
             var text = RequestText.Text;
             Placeholder.Visibility = text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-            SendButton.IsEnabled = text.Trim().Length > 0;
+            SendButton.IsEnabled = _noteOptional || text.Trim().Length > 0;
             RequestText.FlowDirection = RequestItemViewModel.StartsRightToLeft(text)
                 ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
         }
