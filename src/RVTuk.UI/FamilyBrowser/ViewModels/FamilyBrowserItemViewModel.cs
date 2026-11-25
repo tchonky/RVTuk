@@ -1,4 +1,5 @@
 ﻿// RVTuk.UI/ViewModels/FamilyBrowserItemViewModel.cs
+using System;
 using System.Collections.Generic;
 using System.Windows.Media.Imaging;
 using RVTuk.Core.FamilyBrowser.Models;
@@ -91,6 +92,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 _allTags = null;
                 OnPropertyChanged(nameof(ShowUpToDate));
                 OnPropertyChanged(nameof(ShowUpdateAvailable));
+                OnPropertyChanged(nameof(ShowUnknown));
                 OnPropertyChanged(nameof(IsModelOnly));
                 OnPropertyChanged(nameof(ShowDuplicate));
             }
@@ -98,6 +100,17 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         public bool ShowUpToDate => _versionStatus == VersionStatus.UpToDate;
         public bool ShowUpdateAvailable => _versionStatus == VersionStatus.UpdateAvailable;
+
+        // Loaded in the project, but nothing says whether it matches the library (FamilySourceCheck).
+        public bool ShowUnknown => _versionStatus == VersionStatus.Unknown;
+        public const string UnknownToolTip =
+            "Loaded in the project, but RVTuk can't tell whether it matches the library: it was loaded " +
+            "before RVTuk noted where families come from, or from outside the library, and there is no " +
+            "_Version to compare. Load it once from here to check it from then on.";
+
+        // The library file as of the last ⟳ (size, last write UTC), for re-judging after a Rescan.
+        private long? _libraryFileSize;
+        private DateTime? _libraryFileModifiedUtc;
 
         // A synthetic row for a family loaded in the project but absent from the library.
         // It has no .rfa, no DB row (Id 0), no thumbnail — every library-backed action
@@ -141,12 +154,14 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             _versionStatus = model.VersionStatus;
         }
 
-        /// <summary>Judges this library row against the copy loaded in the project (Sync).</summary>
-        public void CompareWithProject(ProjectFamilyInfo loaded)
+        /// <summary>Judges this library row against the copy loaded in the project (Sync):
+        /// _Version, then the library file against the size and date noted when it was loaded.</summary>
+        public void CompareWithProject(ProjectFamilyInfo loaded, long? libraryFileSize, DateTime? libraryFileModifiedUtc)
         {
             _inProject = loaded;
-            VersionStatus = FamilyVersionCheck.IsUpdateAvailable(Model.Version, loaded.Version)
-                ? VersionStatus.UpdateAvailable : VersionStatus.UpToDate;
+            _libraryFileSize = libraryFileSize;
+            _libraryFileModifiedUtc = libraryFileModifiedUtc;
+            VersionStatus = FamilySourceCheck.Judge(Model.Version, loaded, libraryFileSize, libraryFileModifiedUtc);
             // Red flag if *either* copy still carries _Version at instance level — the library
             // flag comes from the index (deep scan), the loaded copy's from Sync's fallback.
             if (loaded.VersionIsInstance) VersionIsInstance = true;
@@ -171,7 +186,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             OnPropertyChanged(nameof(Version));
             OnPropertyChanged(nameof(HasVersion));
             UpdateThumbnail(fresh.ThumbnailPng);
-            if (_inProject != null && _duplicatePaths == null) CompareWithProject(_inProject);
+            if (_inProject != null && _duplicatePaths == null)
+                CompareWithProject(_inProject, _libraryFileSize, _libraryFileModifiedUtc);
         }
 
         /// <summary>

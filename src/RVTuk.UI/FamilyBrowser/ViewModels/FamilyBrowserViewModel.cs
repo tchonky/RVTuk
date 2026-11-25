@@ -759,7 +759,20 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                     }).ToList(), snapshot.Families);
                     foreach (var item in items)
                     {
-                        if (comparison.Matches.TryGetValue(item.Id, out var pf)) item.CompareWithProject(pf);
+                        if (comparison.Matches.TryGetValue(item.Id, out var pf))
+                        {
+                            // The library file as it is now, for the size and date noted at load
+                            // time (FamilySourceCheck). Metadata only: Desktop Connector downloads nothing.
+                            long? size = null;
+                            DateTime? modified = null;
+                            try
+                            {
+                                var file = new FileInfo(Path.Combine(_config.LibraryFolderPath, item.RelativePath));
+                                if (file.Exists) { size = file.Length; modified = file.LastWriteTimeUtc; }
+                            }
+                            catch { /* unreadable: the version alone decides */ }
+                            item.CompareWithProject(pf, size, modified);
+                        }
                         else if (comparison.Duplicates.TryGetValue(item.Id, out var paths))
                             item.MarkDuplicate(projectFamily: snapshot.Families.First(f =>
                                 string.Equals(f.Name, FamilyFileName.WithoutRfaExtension(item.FileName), StringComparison.OrdinalIgnoreCase)), paths);
@@ -1373,7 +1386,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             var item = SelectedItem;
             if (item == null || item.IsModelOnly) return;
             bool inProject = !IsComparisonHidden && item.VersionStatus is VersionStatus.UpToDate
-                or VersionStatus.UpdateAvailable or VersionStatus.DuplicateInLibrary;
+                or VersionStatus.UpdateAvailable or VersionStatus.DuplicateInLibrary or VersionStatus.Unknown;
             var answer = RequestDialog?.Invoke(new RequestDialogInput
                 { IsFix = true, FamilyName = item.DisplayName, CanAttach = inProject });
             if (answer == null) return;

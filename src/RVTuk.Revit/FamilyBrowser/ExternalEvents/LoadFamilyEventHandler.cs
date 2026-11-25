@@ -5,6 +5,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
 using RVTuk.Core.FamilyBrowser.Util;
+using RVTuk.Revit.FamilyBrowser;
 
 namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
 {
@@ -59,11 +60,17 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
                 var options = new KeepValuesLoadOptions();
                 using var tx = new Transaction(doc, "Load Family");
                 tx.Start();
-                bool loaded = doc.LoadFamily(FamilyPath, options, out _);
-                tx.Commit();
+                bool loaded;
+                Family? family;
+                // This load notes its own source below, in the same transaction (one undo step).
+                FamilyLoadWatch.SuppressDepth++;
+                try { loaded = doc.LoadFamily(FamilyPath, options, out family); }
+                finally { FamilyLoadWatch.SuppressDepth--; }
                 // An identical family already in the project: Revit returns false without asking
                 // the load options. That is "already current", not a failure.
                 Success = loaded || (!options.FamilyFoundCalled && IsLoaded(doc, FamilyPath));
+                if (Success) NoteSource(doc, family, FamilyPath);
+                tx.Commit();
                 if (!Success)
                     ErrorMessage = "Revit did not load the family (it may be invalid, or the load was rejected).";
             }
@@ -77,11 +84,32 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
             }
         }
 
-        private static bool IsLoaded(Document doc, string familyPath)
+        private static bool IsLoaded(Document doc, string familyPath) => FindByFileName(doc, familyPath) != null;
+
+        private static Family? FindByFileName(Document doc, string familyPath)
         {
             var name = FamilyFileName.WithoutRfaExtension(Path.GetFileName(familyPath));
-            return new FilteredElementCollector(doc).OfClass(typeof(Family))
-                .Any(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
+            return new FilteredElementCollector(doc).OfClass(typeof(Family)).Cast<Family>()
+                .FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Notes the library file on the family, so ⟳ can tell later whether it changed since. Best
+        // effort: a family that can't take the note (someone else owns it in a workshared model)
+        // just shows as "can't tell".
+        private static void NoteSource(Document doc, Family? family, string familyPath)
+        {
+            try
+            {
+                family ??= FindByFileName(doc, familyPath);
+                if (family == null) return;
+                if (doc.IsWorkshared && WorksharingUtils.GetCheckoutStatus(doc, family.Id) == CheckoutStatus.OwnedByOtherUser)
+                    return;
+                string? root = null;
+                try { root = Core.Shared.Config.ConfigManager.LoadConfig().LibraryFolderPath; } catch { }
+                var relative = FamilySourceStamp.LibraryRelativePath(familyPath, root);
+                if (relative != null) FamilySourceStamp.Write(family, new FileInfo(familyPath), relative);
+            }
+            catch (Exception ex) { RVTuk.Revit.Application.LogDiagnostic($"Family source note failed: {ex}"); }
         }
 
         public string GetName() => "RVTuk.LoadFamilyEventHandler";

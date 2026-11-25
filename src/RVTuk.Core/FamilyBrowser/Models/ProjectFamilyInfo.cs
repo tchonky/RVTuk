@@ -16,5 +16,12 @@
         // to be read off a placed instance instead of the symbols). The office standard wants
         // a type parameter — the browser paints the version red to flag the family.
         public bool VersionIsInstance { get; set; }
+
+        // The library file this copy was loaded from, as RVTuk noted it at load time (size and
+        // last-write time, UTC). Null when RVTuk never noted it: loaded before it did, from
+        // outside the library, or edited in the project since.
+        public long? LoadedFileSize { get; set; }
+        public System.DateTime? LoadedFileModifiedUtc { get; set; }
+        public bool HasLoadStamp => LoadedFileSize != null && LoadedFileModifiedUtc != null;
     }
 }

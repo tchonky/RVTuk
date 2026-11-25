@@ -172,7 +172,7 @@
                                                 </Viewbox>
                                                 <TextBlock Text="{Binding Value}" FontSize="11" VerticalAlignment="Center"
                                                            MaxWidth="160" TextTrimming="CharacterEllipsis"/>
-                                                <Button Width="16" Height="16" Margin="2,0,0,0" Padding="0"
+                                                <Button Focusable="False" Width="16" Height="16" Margin="2,0,0,0" Padding="0"
                                                         BorderThickness="0" Background="Transparent" Cursor="Hand"
                                                         ToolTip="{Binding RemoveLabel}"
                                                         AutomationProperties.Name="{Binding RemoveLabel}"
@@ -255,7 +255,7 @@
                             Background="{StaticResource Brush.Panel}" BorderBrush="{StaticResource Brush.Border}"
                             BorderThickness="1" TextElement.Foreground="{StaticResource Brush.Text}">
                         <!-- A Popup taller than the screen can't scroll: cap it. -->
-                        <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto" Focusable="False">
                             <StackPanel>
                                 <StackPanel Visibility="{Binding ShowTagSuggestions, Converter={StaticResource BoolVis}}">
                                     <TextBlock Text="TAGS · every tag must match" FontSize="10" FontWeight="SemiBold"
@@ -266,7 +266,7 @@
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="{x:Type vm:TagSuggestion}">
-                                                <Button Margin="2" Padding="8,2" IsEnabled="{Binding IsEnabled}"
+                                                <Button Focusable="False" Margin="2" Padding="8,2" IsEnabled="{Binding IsEnabled}"
                                                         ToolTip="{Binding ToolTip}" ToolTipService.ShowOnDisabled="True"
                                                         Command="{Binding DataContext.FilterByTagCommand,
                                                                   RelativeSource={RelativeSource AncestorType=ItemsControl}}"
@@ -301,7 +301,7 @@
                                 </StackPanel>
 
                                 <DockPanel Margin="2,2,2,3">
-                                    <Button DockPanel.Dock="Right" Content="Clear" Padding="2,0" FontSize="11"
+                                    <Button Focusable="False" DockPanel.Dock="Right" Content="Clear" Padding="2,0" FontSize="11"
                                             BorderThickness="0" Background="Transparent" Cursor="Hand"
                                             Foreground="{StaticResource Brush.Accent}"
                                             Command="{Binding ClearCategoriesCommand}"
@@ -313,7 +313,7 @@
                                 <ItemsControl ItemsSource="{Binding VisibleCategoryOptions}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate DataType="{x:Type vm:CategoryFilterOption}">
-                                            <CheckBox Margin="2" IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                            <CheckBox Focusable="False" Margin="2" IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                                       HorizontalContentAlignment="Stretch">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
@@ -441,6 +441,11 @@
                             <TextBlock Grid.Column="3" Text="&#x2713;" Foreground="{StaticResource Brush.Success}"
                                        VerticalAlignment="Center" Margin="4,0,2,0"
                                        Visibility="{Binding ShowUpToDate, Converter={StaticResource BoolVis}}"/>
+                            <!-- In the project, but nothing says whether it matches the library. -->
+                            <TextBlock Grid.Column="3" Text="?" FontWeight="Bold" Foreground="{StaticResource Brush.TextMuted}"
+                                       VerticalAlignment="Center" Margin="4,0,2,0"
+                                       ToolTip="{x:Static vm:FamilyBrowserItemViewModel.UnknownToolTip}"
+                                       Visibility="{Binding ShowUnknown, Converter={StaticResource BoolVis}}"/>
                             <Border Grid.Column="3" Background="{StaticResource Brush.Accent}" CornerRadius="3"
                                     Padding="4,1" Margin="4,0,2,0"
                                     Visibility="{Binding ShowUpdateAvailable, Converter={StaticResource BoolVis}}">
@@ -557,6 +562,12 @@
                                     <TextBlock Text="&#x2713;" Foreground="{StaticResource Brush.Success}"
                                                FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,2,0"
                                                Visibility="{Binding ShowUpToDate, Converter={StaticResource BoolVis}}"/>
+                                    <Border Background="#66000000" CornerRadius="3" Padding="4,0" Margin="0,0,2,0"
+                                            VerticalAlignment="Center"
+                                            ToolTip="{x:Static vm:FamilyBrowserItemViewModel.UnknownToolTip}"
+                                            Visibility="{Binding ShowUnknown, Converter={StaticResource BoolVis}}">
+                                        <TextBlock Text="?" FontWeight="Bold" Foreground="{StaticResource Brush.TextMuted}"/>
+                                    </Border>
                                     <Border Background="{StaticResource Brush.Accent}" CornerRadius="3"
                                             Padding="4,1" Margin="0,0,2,0" VerticalAlignment="Center"
                                             Visibility="{Binding ShowUpdateAvailable, Converter={StaticResource BoolVis}}">

@@ -5,5 +5,7 @@
     // ModelOnly = loaded in the project but absent from the library (synthetic browser row).
     // DuplicateInLibrary = in the project, but the library holds several copies of its file name:
     //   no verdict, never updated (which copy is "the" library one is unknown).
-    public enum VersionStatus { None, UpToDate, UpdateAvailable, ModelOnly, DuplicateInLibrary }
+    // Unknown = in both, but nothing says whether they match: neither a noted load (see
+    //   FamilySourceCheck) nor a _Version on both sides. Shown as "?", never as up to date.
+    public enum VersionStatus { None, UpToDate, UpdateAvailable, ModelOnly, DuplicateInLibrary, Unknown }
 }

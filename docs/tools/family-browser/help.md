@@ -19,6 +19,8 @@ Search the office family library and load families into the open project.
 ⟳ compares the library with the open project. It runs only when you press it, and after a Scan.
 
 - ✓ means the family is loaded and up to date.
+- RVTuk notes which library file a family was loaded from, its size and date, whenever it is loaded, also with Revit's own Load Family. ⟳ then shows **↑ Update** when that library file changed since, even if its _Version wasn't raised.
+- **?** means the family is loaded, but RVTuk can't tell whether it matches the library: it was loaded before RVTuk noted this, or from outside the library, and there is no _Version to compare. Load it once from the browser and it is checked from then on.
 - **↑ Update** means the library copy has a newer _Version. Select the family and press **Update**, or press **↑ Update All** above the list.
 - ⚠️ means the family is loaded in the project but is not in the library. Press **Save to Library** to add it. It appears in the list after the next Scan.
 - ⚠️ on a family that is in the library means the library has more than one copy of it. Point at ⚠️ to see where. Update All skips it until the extra copies are removed.
