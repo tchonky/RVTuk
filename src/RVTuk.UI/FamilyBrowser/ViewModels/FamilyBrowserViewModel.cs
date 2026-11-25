@@ -25,6 +25,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
     public sealed class RequestDialogInput
     {
         public bool IsFix { get; set; }
+        /// <summary>A view-only user's Save to Library: the family is always attached, the note optional.</summary>
+        public bool IsSuggestion { get; set; }
         public string? FamilyName { get; set; }
         /// <summary>The family is loaded in the open project, so its project version can be attached.</summary>
         public bool CanAttach { get; set; }
@@ -433,6 +435,12 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         public ICommand MarkRequestDoneCommand { get; }
         public ICommand WithdrawRequestCommand { get; }
         public ICommand ShowRequestFamilyCommand { get; }
+        public ICommand ApproveSuggestionCommand { get; }
+
+        public string SaveToLibraryLabel => CanEdit ? "Save to Library" : "Suggest for Library";
+        public string SaveToLibraryToolTip => CanEdit
+            ? "Save this family from the model into the library folder"
+            : "Send this family from the model to the library maintainer, who decides whether to add it";
 
         /// <summary>Shows the request window (set by the browser window); null result = cancelled.</summary>
         public Func<RequestDialogInput, RequestDialogResult?>? RequestDialog { get; set; }
@@ -442,9 +450,13 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         /// <summary>The browser window: message boxes are owned by it so they never open behind it.</summary>
         public Window? Owner { get; set; }
 
+        /// <summary>Answers the browser's message boxes instead of showing them (tests).</summary>
+        public Func<string, MessageBoxButton, MessageBoxResult>? AnswerMessage { get; set; }
+
         private MessageBoxResult Warn(string text, MessageBoxButton buttons = MessageBoxButton.OK,
             MessageBoxImage icon = MessageBoxImage.Warning, string caption = "RVTuk")
-            => Owner != null
+            => AnswerMessage != null ? AnswerMessage(text, buttons)
+            : Owner != null
                 ? MessageBox.Show(Owner, text, caption, buttons, icon)
                 : MessageBox.Show(text, caption, buttons, icon);
 
@@ -504,8 +516,11 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             RescanFamilyCommand    = new RelayCommand(RescanSelected, () => CanEdit && SelectedItem != null && !SelectedItem.IsModelOnly && !IsRescanning);
             // Open-in-editor works for model-only rows too (via EditFamily on the loaded family).
             OpenFamilyEditorCommand= new RelayCommand(OpenInFamilyEditor, () => SelectedItem != null && !IsLoading);
+            // The maintainer saves into the library; a view-only user suggests the family instead.
             SaveToLibraryCommand   = new RelayCommand(SaveToLibrary,
-                () => CanEdit && SelectedItem != null && SelectedItem.IsModelOnly && !IsSavingToLibrary);
+                () => SelectedItem != null && SelectedItem.IsModelOnly && !IsSavingToLibrary
+                      && (CanEdit || (_requestStore != null && !IsSendingRequest)));
+            ApproveSuggestionCommand = new RelayCommand<RequestItemViewModel>(ApproveSuggestion, r => r != null && r.CanApprove);
             FilterByTagCommand     = new RelayCommand<string>(AddTagFilter);
             RemoveChipCommand      = new RelayCommand<FilterChip>(RemoveChip);
             ClearCategoriesCommand = new RelayCommand(ClearCategories);
@@ -1173,6 +1188,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         {
             var item = SelectedItem;
             if (item == null || !item.IsModelOnly) return;
+            if (!CanEdit) { SuggestToLibrary(item); return; }
 
             // Ignored folders (archives, backups) must not decide where the file goes: the scan
             // never walks them, so a family saved there would never be indexed.
@@ -1241,6 +1257,7 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
         public ObservableCollection<RequestItemViewModel> NewFamilyRequests { get; } = new();
         public ObservableCollection<RequestItemViewModel> FixRequests { get; } = new();
+        public ObservableCollection<RequestItemViewModel> SuggestedFamilyRequests { get; } = new();
         public ObservableCollection<RequestItemViewModel> SelectedFamilyRequests { get; } = new();
 
         public int OpenRequestCount => _openRequests.Count;
@@ -1248,13 +1265,17 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         public bool HasSelectedFamilyRequests => SelectedFamilyRequests.Count > 0;
         public bool HasNoNewFamilyRequests => NewFamilyRequests.Count == 0;
         public bool HasNoFixRequests => FixRequests.Count == 0;
+        public bool HasNoSuggestedFamilyRequests => SuggestedFamilyRequests.Count == 0;
+        public string SuggestedFamilyRequestsTitle => $"SUGGESTED FAMILIES ({SuggestedFamilyRequests.Count})";
         public string NewFamilyRequestsTitle => $"NEW FAMILIES ({NewFamilyRequests.Count})";
         public string FixRequestsTitle => $"FIXES ({FixRequests.Count})";
-        public string SelectedRequestsTitle => SelectedFamilyRequests.Count == 1
-            ? "A fix is requested" : $"{SelectedFamilyRequests.Count} fixes are requested";
+        public string SelectedRequestsTitle => SelectedFamilyRequests.All(r => r.IsSuggestion)
+            ? "Suggested for the library"
+            : SelectedFamilyRequests.Count == 1 ? "A fix is requested" : $"{SelectedFamilyRequests.Count} fixes are requested";
+        public string SelectedRequestsIcon => SelectedFamilyRequests.All(r => r.IsSuggestion) ? "box" : "tool";
         public string RequestsButtonToolTip => _openRequests.Count == 0 ? "Requests" : $"Requests ({_openRequests.Count} open)";
         public string RequestsIntro => CanEdit
-            ? "What users asked for. Done moves a request to .Requests\\Done, so you keep a history."
+            ? "What users asked for. Approve adds a suggested family to the library; Done and Reject move a request to .Requests\\Done, so you keep a history."
             : "Everyone can see these, so check here before asking for the same thing twice. You can withdraw your own requests.";
         public string DoneRequestsLine => _doneRequestCount == 0 ? string.Empty
             : $"{_doneRequestCount} done request{(_doneRequestCount == 1 ? "" : "s")} kept in .Requests\\Done.";
@@ -1296,12 +1317,15 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         {
             ApplyRequestFlags();
             Fill(NewFamilyRequests, _openRequests.Where(r => r.Kind == FamilyRequest.KindNewFamily));
-            Fill(FixRequests, _openRequests.Where(r => r.Kind != FamilyRequest.KindNewFamily));
+            Fill(SuggestedFamilyRequests, _openRequests.Where(r => r.Kind == FamilyRequest.KindSuggestion));
+            Fill(FixRequests, _openRequests.Where(IsFixKind));
             UpdateSelectedRequests();
             OnPropertyChanged(nameof(OpenRequestCount));
             OnPropertyChanged(nameof(HasOpenRequests));
             OnPropertyChanged(nameof(HasNoNewFamilyRequests));
             OnPropertyChanged(nameof(HasNoFixRequests));
+            OnPropertyChanged(nameof(HasNoSuggestedFamilyRequests));
+            OnPropertyChanged(nameof(SuggestedFamilyRequestsTitle));
             OnPropertyChanged(nameof(NewFamilyRequestsTitle));
             OnPropertyChanged(nameof(FixRequestsTitle));
             OnPropertyChanged(nameof(RequestsButtonToolTip));
@@ -1315,10 +1339,14 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             foreach (var r in requests) target.Add(new RequestItemViewModel(r, CanEdit, _currentUser));
         }
 
+        // Any kind this add-in doesn't know is shown as a fix, so a newer add-in's request still shows.
+        private static bool IsFixKind(FamilyRequest r) =>
+            r.Kind != FamilyRequest.KindNewFamily && r.Kind != FamilyRequest.KindSuggestion;
+
         private void ApplyRequestFlags()
         {
             var paths = new HashSet<string>(_openRequests
-                .Where(r => r.Kind != FamilyRequest.KindNewFamily && !string.IsNullOrEmpty(r.RelativePath))
+                .Where(r => IsFixKind(r) && !string.IsNullOrEmpty(r.RelativePath))
                 .Select(r => r.RelativePath!), StringComparer.OrdinalIgnoreCase);
             foreach (var i in _allItems) i.IsFixRequested = !i.IsModelOnly && paths.Contains(i.RelativePath);
         }
@@ -1327,12 +1355,17 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
         {
             SelectedFamilyRequests.Clear();
             var item = _selectedItem;
-            if (item != null && !item.IsModelOnly)
-                foreach (var r in _openRequests.Where(r => r.Kind != FamilyRequest.KindNewFamily
-                             && string.Equals(r.RelativePath, item.RelativePath, StringComparison.OrdinalIgnoreCase)))
-                    SelectedFamilyRequests.Add(new RequestItemViewModel(r, CanEdit, _currentUser));
+            // A library family shows its fix requests; a family only in the model, its suggestion.
+            var matching = item == null ? Enumerable.Empty<FamilyRequest>()
+                : item.IsModelOnly
+                    ? _openRequests.Where(r => r.Kind == FamilyRequest.KindSuggestion
+                        && string.Equals(r.FamilyName, item.DisplayName, StringComparison.OrdinalIgnoreCase))
+                    : _openRequests.Where(r => IsFixKind(r)
+                        && string.Equals(r.RelativePath, item.RelativePath, StringComparison.OrdinalIgnoreCase));
+            foreach (var r in matching) SelectedFamilyRequests.Add(new RequestItemViewModel(r, CanEdit, _currentUser));
             OnPropertyChanged(nameof(HasSelectedFamilyRequests));
             OnPropertyChanged(nameof(SelectedRequestsTitle));
+            OnPropertyChanged(nameof(SelectedRequestsIcon));
         }
 
         private void RequestFix()
@@ -1354,17 +1387,43 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
             SendRequest(FamilyRequest.KindNewFamily, null, answer.Text, attach: false);
         }
 
+        // A view-only user's Save to Library: the family goes to the maintainer as a suggestion.
+        private void SuggestToLibrary(FamilyBrowserItemViewModel item)
+        {
+            if (_requestStore == null) return;
+            var name = item.DisplayName;
+            if (!FamilyFileName.IsSafeFileName(name))
+            {
+                Warn($"'{name}' can't be suggested because its name contains characters Windows doesn't " +
+                     "allow in file names. Rename the family in the project first.");
+                return;
+            }
+            if (_openRequests.Any(r => r.Kind == FamilyRequest.KindSuggestion
+                    && string.Equals(r.FamilyName, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                Warn($"'{name}' is already suggested for the library. The inbox at the bottom lists it.",
+                    icon: MessageBoxImage.Information, caption: "RVTuk — Suggest for Library");
+                return;
+            }
+            var answer = RequestDialog?.Invoke(new RequestDialogInput { IsSuggestion = true, FamilyName = name });
+            if (answer == null) return;
+            SendRequest(FamilyRequest.KindSuggestion, item, answer.Text, attach: true);
+        }
+
         private void SendRequest(string kind, FamilyBrowserItemViewModel? item, string text, bool attach)
         {
             var store = _requestStore;
-            if (store == null || string.IsNullOrWhiteSpace(text)) return;
+            bool suggestion = kind == FamilyRequest.KindSuggestion;
+            // A suggestion's note is optional: the family itself is the point.
+            if (store == null || (!suggestion && string.IsNullOrWhiteSpace(text))) return;
             var now = DateTime.UtcNow;
             var request = new FamilyRequest
             {
                 Id = RequestStore.NewId(_currentUser, now),
                 Kind = kind,
-                RelativePath = item?.RelativePath,
+                RelativePath = suggestion ? null : item?.RelativePath,
                 FamilyName = item?.DisplayName,
+                Category = suggestion ? item?.Category : null,
                 User = _currentUser,
                 CreatedUtc = now.ToString("o"),
                 Text = text.Trim(),
@@ -1394,6 +1453,9 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                     }
                     catch (Exception ex) { attachError = ex.Message; }
                 }
+                // Without the family file a suggestion is nothing to approve: don't send it.
+                if (error == null && suggestion && attachError != null)
+                    error = "Revit could not save the family from the project:\n" + attachError;
                 if (error == null)
                 {
                     try { store.Save(request); }
@@ -1410,8 +1472,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                     }
                     if (!_openRequests.Any(r => r.Id == request.Id)) _openRequests.Add(request); // a newer reload may have it
                     RequestsChanged();
-                    var msg = kind == FamilyRequest.KindFix
-                        ? $"Fix requested for {request.FamilyName}."
+                    var msg = kind == FamilyRequest.KindFix ? $"Fix requested for {request.FamilyName}."
+                        : suggestion ? $"'{request.FamilyName}' was sent to the library maintainer, who decides whether to add it."
                         : "Family request sent.";
                     msg += "\n\nThe library maintainer sees it once Desktop Connector has uploaded it, usually within a minute.";
                     if (attachError != null) msg += "\n\nYour project's version could not be attached, so it was sent without it:\n" + attachError;
@@ -1441,8 +1503,69 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                 () => _openRequests.RemoveAll(r => r.Id == item.Request.Id));
         }
 
+        // The maintainer adds a suggested family: to the folder Save to Library would pick (most
+        // families of its category), or another one under the library. Its file takes the
+        // family's own name, which Revit uses as the family name when it is loaded.
+        private void ApproveSuggestion(RequestItemViewModel? item)
+        {
+            var store = _requestStore;
+            if (item == null || store == null || !CanEdit || !item.IsSuggestion) return;
+            var name = item.Request.FamilyName;
+            if (string.IsNullOrWhiteSpace(name) || !FamilyFileName.IsSafeFileName(name!))
+            {
+                Warn("This suggestion has no family name that can be a file name. Reject it and ask for it again.");
+                return;
+            }
+            var ignored = IgnoredRule();
+            var libraryItems = _allItems.Where(i => !i.IsModelOnly && !ignored(i))
+                .Select(i => (i.Category, i.RelativePath));
+            var (relativePath, error) = SaveToLibraryPlanner.Plan(name!, item.Request.Category, libraryItems);
+            if (error != null) { Warn(error); return; }
+            var root = _config.LibraryFolderPath;
+            var target = Path.Combine(root, relativePath!);
+
+            var where = Warn($"Add '{name}' to the library as:\n\n{relativePath}\n\n" +
+                             "Yes adds it there. No lets you choose another folder.",
+                MessageBoxButton.YesNoCancel, MessageBoxImage.Question, "RVTuk — Approve");
+            if (where == MessageBoxResult.Cancel || where == MessageBoxResult.None) return;
+            if (where == MessageBoxResult.No)
+            {
+                using var dialog = new System.Windows.Forms.FolderBrowserDialog
+                {
+                    Description = $"Folder in the library for '{name}'",
+                    SelectedPath = Path.GetDirectoryName(target) ?? root,
+                };
+                if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+                var rel = PathUtil.GetRelativePath(root, dialog.SelectedPath);
+                var own = new[] { AppConfig.DbFolderName, RequestStore.FolderName };
+                if (rel.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(rel)
+                    || PathUtil.IsUnderIgnoredFolder(rel, own.Concat(_config.IgnoredSubfolders ?? new List<string>())))
+                {
+                    Warn("Choose a folder inside the library, outside .DB, .Requests and the ignored subfolders: " +
+                         "a family anywhere else is never scanned.");
+                    return;
+                }
+                target = Path.Combine(dialog.SelectedPath, name + ".rfa");
+            }
+
+            bool overwrite = false;
+            if (File.Exists(target))
+            {
+                if (Warn($"{target} already exists. Replace it with the suggested family?",
+                        MessageBoxButton.YesNo, caption: "RVTuk — Approve") != MessageBoxResult.Yes) return;
+                overwrite = true;
+            }
+            ChangeRequestInBackground(() => store.ApproveSuggestion(item.Request, target, overwrite),
+                "Could not add the family to the library:", () =>
+                {
+                    _openRequests.RemoveAll(r => r.Id == item.Request.Id);
+                    _doneRequestCount++;
+                },
+                $"Added to:\n{target}\n\nIt will appear in the library after the next Scan.");
+        }
+
         // The folder is on Desktop Connector, which can stall: file work stays off the UI thread.
-        private void ChangeRequestInBackground(Action fileWork, string failure, Action onDone)
+        private void ChangeRequestInBackground(Action fileWork, string failure, Action onDone, string? doneMessage = null)
         {
             ++_requestsGeneration; // a reload already under way must not undo this change
             ThreadPool.QueueUserWorkItem(_ =>
@@ -1455,6 +1578,8 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
                     if (error != null) { Warn(failure + "\n\n" + error); return; }
                     onDone();
                     RequestsChanged();
+                    if (doneMessage != null)
+                        Warn(doneMessage, icon: MessageBoxImage.Information, caption: "RVTuk — Approve");
                 }));
             });
         }

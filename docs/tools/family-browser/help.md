@@ -42,6 +42,7 @@ Switch to the project window first. The check does not work while a family is op
 
 - **Request a fix** (under Load) tells the library maintainer that the selected family needs fixing or changing. Describe what is wrong. If you already changed the family in your project, tick **Attach my project's version** so the maintainer can see your change.
 - **Request family** (bottom of the list) asks for a family the library doesn't have. It is also offered when a search finds nothing.
+- **Suggest for Library** (on a family that is in your project but not in the library, where the maintainer has **Save to Library**) sends that family itself to the maintainer, with an optional note. If the maintainer approves it, it is added to the library and appears after the next Scan.
 - The inbox button at the bottom lists every open request, with their number on it. Check it before asking for the same thing twice. You can **Withdraw** your own requests.
 - A family with an open fix request shows 🔧 in the list, the **Fix requested** tag, and the request above its instructions.
 - Your Windows user name and the date are added. The maintainer sees a request once Desktop Connector has uploaded it, usually within a minute, and marks it **Done** when it is handled.
@@ -51,7 +52,7 @@ Switch to the project window first. The check does not work while a family is op
 Most people can only view the library, so only its maintainer can scan or edit it. In that case:
 - the browser reads a copy of the library kept on your PC. The note at the bottom shows its date, and the copy updates by itself when the library changes;
 - "Offline copy" means the library could not be reached, for example because Desktop Connector is not running. You can still browse and load families you already have;
-- the Scan, Rescan, Edit Info and Save to Library buttons are hidden or turned off;
+- the Scan, Rescan and Edit Info buttons are hidden or turned off, and Save to Library becomes **Suggest for Library**;
 - ⭐ favourites are your own and stay on your PC.
 
 You need Autodesk Desktop Connector, signed in with your Autodesk account.
@@ -61,6 +62,8 @@ You need Autodesk Desktop Connector, signed in with your Autodesk account.
 - **Library root folder** is the folder with the office families. Its .DB subfolder holds the database everyone shares.
 - **Scan** adds new families and removes deleted ones. Tick **Update thumbnails** or **Update parameters** to re-read those too. Parameters are read through Revit, which is slower. Instructions, tags, favourites and custom thumbnails are always kept.
 - **Ignored subfolders** and **Ignored files** hide families, for example archives or Revit backups, without deleting their data.
+- **Install office shortcuts** replaces your Revit keyboard shortcuts, in every Revit version on your PC, with the office's. Your old shortcuts are kept as a backup file next to them (`KeyboardShortcuts.before-RVTuk-….xml` in your Revit settings folder). Restart Revit to use them.
+- **Publish my shortcuts** (maintainer only) makes your own shortcuts, as set in Revit's Keyboard Shortcuts dialog, the office's. They are kept as `KeyboardShortcuts.xml` in the library's .DB folder.
 
 ## When something goes wrong
 

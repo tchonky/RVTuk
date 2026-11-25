@@ -48,6 +48,81 @@ namespace RVTuk.UI.FamilyBrowser.ViewModels
 
             BrowseLibraryCommand = new RelayCommand(BrowseLibraryFolder);
             ScanCommand = new RelayCommand(() => _scan(ScanThumbnails, ScanParameters), () => IsConfigured && !IsReadOnlyLibrary);
+            InstallShortcutsCommand = new RelayCommand(InstallShortcuts, () => IsConfigured);
+            PublishShortcutsCommand = new RelayCommand(PublishShortcuts, () => IsConfigured && !IsReadOnlyLibrary);
+        }
+
+        public ICommand InstallShortcutsCommand { get; }
+        public ICommand PublishShortcutsCommand { get; }
+
+        /// <summary>Answers this panel's message boxes instead of showing them (tests).</summary>
+        public Func<string, MessageBoxButton, MessageBoxResult>? AnswerMessage { get; set; }
+
+        /// <summary><c>%APPDATA%\Autodesk\Revit</c>; a test points it at a temp folder.</summary>
+        public string UserRevitRoot { get; set; } = OfficeShortcuts.UserRevitRoot();
+
+        private MessageBoxResult Ask(string text, MessageBoxButton buttons, MessageBoxImage icon) =>
+            AnswerMessage?.Invoke(text, buttons)
+            ?? System.Windows.MessageBox.Show(text, "RVTuk — Keyboard shortcuts", buttons, icon);
+
+        // The office keys win: the office file replaces each Revit year's user file, whose old
+        // version is kept next to it.
+        private void InstallShortcuts()
+        {
+            var office = OfficeShortcuts.OfficeFile(_config.LibraryFolderPath);
+            var problem = OfficeShortcuts.Validate(office);
+            if (problem != null)
+            {
+                Ask("There are no office keyboard shortcuts to install yet.\n\n" + problem +
+                    "\n\nThe library maintainer publishes them from this panel.", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            var years = OfficeShortcuts.UserYears(UserRevitRoot);
+            if (years.Count == 0)
+            {
+                Ask("No Revit settings folder was found for your Windows user.", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            var list = string.Join(", ", years.Select(y => y.Year));
+            if (Ask($"Replace your keyboard shortcuts in Revit {list} with the office's?\n\n" +
+                    "Your current shortcuts are kept as a backup file next to them. " +
+                    "The new shortcuts work after you restart Revit.",
+                    MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+            try
+            {
+                var done = OfficeShortcuts.Install(office, UserRevitRoot, DateTime.Now);
+                Ask($"Installed the office keyboard shortcuts for Revit {string.Join(", ", done)}.\n\nRestart Revit to use them.",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                Ask("Could not install the keyboard shortcuts:\n\n" + ex.Message, MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        // The maintainer's own shortcuts (set in Revit's Keyboard Shortcuts dialog) become the office's.
+        private void PublishShortcuts()
+        {
+            var newest = OfficeShortcuts.NewestUserFile(UserRevitRoot);
+            if (newest == null)
+            {
+                Ask("You have no keyboard shortcuts of your own yet. Set them in Revit (View › User Interface › " +
+                    "Keyboard Shortcuts), click OK, then publish them here.", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            var office = OfficeShortcuts.OfficeFile(_config.LibraryFolderPath);
+            if (Ask($"Publish your Revit {newest.Value.Year} keyboard shortcuts as the office's?\n\n{newest.Value.Path}\n\n" +
+                    "Everyone gets them when they press Install office shortcuts.",
+                    MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+            try
+            {
+                OfficeShortcuts.Publish(newest.Value.Path, office);
+                Ask("Published to:\n" + office, MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                Ask("Could not publish the keyboard shortcuts:\n\n" + ex.Message, MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         public string LibraryFolderPath

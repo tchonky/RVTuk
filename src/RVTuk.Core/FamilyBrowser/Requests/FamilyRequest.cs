@@ -12,6 +12,10 @@ namespace RVTuk.Core.FamilyBrowser.Requests
         public const string KindFix = "fix";
         public const string KindNewFamily = "new";
 
+        /// <summary>A family from a user's project, attached, proposed for the library (a
+        /// view-only user's Save to Library). The maintainer approves it into a library folder.</summary>
+        public const string KindSuggestion = "add";
+
         /// <summary>The file name without ".json". Set from the file on reading.</summary>
         public string Id { get; set; } = string.Empty;
 
@@ -21,6 +25,9 @@ namespace RVTuk.Core.FamilyBrowser.Requests
         public string? RelativePath { get; set; }
 
         public string? FamilyName { get; set; }
+
+        /// <summary>The family's category in the project (suggestions): where Approve files it.</summary>
+        public string? Category { get; set; }
 
         public string User { get; set; } = string.Empty;
 
