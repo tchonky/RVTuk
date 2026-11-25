@@ -210,12 +210,14 @@ namespace RVTuk.UI.FamilyBrowser.Views
             ViewModel.IsSearchPopupOpen = false;
         }
 
-        // Any click in the window outside the search row. Clicks inside the dropdown never get
-        // here: a popup is a window of its own.
+        // Any click in the window outside the search row and the dropdown. The dropdown is a
+        // window of its own, but WPF routes its mouse events up through the Popup to this window
+        // too, so a click on a category arrives here as well and must not close the list.
         private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
         {
             if (ViewModel == null || !ViewModel.IsSearchPopupOpen) return;
-            if (IsInside(e.OriginalSource as DependencyObject, SearchRow)) return;
+            var source = e.OriginalSource as DependencyObject;
+            if (IsInside(source, SearchRow) || IsInside(source, SearchPopupContent)) return;
             ViewModel.IsSearchPopupOpen = false;
         }
 
