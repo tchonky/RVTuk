@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace RVTuk.Setup
 {
@@ -25,7 +26,8 @@ namespace RVTuk.Setup
     ///        --years &lt;y,y&gt;         only these Revit years (default: the ones on this PC)
     ///        --source &lt;dir&gt;        use a payload folder instead of the embedded payload.zip
     ///        --target &lt;dir&gt;        install every year under that folder (testing, no elevation)
-    ///        --quiet                print nothing (the log is still written)
+    ///        --quiet                print nothing (the log is still written); never waits for Revit
+    ///        --no-wait              skip a year whose Revit is open instead of waiting for it to close
     ///        --no-pause             don't wait for Enter at the end
     /// </summary>
     internal sealed class Options
@@ -34,7 +36,7 @@ namespace RVTuk.Setup
         public List<string> Keys;
         public List<string> Years;
         public string Source, Target;
-        public bool Quiet, NoPause;
+        public bool Quiet, NoPause, NoWait;
 
         public static Options Parse(string[] args, out string error)
         {
@@ -73,6 +75,7 @@ namespace RVTuk.Setup
                     case "--target": o.Target = Value(); break;
                     case "--quiet": o.Quiet = true; break;
                     case "--no-pause": o.NoPause = true; break;
+                    case "--no-wait": o.NoWait = true; break;
                     default: err = $"unknown argument '{a}'"; break;
                 }
             }
@@ -86,7 +89,7 @@ namespace RVTuk.Setup
     {
         private const string Usage =
             "Usage: RVTukSetup [--install <names|all> | --remove <names|all> | --uninstall] [--years <y,y>]\r\n" +
-            "                  [--source <dir>] [--target <dir>] [--quiet] [--no-pause]";
+            "                  [--source <dir>] [--target <dir>] [--quiet] [--no-wait] [--no-pause]";
 
         private static int Main(string[] args)
         {
@@ -105,7 +108,9 @@ namespace RVTuk.Setup
 
             string log = elevated ? ElevatedLog()
                 : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RVTuk", "setup.log");
-            int exit = Run(o, Console.Out, log);
+            // Someone is watching and can close Revit: wait for it instead of skipping its year.
+            bool canWait = !o.Quiet && !o.NoWait && !Console.IsInputRedirected;
+            int exit = Run(o, Console.Out, log, canWait ? WaitAWhile : (Func<bool>)null);
 
             if (!o.NoPause && !o.Quiet && !Console.IsOutputRedirected)
             {
@@ -117,7 +122,13 @@ namespace RVTuk.Setup
         }
 
         // 0 = done; 1 = something failed or was skipped, or there is no payload; 2 = --install names an unknown add-in.
-        internal static int Run(Options o, TextWriter output, string logFile)
+        internal static int Run(Options o, TextWriter output, string logFile) => Run(o, output, logFile, null);
+
+        /// <param name="wait">Null: a year whose Revit is open is skipped. Otherwise setup waits for
+        /// that Revit to close and then does the year: <paramref name="wait"/> pauses between two
+        /// looks and returns false to stop waiting (Esc), which skips the years still open.</param>
+        /// <param name="machine">Tests only: the machine instead of this PC or --target.</param>
+        internal static int Run(Options o, TextWriter output, string logFile, Func<bool> wait, IMachine machine = null)
         {
             void Say(string line)
             {
@@ -181,7 +192,7 @@ namespace RVTuk.Setup
                     return 2;
                 }
 
-                IMachine machine = o.Target != null ? new TargetMachine(o.Target) : new RealMachine();
+                machine = machine ?? (o.Target != null ? new TargetMachine(o.Target) : (IMachine)new RealMachine());
 
                 // Before the add-ins, so the first Revit start after this install already trusts them.
                 var trust = o.Remove ? null : Engine.TrustPublisher(payload, machine, null);
@@ -189,12 +200,47 @@ namespace RVTuk.Setup
                     Say("  Signing certificate  " + (trust.Outcome == Outcome.Installed ? "trusted"
                         : trust.Outcome == Outcome.Unchanged ? "already trusted" : "FAILED: " + trust.Message));
 
-                var results = o.Remove
-                    ? Engine.Remove(catalog, machine, o.Keys, o.Years, null)
-                    : Engine.Install(catalog, payload, machine, o.Keys, o.Years, null);
+                List<Result> Pass(ICollection<string> keys, ICollection<string> years) => o.Remove
+                    ? Engine.Remove(catalog, machine, keys, years, null)
+                    : Engine.Install(catalog, payload, machine, keys, years, null);
 
-                foreach (var r in results)
+                var results = Pass(o.Keys, o.Years);
+                var open = wait == null ? new List<Result>() : results.Where(r => r.Outcome == Outcome.SkippedRevitOpen).ToList();
+                foreach (var r in results.Except(open))
                     Say($"  Revit {r.Year}  {r.AddIn}  {Words(r)}");
+
+                if (open.Count > 0)
+                {
+                    results = results.Except(open).ToList();
+                    // Year -> the add-ins still to do there.
+                    var pending = open.GroupBy(r => r.Year).ToDictionary(g => g.Key, g => g.Select(r => r.AddIn).ToList());
+                    Say("");
+                    string them = pending.Count == 1 ? "it" : "them";
+                    Say($"  Revit {string.Join(" and ", pending.Keys)} {(pending.Count == 1 ? "is" : "are")} open. Close {them} and setup");
+                    Say($"  continues by itself. Press Esc to stop waiting and skip {them}.");
+                    while (pending.Count > 0)
+                    {
+                        foreach (var year in pending.Keys.ToList())
+                        {
+                            if (machine.IsRunning(year)) continue;
+                            Say($"  Revit {year} is closed.");
+                            foreach (var r in Pass(pending[year], new List<string> { year }))
+                            {
+                                Say($"  Revit {r.Year}  {r.AddIn}  {Words(r)}");
+                                results.Add(r);
+                            }
+                            pending.Remove(year);
+                        }
+                        if (pending.Count == 0 || wait()) continue;
+                        foreach (var r in open.Where(r => pending.ContainsKey(r.Year)))
+                        {
+                            Say($"  Revit {r.Year}  {r.AddIn}  {Words(r)}");
+                            results.Add(r);
+                        }
+                        break;
+                    }
+                    Say("");
+                }
                 if (results.Count == 0)
                     Say("  Nothing to do: no selected add-in fits a Revit year on this PC.");
                 bool failed = Engine.Failed(results) || (trust != null && trust.Outcome == Outcome.Failed);
@@ -229,6 +275,22 @@ namespace RVTuk.Setup
         }
 
         // --- environment ------------------------------------------------------
+
+        // Two seconds between looks at Revit; false as soon as Esc is pressed.
+        private static bool WaitAWhile()
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                Thread.Sleep(200);
+                try
+                {
+                    while (Console.KeyAvailable)
+                        if (Console.ReadKey(true).Key == ConsoleKey.Escape) return false;
+                }
+                catch (InvalidOperationException) { } // no console to read: keep waiting
+            }
+            return true;
+        }
 
         // %ProgramData%\RVTuk\setup.log, unless an ordinary user could have planted the folder or the log: then null (no log).
         private static string ElevatedLog()

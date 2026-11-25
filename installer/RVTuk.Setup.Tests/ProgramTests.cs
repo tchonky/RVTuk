@@ -160,6 +160,76 @@ namespace RVTuk.Setup.Tests
             }
         }
 
+        // Revit 2024 is open: 2023 is done at once, then setup waits for 2024 to close.
+        private int RunWaiting(FakeMachine machine, Func<bool> wait, out string output, bool remove = false)
+        {
+            var w = new StringWriter();
+            int exit = Program.Run(Opt(remove: remove), w, null, wait, machine);
+            output = w.ToString();
+            return exit;
+        }
+
+        private FakeMachine Machine() => new FakeMachine(_t) { Installed = { "2023", "2024" }, Running = { "2024" } };
+
+        [Fact]
+        public void Run_RevitOpen_WaitsForItToClose_ThenInstalls()
+        {
+            var machine = Machine();
+            int looks = 0;
+            Assert.Equal(0, RunWaiting(machine, () =>
+            {
+                Assert.True(File.Exists(T("2023", "A", "Host.dll"))); // the free year did not wait
+                Assert.False(File.Exists(T("2024", "A", "Host.dll")));
+                if (++looks == 3) machine.Running.Clear();            // closed on the third look
+                return true;
+            }, out var output));
+            Assert.Equal(3, looks);
+            Assert.True(File.Exists(T("2024", "A", "Host.dll")));
+            Assert.True(File.Exists(T("2024", "A.addin")));
+            Assert.Contains("Revit 2024 is open. Close it", output);
+            Assert.Contains("Revit 2024 is closed.", output);
+            Assert.Contains("Revit 2024  A  installed", output);
+            Assert.DoesNotContain("SKIPPED", output);
+            Assert.Contains("Done.", output);
+        }
+
+        [Fact]
+        public void Run_RevitOpen_EscStopsWaiting_AndSkipsThatYear()
+        {
+            Assert.Equal(1, RunWaiting(Machine(), () => false, out var output));
+            Assert.True(File.Exists(T("2023", "A", "Host.dll")));
+            Assert.False(Directory.Exists(T("2024", "A")));
+            Assert.Contains("Revit 2024  A  SKIPPED: Revit 2024 is open", output);
+            Assert.Contains("NOT everything", output);
+        }
+
+        [Fact]
+        public void Run_RevitOpen_WithoutWaiting_SkipsAtOnce()
+        {
+            Assert.Equal(1, RunWaiting(Machine(), null, out var output));
+            Assert.DoesNotContain("Close it", output);
+            Assert.Contains("SKIPPED: Revit 2024 is open", output);
+        }
+
+        [Fact]
+        public void Run_Remove_WaitsForRevitToo()
+        {
+            var machine = new FakeMachine(_t) { Installed = { "2023", "2024" } };
+            Assert.Equal(0, RunWaiting(machine, () => true, out _));
+            machine.Running.Add("2024");
+            Assert.Equal(0, RunWaiting(machine, () => { machine.Running.Clear(); return true; }, out var output, remove: true));
+            Assert.False(Directory.Exists(T("2024", "A")));
+            Assert.Contains("Revit 2024  A  removed", output);
+        }
+
+        [Fact]
+        public void Parse_NoWait()
+        {
+            Assert.True(Options.Parse(new[] { "--no-wait" }, out var error).NoWait);
+            Assert.Null(error);
+            Assert.False(Options.Parse(new string[0], out _).NoWait);
+        }
+
         [Fact]
         public void Run_NothingSelected_SaysSo()
         {

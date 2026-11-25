@@ -5,8 +5,9 @@
 .DESCRIPTION
     Builds and stages the add-ins with build\Staging.ps1 into installer\payload-staging,
     then hands that folder to the setup exe's install engine (installer\RVTuk.Setup),
-    which picks the Addins folder per year, skips a year whose Revit is open or whose
-    files are in use, writes the .addin manifests and prints the summary.
+    which picks the Addins folder per year, waits for an open Revit to close before doing
+    its year (Esc skips it), skips a year whose files are in use, writes the .addin
+    manifests and prints the summary.
 .PARAMETER Years
     Optional Revit years (e.g. ".\Deploy.ps1 2024 2027"). Defaults to the years found on the PC.
 .PARAMETER AddIn

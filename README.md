@@ -38,7 +38,7 @@ Build the standalone installer once, then hand out the exe:
 .\Build-Installer.ps1        # produces dist\RVTukSetup.exe
 ```
 
-On the target computer just double-click `RVTukSetup.exe` — it asks for admin rights, finds which Revit versions are installed (by their `Revit.exe`; 2023 gets KKarea; 2024, 2025, 2026 and 2027 get RVTuk), and installs for each of them. A year is skipped, with nothing in it changed, when its Revit is open or any file of the add-in is in use; the exe then exits 1 — close Revit and re-run. Until releases exist every package is a dev build and always replaces what is installed. No other software is needed on the target machine.
+On the target computer just double-click `RVTukSetup.exe` — it asks for admin rights, finds which Revit versions are installed (by their `Revit.exe`; 2023 gets KKarea; 2024, 2025, 2026 and 2027 get RVTuk), and installs for each of them. If a Revit is open, it installs the other versions first, then waits for that Revit to close and installs it by itself (Esc stops waiting). A year is skipped, with nothing in it changed, when Esc was pressed or any file of the add-in is in use; the exe then exits 1 — close Revit and re-run. Until releases exist every package is a dev build and always replaces what is installed. No other software is needed on the target machine.
 
 Flags: `--install <names|all>` (the default: all), `--remove <names|all>`, `--uninstall` (= `--remove all`), `--years <y,y>` (these Revit years instead of the detected ones), `--source <dir>` (a payload folder instead of the embedded one), `--target <dir>` (install under another folder for testing, no admin rights), `--quiet`, `--no-pause`.
 
@@ -66,7 +66,7 @@ Run as Administrator from the repo root:
 .\Deploy.ps1 -Clean 2025    # remove the add-ins from Revit 2025
 ```
 
-Stages the add-ins from the working tree with `build\Staging.ps1` and hands them to the setup exe's install engine, which copies them to `C:\ProgramData\Autodesk\Revit\Addins\{year}\{RVTuk|KKarea}\` (Revit 2027: `C:\Program Files\Autodesk\Revit\Addins\2027\RVTuk\`) and writes the `.addin` manifests from the catalog. Only Revit years found on the PC are written to, unless named. A year whose Revit is open or whose files are in use is skipped and left exactly as it was, and the script exits 1. `-Clean` removes. Restart Revit after deploying.
+Stages the add-ins from the working tree with `build\Staging.ps1` and hands them to the setup exe's install engine, which copies them to `C:\ProgramData\Autodesk\Revit\Addins\{year}\{RVTuk|KKarea}\` (Revit 2027: `C:\Program Files\Autodesk\Revit\Addins\2027\RVTuk\`) and writes the `.addin` manifests from the catalog. Only Revit years found on the PC are written to, unless named. A year whose Revit is open is deployed once that Revit closes (Esc stops waiting). A year whose files are in use, or whose wait was stopped, is skipped and left exactly as it was, and the script exits 1. `-Clean` removes. Restart Revit after deploying.
 
 ## 📁 Project Structure
 
