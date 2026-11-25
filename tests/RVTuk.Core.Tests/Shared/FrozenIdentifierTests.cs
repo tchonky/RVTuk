@@ -50,10 +50,15 @@ public class FrozenIdentifierTests
         1|ServiceField = "ServicePercent"
         1|TotalField = "TotalPercent"
         1|AddSimpleField(name, typeof(double)).SetSpec(SpecTypeId.Number)
+        1|new Guid("25ad5669-d8cb-485f-b965-f2d788c7b356")
+        1|SchemaName = "RVTukFamilySource"
+        1|SizeField = "FileSize"
+        1|ModifiedField = "ModifiedUtc"
+        1|PathField = "LibraryPath"
         5|AddSimpleField(FieldName, typeof(string))
-        8|builder.SetVendorId("KnafoKlimor");
-        8|builder.SetReadAccessLevel(AccessLevel.Public);
-        8|builder.SetWriteAccessLevel(AccessLevel.Public);
+        9|builder.SetVendorId("KnafoKlimor");
+        9|builder.SetReadAccessLevel(AccessLevel.Public);
+        9|builder.SetWriteAccessLevel(AccessLevel.Public);
         1|OurVendorId = "KnafoKlimor"
         1|new DockablePaneId(new Guid("e5d47b31-2c8a-4f16-b0d9-73a5e91c46f2"))
         1|new DockablePaneId(new Guid("88a9c4fa-9c6a-4b02-b169-701be8358090"))

@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Navigation;
 using System.Collections.Generic;
 using RVTuk.Core.Shared.Config;
@@ -179,8 +180,9 @@ namespace RVTuk.UI.FamilyBrowser.Views
 
         // ── The search box ──────────────────────────────────────────────────────────────
         // Focusing or clicking it opens the dropdown; typing keeps it open. Enter adds the
-        // highlighted tag, Backspace in an empty box takes the last chip back, Esc closes,
-        // Down moves into the dropdown.
+        // highlighted tag, Backspace in an empty box takes the last chip back, Esc closes.
+        // Nothing in the dropdown takes keyboard focus (Focusable="False"): clicking a category
+        // or a tag leaves the cursor in the box, so the user just keeps typing.
         // The popup is StaysOpen=True and closed here instead: a StaysOpen=False popup takes
         // mouse capture, so the text box's own click would close it again, and the first click
         // elsewhere (on a family in the list) would only close it.
@@ -194,10 +196,17 @@ namespace RVTuk.UI.FamilyBrowser.Views
         private void SearchBox_PreviewMouseDown(object sender, MouseButtonEventArgs e)
             => ViewModel.IsSearchPopupOpen = true;
 
-        // Tab or a click away from the box (not into the dropdown) closes the dropdown.
-        private void SearchBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+        // Tab away from the box closes the dropdown. Decided once focus has settled: the dropdown
+        // is a window of its own, and focus passes through "nowhere" on its way between windows
+        // (closing on that first step made a click on a category close the list instead).
+        private void SearchBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) =>
+            Dispatcher.BeginInvoke(new Action(CloseSearchPopupIfLeft), System.Windows.Threading.DispatcherPriority.Input);
+
+        private void CloseSearchPopupIfLeft()
         {
-            if (e.NewFocus is DependencyObject d && SearchPopupContent.IsAncestorOf(d)) return;
+            if (ViewModel == null || !ViewModel.IsSearchPopupOpen) return;
+            if (SearchBox.IsKeyboardFocused || SearchPopupContent.IsKeyboardFocusWithin
+                || SearchPopupContent.IsMouseOver || SearchRow.IsMouseOver) return;
             ViewModel.IsSearchPopupOpen = false;
         }
 
@@ -205,15 +214,30 @@ namespace RVTuk.UI.FamilyBrowser.Views
         // here: a popup is a window of its own.
         private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
         {
-            if (!ViewModel.IsSearchPopupOpen) return;
-            if (e.OriginalSource is DependencyObject d && SearchRow.IsAncestorOf(d)) return;
+            if (ViewModel == null || !ViewModel.IsSearchPopupOpen) return;
+            if (IsInside(e.OriginalSource as DependencyObject, SearchRow)) return;
             ViewModel.IsSearchPopupOpen = false;
         }
 
-        // A popup doesn't follow its window, nor float sensibly over another application.
+        /// <summary>Whether <paramref name="d"/> is <paramref name="container"/> or inside it. A click
+        /// in text (the instructions' FlowDocument, a Run) starts on a content element, which is not
+        /// a Visual and makes IsAncestorOf throw: climb to the Visual that holds it first.</summary>
+        public static bool IsInside(DependencyObject? d, Visual container)
+        {
+            while (d != null && d is not Visual && d is not System.Windows.Media.Media3D.Visual3D)
+                d = d is FrameworkContentElement fce ? fce.Parent ?? LogicalTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
+            if (d == null) return false;
+            try { return ReferenceEquals(d, container) || container.IsAncestorOf(d); }
+            catch (InvalidOperationException) { return false; }
+        }
+
+        // A popup doesn't follow its window, nor float sensibly over another application. A click
+        // in the dropdown itself must not count as leaving.
         private void Window_MovedOrDeactivated(object sender, EventArgs e)
         {
-            if (ViewModel != null) ViewModel.IsSearchPopupOpen = false;
+            if (ViewModel == null || !ViewModel.IsSearchPopupOpen) return;
+            if (SearchPopupContent.IsMouseOver) return;
+            ViewModel.IsSearchPopupOpen = false;
         }
 
         // Chips wrapping onto a second row make the box taller: move the dropdown below it.
@@ -250,13 +274,6 @@ namespace RVTuk.UI.FamilyBrowser.Views
                     break;
                 case Key.Back:
                     if (SearchBox.Text.Length == 0 && ViewModel.RemoveLastChip()) e.Handled = true;
-                    break;
-                case Key.Down:
-                    if (ViewModel.IsSearchPopupOpen)
-                    {
-                        SearchPopupContent.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
-                        e.Handled = true;
-                    }
                     break;
             }
         }

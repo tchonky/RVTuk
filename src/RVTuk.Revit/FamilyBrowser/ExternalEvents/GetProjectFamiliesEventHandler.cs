@@ -47,6 +47,12 @@ namespace RVTuk.Revit.FamilyBrowser.ExternalEvents
                         Version = ReadVersionFromSymbols(doc, f),
                         Category = f.FamilyCategory?.Name,
                     };
+                    // Which library file it was loaded from, if RVTuk noted it (FamilySourceStamp).
+                    if (FamilySourceStamp.TryRead(f, out var size, out var modified))
+                    {
+                        info.LoadedFileSize = size;
+                        info.LoadedFileModifiedUtc = modified;
+                    }
                     if (info.Version == null) unresolved[f.Id] = info;
                     infos.Add(info);
                 }

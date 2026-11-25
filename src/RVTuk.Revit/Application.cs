@@ -154,6 +154,8 @@ namespace RVTuk.Revit
                 var key = KeyOf(e.Document);
                 if (key != null) TellBrowser(vm => vm.DocumentClosing(key));
             };
+            // Every family load notes which library file it came from, for ⟳'s comparison.
+            RVTuk.Revit.FamilyBrowser.FamilyLoadWatch.Start(application);
             AreaExtractHandler = new AreaExtractEventHandler();
             AreaExtractEvent   = ExternalEvent.Create(AreaExtractHandler);
             SelectAreaHandler  = new SelectAreaEventHandler();

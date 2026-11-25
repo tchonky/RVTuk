@@ -84,6 +84,17 @@ Bugs, improvements, and ideas for the Family Browser tool. Toolkit-wide items li
 
 ## ✅ Done
 
+- [x] **Compare by the loaded file, not only `_Version`** (2026-11-25). Every family load —
+  the browser's and Revit's own (`FamilyLoadedIntoDocument`, noted at the next idle moment in an
+  "RVTuk: note where families come from" transaction) — notes the library file's size and
+  last-write time on the Family (`FamilySourceStamp`, Extensible Storage); a load from outside
+  the library clears it. ⟳ compares that with the library file (Core's `FamilySourceCheck`): a
+  changed file is ↑ Update even with the same or no `_Version`; nothing noted and no `_Version`
+  on both sides shows **?** instead of a false ✓. Still to check in Revit: that the event fires
+  for Revit's own Load Family with the file's path, the extra undo step it adds, a workshared
+  model, and whether Desktop Connector gives the same file time on every PC (if not, a project
+  opened on another PC would show ↑ Update for unchanged families).
+
 - [x] **Office keyboard shortcuts** (2026-11-25): Settings › Keyboard shortcuts. The maintainer
   publishes their own `KeyboardShortcuts.xml` to `.DB`; **Install office shortcuts** copies it
   over the user's file for every Revit year in `%APPDATA%\Autodesk\Revit` (office keys win, the
