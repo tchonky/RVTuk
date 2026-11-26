@@ -27,6 +27,7 @@ using RVTuk.Revit.NeoProperties;
 using RVTuk.Revit.TopoTools;
 using RVTuk.Revit.TopoTools.Commands;
 using RVTuk.Revit.RoomFloors.Commands;
+using RVTuk.Revit.WallFinishes.Commands;
 
 namespace RVTuk.Revit
 {
@@ -87,6 +88,12 @@ namespace RVTuk.Revit
         /// a finish floor per clicked room, like Automatic Ceiling does for ceilings.
         /// </summary>
         private static readonly bool RegisterRoomFloors = true;
+
+        /// <summary>
+        /// Wall Finishes ships on the RVTuk panel: a one-shot command that draws a line off every
+        /// exposed wall face in the active plan, styled by its finish, and rebuilds the legend.
+        /// </summary>
+        private static readonly bool RegisterWallFinishes = true;
 
         /// <summary>
         /// Neo Properties is still unreleased: no ribbon panel, no dockable pane, no selection
@@ -527,6 +534,22 @@ namespace RVTuk.Revit
                 panel.AddItem(roomFloorBtn);
             }
 
+            if (RegisterWallFinishes)
+            {
+                var wallFinishesBtn = new PushButtonData(
+                    "WallFinishes",
+                    "Wall\nFinishes",
+                    assemblyPath,
+                    typeof(WallFinishesCommand).FullName!)
+                {
+                    ToolTip = "Draw a line 10 cm off every exposed wall face in this plan, styled by its finish, and update the RVTuk Wall Finishes legend."
+                };
+                wallFinishesBtn.LargeImage = CreateWallFinishesIcon(32);
+                wallFinishesBtn.Image      = CreateWallFinishesIcon(16);
+
+                panel.AddItem(wallFinishesBtn);
+            }
+
             // The Topo Edit session's panel: created hidden right after the RVTuk panel (the
             // ribbon API only appends), shown while a session is open.
             if (RegisterTopoTools) TopoEditPanel.Create(app, assemblyPath);
@@ -576,6 +599,31 @@ namespace RVTuk.Revit
                 var wall = new Pen(new SolidColorBrush(Colors.White), Math.Max(1, s * 0.06));
                 wall.Freeze();
                 ctx.DrawGeometry(new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00)), wall, outline);
+            }
+            var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            bmp.Freeze();
+            return bmp;
+        }
+
+        private static BitmapSource CreateWallFinishesIcon(int size)
+        {
+            var dv = new DrawingVisual();
+            using (var ctx = dv.RenderOpen())
+            {
+                double s = size;
+                ctx.DrawRectangle(new SolidColorBrush(WpfColor.FromRgb(0x25, 0x25, 0x26)), null,
+                    new Rect(0, 0, s, s));
+
+                // A grey wall in plan, an orange finish line along one face and a blue along the other.
+                ctx.DrawRectangle(new SolidColorBrush(WpfColor.FromRgb(0x9A, 0x9A, 0x9A)), null,
+                    new Rect(s * 0.14, s * 0.40, s * 0.72, s * 0.20));
+                var orange = new Pen(new SolidColorBrush(WpfColor.FromRgb(0xFF, 0x8C, 0x00)), Math.Max(1, s * 0.07));
+                var blue = new Pen(new SolidColorBrush(WpfColor.FromRgb(0x3C, 0x9C, 0xFF)), Math.Max(1, s * 0.07));
+                orange.Freeze();
+                blue.Freeze();
+                ctx.DrawLine(orange, new WpfPoint(s * 0.14, s * 0.27), new WpfPoint(s * 0.86, s * 0.27));
+                ctx.DrawLine(blue, new WpfPoint(s * 0.14, s * 0.73), new WpfPoint(s * 0.86, s * 0.73));
             }
             var bmp = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
             bmp.Render(dv);
