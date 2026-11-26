@@ -20,9 +20,13 @@ namespace RVTuk.Revit.WallFinishes
             var legend = FindOrCreate(doc);
             if (legend == null) return;
 
-            var old = new FilteredElementCollector(doc, legend.Id)
-                .WhereElementIsNotElementType()
-                .Where(e => e.OwnerViewId == legend.Id)
+            // Only the lines and texts this method draws. "Everything owned by the view" also
+            // takes Revit's own view-owned elements, and deleting those deleted the view itself.
+            var legendId = legend.Id;
+            var old = new FilteredElementCollector(doc, legendId)
+                .WherePasses(new LogicalOrFilter(
+                    new ElementClassFilter(typeof(CurveElement)), new ElementClassFilter(typeof(TextNote))))
+                .Where(e => e.OwnerViewId == legendId)
                 .Select(e => e.Id)
                 .ToList();
             if (old.Count > 0) doc.Delete(old);
@@ -30,7 +34,7 @@ namespace RVTuk.Revit.WallFinishes
             var styles = new FilteredElementCollector(doc)
                 .OfClass(typeof(CurveElement))
                 .Cast<CurveElement>()
-                .Where(c => c.OwnerViewId != legend.Id)
+                .Where(c => c.OwnerViewId != legendId)
                 .Select(c => c.LineStyle)
                 .OfType<GraphicsStyle>()
                 .Where(s => FinishStyleName.IsFinishStyle(s.Name))
