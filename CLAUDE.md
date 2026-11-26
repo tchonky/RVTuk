@@ -55,10 +55,11 @@ Decided by Daniel on 2026-11-19: one long-lived branch per tool, plus `master`.
 | Room Floors | `room-floors` |
 | Round Positions | `round-positions` |
 | Neo Properties | `neo-properties` |
+| Wall Finishes | `wall-finishes` |
 
 - Work on a tool happens on its branch. Merge it into `master` when it is ready, then bring the branch up to date with `master` before the next piece of work. Do not create other branches, one per task or feature.
 - Work that touches no single tool (build scripts, installer, Shared code, toolkit docs) goes on `master`.
-- Work in `D:\Coding\RVTuk` itself, switching branches there. Never create worktree folders. `Deploy.ps1` builds whatever branch is checked out, so say which branch to deploy.
+- Claude may work in a worktree under `.claude/worktrees/` (Daniel, 2026-11-26), on the tool's branch, but **always merges it into `master` when the task is finished**, so `master` in `D:\Coding\RVTuk` holds everything done. Daniel deploys from `D:\Coding\RVTuk` itself, on whichever branch it has checked out; `Deploy.ps1` builds that branch, so don't switch it without saying so.
 - Branches kept for Daniel to review, outside this scheme: `parked/addin-split-tools-step` (the parked Tools add-in step), `topo-probe-2026-11-17` (the throwaway Topo probe, never merged), and `archive/project-review-improvements-24x1gs` (on GitHub only). Do not delete them, and do not build on them, without his say-so.
 
 ## Build
