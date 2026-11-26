@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Autodesk.Revit.Attributes;
@@ -37,7 +38,7 @@ namespace RVTuk.Revit.WallFinishes.Commands
 
             // Detail lines lie in the view's plane, at its level.
             var flatten = Transform.CreateTranslation(new XYZ(0, 0, view.GenLevel.ProjectElevation));
-            int failedLoops = 0;
+            int failedLoops = 0, notDrawn = 0;
             var lines = new List<FinishEdge>();
             foreach (var loop in outline.Loops)
             {
@@ -61,15 +62,24 @@ namespace RVTuk.Revit.WallFinishes.Commands
                 var styles = new Dictionary<ElementId, GraphicsStyle?>();
                 foreach (var line in lines)
                 {
-                    if (!styles.TryGetValue(line.MaterialId, out var style))
+                    // One sliver or one refused style name must not cost the whole run.
+                    try
                     {
-                        style = styles[line.MaterialId] = StyleFor(doc, line.MaterialId);
-                    }
-                    if (style == null) continue;
+                        if (!styles.TryGetValue(line.MaterialId, out var style))
+                        {
+                            style = styles[line.MaterialId] = StyleFor(doc, line.MaterialId);
+                        }
+                        if (style == null) { notDrawn++; continue; }
 
-                    var curve = line.Edge.CreateTransformed(
-                        flatten.Multiply(Transform.CreateTranslation(new XYZ(0, 0, -line.Edge.GetEndPoint(0).Z))));
-                    doc.Create.NewDetailCurve(view, curve).LineStyle = style;
+                        var curve = line.Edge.CreateTransformed(
+                            flatten.Multiply(Transform.CreateTranslation(new XYZ(0, 0, -line.Edge.GetEndPoint(0).Z))));
+                        doc.Create.NewDetailCurve(view, curve).LineStyle = style;
+                    }
+                    catch (Exception)
+                    {
+                        styles[line.MaterialId] = styles.TryGetValue(line.MaterialId, out var known) ? known : null;
+                        notDrawn++;
+                    }
                 }
 
                 FinishLegend.Rebuild(doc);
@@ -78,7 +88,9 @@ namespace RVTuk.Revit.WallFinishes.Commands
 
             var report = new List<string>();
             if (outline.UsedFallback)
-                report.Add("The doors and windows could not be set aside (another user may have them borrowed), so the lines break at each opening.");
+                report.Add("The doors and windows could not be set aside for the read, so the lines break at each opening.");
+            if (notDrawn > 0)
+                report.Add($"{notDrawn} line(s) could not be drawn.");
             if (outline.BooleanFailures > 0)
                 report.Add($"{outline.BooleanFailures} wall(s) could not be merged with their neighbours and were drawn on their own.");
             if (outline.EdgesWithoutMaterial > 0)

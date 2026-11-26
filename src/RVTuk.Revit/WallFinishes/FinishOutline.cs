@@ -59,14 +59,20 @@ namespace RVTuk.Revit.WallFinishes
                 try
                 {
                     tx.Start();
-                    if (inserts.Count > 0) doc.Delete(inserts.ToList());
-                    doc.Regenerate();
-                    return ReadWalls(doc, view, walls, inserts, dropInsertFaces: false);
-                }
-                catch (Exception) when (inserts.Count > 0)
-                {
-                    // Borrowed by someone else, or anything else the deletion threw: read the
-                    // walls as they are and break the line at each opening (spec step 2).
+                    bool setAside = true;
+                    try
+                    {
+                        if (inserts.Count > 0) doc.Delete(inserts.ToList());
+                        doc.Regenerate();
+                    }
+                    catch (Exception) when (inserts.Count > 0)
+                    {
+                        // Whatever the deletion threw: read the walls as they are and break the
+                        // line at each opening (spec step 2). Only the deletion is caught here,
+                        // so a geometry failure in the read is not mistaken for it.
+                        setAside = false;
+                    }
+                    if (setAside) return ReadWalls(doc, view, walls, inserts, dropInsertFaces: false);
                 }
                 finally
                 {
@@ -153,7 +159,8 @@ namespace RVTuk.Revit.WallFinishes
                         var loop = new FinishLoop { Face = face };
                         foreach (var curve in curveLoop)
                         {
-                            loop.Edges.Add(Classify(doc, curve.CreateTransformed(lift), faces, inserts, dropInsertFaces));
+                            foreach (var piece in SplitAtFaceEnds(curve.CreateTransformed(lift), faces))
+                                loop.Edges.Add(Classify(doc, piece, faces, inserts, dropInsertFaces));
                         }
                         result.EdgesWithoutMaterial += FillFreeEnds(loop);
                         result.Loops.Add(loop);
@@ -233,6 +240,47 @@ namespace RVTuk.Revit.WallFinishes
             return result;
         }
 
+        /// <summary>
+        /// The union merges coplanar neighbours, so one outline edge can run along two walls, or
+        /// two faces of one wall split and painted apart. Splits a straight edge wherever a wall
+        /// face ends along it, so each piece is classified on its own face.
+        /// </summary>
+        private static IEnumerable<Curve> SplitAtFaceEnds(Curve edge, List<WallFaces> walls)
+        {
+            // ponytail: arcs are not split; an arc run of two finishes takes its midpoint's.
+            if (!(edge is Line line)) return new[] { edge };
+
+            var start = line.GetEndPoint(0);
+            var end = line.GetEndPoint(1);
+            var direction = (end - start).Normalize();
+            double length = line.Length;
+            var cuts = new List<double>();
+            foreach (var wall in walls.Where(w => w.Overlaps(start, end)))
+            {
+                foreach (var vertex in wall.Vertices)
+                {
+                    var flat = new XYZ(vertex.X, vertex.Y, start.Z) - start;
+                    double along = flat.DotProduct(direction);
+                    if (along <= Tolerance || along >= length - Tolerance) continue;
+                    if ((flat - direction * along).GetLength() > Tolerance) continue;
+                    if (cuts.All(c => Math.Abs(c - along) > Tolerance)) cuts.Add(along);
+                }
+            }
+            if (cuts.Count == 0) return new[] { edge };
+
+            cuts.Sort();
+            var pieces = new List<Curve>();
+            var from = start;
+            foreach (var cut in cuts)
+            {
+                var to = start + direction * cut;
+                pieces.Add(Line.CreateBound(from, to));
+                from = to;
+            }
+            pieces.Add(Line.CreateBound(from, end));
+            return pieces;
+        }
+
         private static ElementId LayerMaterial(Document doc, Wall wall, int which)
         {
             var structure = wall.WallType.GetCompoundStructure();
@@ -291,6 +339,16 @@ namespace RVTuk.Revit.WallFinishes
                 _interior = SideFaces(wall, ShellLayerType.Interior);
                 _all = solids.SelectMany(s => s.Faces.Cast<Face>()).ToList();
             }
+
+            /// <summary>Every corner of the wall's faces: where a face can end along an outline edge.</summary>
+            public IEnumerable<XYZ> Vertices =>
+                _all.SelectMany(f => f.EdgeLoops.Cast<EdgeArray>().SelectMany(loop => loop.Cast<Edge>()))
+                    .SelectMany(e => { var c = e.AsCurve(); return new[] { c.GetEndPoint(0), c.GetEndPoint(1) }; });
+
+            public bool Overlaps(XYZ a, XYZ b) =>
+                _box != null
+                && Math.Max(a.X, b.X) >= _box.Min.X - Tolerance && Math.Min(a.X, b.X) <= _box.Max.X + Tolerance
+                && Math.Max(a.Y, b.Y) >= _box.Min.Y - Tolerance && Math.Min(a.Y, b.Y) <= _box.Max.Y + Tolerance;
 
             public bool Near(XYZ p) =>
                 _box != null
