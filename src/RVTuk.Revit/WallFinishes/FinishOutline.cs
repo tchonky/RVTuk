@@ -59,6 +59,15 @@ namespace RVTuk.Revit.WallFinishes
                 try
                 {
                     tx.Start();
+                    // Deleting the doors and windows breaks every dimension and spot elevation
+                    // that references them, across all views, and Revit would show those errors
+                    // to the user even though the transaction is only ever rolled back.
+                    var options = tx.GetFailureHandlingOptions();
+                    options.SetFailuresPreprocessor(new SilentFailures());
+                    options.SetClearAfterRollback(true);
+                    options.SetForcedModalHandling(false);
+                    tx.SetFailureHandlingOptions(options);
+
                     bool setAside = true;
                     try
                     {
@@ -320,6 +329,19 @@ namespace RVTuk.Revit.WallFinishes
                 if (edges[i].MaterialId == ElementId.InvalidElementId) missing++;
             }
             return missing;
+        }
+
+        /// <summary>
+        /// For the read transaction only: nothing it does is kept, so nothing it breaks is shown.
+        /// </summary>
+        private sealed class SilentFailures : IFailuresPreprocessor
+        {
+            public FailureProcessingResult PreprocessFailures(FailuresAccessor failures)
+            {
+                if (failures.GetSeverity() >= FailureSeverity.Error) return FailureProcessingResult.ProceedWithRollBack;
+                failures.DeleteAllWarnings();
+                return FailureProcessingResult.Continue;
+            }
         }
 
         /// <summary>A wall's faces, sorted the way the material rule needs them.</summary>
